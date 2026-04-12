@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import MDEditor from '@uiw/react-md-editor'
 import { supabase } from '../../lib/supabase'
-import type { User, Sop } from '../../types/database'
+import { SOPEditor } from '../../components/Editor'
+import type { User, Sop, Tag } from '../../types/database'
 
 export function SOPEdit({ user }: { user: User }) {
   const { id } = useParams<{ id: string }>()
@@ -15,18 +15,58 @@ export function SOPEdit({ user }: { user: User }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
+  // Tags
+  const [allTags, setAllTags] = useState<Tag[]>([])
+  const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set())
+  const [newTagName, setNewTagName] = useState('')
+
   useEffect(() => {
     async function load() {
-      const { data } = await supabase.from('sops').select('*').eq('id', id!).single()
-      if (data) {
-        setSOP(data)
-        setTitle(data.title)
-        setContent(data.content_markdown)
-        setStatus(data.status)
+      const [sopResult, tagsResult, sopTagsResult] = await Promise.all([
+        supabase.from('sops').select('*').eq('id', id!).single(),
+        supabase.from('tags').select('*').eq('org_id', user.org_id).order('name'),
+        supabase.from('sop_tags').select('tag_id').eq('sop_id', id!),
+      ])
+
+      if (sopResult.data) {
+        setSOP(sopResult.data)
+        setTitle(sopResult.data.title)
+        setContent(sopResult.data.content_markdown)
+        setStatus(sopResult.data.status)
       }
+
+      setAllTags(tagsResult.data || [])
+      setSelectedTagIds(new Set((sopTagsResult.data || []).map(st => st.tag_id)))
     }
     load()
-  }, [id])
+  }, [id, user.org_id])
+
+  function toggleTag(tagId: string) {
+    setSelectedTagIds(prev => {
+      const next = new Set(prev)
+      if (next.has(tagId)) next.delete(tagId)
+      else next.add(tagId)
+      return next
+    })
+  }
+
+  async function handleCreateTag() {
+    const name = newTagName.trim()
+    if (!name) return
+
+    const { data, error } = await supabase
+      .from('tags')
+      .insert({ org_id: user.org_id, name })
+      .select()
+      .single()
+
+    if (error) { alert(error.message); return }
+    if (data) {
+      setAllTags(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
+      setSelectedTagIds(prev => new Set([...prev, data.id]))
+      setNewTagName('')
+    }
+  }
 
   async function handleSave() {
     if (!sop) return
@@ -36,7 +76,6 @@ export function SOPEdit({ user }: { user: User }) {
     const newVersion = sop.current_version + 1
     const contentChanged = content !== sop.content_markdown
 
-    // Update SOP
     const { error: updateError } = await supabase
       .from('sops')
       .update({
@@ -50,7 +89,6 @@ export function SOPEdit({ user }: { user: User }) {
 
     if (updateError) { setError(updateError.message); setSaving(false); return }
 
-    // Create version snapshot if content changed
     if (contentChanged) {
       await supabase.from('sop_versions').insert({
         sop_id: sop.id,
@@ -59,6 +97,14 @@ export function SOPEdit({ user }: { user: User }) {
         change_summary: changeSummary || null,
         changed_by: user.id,
       })
+    }
+
+    // Sync tags: delete all existing, insert selected
+    await supabase.from('sop_tags').delete().eq('sop_id', sop.id)
+    if (selectedTagIds.size > 0) {
+      await supabase.from('sop_tags').insert(
+        [...selectedTagIds].map(tag_id => ({ sop_id: sop.id, tag_id }))
+      )
     }
 
     setSaving(false)
@@ -109,14 +155,56 @@ export function SOPEdit({ user }: { user: User }) {
           />
         </div>
 
-        <div data-color-mode={document.documentElement.classList.contains('dark') ? 'dark' : 'light'}>
+        {/* Tags */}
+        <div>
+          <label className="mb-2 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>Tags</label>
+          <div className="flex flex-wrap gap-2">
+            {allTags.map(tag => {
+              const isSelected = selectedTagIds.has(tag.id)
+              return (
+                <button
+                  key={tag.id}
+                  type="button"
+                  onClick={() => toggleTag(tag.id)}
+                  className="rounded-full border px-3 py-1 text-xs font-medium transition-all"
+                  style={{
+                    borderColor: isSelected ? 'var(--color-primary)' : 'var(--color-border)',
+                    backgroundColor: isSelected ? 'color-mix(in srgb, var(--color-primary) 12%, transparent)' : 'transparent',
+                    color: isSelected ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+                  }}
+                >
+                  {tag.name}
+                </button>
+              )
+            })}
+            {/* Inline create tag */}
+            <div className="flex items-center gap-1">
+              <input
+                type="text"
+                value={newTagName}
+                onChange={e => setNewTagName(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleCreateTag() } }}
+                placeholder="New tag..."
+                className="w-24 rounded-full border px-3 py-1 text-xs outline-none"
+                style={inputStyle}
+              />
+              {newTagName.trim() && (
+                <button
+                  type="button"
+                  onClick={handleCreateTag}
+                  className="rounded-full px-2 py-1 text-xs font-medium"
+                  style={{ color: 'var(--color-primary)' }}
+                >
+                  + Add
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div>
           <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>Content</label>
-          <MDEditor
-            value={content}
-            onChange={val => setContent(val || '')}
-            height={500}
-            preview="live"
-          />
+          <SOPEditor content={content} onChange={setContent} />
         </div>
 
         <div>

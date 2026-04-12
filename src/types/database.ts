@@ -60,6 +60,7 @@ export type Database = {
           phone: string
           email: string | null
           photo_url: string | null
+          department: string | null
           slug: string
           access_token: string
           created_at: string
@@ -71,6 +72,7 @@ export type Database = {
           phone: string
           email?: string | null
           photo_url?: string | null
+          department?: string | null
           slug: string
           access_token: string
           created_at?: string
@@ -80,6 +82,7 @@ export type Database = {
           phone?: string
           email?: string | null
           photo_url?: string | null
+          department?: string | null
           slug?: string
           access_token?: string
         }
@@ -240,9 +243,52 @@ export type Database = {
         }
         Relationships: []
       }
+      tags: {
+        Row: {
+          id: string
+          org_id: string
+          name: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          org_id: string
+          name: string
+          created_at?: string
+        }
+        Update: {
+          name?: string
+        }
+        Relationships: []
+      }
+      sop_tags: {
+        Row: {
+          sop_id: string
+          tag_id: string
+        }
+        Insert: {
+          sop_id: string
+          tag_id: string
+        }
+        Update: {
+          sop_id?: string
+          tag_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: Record<string, never>
-    Functions: Record<string, never>
+    Functions: {
+      handle_signup: {
+        Args: {
+          user_id: string
+          user_email: string
+          user_name: string
+          org_name: string
+        }
+        Returns: string
+      }
+    }
     Enums: Record<string, never>
   }
 }
@@ -257,3 +303,4 @@ export type SopVersion = Database['public']['Tables']['sop_versions']['Row']
 export type SopSignature = Database['public']['Tables']['sop_signatures']['Row']
 export type PendingUpdate = Database['public']['Tables']['pending_updates']['Row']
 export type ApiKey = Database['public']['Tables']['api_keys']['Row']
+export type Tag = Database['public']['Tables']['tags']['Row']

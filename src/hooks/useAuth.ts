@@ -46,19 +46,14 @@ export function useAuth() {
     const { data: authData, error: authError } = await supabase.auth.signUp({ email, password })
     if (authError || !authData.user) return { error: authError }
 
-    // Create organization
-    const { data: org, error: orgError } = await supabase
-      .from('organizations')
-      .insert({ name: orgName })
-      .select()
-      .single()
-    if (orgError) return { error: orgError }
-
-    // Create user profile
-    const { error: userError } = await supabase
-      .from('users')
-      .insert({ id: authData.user.id, org_id: org.id, email, name })
-    if (userError) return { error: userError }
+    // Create org + user profile via security definer function (bypasses RLS)
+    const { error: setupError } = await supabase.rpc('handle_signup', {
+      user_id: authData.user.id,
+      user_email: email,
+      user_name: name,
+      org_name: orgName,
+    })
+    if (setupError) return { error: setupError }
 
     return { error: null }
   }
