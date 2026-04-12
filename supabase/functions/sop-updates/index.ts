@@ -100,7 +100,7 @@ Deno.serve(async (req: Request) => {
         : newContent
 
       // Translate the full merged English content to Indonesian
-      const mergedContentId = await translateToIndonesian(mergedContent)
+      const { text: mergedContentId } = await translateToIndonesian(mergedContent)
 
       const newVersion = sop.current_version + 1
 

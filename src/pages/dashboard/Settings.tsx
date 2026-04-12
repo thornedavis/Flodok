@@ -125,22 +125,27 @@ export function Settings({ user }: { user: User }) {
         <h2 className="mb-4 text-lg font-semibold" style={{ color: 'var(--color-text)' }}>API Keys</h2>
 
         {generatedKey && (
-          <div className="mb-4 rounded-xl border p-4" style={{ borderColor: 'var(--color-success)', backgroundColor: 'var(--color-diff-add)' }}>
-            <p className="mb-2 text-sm font-medium" style={{ color: 'var(--color-text)' }}>
-              API key generated. Copy it now — you won't be able to see it again.
-            </p>
-            <div className="flex items-center gap-2">
-              <code className="flex-1 rounded-lg p-2 text-xs" style={{ backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}>
-                {generatedKey}
-              </code>
+          <div className="mb-4 overflow-hidden rounded-xl border p-4" style={{ borderColor: 'var(--color-success)', backgroundColor: 'var(--color-diff-add)' }}>
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+                API key generated. Copy it now — you won't be able to see it again.
+              </p>
               <button
                 onClick={() => { navigator.clipboard.writeText(generatedKey); setGeneratedKey('') }}
-                className="shrink-0 rounded-lg border px-3 py-1.5 text-sm"
-                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
+                className="shrink-0 cursor-pointer rounded-lg px-3 py-1.5 text-sm font-medium text-white"
+                style={{ backgroundColor: 'var(--color-success)' }}
               >
                 Copy & dismiss
               </button>
             </div>
+            <input
+              type="text"
+              readOnly
+              value={generatedKey}
+              onFocus={e => e.target.select()}
+              className="w-full rounded-lg border px-3 py-2 font-mono text-xs"
+              style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+            />
           </div>
         )}
 

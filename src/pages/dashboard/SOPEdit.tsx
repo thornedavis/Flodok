@@ -4,12 +4,30 @@ import { supabase } from '../../lib/supabase'
 import { SOPEditor } from '../../components/Editor'
 import type { User, Sop, Tag } from '../../types/database'
 
+function fireTranslation(sopId: string, direction: 'en-to-id' | 'id-to-en') {
+  supabase.auth.getSession().then(({ data: { session } }) => {
+    if (!session) return
+    fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/translate-sop`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ sop_id: sopId, direction }),
+    }).catch(() => {})
+  })
+}
+
 export function SOPEdit({ user }: { user: User }) {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [sop, setSOP] = useState<Sop | null>(null)
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
+  const [contentId, setContentId] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<'en' | 'id'>('en')
+  const [translating, setTranslating] = useState(false)
+  const [translateDone, setTranslateDone] = useState(false)
   const [status, setStatus] = useState<'active' | 'draft' | 'archived'>('draft')
   const [changeSummary, setChangeSummary] = useState('')
   const [saving, setSaving] = useState(false)
@@ -32,6 +50,7 @@ export function SOPEdit({ user }: { user: User }) {
         setSOP(sopResult.data)
         setTitle(sopResult.data.title)
         setContent(sopResult.data.content_markdown)
+        setContentId(sopResult.data.content_markdown_id)
         setStatus(sopResult.data.status)
       }
 
@@ -68,19 +87,80 @@ export function SOPEdit({ user }: { user: User }) {
     }
   }
 
+  async function handleTranslate(direction: 'en-to-id' | 'id-to-en') {
+    if (!sop) return
+    setTranslating(true)
+    setTranslateDone(false)
+    setError('')
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) { setError('Not authenticated'); setTranslating(false); return }
+
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 55000)
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/translate-sop`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ sop_id: sop.id, direction }),
+          signal: controller.signal,
+        },
+      )
+      clearTimeout(timeout)
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}))
+        throw new Error(body.error || `Translation failed (${response.status})`)
+      }
+
+      // Reload the full SOP so the local baseline matches the DB.
+      // This prevents Save from seeing the translated field as a "change"
+      // and re-triggering translation.
+      const { data } = await supabase.from('sops').select('*').eq('id', sop.id).single()
+      if (data) {
+        setSOP(data)
+        if (direction === 'en-to-id') setContentId(data.content_markdown_id)
+        else setContent(data.content_markdown)
+      }
+
+      setTranslateDone(true)
+      setTimeout(() => setTranslateDone(false), 3000)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Translation failed')
+    }
+
+    setTranslating(false)
+  }
+
+  const enChanged = sop ? content !== sop.content_markdown : false
+  const idChanged = sop ? contentId !== sop.content_markdown_id : false
+  const hasChanges = sop ? (
+    enChanged || idChanged ||
+    title !== sop.title ||
+    status !== sop.status ||
+    changeSummary !== ''
+  ) : false
+
   async function handleSave() {
     if (!sop) return
     setError('')
     setSaving(true)
 
     const newVersion = sop.current_version + 1
-    const contentChanged = content !== sop.content_markdown
+    const contentChanged = enChanged || idChanged
 
     const { error: updateError } = await supabase
       .from('sops')
       .update({
         title,
         content_markdown: content,
+        content_markdown_id: contentId,
         status,
         current_version: contentChanged ? newVersion : sop.current_version,
         updated_at: new Date().toISOString(),
@@ -99,12 +179,19 @@ export function SOPEdit({ user }: { user: User }) {
       })
     }
 
-    // Sync tags: delete all existing, insert selected
+    // Sync tags
     await supabase.from('sop_tags').delete().eq('sop_id', sop.id)
     if (selectedTagIds.size > 0) {
       await supabase.from('sop_tags').insert(
         [...selectedTagIds].map(tag_id => ({ sop_id: sop.id, tag_id }))
       )
+    }
+
+    // Fire-and-forget translation if content changed
+    if (enChanged) {
+      fireTranslation(sop.id, 'en-to-id')
+    } else if (idChanged) {
+      fireTranslation(sop.id, 'id-to-en')
     }
 
     setSaving(false)
@@ -118,6 +205,9 @@ export function SOPEdit({ user }: { user: User }) {
     backgroundColor: 'var(--color-bg)',
     color: 'var(--color-text)',
   } as React.CSSProperties
+
+  const translateDirection = activeTab === 'en' ? 'en-to-id' : 'id-to-en'
+  const hasSourceContent = activeTab === 'en' ? !!content : !!contentId
 
   return (
     <div>
@@ -177,7 +267,6 @@ export function SOPEdit({ user }: { user: User }) {
                 </button>
               )
             })}
-            {/* Inline create tag */}
             <div className="flex items-center gap-1">
               <input
                 type="text"
@@ -203,8 +292,82 @@ export function SOPEdit({ user }: { user: User }) {
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>Content</label>
-          <SOPEditor content={content} onChange={setContent} />
+          <div className="mb-2 flex items-center justify-between">
+            <label className="block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>Content</label>
+            <div className="flex items-center gap-2">
+              <div
+                className="flex rounded-lg border p-0.5"
+                style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)' }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('en')}
+                  className="rounded-md px-3 py-1 text-xs font-medium transition-colors"
+                  style={{
+                    backgroundColor: activeTab === 'en' ? 'var(--color-bg)' : 'transparent',
+                    color: activeTab === 'en' ? 'var(--color-text)' : 'var(--color-text-tertiary)',
+                    boxShadow: activeTab === 'en' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
+                  }}
+                >
+                  English
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('id')}
+                  className="rounded-md px-3 py-1 text-xs font-medium transition-colors"
+                  style={{
+                    backgroundColor: activeTab === 'id' ? 'var(--color-bg)' : 'transparent',
+                    color: activeTab === 'id' ? 'var(--color-text)' : 'var(--color-text-tertiary)',
+                    boxShadow: activeTab === 'id' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
+                  }}
+                >
+                  Bahasa Indonesia
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleTranslate(translateDirection)}
+                disabled={translating || !hasSourceContent}
+                className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all disabled:opacity-50"
+                style={{
+                  borderColor: translateDone ? 'var(--color-success, #22c55e)' : 'var(--color-border)',
+                  color: translateDone ? 'var(--color-success, #22c55e)' : 'var(--color-text-secondary)',
+                }}
+                onMouseOver={e => { if (!translateDone) e.currentTarget.style.borderColor = 'var(--color-primary)' }}
+                onMouseOut={e => { if (!translateDone) e.currentTarget.style.borderColor = 'var(--color-border)' }}
+              >
+                {translating ? (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
+                    <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                  </svg>
+                ) : translateDone ? (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                ) : (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="m5 8 6 6"/>
+                    <path d="m4 14 6-6 2-3"/>
+                    <path d="M2 5h12"/>
+                    <path d="M7 2h1"/>
+                    <path d="m22 22-5-10-5 10"/>
+                    <path d="M14 18h6"/>
+                  </svg>
+                )}
+                {translating ? 'Translating...' : translateDone ? 'Complete' : (
+                  activeTab === 'en'
+                    ? (contentId ? 'Re-translate to ID' : 'Translate to ID')
+                    : (content ? 'Re-translate to EN' : 'Translate to EN')
+                )}
+              </button>
+            </div>
+          </div>
+
+          {activeTab === 'en' ? (
+            <SOPEditor key="en" content={content} onChange={setContent} />
+          ) : (
+            <SOPEditor key="id" content={contentId || ''} onChange={setContentId} />
+          )}
         </div>
 
         <div>
@@ -224,11 +387,18 @@ export function SOPEdit({ user }: { user: User }) {
         <div className="flex gap-2 pt-2">
           <button
             onClick={handleSave}
-            disabled={saving}
-            className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+            disabled={saving || !hasChanges}
+            className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50 flex items-center gap-2"
             style={{ backgroundColor: 'var(--color-primary)' }}
           >
-            {saving ? 'Saving...' : 'Save'}
+            {saving ? (
+              <>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
+                  <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                </svg>
+                Saving...
+              </>
+            ) : 'Save'}
           </button>
           <button
             onClick={() => navigate('/dashboard/sops')}

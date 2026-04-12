@@ -114,6 +114,7 @@ export type Database = {
           employee_id: string
           title: string
           content_markdown: string
+          content_markdown_id: string | null
           current_version: number
           status: 'active' | 'draft' | 'archived'
           created_at: string
@@ -125,6 +126,7 @@ export type Database = {
           employee_id: string
           title: string
           content_markdown: string
+          content_markdown_id?: string | null
           current_version?: number
           status?: 'active' | 'draft' | 'archived'
           created_at?: string
@@ -133,6 +135,7 @@ export type Database = {
         Update: {
           title?: string
           content_markdown?: string
+          content_markdown_id?: string | null
           current_version?: number
           status?: 'active' | 'draft' | 'archived'
           updated_at?: string

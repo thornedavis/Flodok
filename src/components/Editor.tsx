@@ -235,6 +235,155 @@ export function SOPEditor({ content, onChange }: EditorProps) {
   )
 }
 
+export function SOPViewer({ content }: { content: string }) {
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({
+        heading: { levels: [1, 2, 3] },
+      }),
+      Link.configure({
+        openOnClick: true,
+        HTMLAttributes: { class: 'editor-link' },
+      }),
+      Underline,
+      Table.configure({ resizable: false }),
+      TableRow,
+      TableCell,
+      TableHeader,
+      Markdown,
+    ],
+    content,
+    contentType: 'markdown',
+    editable: false,
+  })
+
+  useEffect(() => {
+    if (editor) {
+      editor.commands.setContent(content, { emitUpdate: false, contentType: 'markdown' })
+    }
+  }, [editor, content])
+
+  if (!editor) return null
+
+  return (
+    <div className="sop-editor">
+      <EditorContent editor={editor} />
+      <style>{`
+        .sop-editor .tiptap {
+          outline: none;
+          min-height: 400px;
+          padding: 1.5rem;
+          border: 1px solid var(--color-border);
+          border-radius: 0.75rem;
+          background: var(--color-bg);
+          color: var(--color-text);
+          font-size: 0.9375rem;
+          line-height: 1.7;
+        }
+
+        .sop-editor .tiptap h1 {
+          font-size: 1.75rem;
+          font-weight: 700;
+          margin: 1.5rem 0 0.75rem;
+          line-height: 1.3;
+        }
+
+        .sop-editor .tiptap h2 {
+          font-size: 1.35rem;
+          font-weight: 600;
+          margin: 1.25rem 0 0.5rem;
+          line-height: 1.3;
+        }
+
+        .sop-editor .tiptap h3 {
+          font-size: 1.1rem;
+          font-weight: 600;
+          margin: 1rem 0 0.5rem;
+          line-height: 1.3;
+        }
+
+        .sop-editor .tiptap p {
+          margin: 0.5rem 0;
+        }
+
+        .sop-editor .tiptap ul,
+        .sop-editor .tiptap ol {
+          padding-left: 1.5rem;
+          margin: 0.5rem 0;
+        }
+
+        .sop-editor .tiptap li {
+          margin: 0.25rem 0;
+        }
+
+        .sop-editor .tiptap blockquote {
+          border-left: 3px solid var(--color-border-strong);
+          padding-left: 1rem;
+          margin: 0.75rem 0;
+          color: var(--color-text-secondary);
+        }
+
+        .sop-editor .tiptap code {
+          background: var(--color-bg-tertiary);
+          border-radius: 0.25rem;
+          padding: 0.15rem 0.35rem;
+          font-size: 0.85em;
+          font-family: ui-monospace, monospace;
+        }
+
+        .sop-editor .tiptap pre {
+          background: var(--color-bg-tertiary);
+          border-radius: 0.5rem;
+          padding: 0.75rem 1rem;
+          margin: 0.75rem 0;
+          overflow-x: auto;
+        }
+
+        .sop-editor .tiptap pre code {
+          background: none;
+          padding: 0;
+        }
+
+        .sop-editor .tiptap hr {
+          border: none;
+          border-top: 1px solid var(--color-border);
+          margin: 1.5rem 0;
+        }
+
+        .sop-editor .tiptap a,
+        .sop-editor .tiptap .editor-link {
+          color: var(--color-primary);
+          text-decoration: underline;
+          cursor: pointer;
+        }
+
+        .sop-editor .tiptap table {
+          border-collapse: collapse;
+          width: 100%;
+          margin: 0.75rem 0;
+        }
+
+        .sop-editor .tiptap th,
+        .sop-editor .tiptap td {
+          border: 1px solid var(--color-border);
+          padding: 0.5rem 0.75rem;
+          text-align: left;
+          font-size: 0.875rem;
+        }
+
+        .sop-editor .tiptap th {
+          background: var(--color-bg-secondary);
+          font-weight: 600;
+        }
+
+        .sop-editor .tiptap strong {
+          font-weight: 600;
+        }
+      `}</style>
+    </div>
+  )
+}
+
 /* ---- Fixed Toolbar ---- */
 
 function Toolbar({ editor, onSetLink }: { editor: Editor; onSetLink: () => void }) {
