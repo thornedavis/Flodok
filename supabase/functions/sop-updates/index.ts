@@ -1,5 +1,6 @@
 import { corsHeaders, jsonResponse, getSupabaseAdmin, validateApiKey } from '../_shared/auth.ts'
 import { normalizePhone } from '../_shared/phone.ts'
+import { translateToIndonesian } from '../_shared/translate.ts'
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -98,11 +99,15 @@ Deno.serve(async (req: Request) => {
         ? `${sop.content_markdown}\n\n${newContent}`
         : newContent
 
+      // Translate the full merged English content to Indonesian
+      const mergedContentId = await translateToIndonesian(mergedContent)
+
       const newVersion = sop.current_version + 1
 
       await Promise.all([
         supabase.from('sops').update({
           content_markdown: mergedContent,
+          content_markdown_id: mergedContentId || sop.content_markdown_id || null,
           current_version: newVersion,
           updated_at: new Date().toISOString(),
         }).eq('id', sop.id),
@@ -110,6 +115,7 @@ Deno.serve(async (req: Request) => {
           sop_id: sop.id,
           version_number: newVersion,
           content_markdown: mergedContent,
+          content_markdown_id: mergedContentId || sop.content_markdown_id || null,
           change_summary: `Auto-applied from ${source_meeting || 'API'}`,
           changed_by: 'api',
         }),
