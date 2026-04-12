@@ -1,13 +1,4 @@
-// Supabase Edge Function: GET /api/employees
-// Returns list of employees for the org (used by AI pipeline for matching)
-
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, content-type',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
-}
+import { corsHeaders, jsonResponse, getSupabaseAdmin, validateApiKey } from '../_shared/auth.ts'
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -15,50 +6,19 @@ Deno.serve(async (req: Request) => {
   }
 
   if (req.method !== 'GET') {
-    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-      status: 405,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+    return jsonResponse({ error: 'Method not allowed' }, 405)
   }
 
   try {
-    const authHeader = req.headers.get('authorization')
-    if (!authHeader?.startsWith('Bearer flk_')) {
-      return new Response(JSON.stringify({ error: 'Invalid API key' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
-
-    const apiKey = authHeader.slice(7)
-
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-    )
-
-    // Hash and verify API key
-    const encoder = new TextEncoder()
-    const data = encoder.encode(apiKey)
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data)
-    const hashArray = Array.from(new Uint8Array(hashBuffer))
-    const keyHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
-
-    const { data: apiKeyRecord } = await supabase
-      .from('api_keys')
-      .select('id, org_id')
-      .eq('key_hash', keyHash)
-      .single()
+    const supabase = getSupabaseAdmin()
+    const apiKeyRecord = await validateApiKey(req, supabase)
 
     if (!apiKeyRecord) {
-      return new Response(JSON.stringify({ error: 'Invalid API key' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+      return jsonResponse({ error: 'Invalid API key' }, 401)
     }
 
-    // Update last_used_at
-    await supabase.from('api_keys').update({ last_used_at: new Date().toISOString() }).eq('id', apiKeyRecord.id)
+    const url = new URL(req.url)
+    const includeSop = url.searchParams.get('include_sop') !== 'false' // default true
 
     // Get employees
     const { data: employees } = await supabase
@@ -67,14 +27,33 @@ Deno.serve(async (req: Request) => {
       .eq('org_id', apiKeyRecord.org_id)
       .order('name')
 
-    return new Response(JSON.stringify({ employees: employees || [] }), {
-      status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+    if (!includeSop) {
+      return jsonResponse({ employees: employees || [] })
+    }
+
+    // Fetch SOPs for all employees in the org
+    const { data: sops } = await supabase
+      .from('sops')
+      .select('id, employee_id, title, content_markdown, current_version, updated_at')
+      .eq('org_id', apiKeyRecord.org_id)
+
+    const sopByEmployee = new Map(
+      (sops || []).map(s => [s.employee_id, {
+        id: s.id,
+        title: s.title,
+        content_markdown: s.content_markdown,
+        current_version: s.current_version,
+        updated_at: s.updated_at,
+      }])
+    )
+
+    const employeesWithSops = (employees || []).map(emp => ({
+      ...emp,
+      sop: sopByEmployee.get(emp.id) || null,
+    }))
+
+    return jsonResponse({ employees: employeesWithSops })
   } catch {
-    return new Response(JSON.stringify({ error: 'Internal server error' }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+    return jsonResponse({ error: 'Internal server error' }, 500)
   }
 })

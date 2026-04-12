@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { normalizePhone, isValidE164, formatPhone } from '../../lib/phone'
 import { generateSlug, generateAccessToken } from '../../lib/slug'
@@ -13,7 +13,7 @@ export function Employees({ user }: { user: User }) {
   const [showAdd, setShowAdd] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [activeDepartments, setActiveDepartments] = useState<Set<string>>(new Set())
-  const navigate = useNavigate()
+
 
   useEffect(() => {
     loadData()

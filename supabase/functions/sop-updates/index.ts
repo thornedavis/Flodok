@@ -1,13 +1,5 @@
-// Supabase Edge Function: POST /api/sop-updates
-// Handles SOP update proposals from external AI pipeline
-
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-}
+import { corsHeaders, jsonResponse, getSupabaseAdmin, validateApiKey } from '../_shared/auth.ts'
+import { normalizePhone } from '../_shared/phone.ts'
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -15,60 +7,23 @@ Deno.serve(async (req: Request) => {
   }
 
   if (req.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-      status: 405,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+    return jsonResponse({ error: 'Method not allowed' }, 405)
   }
 
   try {
-    const authHeader = req.headers.get('authorization')
-    if (!authHeader?.startsWith('Bearer flk_')) {
-      return new Response(JSON.stringify({ error: 'Invalid API key' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
-
-    const apiKey = authHeader.slice(7) // Remove 'Bearer '
-
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-    )
-
-    // Hash the API key and find matching key
-    const encoder = new TextEncoder()
-    const data = encoder.encode(apiKey)
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data)
-    const hashArray = Array.from(new Uint8Array(hashBuffer))
-    const keyHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
-
-    const { data: apiKeyRecord } = await supabase
-      .from('api_keys')
-      .select('id, org_id')
-      .eq('key_hash', keyHash)
-      .single()
+    const supabase = getSupabaseAdmin()
+    const apiKeyRecord = await validateApiKey(req, supabase)
 
     if (!apiKeyRecord) {
-      return new Response(JSON.stringify({ error: 'Invalid API key' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+      return jsonResponse({ error: 'Invalid API key' }, 401)
     }
-
-    // Update last_used_at
-    await supabase.from('api_keys').update({ last_used_at: new Date().toISOString() }).eq('id', apiKeyRecord.id)
 
     // Parse request body
     const body = await req.json()
     const { employee_phone, changes, source_meeting } = body
 
     if (!employee_phone || !changes) {
-      return new Response(JSON.stringify({ error: 'Missing required fields: employee_phone, changes' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+      return jsonResponse({ error: 'Missing required fields: employee_phone, changes' }, 400)
     }
 
     // Get org settings
@@ -79,18 +34,7 @@ Deno.serve(async (req: Request) => {
       .single()
 
     // Normalize phone number
-    let phone = employee_phone.replace(/[\s\-.()\[\]]/g, '')
-    const countryCode = org?.default_country_code || '+62'
-    if (phone.startsWith('0')) {
-      phone = countryCode + phone.slice(1)
-    } else if (!phone.startsWith('+')) {
-      const codeDigits = countryCode.replace('+', '')
-      if (phone.startsWith(codeDigits)) {
-        phone = '+' + phone
-      } else {
-        phone = countryCode + phone
-      }
-    }
+    const phone = normalizePhone(employee_phone, org?.default_country_code || '+62')
 
     // Find employee by phone
     const { data: employee } = await supabase
@@ -115,15 +59,11 @@ Deno.serve(async (req: Request) => {
         .select('id')
         .single()
 
-      return new Response(JSON.stringify({ status: 'unmatched', update_id: update?.id }), {
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+      return jsonResponse({ status: 'unmatched', update_id: update?.id })
     }
 
     // Employee matched
     if (org?.review_mode) {
-      // Insert as pending
       const { data: update } = await supabase
         .from('pending_updates')
         .insert({
@@ -137,10 +77,7 @@ Deno.serve(async (req: Request) => {
         .select('id')
         .single()
 
-      return new Response(JSON.stringify({ status: 'pending', update_id: update?.id }), {
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+      return jsonResponse({ status: 'pending', update_id: update?.id })
     }
 
     // Auto-apply: update SOP directly
@@ -194,14 +131,8 @@ Deno.serve(async (req: Request) => {
       .select('id')
       .single()
 
-    return new Response(JSON.stringify({ status: 'applied', update_id: update?.id }), {
-      status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
-  } catch (err) {
-    return new Response(JSON.stringify({ error: 'Internal server error' }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+    return jsonResponse({ status: 'applied', update_id: update?.id })
+  } catch {
+    return jsonResponse({ error: 'Internal server error' }, 500)
   }
 })
