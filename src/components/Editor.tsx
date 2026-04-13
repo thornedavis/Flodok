@@ -266,64 +266,59 @@ export function SOPViewer({ content }: { content: string }) {
   if (!editor) return null
 
   return (
-    <div className="sop-editor">
+    <div className="sop-viewer">
       <EditorContent editor={editor} />
       <style>{`
-        .sop-editor .tiptap {
+        .sop-viewer .tiptap {
           outline: none;
-          min-height: 400px;
-          padding: 1.5rem;
-          border: 1px solid var(--color-border);
-          border-radius: 0.75rem;
-          background: var(--color-bg);
           color: var(--color-text);
           font-size: 0.9375rem;
           line-height: 1.7;
         }
 
-        .sop-editor .tiptap h1 {
+        .sop-viewer .tiptap h1 {
           font-size: 1.75rem;
           font-weight: 700;
-          margin: 1.5rem 0 0.75rem;
-          line-height: 1.3;
-        }
-
-        .sop-editor .tiptap h2 {
-          font-size: 1.35rem;
-          font-weight: 600;
-          margin: 1.25rem 0 0.5rem;
-          line-height: 1.3;
-        }
-
-        .sop-editor .tiptap h3 {
-          font-size: 1.1rem;
-          font-weight: 600;
           margin: 1rem 0 0.5rem;
           line-height: 1.3;
         }
 
-        .sop-editor .tiptap p {
+        .sop-viewer .tiptap h2 {
+          font-size: 1.35rem;
+          font-weight: 600;
+          margin: 0.75rem 0 0.5rem;
+          line-height: 1.3;
+        }
+
+        .sop-viewer .tiptap h3 {
+          font-size: 1.1rem;
+          font-weight: 600;
+          margin: 0.75rem 0 0.5rem;
+          line-height: 1.3;
+        }
+
+        .sop-viewer .tiptap p {
           margin: 0.5rem 0;
         }
 
-        .sop-editor .tiptap ul,
-        .sop-editor .tiptap ol {
+        .sop-viewer .tiptap ul,
+        .sop-viewer .tiptap ol {
           padding-left: 1.5rem;
           margin: 0.5rem 0;
         }
 
-        .sop-editor .tiptap li {
+        .sop-viewer .tiptap li {
           margin: 0.25rem 0;
         }
 
-        .sop-editor .tiptap blockquote {
+        .sop-viewer .tiptap blockquote {
           border-left: 3px solid var(--color-border-strong);
           padding-left: 1rem;
           margin: 0.75rem 0;
           color: var(--color-text-secondary);
         }
 
-        .sop-editor .tiptap code {
+        .sop-viewer .tiptap code {
           background: var(--color-bg-tertiary);
           border-radius: 0.25rem;
           padding: 0.15rem 0.35rem;
@@ -331,7 +326,7 @@ export function SOPViewer({ content }: { content: string }) {
           font-family: ui-monospace, monospace;
         }
 
-        .sop-editor .tiptap pre {
+        .sop-viewer .tiptap pre {
           background: var(--color-bg-tertiary);
           border-radius: 0.5rem;
           padding: 0.75rem 1rem;
@@ -339,44 +334,38 @@ export function SOPViewer({ content }: { content: string }) {
           overflow-x: auto;
         }
 
-        .sop-editor .tiptap pre code {
+        .sop-viewer .tiptap pre code {
           background: none;
           padding: 0;
         }
 
-        .sop-editor .tiptap hr {
-          border: none;
-          border-top: 1px solid var(--color-border);
-          margin: 1.5rem 0;
-        }
-
-        .sop-editor .tiptap a,
-        .sop-editor .tiptap .editor-link {
+        .sop-viewer .tiptap a,
+        .sop-viewer .tiptap .editor-link {
           color: var(--color-primary);
           text-decoration: underline;
           cursor: pointer;
         }
 
-        .sop-editor .tiptap table {
+        .sop-viewer .tiptap table {
           border-collapse: collapse;
           width: 100%;
           margin: 0.75rem 0;
         }
 
-        .sop-editor .tiptap th,
-        .sop-editor .tiptap td {
+        .sop-viewer .tiptap th,
+        .sop-viewer .tiptap td {
           border: 1px solid var(--color-border);
           padding: 0.5rem 0.75rem;
           text-align: left;
           font-size: 0.875rem;
         }
 
-        .sop-editor .tiptap th {
+        .sop-viewer .tiptap th {
           background: var(--color-bg-secondary);
           font-weight: 600;
         }
 
-        .sop-editor .tiptap strong {
+        .sop-viewer .tiptap strong {
           font-weight: 600;
         }
       `}</style>

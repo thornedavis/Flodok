@@ -4,7 +4,7 @@ export async function verifyWebhookSignature(
   request: Request,
   secret: string,
 ): Promise<boolean> {
-  const signature = request.headers.get("x-webhook-signature");
+  const signature = request.headers.get("x-hub-signature");
   if (!signature) return false;
 
   const body = await request.clone().text();

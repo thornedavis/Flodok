@@ -191,6 +191,10 @@ async function routeOutputs(
 
   // Route tasks to Asana (non-blocking — failures don't stop SOP updates)
   const taskPromises = analysis.tasks.map(async (task) => {
+    if (!config.asana_access_token || !config.asana_workspace_id || !config.asana_project_id) {
+      log.errors.push("Asana not configured — skipping task creation");
+      return;
+    }
     try {
       const result = await createAsanaTask(
         task,

@@ -86,10 +86,9 @@ export interface SOPUpdate {
   employee_id: string;
   employee_phone: string;
   employee_name: string;
-  section: string;
   summary: string;
   proposed_content: string;
-  change_type: "addition" | "modification" | "removal";
+  change_type: "revision" | "addition" | "modification" | "removal";
 }
 
 export interface UnmatchedSOPItem {
@@ -111,12 +110,12 @@ export interface OrgConfig {
   org_id: string;
   org_name: string;
   fireflies_api_key: string;
-  fireflies_webhook_secret: string;
+  fireflies_webhook_secret?: string;
   flodok_api_key: string;
   flodok_api_base: string;
-  asana_access_token: string;
-  asana_workspace_id: string;
-  asana_project_id: string;
+  asana_access_token?: string;
+  asana_workspace_id?: string;
+  asana_project_id?: string;
   openrouter_api_key: string;
   openrouter_model: string;
   enabled: boolean;

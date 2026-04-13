@@ -47,12 +47,18 @@ Action items, to-dos, follow-ups, and assignments discussed in the meeting. For 
 - Priority if indicated (high/medium/low, default medium)
 
 CATEGORY 2 — SOP UPDATES:
-Changes to employee roles, responsibilities, or processes that should be reflected in their SOP. For each update:
-- Compare against the employee's CURRENT SOP provided below
-- ONLY flag genuinely NEW information or CHANGES to existing procedures
-- DO NOT flag things already documented in the current SOP
-- Write the proposed content in clean markdown format
-- Identify which section/category of the SOP this belongs to
+Changes to employee roles, responsibilities, or processes that should be reflected in their SOP.
+
+CRITICAL: For each employee whose SOP needs updating, return the COMPLETE REVISED SOP — not just the changes. You are editing the full document. This means:
+- Start from the employee's CURRENT SOP (provided below)
+- Integrate new information from the transcript into the appropriate sections
+- Modify existing text where responsibilities have changed (e.g., frequency changes, scope changes, new requirements)
+- Remove information that is explicitly no longer applicable based on the discussion
+- Add new sections where genuinely new responsibilities are discussed
+- Preserve all existing SOP content that was NOT discussed or changed in the meeting
+- Maintain consistent markdown formatting, heading hierarchy, and structure
+
+The "summary" field should describe what changed so a reviewer can quickly understand the differences without reading the full SOP.
 
 Return ONLY valid JSON in this exact format:
 {
@@ -69,10 +75,9 @@ Return ONLY valid JSON in this exact format:
       "employee_id": "uuid from roster",
       "employee_phone": "+62...",
       "employee_name": "Full name",
-      "section": "SOP section/category name",
-      "summary": "Brief human-readable summary of what changed",
-      "proposed_content": "The new or updated content in markdown format",
-      "change_type": "addition" | "modification" | "removal"
+      "summary": "Brief description of what changed (e.g., 'Added software review responsibility, increased vendor check-in frequency from weekly to twice-weekly')",
+      "proposed_content": "The COMPLETE revised SOP in markdown format — this replaces the entire existing SOP",
+      "change_type": "revision"
     }
   ],
   "unmatched_sop_items": [
@@ -89,7 +94,8 @@ IMPORTANT:
 - Most meetings will have NO SOP updates. This is normal. Return empty arrays.
 - Tasks are common. Capture all clearly assigned action items.
 - If something is ambiguous between a task and an SOP update, classify it as a task. SOP updates should only be clear, structural changes to roles or processes.
-- Do not invent or assume changes. Only extract what was explicitly discussed.`;
+- Do not invent or assume changes. Only extract what was explicitly discussed.
+- The proposed_content MUST be the full revised SOP, not a fragment. A reviewer will see this as the complete new version of the employee's SOP.`;
 
 export function buildNameExtractionUserMessage(
   roster: { id: string; name: string; phone: string }[],

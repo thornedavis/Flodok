@@ -89,15 +89,25 @@ Deno.serve(async (req: Request) => {
       .single()
 
     if (sop) {
-      const newContent = changes
-        .map((c: { section?: string; content_markdown?: string; summary?: string }) =>
-          `## ${c.section || 'Update'}\n\n${c.content_markdown || c.summary || ''}`
-        )
-        .join('\n\n')
+      // If change_type is "revision", the content is a full SOP replacement
+      // Otherwise, append as before (backwards compatible)
+      const isRevision = changes.some((c: { change_type?: string }) => c.change_type === 'revision')
 
-      const mergedContent = sop.content_markdown
-        ? `${sop.content_markdown}\n\n${newContent}`
-        : newContent
+      let mergedContent: string
+      if (isRevision) {
+        // Use the first revision's content as the full replacement
+        const revision = changes.find((c: { change_type?: string }) => c.change_type === 'revision')
+        mergedContent = revision?.content_markdown || sop.content_markdown
+      } else {
+        const newContent = changes
+          .map((c: { section?: string; content_markdown?: string; summary?: string }) =>
+            `## ${c.section || 'Update'}\n\n${c.content_markdown || c.summary || ''}`
+          )
+          .join('\n\n')
+        mergedContent = sop.content_markdown
+          ? `${sop.content_markdown}\n\n${newContent}`
+          : newContent
+      }
 
       // Translate the full merged English content to Indonesian
       const { text: mergedContentId } = await translateToIndonesian(mergedContent)

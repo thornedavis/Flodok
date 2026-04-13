@@ -52,7 +52,8 @@ export async function fetchEmployeeRoster(
     `${apiBase}/employees?include_sop=false`,
     apiKey,
   );
-  return response.json() as Promise<FlodokEmployee[]>;
+  const data = (await response.json()) as { employees: FlodokEmployee[] };
+  return data.employees;
 }
 
 export async function fetchEmployeesWithSOPs(
@@ -65,7 +66,8 @@ export async function fetchEmployeesWithSOPs(
     `${apiBase}/employees?include_sop=true&ids=${ids}`,
     apiKey,
   );
-  return response.json() as Promise<FlodokEmployeeWithSOP[]>;
+  const data = (await response.json()) as { employees: FlodokEmployeeWithSOP[] };
+  return data.employees;
 }
 
 export async function submitSOPUpdate(
@@ -80,9 +82,9 @@ export async function submitSOPUpdate(
       employee_phone: update.employee_phone,
       changes: [
         {
-          section: update.section,
           summary: update.summary,
           content_markdown: update.proposed_content,
+          change_type: update.change_type || 'revision',
         },
       ],
       source_meeting: sourceMeeting,
