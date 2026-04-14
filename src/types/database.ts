@@ -61,6 +61,7 @@ export type Database = {
           email: string | null
           photo_url: string | null
           department: string | null
+          notes: string | null
           slug: string
           access_token: string
           created_at: string
@@ -73,6 +74,7 @@ export type Database = {
           email?: string | null
           photo_url?: string | null
           department?: string | null
+          notes?: string | null
           slug: string
           access_token: string
           created_at?: string
@@ -83,6 +85,7 @@ export type Database = {
           email?: string | null
           photo_url?: string | null
           department?: string | null
+          notes?: string | null
           slug?: string
           access_token?: string
         }

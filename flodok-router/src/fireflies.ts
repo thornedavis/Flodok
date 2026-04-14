@@ -2,6 +2,52 @@ import type { FirefliesTranscript } from "./types";
 
 const FIREFLIES_API_URL = "https://api.fireflies.ai/graphql";
 
+const TRANSCRIPTS_LIST_QUERY = `
+  query RecentTranscripts {
+    transcripts {
+      id
+      title
+      date
+    }
+  }
+`;
+
+export interface TranscriptListItem {
+  id: string;
+  title: string;
+  date: string;
+}
+
+export async function fetchRecentTranscripts(
+  apiKey: string,
+): Promise<TranscriptListItem[]> {
+  const response = await fetch(FIREFLIES_API_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({ query: TRANSCRIPTS_LIST_QUERY }),
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `Fireflies API returned ${response.status}: ${await response.text()}`,
+    );
+  }
+
+  const json = (await response.json()) as {
+    data?: { transcripts: TranscriptListItem[] };
+    errors?: { message: string }[];
+  };
+
+  if (json.errors?.length) {
+    throw new Error(`Fireflies GraphQL error: ${json.errors[0].message}`);
+  }
+
+  return json.data?.transcripts ?? [];
+}
+
 const TRANSCRIPT_QUERY = `
   query Transcript($transcriptId: String!) {
     transcript(id: $transcriptId) {

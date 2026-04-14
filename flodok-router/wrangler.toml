@@ -2,9 +2,18 @@ name = "flodok-router"
 main = "src/index.ts"
 compatibility_date = "2025-04-10"
 
+[observability]
+[observability.logs]
+enabled = true
+invocation_logs = true
+[observability.traces]
+
 [[kv_namespaces]]
 binding = "KV"
 id = "f7df54fda6344607ace5b4ae932452fa"
 
 # For local dev, use a preview KV namespace
 # preview_id = "REPLACE_WITH_PREVIEW_KV_NAMESPACE_ID"
+
+[triggers]
+crons = ["*/5 * * * *"]

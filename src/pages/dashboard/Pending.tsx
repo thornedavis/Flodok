@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
 import { SOPEditor } from '../../components/Editor'
 import { Avatar } from '../../components/Avatar'
@@ -12,6 +12,11 @@ type EnrichedUpdate = PendingUpdate & {
   employee?: Employee | null
   currentSop?: Sop | null
   mergedContent: string
+}
+
+type ResolvedDiffData = {
+  oldContent: string
+  newContent: string
 }
 
 /** Build the full SOP content to show in the editor */
@@ -44,13 +49,32 @@ function getChangeSummaries(update: PendingUpdate): string[] {
     .filter((s): s is string => !!s)
 }
 
+const ROUTER_URL = 'https://flodok-router.thorne-davis.workers.dev'
+
 export function Pending({ user }: { user: User }) {
   const [updates, setUpdates] = useState<EnrichedUpdate[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [polling, setPolling] = useState(false)
+  const [pollResult, setPollResult] = useState<string | null>(null)
   // Track edited full-SOP content per update ID
   const [editedContent, setEditedContent] = useState<Record<string, string>>({})
+  // Pending section filters
+  const [pendingFilterEmployee, setPendingFilterEmployee] = useState<string>('')
+  const [pendingSort, setPendingSort] = useState<'newest' | 'oldest'>('newest')
+  // Resolved section state
+  const [expandedResolvedId, setExpandedResolvedId] = useState<string | null>(null)
+  const [resolvedDiffs, setResolvedDiffs] = useState<Record<string, ResolvedDiffData>>({})
+  const [loadingDiff, setLoadingDiff] = useState<string | null>(null)
+  // Filters
+  const [filterEmployee, setFilterEmployee] = useState<string>('')
+  const [filterStatus, setFilterStatus] = useState<string>('')
+  const [filterDateFrom, setFilterDateFrom] = useState<string>('')
+  const [filterDateTo, setFilterDateTo] = useState<string>('')
+  // Pagination
+  const [pageSize, setPageSize] = useState(10)
+  const [currentPage, setCurrentPage] = useState(1)
 
   useEffect(() => { loadData() }, [user.org_id])
 
@@ -149,10 +173,181 @@ export function Pending({ user }: { user: User }) {
     loadData()
   }
 
-  if (loading) return <div style={{ color: 'var(--color-text-secondary)' }}>Loading...</div>
+  async function loadResolvedDiff(update: EnrichedUpdate) {
+    if (resolvedDiffs[update.id]) return // Already loaded
+    setLoadingDiff(update.id)
 
-  const pendingOnly = updates.filter(u => u.status === 'pending')
+    try {
+      const changes = (update.proposed_changes as ProposedChanges).changes || []
+      const newContent = buildMergedContent(null, changes)
+
+      // For approved items, find the version created by this update
+      // For rejected items, show proposed vs current SOP
+      let oldContent = ''
+
+      if (update.employee_id) {
+        const { data: sop } = await supabase
+          .from('sops')
+          .select('id, content_markdown')
+          .eq('employee_id', update.employee_id)
+          .single()
+
+        if (sop) {
+          if (update.status === 'approved') {
+            // Find the version just before the approved change
+            const { data: versions } = await supabase
+              .from('sop_versions')
+              .select('content_markdown, version_number')
+              .eq('sop_id', sop.id)
+              .order('version_number', { ascending: false })
+              .limit(10)
+
+            // Find the version created around the resolved_at time
+            const resolvedTime = update.resolved_at ? new Date(update.resolved_at).getTime() : 0
+            const { data: matchingVersions } = await supabase
+              .from('sop_versions')
+              .select('content_markdown, version_number, created_at')
+              .eq('sop_id', sop.id)
+              .order('version_number', { ascending: false })
+
+            if (matchingVersions && matchingVersions.length >= 2) {
+              // The most recent version matching the update is the "after"
+              // The one before it is the "before"
+              const afterIdx = matchingVersions.findIndex(v => {
+                const vTime = new Date(v.created_at).getTime()
+                return Math.abs(vTime - resolvedTime) < 60000 // within 1 minute
+              })
+              if (afterIdx >= 0 && afterIdx + 1 < matchingVersions.length) {
+                oldContent = matchingVersions[afterIdx + 1].content_markdown
+                setResolvedDiffs(prev => ({
+                  ...prev,
+                  [update.id]: {
+                    oldContent,
+                    newContent: matchingVersions[afterIdx].content_markdown,
+                  },
+                }))
+                setLoadingDiff(null)
+                return
+              }
+            }
+
+            // Fallback: use second-to-last version as "before"
+            if (versions && versions.length >= 2) {
+              oldContent = versions[1].content_markdown
+            }
+          } else {
+            // Rejected — show current SOP as "old", proposed as "new"
+            oldContent = sop.content_markdown
+          }
+        }
+      }
+
+      setResolvedDiffs(prev => ({
+        ...prev,
+        [update.id]: { oldContent, newContent },
+      }))
+    } catch {
+      setResolvedDiffs(prev => ({
+        ...prev,
+        [update.id]: { oldContent: '', newContent: '' },
+      }))
+    }
+    setLoadingDiff(null)
+  }
+
+  function handleExpandResolved(update: EnrichedUpdate) {
+    const isExpanding = expandedResolvedId !== update.id
+    setExpandedResolvedId(isExpanding ? update.id : null)
+    if (isExpanding) {
+      loadResolvedDiff(update)
+    }
+  }
+
+  // Filter and paginate resolved items
   const resolved = updates.filter(u => u.status !== 'pending')
+
+  const filteredResolved = useMemo(() => {
+    let items = resolved
+
+    if (filterEmployee) {
+      items = items.filter(u => u.employee_id === filterEmployee)
+    }
+    if (filterStatus) {
+      items = items.filter(u => u.status === filterStatus)
+    }
+    if (filterDateFrom) {
+      const from = new Date(filterDateFrom).getTime()
+      items = items.filter(u => new Date(u.created_at).getTime() >= from)
+    }
+    if (filterDateTo) {
+      const to = new Date(filterDateTo).getTime() + 86400000 // end of day
+      items = items.filter(u => new Date(u.created_at).getTime() <= to)
+    }
+
+    return items
+  }, [resolved, filterEmployee, filterStatus, filterDateFrom, filterDateTo])
+
+  const totalPages = Math.max(1, Math.ceil(filteredResolved.length / pageSize))
+  const paginatedResolved = filteredResolved.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+
+  // Reset to page 1 when filters change
+  useEffect(() => { setCurrentPage(1) }, [filterEmployee, filterStatus, filterDateFrom, filterDateTo, pageSize])
+
+  async function handleCheckForUpdates() {
+    setPolling(true)
+    setPollResult(null)
+    try {
+      // Get an active API key for this org
+      const { data: keys } = await supabase
+        .from('api_keys')
+        .select('key_hash')
+        .eq('org_id', user.org_id)
+        .limit(1)
+
+      if (!keys?.length) {
+        setPollResult('No active API key found. Create one in Settings.')
+        setPolling(false)
+        return
+      }
+
+      const res = await fetch(`${ROUTER_URL}/poll`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${keys[0].key_hash}`,
+          'Content-Type': 'application/json',
+        },
+      })
+
+      const data = await res.json() as { status: string; found?: number; processed?: number }
+      if (data.processed && data.processed > 0) {
+        setPollResult(`Found ${data.processed} new transcript${data.processed > 1 ? 's' : ''}. Processing...`)
+        // Reload after a delay to let processing complete
+        setTimeout(() => { loadData(); setPollResult(null) }, 5000)
+      } else {
+        setPollResult('No new transcripts found.')
+        setTimeout(() => setPollResult(null), 3000)
+      }
+    } catch (err) {
+      setPollResult('Failed to check for updates.')
+      setTimeout(() => setPollResult(null), 3000)
+    }
+    setPolling(false)
+  }
+
+  // Filter and sort pending items (hooks must be before early returns)
+  const allPending = updates.filter(u => u.status === 'pending')
+  const pendingOnly = useMemo(() => {
+    let items = allPending
+    if (pendingFilterEmployee) {
+      items = items.filter(u => u.employee_id === pendingFilterEmployee)
+    }
+    if (pendingSort === 'oldest') {
+      items = [...items].reverse()
+    }
+    return items
+  }, [allPending, pendingFilterEmployee, pendingSort])
+
+  if (loading) return <div style={{ color: 'var(--color-text-secondary)' }}>Loading...</div>
 
   const statusColors: Record<string, string> = {
     pending: 'var(--color-warning)',
@@ -163,11 +358,89 @@ export function Pending({ user }: { user: User }) {
 
   return (
     <div>
-      <h1 className="mb-6 text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>Pending Updates</h1>
+      {/* Pending Updates Section */}
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>Pending Updates</h2>
+        <div className="flex items-center gap-3">
+          {pollResult && (
+            <span className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>{pollResult}</span>
+          )}
+          <button
+            onClick={handleCheckForUpdates}
+            disabled={polling}
+            className="flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors"
+            style={{
+              borderColor: 'var(--color-border)',
+              color: polling ? 'var(--color-text-tertiary)' : 'var(--color-text)',
+              backgroundColor: 'var(--color-bg-elevated)',
+            }}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={polling ? 'animate-spin' : ''}
+            >
+              <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+            </svg>
+            {polling ? 'Checking...' : 'Check for Updates'}
+          </button>
+        </div>
+      </div>
+
+      {/* Pending filters — only show when there are items */}
+      {allPending.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <select
+            value={pendingFilterEmployee}
+            onChange={e => setPendingFilterEmployee(e.target.value)}
+            className="rounded-lg border px-3 py-1.5 text-xs"
+            style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+          >
+            <option value="">All employees</option>
+            {employees
+              .filter(e => allPending.some(u => u.employee_id === e.id))
+              .map(e => (
+                <option key={e.id} value={e.id}>{e.name}</option>
+              ))}
+          </select>
+
+          <select
+            value={pendingSort}
+            onChange={e => setPendingSort(e.target.value as 'newest' | 'oldest')}
+            className="rounded-lg border px-3 py-1.5 text-xs"
+            style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+          >
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+          </select>
+
+          {pendingFilterEmployee && (
+            <button
+              onClick={() => setPendingFilterEmployee('')}
+              className="text-xs underline"
+              style={{ color: 'var(--color-text-tertiary)' }}
+            >
+              Clear filter
+            </button>
+          )}
+
+          <span className="ml-auto text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+            {pendingOnly.length} item{pendingOnly.length !== 1 ? 's' : ''}
+          </span>
+        </div>
+      )}
 
       {pendingOnly.length === 0 ? (
         <p className="py-12 text-center text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-          No pending updates. Updates from the API will appear here.
+          {allPending.length === 0
+            ? 'No pending updates. Updates from the API will appear here.'
+            : 'No items match your filter.'}
         </p>
       ) : (
         <div className="space-y-3">
@@ -309,42 +582,223 @@ export function Pending({ user }: { user: User }) {
 
       {resolved.length > 0 && (
         <div className="mt-10">
-          <h2 className="mb-4 text-lg font-semibold" style={{ color: 'var(--color-text-secondary)' }}>Resolved</h2>
-          <div className="divide-y rounded-xl border" style={{ borderColor: 'var(--color-border)' }}>
-            {resolved.map(update => {
+          <h2 className="mb-4 text-xl font-semibold" style={{ color: 'var(--color-text)' }}>Resolved</h2>
+
+          {/* Filters */}
+          <div className="mb-4 flex flex-wrap items-center gap-3">
+            <select
+              value={filterEmployee}
+              onChange={e => setFilterEmployee(e.target.value)}
+              className="rounded-lg border px-3 py-1.5 text-xs"
+              style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+            >
+              <option value="">All employees</option>
+              {employees
+                .filter(e => resolved.some(u => u.employee_id === e.id))
+                .map(e => (
+                  <option key={e.id} value={e.id}>{e.name}</option>
+                ))}
+            </select>
+
+            <select
+              value={filterStatus}
+              onChange={e => setFilterStatus(e.target.value)}
+              className="rounded-lg border px-3 py-1.5 text-xs"
+              style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+            >
+              <option value="">All statuses</option>
+              <option value="approved">Approved</option>
+              <option value="rejected">Rejected</option>
+              <option value="auto_applied">Auto-applied</option>
+            </select>
+
+            <div className="flex items-center gap-1.5">
+              <input
+                type="date"
+                value={filterDateFrom}
+                onChange={e => setFilterDateFrom(e.target.value)}
+                className="rounded-lg border px-3 py-1.5 text-xs"
+                style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+                placeholder="From"
+              />
+              <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>to</span>
+              <input
+                type="date"
+                value={filterDateTo}
+                onChange={e => setFilterDateTo(e.target.value)}
+                className="rounded-lg border px-3 py-1.5 text-xs"
+                style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+                placeholder="To"
+              />
+            </div>
+
+            {(filterEmployee || filterStatus || filterDateFrom || filterDateTo) && (
+              <button
+                onClick={() => { setFilterEmployee(''); setFilterStatus(''); setFilterDateFrom(''); setFilterDateTo('') }}
+                className="text-xs underline"
+                style={{ color: 'var(--color-text-tertiary)' }}
+              >
+                Clear filters
+              </button>
+            )}
+
+            <div className="ml-auto flex items-center gap-2">
+              <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                {filteredResolved.length} result{filteredResolved.length !== 1 ? 's' : ''}
+              </span>
+              <select
+                value={pageSize}
+                onChange={e => setPageSize(Number(e.target.value))}
+                className="rounded-lg border px-2 py-1.5 text-xs"
+                style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+              >
+                <option value={10}>10 per page</option>
+                <option value={20}>20 per page</option>
+                <option value={50}>50 per page</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Resolved items list */}
+          <div className="space-y-2">
+            {paginatedResolved.map(update => {
               const summaries = getChangeSummaries(update)
+              const isExpanded = expandedResolvedId === update.id
+              const diffData = resolvedDiffs[update.id]
+
               return (
-                <div key={update.id} className="flex items-center justify-between px-5 py-3">
-                  <div className="flex items-center gap-3">
-                    <Avatar
-                      name={update.employee?.name || '?'}
-                      id={update.employee?.id || update.id}
-                      photoUrl={update.employee?.photo_url}
-                      size="sm"
-                    />
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm" style={{ color: 'var(--color-text)' }}>
-                          {update.employee?.name || update.employee_identifier}
-                        </span>
-                        <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                          {new Date(update.created_at).toLocaleDateString()}
-                        </span>
+                <div
+                  key={update.id}
+                  className="rounded-xl border"
+                  style={{ borderColor: isExpanded ? 'var(--color-primary)' : 'var(--color-border)' }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => handleExpandResolved(update)}
+                    className="flex w-full items-center justify-between px-5 py-3 text-left"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Avatar
+                        name={update.employee?.name || '?'}
+                        id={update.employee?.id || update.id}
+                        photoUrl={update.employee?.photo_url}
+                        size="sm"
+                      />
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+                            {update.employee?.name || update.employee_identifier}
+                          </span>
+                          <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                            {new Date(update.created_at).toLocaleDateString()}
+                          </span>
+                        </div>
+                        {summaries.length > 0 && (
+                          <div className="mt-0.5 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                            {summaries[0]}{summaries.length > 1 && ` (+${summaries.length - 1} more)`}
+                          </div>
+                        )}
+                        {update.source_meeting && (
+                          <div className="mt-0.5 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                            {update.source_meeting}
+                          </div>
+                        )}
                       </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs font-medium" style={{ color: statusColors[update.status] }}>
+                        {update.status}
+                      </span>
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="shrink-0 transition-transform"
+                        style={{
+                          color: 'var(--color-text-tertiary)',
+                          transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                        }}
+                      >
+                        <polyline points="6 9 12 15 18 9" />
+                      </svg>
+                    </div>
+                  </button>
+
+                  {isExpanded && (
+                    <div className="border-t px-5 pb-5 pt-4" style={{ borderColor: 'var(--color-border)' }}>
+                      {/* Change summaries */}
                       {summaries.length > 0 && (
-                        <div className="mt-0.5 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                          {summaries[0]}{summaries.length > 1 && ` (+${summaries.length - 1} more)`}
+                        <div className="mb-4 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+                          {summaries.map((s, i) => (
+                            <span key={i}>{i > 0 && ' · '}{s}</span>
+                          ))}
                         </div>
                       )}
+
+                      {/* Resolved metadata */}
+                      {update.resolved_at && (
+                        <div className="mb-4 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                          {update.status === 'approved' ? 'Approved' : update.status === 'rejected' ? 'Rejected' : 'Resolved'} on{' '}
+                          {new Date(update.resolved_at).toLocaleString()}
+                        </div>
+                      )}
+
+                      {/* Diff panel */}
+                      {loadingDiff === update.id ? (
+                        <div className="py-4 text-center text-sm" style={{ color: 'var(--color-text-tertiary)' }}>
+                          Loading diff...
+                        </div>
+                      ) : diffData ? (
+                        <DiffPanel
+                          oldContent={diffData.oldContent}
+                          newContent={diffData.newContent}
+                        />
+                      ) : null}
                     </div>
-                  </div>
-                  <span className="text-xs font-medium" style={{ color: statusColors[update.status] }}>
-                    {update.status}
-                  </span>
+                  )}
                 </div>
               )
             })}
           </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="mt-4 flex items-center justify-center gap-2">
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="rounded-lg border px-3 py-1.5 text-xs"
+                style={{
+                  borderColor: 'var(--color-border)',
+                  color: currentPage === 1 ? 'var(--color-text-tertiary)' : 'var(--color-text)',
+                  backgroundColor: 'var(--color-bg-elevated)',
+                }}
+              >
+                Previous
+              </button>
+              <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+                Page {currentPage} of {totalPages}
+              </span>
+              <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="rounded-lg border px-3 py-1.5 text-xs"
+                style={{
+                  borderColor: 'var(--color-border)',
+                  color: currentPage === totalPages ? 'var(--color-text-tertiary)' : 'var(--color-text)',
+                  backgroundColor: 'var(--color-bg-elevated)',
+                }}
+              >
+                Next
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
