@@ -915,10 +915,10 @@ export function SOPView() {
                           {event.description && (
                             <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{event.description}</p>
                           )}
-                          {event.event_type === 'sop_signed' && event.metadata?.signature_font && (
+                          {event.event_type === 'sop_signed' && (event.metadata as Record<string, string>)?.signature_font && (
                             <p
                               className="mt-1 text-lg"
-                              style={{ fontFamily: `'${event.metadata.signature_font}', cursive`, color: 'var(--color-text-secondary)' }}
+                              style={{ fontFamily: `'${(event.metadata as Record<string, string>).signature_font}', cursive`, color: 'var(--color-text-secondary)' }}
                             >
                               {event.title}
                             </p>

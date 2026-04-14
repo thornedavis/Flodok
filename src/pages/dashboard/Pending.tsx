@@ -98,7 +98,7 @@ export function Pending({ user }: { user: User }) {
         .select('*')
         .in('employee_id', employeeIds)
 
-      sopMap = new Map((sops || []).map(s => [s.employee_id, s]))
+      sopMap = new Map((sops || []).filter(s => s.employee_id !== null).map(s => [s.employee_id as string, s]))
     }
 
     setUpdates((updatesResult.data || []).map(u => {

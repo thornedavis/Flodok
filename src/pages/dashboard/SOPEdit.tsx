@@ -32,7 +32,7 @@ export function SOPEdit({ user }: { user: User }) {
   const [translating, setTranslating] = useState(false)
   const [translateDone, setTranslateDone] = useState(false)
   const [status, setStatus] = useState<'active' | 'draft' | 'archived'>('draft')
-  const [changeSummary, setChangeSummary] = useState('')
+  const [changeSummary] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
