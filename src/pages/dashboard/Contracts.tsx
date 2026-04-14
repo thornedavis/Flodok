@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import type { User, Contract, Employee, Tag } from '../../types/database'
@@ -417,6 +417,253 @@ export function Contracts({ user }: { user: User }) {
   )
 }
 
+type ContractType = 'pkwt' | 'pkwtt'
+
+const CONTRACT_TYPE_INFO: Record<ContractType, { label: string; description: string }> = {
+  pkwt: {
+    label: 'Fixed Term (PKWT)',
+    description: 'Perjanjian Kerja Waktu Tertentu — for contract/temporary employees. Has a defined start and end date, max 5 years including extensions. No probation period allowed.',
+  },
+  pkwtt: {
+    label: 'Permanent (PKWTT)',
+    description: 'Perjanjian Kerja Waktu Tidak Tertentu — for permanent employees. No end date. May include a probation period of up to 3 months.',
+  },
+}
+
+function formatCurrency(val: string) {
+  const num = val.replace(/\D/g, '')
+  if (!num) return ''
+  return Number(num).toLocaleString('id-ID')
+}
+
+function generateContractMarkdown(
+  type: ContractType,
+  fields: {
+    employeeName: string
+    employeeAddress: string
+    ktpNumber: string
+    position: string
+    department: string
+    workLocation: string
+    startDate: string
+    endDate: string
+    probationMonths: string
+    baseSalary: string
+    transportAllowance: string
+    mealAllowance: string
+    hoursPerDay: string
+    daysPerWeek: string
+    annualLeave: string
+  },
+) {
+  const isPKWT = type === 'pkwt'
+  const name = fields.employeeName || '[Employee Name]'
+  const address = fields.employeeAddress || '[Employee Address]'
+  const ktp = fields.ktpNumber || '[KTP Number]'
+  const position = fields.position || '[Position]'
+  const dept = fields.department || '[Department]'
+  const location = fields.workLocation || '[Work Location]'
+  const start = fields.startDate || '[Start Date]'
+  const end = fields.endDate || '[End Date]'
+  const salary = fields.baseSalary ? `Rp ${formatCurrency(fields.baseSalary)}` : '[Base Salary]'
+  const transport = fields.transportAllowance ? `Rp ${formatCurrency(fields.transportAllowance)}` : '-'
+  const meal = fields.mealAllowance ? `Rp ${formatCurrency(fields.mealAllowance)}` : '-'
+  const hours = fields.hoursPerDay || '8'
+  const days = fields.daysPerWeek || '6'
+  const leave = fields.annualLeave || '12'
+
+  let md = `# ${isPKWT ? 'PERJANJIAN KERJA WAKTU TERTENTU (PKWT)' : 'PERJANJIAN KERJA WAKTU TIDAK TERTENTU (PKWTT)'}
+
+# EMPLOYMENT CONTRACT
+
+This Employment Contract (the "Agreement") is entered into on this **${start}**,
+
+**BETWEEN:**
+
+**[Company Name]**, a company organized and existing under the laws of the Republic of Indonesia, with its principal office located at [Company Address] (the "Employer");
+
+**AND:**
+
+**${name}**, holder of KTP No. **${ktp}**, residing at **${address}** (the "Employee").
+
+The parties agree to the following terms and conditions:
+
+---
+
+## 1. POSITION AND DUTIES
+
+1.1 **Title:** The Employee is hired for the position of **${position}** within the **${dept}**.
+
+1.2 **Reporting:** The Employee shall report directly to their designated supervisor or such other person as the Employer may designate.
+
+1.3 **Responsibilities:** The Employee agrees to perform the duties customary to this position, including but not limited to those outlined by the Employer.
+
+1.4 **Work Location:** ${location}
+
+---
+
+## 2. CONTRACT DURATION
+
+`
+
+  if (isPKWT) {
+    md += `2.1 This Agreement shall commence on **${start}** and shall terminate on **${end}**, unless terminated earlier in accordance with the terms of this Agreement.
+
+2.2 This Agreement may be extended by mutual written consent of both parties, subject to the maximum duration permitted under applicable law (PP 35/2021).
+
+2.3 Upon expiration, the Employee shall be entitled to compensation pay as stipulated under Government Regulation No. 35 of 2021.
+
+`
+  } else {
+    const probation = fields.probationMonths || '3'
+    md += `2.1 This Agreement shall commence on **${start}** and shall continue indefinitely until terminated by either party in accordance with the terms of this Agreement.
+
+2.2 **Probation Period:** The Employee shall be subject to a probation period of **${probation} month(s)** from the commencement date. During probation, either party may terminate this Agreement with 7 days' written notice.
+
+`
+  }
+
+  md += `---
+
+## 3. COMPENSATION
+
+3.1 **Base Salary:** The Employee shall receive a monthly base salary of **${salary}** (gross), payable on the last working day of each month.
+
+3.2 **Allowances:**
+- Transport Allowance: **${transport}** per month
+- Meal Allowance: **${meal}** per month
+
+3.3 **THR (Tunjangan Hari Raya):** The Employee is entitled to a religious holiday bonus equivalent to one month's salary after 12 months of continuous service, or pro-rated for service less than 12 months.
+
+3.4 **Tax:** Income tax (PPh 21) shall be calculated and withheld in accordance with applicable tax regulations.
+
+---
+
+## 4. WORKING HOURS
+
+4.1 The Employee shall work **${hours} hours per day**, **${days} days per week**, totaling **${Number(hours) * Number(days)} hours per week**.
+
+4.2 The specific work schedule shall be determined by the Employer and communicated to the Employee.
+
+---
+
+## 5. OVERTIME
+
+5.1 Overtime work shall be compensated in accordance with Indonesian labor law:
+- **First hour:** 1.5x the hourly wage
+- **Subsequent hours:** 2x the hourly wage
+
+5.2 Overtime must be authorized in advance by the Employee's supervisor.
+
+---
+
+## 6. LEAVE
+
+6.1 **Annual Leave:** The Employee is entitled to **${leave} working days** of paid annual leave per year, after completing 12 months of continuous service.
+
+6.2 **Sick Leave:** As per applicable law, with valid medical certificate.
+
+6.3 **Maternity Leave:** 3 months (1.5 months before and 1.5 months after delivery) with full pay, as per Law No. 13/2003.
+
+6.4 **Other Leave:** As stipulated under applicable Indonesian labor law.
+
+---
+
+## 7. SOCIAL SECURITY (BPJS)
+
+7.1 The Employer shall register the Employee in **BPJS Kesehatan** (health insurance) and **BPJS Ketenagakerjaan** (employment social security) in accordance with applicable law.
+
+7.2 Contributions shall be shared between the Employer and Employee as prescribed by regulation.
+
+---
+
+## 8. TERMINATION
+
+8.1 Either party may terminate this Agreement in accordance with the provisions of Law No. 13/2003 on Manpower and its amendments under Law No. 11/2020 (Cipta Kerja).
+
+8.2 The Employee shall be entitled to severance pay, service pay, and compensation rights as applicable under law.
+
+8.3 Grounds for termination by the Employer include, but are not limited to: serious misconduct, repeated violation of company rules, or prolonged absence without notice.
+
+---
+
+## 9. CONFIDENTIALITY
+
+9.1 The Employee shall maintain the confidentiality of all proprietary information, trade secrets, and business operations of the Employer during and after the term of employment.
+
+---
+
+## 10. GENERAL PROVISIONS
+
+10.1 This Agreement is governed by the laws of the Republic of Indonesia.
+
+10.2 Any disputes arising from this Agreement shall be resolved through deliberation (musyawarah) and, failing that, through the Industrial Relations Court.
+
+10.3 This Agreement is made in duplicate, each copy having equal legal force, one for each party.
+
+---
+
+**EMPLOYER:**
+
+Name: ____________________________
+
+Title: ____________________________
+
+Signature: ________________________
+
+Date: ____________________________
+
+&nbsp;
+
+**EMPLOYEE:**
+
+Name: **${name}**
+
+Signature: ________________________
+
+Date: ____________________________
+`
+
+  return md
+}
+
+function InfoTooltip({ text }: { text: string }) {
+  const [show, setShow] = useState(false)
+  const btnRef = useRef<HTMLButtonElement>(null)
+  const [pos, setPos] = useState({ top: 0, left: 0 })
+
+  const handleEnter = () => {
+    if (btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect()
+      setPos({ top: rect.bottom + 6, left: rect.left + rect.width / 2 })
+    }
+    setShow(true)
+  }
+
+  return (
+    <span className="inline-flex">
+      <button
+        ref={btnRef}
+        type="button"
+        className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold"
+        style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-tertiary)' }}
+        onMouseEnter={handleEnter}
+        onMouseLeave={() => setShow(false)}
+      >
+        i
+      </button>
+      {show && (
+        <div
+          className="fixed z-50 w-64 -translate-x-1/2 rounded-lg border p-3 text-xs shadow-lg"
+          style={{ top: pos.top, left: pos.left, backgroundColor: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
+        >
+          {text}
+        </div>
+      )}
+    </span>
+  )
+}
+
 function CreateContractModal({ orgId, employees, onClose, onCreated }: {
   orgId: string
   employees: Employee[]
@@ -426,8 +673,23 @@ function CreateContractModal({ orgId, employees, onClose, onCreated }: {
   const [title, setTitle] = useState('')
   const [employeeId, setEmployeeId] = useState('')
   const [empSearch, setEmpSearch] = useState('')
+  const [contractType, setContractType] = useState<ContractType>('pkwt')
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
+
+  // Quick-fill fields
+  const [ktpNumber, setKtpNumber] = useState('')
+  const [employeeAddress, setEmployeeAddress] = useState('')
+  const [workLocation, setWorkLocation] = useState('')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+  const [probationMonths, setProbationMonths] = useState('3')
+  const [baseSalary, setBaseSalary] = useState('')
+  const [transportAllowance, setTransportAllowance] = useState('')
+  const [mealAllowance, setMealAllowance] = useState('')
+  const [hoursPerDay, setHoursPerDay] = useState('8')
+  const [daysPerWeek, setDaysPerWeek] = useState('6')
+  const [annualLeave, setAnnualLeave] = useState('12')
 
   useEffect(() => {
     function handleKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
@@ -446,9 +708,27 @@ function CreateContractModal({ orgId, employees, onClose, onCreated }: {
     setError('')
     setCreating(true)
 
+    const markdown = generateContractMarkdown(contractType, {
+      employeeName: selectedEmployee?.name || '',
+      employeeAddress,
+      ktpNumber,
+      position: selectedEmployee?.department ? `${selectedEmployee.department} Staff` : '',
+      department: selectedEmployee?.department || '',
+      workLocation,
+      startDate,
+      endDate,
+      probationMonths,
+      baseSalary,
+      transportAllowance,
+      mealAllowance,
+      hoursPerDay,
+      daysPerWeek,
+      annualLeave,
+    })
+
     const { data, error: insertError } = await supabase
       .from('contracts')
-      .insert({ org_id: orgId, employee_id: employeeId || null, title: title.trim(), content_markdown: '', status: 'draft' as const })
+      .insert({ org_id: orgId, employee_id: employeeId || null, title: title.trim(), content_markdown: markdown, status: 'draft' as const })
       .select()
       .single()
 
@@ -464,7 +744,7 @@ function CreateContractModal({ orgId, employees, onClose, onCreated }: {
       style={{ backgroundColor: 'rgba(0, 0, 0, 0.6)', backdropFilter: 'blur(4px)' }}
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="relative w-full max-w-md rounded-2xl border p-6" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-elevated, var(--color-bg))' }}>
+      <div className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border p-6" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-elevated, var(--color-bg))' }}>
         <button type="button" onClick={onClose} className="absolute right-4 top-4 rounded-lg p-1.5 transition-colors" style={{ color: 'var(--color-text-tertiary)' }}
           onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
           onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
@@ -481,11 +761,42 @@ function CreateContractModal({ orgId, employees, onClose, onCreated }: {
             <div className="rounded-md px-3 py-2 text-sm" style={{ backgroundColor: 'var(--color-diff-remove)', color: 'var(--color-danger)' }}>{error}</div>
           )}
 
+          {/* Contract Type Toggle */}
           <div>
-            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>Title</label>
-            <input type="text" value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Employment Contract - Full Time" className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} autoFocus />
+            <label className="mb-2 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>Contract Type</label>
+            <div className="grid grid-cols-2 gap-2">
+              {(['pkwt', 'pkwtt'] as const).map(type => {
+                const isSelected = contractType === type
+                const info = CONTRACT_TYPE_INFO[type]
+                return (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => setContractType(type)}
+                    className="relative rounded-lg border px-3 py-2.5 text-left text-sm font-medium transition-all"
+                    style={{
+                      borderColor: isSelected ? 'var(--color-primary)' : 'var(--color-border)',
+                      backgroundColor: isSelected ? 'color-mix(in srgb, var(--color-primary) 8%, transparent)' : 'transparent',
+                      color: isSelected ? 'var(--color-primary)' : 'var(--color-text)',
+                    }}
+                  >
+                    <span className="flex items-center">
+                      {info.label}
+                      <InfoTooltip text={info.description} />
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
           </div>
 
+          {/* Title */}
+          <div>
+            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>Title</label>
+            <input type="text" value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Employment Contract - Katut Ruti" className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} autoFocus />
+          </div>
+
+          {/* Employee */}
           <div>
             <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
               Employee <span className="font-normal" style={{ color: 'var(--color-text-tertiary)' }}>(optional)</span>
@@ -496,31 +807,145 @@ function CreateContractModal({ orgId, employees, onClose, onCreated }: {
                   <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{selectedEmployee.name}</span>
                   {selectedEmployee.department && <span className="ml-2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{selectedEmployee.department}</span>}
                 </div>
-                <button type="button" onClick={() => setEmployeeId('')} className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>Clear</button>
+                <button type="button" onClick={() => { setEmployeeId(''); setKtpNumber(''); setEmployeeAddress('') }} className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>Clear</button>
               </div>
             ) : (
-              <div>
-                {employees.length > 5 && (
-                  <input type="text" value={empSearch} onChange={e => setEmpSearch(e.target.value)} placeholder="Search employees..." className="mb-2 w-full rounded-lg border px-3 py-1.5 text-sm" style={inputStyle} />
+              <div className="relative">
+                <input type="text" value={empSearch} onChange={e => setEmpSearch(e.target.value)} placeholder="Search employees..." className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
+                {empSearch.trim() && (
+                  <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-32 overflow-y-auto rounded-lg border shadow-lg" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }}>
+                    {filteredEmployees.length === 0 ? (
+                      <p className="px-3 py-2 text-sm" style={{ color: 'var(--color-text-tertiary)' }}>No matches</p>
+                    ) : (
+                      filteredEmployees.map(emp => (
+                        <button key={emp.id} type="button" onClick={() => { setEmployeeId(emp.id); setEmpSearch(''); if (emp.ktp_nik) setKtpNumber(emp.ktp_nik); if (emp.address) setEmployeeAddress(emp.address) }}
+                          className="flex w-full items-center justify-between px-3 py-2 text-left text-sm transition-colors" style={{ color: 'var(--color-text)' }}
+                          onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
+                          onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
+                        >
+                          <span>{emp.name}</span>
+                          {emp.department && <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{emp.department}</span>}
+                        </button>
+                      ))
+                    )}
+                  </div>
                 )}
-                <div className="max-h-40 overflow-y-auto rounded-lg border" style={{ borderColor: 'var(--color-border)' }}>
-                  {filteredEmployees.length === 0 ? (
-                    <p className="px-3 py-2 text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{employees.length === 0 ? 'No employees yet' : 'No matches'}</p>
-                  ) : (
-                    filteredEmployees.map(emp => (
-                      <button key={emp.id} type="button" onClick={() => { setEmployeeId(emp.id); setEmpSearch('') }}
-                        className="flex w-full items-center justify-between px-3 py-2 text-left text-sm transition-colors" style={{ color: 'var(--color-text)' }}
-                        onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
-                        onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
-                      >
-                        <span>{emp.name}</span>
-                        {emp.department && <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{emp.department}</span>}
-                      </button>
-                    ))
-                  )}
-                </div>
               </div>
             )}
+          </div>
+
+          {/* Quick-fill fields */}
+          <div className="border-t pt-4" style={{ borderColor: 'var(--color-border)' }}>
+            <h3 className="mb-3 text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+              Contract Details
+              <span className="ml-2 font-normal text-xs" style={{ color: 'var(--color-text-tertiary)' }}>All fields can be edited later</span>
+            </h3>
+
+            <div className="space-y-3">
+              {/* Employee details */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>KTP / NIK Number</label>
+                  <input type="text" value={ktpNumber} onChange={e => setKtpNumber(e.target.value)} placeholder="3171..." className="w-full rounded-lg border px-3 py-1.5 text-sm" style={inputStyle} />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>Work Location</label>
+                  <input type="text" value={workLocation} onChange={e => setWorkLocation(e.target.value)} placeholder="e.g. Jl. Raya Ubud" className="w-full rounded-lg border px-3 py-1.5 text-sm" style={inputStyle} />
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>Employee Address</label>
+                <input type="text" value={employeeAddress} onChange={e => setEmployeeAddress(e.target.value)} placeholder="Full address" className="w-full rounded-lg border px-3 py-1.5 text-sm" style={inputStyle} />
+              </div>
+
+              {/* Dates */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>Start Date</label>
+                  <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full rounded-lg border px-3 py-1.5 text-sm" style={inputStyle} />
+                </div>
+                {contractType === 'pkwt' ? (
+                  <div>
+                    <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>End Date</label>
+                    <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full rounded-lg border px-3 py-1.5 text-sm" style={inputStyle} />
+                  </div>
+                ) : (
+                  <div>
+                    <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>Probation (months)</label>
+                    <select value={probationMonths} onChange={e => setProbationMonths(e.target.value)} className="w-full rounded-lg border px-3 py-1.5 text-sm" style={inputStyle}>
+                      <option value="1">1 month</option>
+                      <option value="2">2 months</option>
+                      <option value="3">3 months</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {/* Compensation */}
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                    Base Salary
+                    <span className="ml-1" style={{ color: 'var(--color-text-tertiary)' }}>/mo</span>
+                  </label>
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>Rp</span>
+                    <input type="text" value={baseSalary ? formatCurrency(baseSalary) : ''} onChange={e => setBaseSalary(e.target.value.replace(/\D/g, ''))}
+                      placeholder="5,000,000" className="w-full rounded-lg border py-1.5 pl-8 pr-3 text-sm" style={inputStyle} />
+                  </div>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                    Transport
+                    <span className="ml-1" style={{ color: 'var(--color-text-tertiary)' }}>/mo</span>
+                  </label>
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>Rp</span>
+                    <input type="text" value={transportAllowance ? formatCurrency(transportAllowance) : ''} onChange={e => setTransportAllowance(e.target.value.replace(/\D/g, ''))}
+                      placeholder="500,000" className="w-full rounded-lg border py-1.5 pl-8 pr-3 text-sm" style={inputStyle} />
+                  </div>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                    Meal
+                    <span className="ml-1" style={{ color: 'var(--color-text-tertiary)' }}>/mo</span>
+                  </label>
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>Rp</span>
+                    <input type="text" value={mealAllowance ? formatCurrency(mealAllowance) : ''} onChange={e => setMealAllowance(e.target.value.replace(/\D/g, ''))}
+                      placeholder="500,000" className="w-full rounded-lg border py-1.5 pl-8 pr-3 text-sm" style={inputStyle} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Working hours */}
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>Hours / day</label>
+                  <select value={hoursPerDay} onChange={e => setHoursPerDay(e.target.value)} className="w-full rounded-lg border px-3 py-1.5 text-sm" style={inputStyle}>
+                    <option value="7">7 hours</option>
+                    <option value="8">8 hours</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>Days / week</label>
+                  <select value={daysPerWeek} onChange={e => setDaysPerWeek(e.target.value)} className="w-full rounded-lg border px-3 py-1.5 text-sm" style={inputStyle}>
+                    <option value="5">5 days</option>
+                    <option value="6">6 days</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>Annual leave</label>
+                  <select value={annualLeave} onChange={e => setAnnualLeave(e.target.value)} className="w-full rounded-lg border px-3 py-1.5 text-sm" style={inputStyle}>
+                    <option value="12">12 days</option>
+                    <option value="14">14 days</option>
+                    <option value="15">15 days</option>
+                    <option value="20">20 days</option>
+                  </select>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="flex items-center gap-2 border-t pt-4" style={{ borderColor: 'var(--color-border)' }}>

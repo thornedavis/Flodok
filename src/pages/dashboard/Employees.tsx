@@ -547,7 +547,7 @@ function EmployeeCard({ emp, onDuplicate, onDelete, onEdit }: {
             <CopyButton value={emp.phone} />
           </div>
 
-          {/* SOP URL with copy */}
+          {/* Portal URL with copy */}
           <div className="mt-1 flex items-center gap-1.5">
             <span className="truncate text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
               {`${window.location.origin}/sop/${emp.slug}-${emp.access_token}`}
@@ -575,6 +575,8 @@ function AddEmployeeForm({ orgId, countryCode, departments, onDone, onCancel }: 
   const [email, setEmail] = useState('')
   const [department, setDepartment] = useState('')
   const [notes, setNotes] = useState('')
+  const [ktpNik, setKtpNik] = useState('')
+  const [address, setAddress] = useState('')
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
   const [error, setError] = useState('')
@@ -619,7 +621,7 @@ function AddEmployeeForm({ orgId, countryCode, departments, onDone, onCancel }: 
 
     const { data: emp, error: empError } = await supabase
       .from('employees')
-      .insert({ org_id: orgId, name, phone, email: email || null, department: department || null, notes: notes || null, slug, access_token: token })
+      .insert({ org_id: orgId, name, phone, email: email || null, department: department || null, notes: notes || null, ktp_nik: ktpNik || null, address: address || null, slug, access_token: token })
       .select()
       .single()
 
@@ -758,6 +760,14 @@ function AddEmployeeForm({ orgId, countryCode, departments, onDone, onCancel }: 
           <div>
             <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>Email (optional)</label>
             <input type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>KTP/NIK Number (optional)</label>
+            <input type="text" value={ktpNik} onChange={e => setKtpNik(e.target.value)} placeholder="e.g. 5171234567890001" className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>Address (optional)</label>
+            <textarea value={address} onChange={e => setAddress(e.target.value)} placeholder="Employee's residential address..." rows={2} className="w-full resize-none rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>Notes (internal only)</label>

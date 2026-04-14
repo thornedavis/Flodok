@@ -62,6 +62,8 @@ export type Database = {
           photo_url: string | null
           department: string | null
           notes: string | null
+          ktp_nik: string | null
+          address: string | null
           slug: string
           access_token: string
           created_at: string
@@ -75,6 +77,8 @@ export type Database = {
           photo_url?: string | null
           department?: string | null
           notes?: string | null
+          ktp_nik?: string | null
+          address?: string | null
           slug: string
           access_token: string
           created_at?: string
@@ -86,6 +90,8 @@ export type Database = {
           photo_url?: string | null
           department?: string | null
           notes?: string | null
+          ktp_nik?: string | null
+          address?: string | null
           slug?: string
           access_token?: string
         }
@@ -177,6 +183,7 @@ export type Database = {
           version_number: number
           employee_id: string
           typed_name: string
+          signature_font: string | null
           signed_at: string
         }
         Insert: {
@@ -185,6 +192,7 @@ export type Database = {
           version_number: number
           employee_id: string
           typed_name: string
+          signature_font?: string | null
           signed_at?: string
         }
         Update: {

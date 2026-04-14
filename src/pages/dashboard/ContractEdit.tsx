@@ -277,21 +277,30 @@ export function ContractEdit({ user }: { user: User }) {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>Edit Contract</h1>
-        <div className="relative flex items-center gap-2">
-          <span className="pointer-events-none absolute left-3 inline-block h-2 w-2 rounded-full" style={{ backgroundColor: statusColors[status] }} />
-          <select
-            value={status}
-            onChange={e => setStatus(e.target.value as typeof status)}
-            className="appearance-none rounded-lg border py-2 pl-7 pr-8 text-sm font-medium"
-            style={{ ...inputStyle, color: statusColors[status] }}
-          >
-            <option value="draft">Draft</option>
-            <option value="active">Active</option>
-            <option value="archived">Archived</option>
-          </select>
-          <svg className="pointer-events-none absolute right-2.5" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-text-tertiary)' }}>
-            <polyline points="6 9 12 15 18 9" />
-          </svg>
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 inline-block h-2 w-2 rounded-full" style={{ backgroundColor: statusColors[status] }} />
+            <select
+              value={status}
+              onChange={e => setStatus(e.target.value as typeof status)}
+              className="appearance-none rounded-lg border py-2 pl-7 pr-8 text-sm font-medium"
+              style={{ ...inputStyle, color: statusColors[status] }}
+            >
+              <option value="draft">Draft</option>
+              <option value="active">Active</option>
+              <option value="archived">Archived</option>
+            </select>
+            <svg className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-text-tertiary)' }}>
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </div>
+          <button onClick={handleSave} disabled={saving || !hasChanges}
+            className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50" style={{ backgroundColor: 'var(--color-primary)' }}>
+            {saving ? (
+              <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>Saving...</>
+            ) : 'Save'}
+          </button>
+          <button onClick={() => navigate('/dashboard/contracts')} className="rounded-lg border px-4 py-2 text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>Cancel</button>
         </div>
       </div>
 
@@ -428,15 +437,6 @@ export function ContractEdit({ user }: { user: User }) {
           </div>
         </div>
 
-        <div className="flex gap-2 pt-2">
-          <button onClick={handleSave} disabled={saving || !hasChanges}
-            className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50" style={{ backgroundColor: 'var(--color-primary)' }}>
-            {saving ? (
-              <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>Saving...</>
-            ) : 'Save'}
-          </button>
-          <button onClick={() => navigate('/dashboard/contracts')} className="rounded-lg border px-4 py-2 text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>Cancel</button>
-        </div>
       </div>
     </div>
   )

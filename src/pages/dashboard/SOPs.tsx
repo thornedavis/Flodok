@@ -614,44 +614,42 @@ function CreateSOPModal({ orgId, employees, onClose, onCreated }: {
                 </button>
               </div>
             ) : (
-              <div>
-                {employees.length > 5 && (
-                  <input
-                    type="text"
-                    value={empSearch}
-                    onChange={e => setEmpSearch(e.target.value)}
-                    placeholder="Search employees..."
-                    className="mb-2 w-full rounded-lg border px-3 py-1.5 text-sm"
-                    style={inputStyle}
-                  />
+              <div className="relative">
+                <input
+                  type="text"
+                  value={empSearch}
+                  onChange={e => setEmpSearch(e.target.value)}
+                  placeholder="Search employees..."
+                  className="w-full rounded-lg border px-3 py-2 text-sm"
+                  style={inputStyle}
+                />
+                {empSearch.trim() && (
+                  <div
+                    className="absolute left-0 right-0 top-full z-20 mt-1 max-h-32 overflow-y-auto rounded-lg border shadow-lg"
+                    style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }}
+                  >
+                    {filteredEmployees.length === 0 ? (
+                      <p className="px-3 py-2 text-sm" style={{ color: 'var(--color-text-tertiary)' }}>No matches</p>
+                    ) : (
+                      filteredEmployees.map(emp => (
+                        <button
+                          key={emp.id}
+                          type="button"
+                          onClick={() => { setEmployeeId(emp.id); setEmpSearch('') }}
+                          className="flex w-full items-center justify-between px-3 py-2 text-left text-sm transition-colors"
+                          style={{ color: 'var(--color-text)' }}
+                          onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
+                          onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
+                        >
+                          <span>{emp.name}</span>
+                          {emp.department && (
+                            <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{emp.department}</span>
+                          )}
+                        </button>
+                      ))
+                    )}
+                  </div>
                 )}
-                <div
-                  className="max-h-40 overflow-y-auto rounded-lg border"
-                  style={{ borderColor: 'var(--color-border)' }}
-                >
-                  {filteredEmployees.length === 0 ? (
-                    <p className="px-3 py-2 text-sm" style={{ color: 'var(--color-text-tertiary)' }}>
-                      {employees.length === 0 ? 'No employees yet' : 'No matches'}
-                    </p>
-                  ) : (
-                    filteredEmployees.map(emp => (
-                      <button
-                        key={emp.id}
-                        type="button"
-                        onClick={() => { setEmployeeId(emp.id); setEmpSearch('') }}
-                        className="flex w-full items-center justify-between px-3 py-2 text-left text-sm transition-colors"
-                        style={{ color: 'var(--color-text)' }}
-                        onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
-                        onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
-                      >
-                        <span>{emp.name}</span>
-                        {emp.department && (
-                          <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{emp.department}</span>
-                        )}
-                      </button>
-                    ))
-                  )}
-                </div>
               </div>
             )}
           </div>

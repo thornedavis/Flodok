@@ -23,6 +23,8 @@ export function EmployeeEditModal({ user, employeeId, onClose, onSaved }: {
   const [email, setEmail] = useState('')
   const [department, setDepartment] = useState('')
   const [notes, setNotes] = useState('')
+  const [ktpNik, setKtpNik] = useState('')
+  const [address, setAddress] = useState('')
   const [photoUrl, setPhotoUrl] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
@@ -44,6 +46,8 @@ export function EmployeeEditModal({ user, employeeId, onClose, onSaved }: {
         setEmail(empResult.data.email || '')
         setDepartment(empResult.data.department || '')
         setNotes(empResult.data.notes || '')
+        setKtpNik(empResult.data.ktp_nik || '')
+        setAddress(empResult.data.address || '')
         setPhotoUrl(empResult.data.photo_url)
       }
       setOrg(orgResult.data)
@@ -127,7 +131,7 @@ export function EmployeeEditModal({ user, employeeId, onClose, onSaved }: {
     setSaving(true)
     const { error: updateError } = await supabase
       .from('employees')
-      .update({ name, phone, email: email || null, department: department || null, notes: notes || null, photo_url: photoUrl })
+      .update({ name, phone, email: email || null, department: department || null, notes: notes || null, ktp_nik: ktpNik || null, address: address || null, photo_url: photoUrl })
       .eq('id', employeeId)
 
     if (updateError) {
@@ -204,7 +208,7 @@ export function EmployeeEditModal({ user, employeeId, onClose, onSaved }: {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const sopUrl = employee
+  const portalUrl = employee
     ? `${window.location.origin}/sop/${employee.slug}-${employee.access_token}`
     : ''
 
@@ -316,6 +320,16 @@ export function EmployeeEditModal({ user, employeeId, onClose, onSaved }: {
               </div>
 
               <div>
+                <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>KTP/NIK Number (optional)</label>
+                <input type="text" value={ktpNik} onChange={e => setKtpNik(e.target.value)} placeholder="e.g. 5171234567890001" className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>Address (optional)</label>
+                <textarea value={address} onChange={e => setAddress(e.target.value)} placeholder="Employee's residential address..." rows={2} className="w-full resize-none rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
+              </div>
+
+              <div>
                 <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>Notes (internal only)</label>
                 <textarea
                   value={notes}
@@ -328,12 +342,13 @@ export function EmployeeEditModal({ user, employeeId, onClose, onSaved }: {
               </div>
 
               <div>
-                <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>SOP Link</label>
+                <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>Employee Portal Link</label>
+                <p className="mb-1.5 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>Share this link with the employee to view their SOPs and contracts.</p>
                 <div className="flex items-center gap-2">
-                  <input type="text" readOnly value={sopUrl} className="w-full rounded-lg border px-3 py-2 text-sm" style={{ ...inputStyle, backgroundColor: 'var(--color-bg-tertiary)' }} />
+                  <input type="text" readOnly value={portalUrl} className="w-full rounded-lg border px-3 py-2 text-sm" style={{ ...inputStyle, backgroundColor: 'var(--color-bg-tertiary)' }} />
                   <button
                     type="button"
-                    onClick={() => copyToClipboard(sopUrl)}
+                    onClick={() => copyToClipboard(portalUrl)}
                     className="shrink-0 rounded-lg border px-3 py-2 text-sm"
                     style={{ borderColor: 'var(--color-border)', color: copied ? 'var(--color-success)' : 'var(--color-text-secondary)' }}
                   >
