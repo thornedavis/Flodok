@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import type { User, Sop, Employee, Tag } from '../../types/database'
+import type { User, Contract, Employee, Tag } from '../../types/database'
 
-type SopWithEmployee = Sop & { employee: Employee | null; tagIds: string[] }
+type ContractWithEmployee = Contract & { employee: Employee | null; tagIds: string[] }
 
-export function SOPs({ user }: { user: User }) {
+export function Contracts({ user }: { user: User }) {
   const navigate = useNavigate()
-  const [sops, setSOPs] = useState<SopWithEmployee[]>([])
+  const [contracts, setContracts] = useState<ContractWithEmployee[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
   const [allTags, setAllTags] = useState<Tag[]>([])
   const [loading, setLoading] = useState(true)
@@ -20,28 +20,27 @@ export function SOPs({ user }: { user: User }) {
 
   useEffect(() => {
     async function load() {
-      const [sopResult, empResult, tagsResult, sopTagsResult] = await Promise.all([
-        supabase.from('sops').select('*').eq('org_id', user.org_id).order('updated_at', { ascending: false }),
+      const [contractResult, empResult, tagsResult, contractTagsResult] = await Promise.all([
+        supabase.from('contracts').select('*').eq('org_id', user.org_id).order('updated_at', { ascending: false }),
         supabase.from('employees').select('*').eq('org_id', user.org_id).order('name'),
         supabase.from('tags').select('*').eq('org_id', user.org_id).order('name'),
-        supabase.from('sop_tags').select('*'),
+        supabase.from('contract_tags').select('*'),
       ])
 
       const empMap = new Map((empResult.data || []).map(e => [e.id, e]))
 
-      // Build a map of sop_id -> tag_ids
-      const sopTagMap = new Map<string, string[]>()
-      for (const st of sopTagsResult.data || []) {
-        const arr = sopTagMap.get(st.sop_id) || []
-        arr.push(st.tag_id)
-        sopTagMap.set(st.sop_id, arr)
+      const tagMap = new Map<string, string[]>()
+      for (const ct of contractTagsResult.data || []) {
+        const arr = tagMap.get(ct.contract_id) || []
+        arr.push(ct.tag_id)
+        tagMap.set(ct.contract_id, arr)
       }
 
       setEmployees(empResult.data || [])
-      setSOPs((sopResult.data || []).map(s => ({
-        ...s,
-        employee: s.employee_id ? empMap.get(s.employee_id) || null : null,
-        tagIds: sopTagMap.get(s.id) || [],
+      setContracts((contractResult.data || []).map(c => ({
+        ...c,
+        employee: c.employee_id ? empMap.get(c.employee_id) || null : null,
+        tagIds: tagMap.get(c.id) || [],
       })))
       setAllTags(tagsResult.data || [])
       setLoading(false)
@@ -49,25 +48,21 @@ export function SOPs({ user }: { user: User }) {
     load()
   }, [user.org_id])
 
-  // Derive departments from employees
-  const departments = [...new Set(sops.map(s => s.employee?.department).filter(Boolean) as string[])].sort()
-
+  const departments = [...new Set(contracts.map(c => c.employee?.department).filter(Boolean) as string[])].sort()
   const statuses = ['active', 'draft', 'archived'] as const
 
-  // Count SOPs per department (from all SOPs, not filtered)
   function getDepartmentCount(dept: string) {
-    return sops.filter(s => s.employee?.department === dept).length
+    return contracts.filter(c => c.employee?.department === dept).length
   }
 
   function getStatusCount(status: string) {
-    return sops.filter(s => s.status === status).length
+    return contracts.filter(c => c.status === status).length
   }
 
   function toggleDepartment(dept: string) {
     setActiveDepartments(prev => {
       const next = new Set(prev)
-      if (next.has(dept)) next.delete(dept)
-      else next.add(dept)
+      if (next.has(dept)) next.delete(dept); else next.add(dept)
       return next
     })
   }
@@ -75,8 +70,7 @@ export function SOPs({ user }: { user: User }) {
   function toggleStatus(status: string) {
     setActiveStatuses(prev => {
       const next = new Set(prev)
-      if (next.has(status)) next.delete(status)
-      else next.add(status)
+      if (next.has(status)) next.delete(status); else next.add(status)
       return next
     })
   }
@@ -84,53 +78,51 @@ export function SOPs({ user }: { user: User }) {
   function toggleTag(tagId: string) {
     setActiveTags(prev => {
       const next = new Set(prev)
-      if (next.has(tagId)) next.delete(tagId)
-      else next.add(tagId)
+      if (next.has(tagId)) next.delete(tagId); else next.add(tagId)
       return next
     })
   }
 
   function getTagCount(tagId: string) {
-    return sops.filter(s => s.tagIds.includes(tagId)).length
+    return contracts.filter(c => c.tagIds.includes(tagId)).length
   }
 
-  const tagMap = new Map(allTags.map(t => [t.id, t]))
+  const tagNameMap = new Map(allTags.map(t => [t.id, t]))
 
-  // Filter SOPs
-  const filtered = sops.filter(s => {
-    const matchesDept = activeDepartments.size === 0 || activeDepartments.has(s.employee?.department || '')
-    const matchesStatus = activeStatuses.size === 0 || activeStatuses.has(s.status)
-    const matchesTags = activeTags.size === 0 || s.tagIds.some(tid => activeTags.has(tid))
+  const filtered = contracts.filter(c => {
+    const matchesDept = activeDepartments.size === 0 || activeDepartments.has(c.employee?.department || '')
+    const matchesStatus = activeStatuses.size === 0 || activeStatuses.has(c.status)
+    const matchesTags = activeTags.size === 0 || c.tagIds.some(tid => activeTags.has(tid))
     const matchesSearch = !searchQuery.trim() ||
-      s.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.employee?.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.employee?.department?.toLowerCase().includes(searchQuery.toLowerCase())
+      c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.employee?.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.employee?.department?.toLowerCase().includes(searchQuery.toLowerCase())
     return matchesDept && matchesStatus && matchesTags && matchesSearch
   })
 
-  async function handleDuplicate(sop: SopWithEmployee) {
+  async function handleDuplicate(contract: ContractWithEmployee) {
     const { data, error } = await supabase
-      .from('sops')
+      .from('contracts')
       .insert({
         org_id: user.org_id,
-        employee_id: sop.employee_id,
-        title: `${sop.title} (Copy)`,
-        content_markdown: sop.content_markdown,
-        content_markdown_id: sop.content_markdown_id,
+        employee_id: contract.employee_id,
+        title: `${contract.title} (Copy)`,
+        content_markdown: contract.content_markdown,
+        content_markdown_id: contract.content_markdown_id,
         status: 'draft' as const,
       })
       .select()
       .single()
 
     if (error) { alert(error.message); return }
-    if (data) navigate(`/dashboard/sops/${data.id}/edit`)
+    if (data) navigate(`/dashboard/contracts/${data.id}/edit`)
   }
 
-  async function handleDelete(sop: SopWithEmployee) {
-    if (!confirm(`Delete "${sop.title}"? This cannot be undone.`)) return
-    const { error } = await supabase.from('sops').delete().eq('id', sop.id)
+  async function handleDelete(contract: ContractWithEmployee) {
+    if (!confirm(`Delete "${contract.title}"? This cannot be undone.`)) return
+    const { error } = await supabase.from('contracts').delete().eq('id', contract.id)
     if (error) { alert(error.message); return }
-    setSOPs(prev => prev.filter(s => s.id !== sop.id))
+    setContracts(prev => prev.filter(c => c.id !== contract.id))
     setMenuOpenId(null)
   }
 
@@ -144,38 +136,37 @@ export function SOPs({ user }: { user: User }) {
 
   return (
     <div className="grid gap-8 lg:grid-cols-[1fr_280px]" style={{ alignItems: 'start' }}>
-      {/* Main content — SOP cards grid */}
       <div>
         <div className="mb-6 flex items-center justify-between">
-          <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>SOPs</h1>
+          <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>Contracts</h1>
           <div className="flex items-center gap-3">
             <span className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-              {filtered.length} {filtered.length === 1 ? 'SOP' : 'SOPs'}
+              {filtered.length} {filtered.length === 1 ? 'Contract' : 'Contracts'}
             </span>
             <button
               onClick={() => setShowCreateModal(true)}
               className="rounded-lg px-4 py-2 text-sm font-medium text-white"
               style={{ backgroundColor: 'var(--color-primary)' }}
             >
-              Create SOP
+              Create Contract
             </button>
           </div>
         </div>
 
         {filtered.length === 0 ? (
           <p className="py-12 text-center text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-            {sops.length === 0
-              ? 'No SOPs yet. Click "Create SOP" to get started.'
-              : 'No SOPs match your filters.'}
+            {contracts.length === 0
+              ? 'No contracts yet. Click "Create Contract" to get started.'
+              : 'No contracts match your filters.'}
           </p>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {filtered.map(sop => (
+            {filtered.map(contract => (
               <div
-                key={sop.id}
+                key={contract.id}
                 className="group relative cursor-pointer rounded-xl border p-5 transition-all"
                 style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }}
-                onClick={() => navigate(`/dashboard/sops/${sop.id}/edit`)}
+                onClick={() => navigate(`/dashboard/contracts/${contract.id}/edit`)}
                 onMouseOver={e => {
                   e.currentTarget.style.borderColor = 'var(--color-border-strong)'
                   e.currentTarget.style.transform = 'translateY(-1px)'
@@ -189,7 +180,7 @@ export function SOPs({ user }: { user: User }) {
                 <div className="absolute right-3 top-3">
                   <button
                     type="button"
-                    onClick={e => { e.stopPropagation(); setMenuOpenId(menuOpenId === sop.id ? null : sop.id) }}
+                    onClick={e => { e.stopPropagation(); setMenuOpenId(menuOpenId === contract.id ? null : contract.id) }}
                     className="rounded-md p-1 opacity-0 transition-all group-hover:opacity-100"
                     style={{ color: 'var(--color-text-tertiary)' }}
                     onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
@@ -202,7 +193,7 @@ export function SOPs({ user }: { user: User }) {
                     </svg>
                   </button>
 
-                  {menuOpenId === sop.id && (
+                  {menuOpenId === contract.id && (
                     <>
                       <div className="fixed inset-0 z-10" onClick={e => { e.stopPropagation(); setMenuOpenId(null) }} />
                       <div
@@ -210,7 +201,7 @@ export function SOPs({ user }: { user: User }) {
                         style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }}
                       >
                         <button
-                          onClick={e => { e.stopPropagation(); handleDuplicate(sop) }}
+                          onClick={e => { e.stopPropagation(); handleDuplicate(contract) }}
                           className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors"
                           style={{ color: 'var(--color-text)' }}
                           onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
@@ -223,7 +214,7 @@ export function SOPs({ user }: { user: User }) {
                           Duplicate
                         </button>
                         <button
-                          onClick={e => { e.stopPropagation(); handleDelete(sop) }}
+                          onClick={e => { e.stopPropagation(); handleDelete(contract) }}
                           className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors"
                           style={{ color: 'var(--color-danger)' }}
                           onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
@@ -242,42 +233,35 @@ export function SOPs({ user }: { user: User }) {
                   )}
                 </div>
 
-                {/* Department badge */}
-                {sop.employee?.department && (
+                {contract.employee?.department && (
                   <span
                     className="mb-3 inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium"
-                    style={{
-                      backgroundColor: 'var(--color-bg-tertiary)',
-                      color: 'var(--color-text-secondary)',
-                    }}
+                    style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}
                   >
-                    {sop.employee.department}
+                    {contract.employee.department}
                   </span>
                 )}
 
                 <h3 className="text-sm font-semibold leading-snug" style={{ color: 'var(--color-text)' }}>
-                  {sop.title}
+                  {contract.title}
                 </h3>
 
-                {sop.employee && (
+                {contract.employee && (
                   <p className="mt-1.5 text-xs leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>
-                    {sop.employee.name}
+                    {contract.employee.name}
                   </p>
                 )}
 
-                {sop.tagIds.length > 0 && (
+                {contract.tagIds.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1">
-                    {sop.tagIds.map(tid => {
-                      const tag = tagMap.get(tid)
+                    {contract.tagIds.map(tid => {
+                      const tag = tagNameMap.get(tid)
                       if (!tag) return null
                       return (
                         <span
                           key={tid}
                           className="rounded-full px-2 py-0.5 text-[10px] font-medium"
-                          style={{
-                            backgroundColor: 'var(--color-bg-tertiary)',
-                            color: 'var(--color-text-secondary)',
-                          }}
+                          style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}
                         >
                           {tag.name}
                         </span>
@@ -287,17 +271,14 @@ export function SOPs({ user }: { user: User }) {
                 )}
 
                 <div className="mt-3 flex items-center gap-2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                  <span
-                    className="inline-flex items-center gap-1"
-                    style={{ color: statusColors[sop.status] }}
-                  >
-                    <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: statusColors[sop.status] }} />
-                    {sop.status.charAt(0).toUpperCase() + sop.status.slice(1)}
+                  <span className="inline-flex items-center gap-1" style={{ color: statusColors[contract.status] }}>
+                    <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: statusColors[contract.status] }} />
+                    {contract.status.charAt(0).toUpperCase() + contract.status.slice(1)}
                   </span>
                   <span>&middot;</span>
-                  <span>v{sop.current_version}</span>
+                  <span>v{contract.current_version}</span>
                   <span>&middot;</span>
-                  <span>{new Date(sop.updated_at).toLocaleDateString()}</span>
+                  <span>{new Date(contract.updated_at).toLocaleDateString()}</span>
                 </div>
               </div>
             ))}
@@ -305,51 +286,28 @@ export function SOPs({ user }: { user: User }) {
         )}
       </div>
 
-      {/* Right sidebar — filters */}
+      {/* Sidebar */}
       <aside className="sticky top-20 space-y-6 lg:border-l lg:pl-6" style={{ borderColor: 'var(--color-border)' }}>
-        {/* Search */}
         <div>
           <div className="relative">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="absolute left-3 top-1/2 -translate-y-1/2"
-              style={{ color: 'var(--color-text-tertiary)' }}
-            >
-              <circle cx="11" cy="11" r="8" />
-              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--color-text-tertiary)' }}>
+              <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
             </svg>
             <input
               type="text"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Search SOPs..."
+              placeholder="Search contracts..."
               className="w-full rounded-lg border py-2 pl-9 pr-3 text-sm outline-none transition-colors focus:border-[var(--color-border-strong)]"
-              style={{
-                borderColor: 'var(--color-border)',
-                backgroundColor: 'var(--color-bg)',
-                color: 'var(--color-text)',
-              }}
+              style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
             />
           </div>
         </div>
 
-        {/* Departments */}
         {departments.length > 0 && (
           <div>
-            <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>
-              Departments
-            </h3>
-            <p className="mb-3 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-              Filter by team.
-            </p>
+            <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Departments</h3>
+            <p className="mb-3 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>Filter by team.</p>
             <div className="space-y-1">
               {departments.map(dept => {
                 const isActive = activeDepartments.has(dept)
@@ -367,9 +325,7 @@ export function SOPs({ user }: { user: User }) {
                     onMouseOut={e => { if (!isActive) e.currentTarget.style.backgroundColor = 'transparent' }}
                   >
                     <span>{dept}</span>
-                    <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                      {getDepartmentCount(dept)}
-                    </span>
+                    <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{getDepartmentCount(dept)}</span>
                   </button>
                 )
               })}
@@ -377,14 +333,9 @@ export function SOPs({ user }: { user: User }) {
           </div>
         )}
 
-        {/* Status */}
         <div>
-          <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>
-            Status
-          </h3>
-          <p className="mb-3 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-            Filter by SOP status.
-          </p>
+          <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Status</h3>
+          <p className="mb-3 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>Filter by contract status.</p>
           <div className="space-y-1">
             {statuses.map(status => {
               const isActive = activeStatuses.has(status)
@@ -406,24 +357,17 @@ export function SOPs({ user }: { user: User }) {
                     <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: statusColors[status] }} />
                     {status}
                   </span>
-                  <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                    {count}
-                  </span>
+                  <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{count}</span>
                 </button>
               )
             })}
           </div>
         </div>
 
-        {/* Tags */}
         {allTags.length > 0 && (
           <div>
-            <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>
-              Tags
-            </h3>
-            <p className="mb-3 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-              Filter by tag.
-            </p>
+            <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Tags</h3>
+            <p className="mb-3 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>Filter by tag.</p>
             <div className="space-y-1">
               {allTags.map(tag => {
                 const isActive = activeTags.has(tag.id)
@@ -442,9 +386,7 @@ export function SOPs({ user }: { user: User }) {
                     onMouseOut={e => { if (!isActive) e.currentTarget.style.backgroundColor = 'transparent' }}
                   >
                     <span>{tag.name}</span>
-                    <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                      {count}
-                    </span>
+                    <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{count}</span>
                   </button>
                 )
               })}
@@ -452,15 +394,9 @@ export function SOPs({ user }: { user: User }) {
           </div>
         )}
 
-        {/* Clear filters */}
         {(activeDepartments.size > 0 || activeStatuses.size > 0 || activeTags.size > 0 || searchQuery) && (
           <button
-            onClick={() => {
-              setActiveDepartments(new Set())
-              setActiveStatuses(new Set())
-              setActiveTags(new Set())
-              setSearchQuery('')
-            }}
+            onClick={() => { setActiveDepartments(new Set()); setActiveStatuses(new Set()); setActiveTags(new Set()); setSearchQuery('') }}
             className="text-xs font-medium"
             style={{ color: 'var(--color-primary)' }}
           >
@@ -470,42 +406,37 @@ export function SOPs({ user }: { user: User }) {
       </aside>
 
       {showCreateModal && (
-        <CreateSOPModal
+        <CreateContractModal
           orgId={user.org_id}
           employees={employees}
           onClose={() => setShowCreateModal(false)}
-          onCreated={(sopId) => navigate(`/dashboard/sops/${sopId}/edit`)}
+          onCreated={(id) => navigate(`/dashboard/contracts/${id}/edit`)}
         />
       )}
     </div>
   )
 }
 
-function CreateSOPModal({ orgId, employees, onClose, onCreated }: {
+function CreateContractModal({ orgId, employees, onClose, onCreated }: {
   orgId: string
   employees: Employee[]
   onClose: () => void
-  onCreated: (sopId: string) => void
+  onCreated: (id: string) => void
 }) {
   const [title, setTitle] = useState('')
-  const [employeeId, setEmployeeId] = useState<string>('')
+  const [employeeId, setEmployeeId] = useState('')
   const [empSearch, setEmpSearch] = useState('')
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
-    function handleKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose()
-    }
+    function handleKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
     document.addEventListener('keydown', handleKey)
     return () => document.removeEventListener('keydown', handleKey)
   }, [onClose])
 
   const filteredEmployees = empSearch.trim()
-    ? employees.filter(e =>
-        e.name.toLowerCase().includes(empSearch.toLowerCase()) ||
-        e.department?.toLowerCase().includes(empSearch.toLowerCase())
-      )
+    ? employees.filter(e => e.name.toLowerCase().includes(empSearch.toLowerCase()) || e.department?.toLowerCase().includes(empSearch.toLowerCase()))
     : employees
 
   const selectedEmployee = employees.find(e => e.id === employeeId)
@@ -516,31 +447,16 @@ function CreateSOPModal({ orgId, employees, onClose, onCreated }: {
     setCreating(true)
 
     const { data, error: insertError } = await supabase
-      .from('sops')
-      .insert({
-        org_id: orgId,
-        employee_id: employeeId || null,
-        title: title.trim(),
-        content_markdown: '',
-        status: 'draft' as const,
-      })
+      .from('contracts')
+      .insert({ org_id: orgId, employee_id: employeeId || null, title: title.trim(), content_markdown: '', status: 'draft' as const })
       .select()
       .single()
 
-    if (insertError) {
-      setError(insertError.message)
-      setCreating(false)
-      return
-    }
-
+    if (insertError) { setError(insertError.message); setCreating(false); return }
     onCreated(data.id)
   }
 
-  const inputStyle = {
-    borderColor: 'var(--color-border)',
-    backgroundColor: 'var(--color-bg)',
-    color: 'var(--color-text)',
-  } as React.CSSProperties
+  const inputStyle = { borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' } as React.CSSProperties
 
   return (
     <div
@@ -548,106 +464,57 @@ function CreateSOPModal({ orgId, employees, onClose, onCreated }: {
       style={{ backgroundColor: 'rgba(0, 0, 0, 0.6)', backdropFilter: 'blur(4px)' }}
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div
-        className="relative w-full max-w-md rounded-2xl border p-6"
-        style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-elevated, var(--color-bg))' }}
-      >
-        <button
-          type="button"
-          onClick={onClose}
-          className="absolute right-4 top-4 rounded-lg p-1.5 transition-colors"
-          style={{ color: 'var(--color-text-tertiary)' }}
+      <div className="relative w-full max-w-md rounded-2xl border p-6" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-elevated, var(--color-bg))' }}>
+        <button type="button" onClick={onClose} className="absolute right-4 top-4 rounded-lg p-1.5 transition-colors" style={{ color: 'var(--color-text-tertiary)' }}
           onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
           onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="18" y1="6" x2="6" y2="18" />
-            <line x1="6" y1="6" x2="18" y2="18" />
+            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
           </svg>
         </button>
 
-        <h2 className="mb-5 text-xl font-semibold" style={{ color: 'var(--color-text)' }}>Create SOP</h2>
+        <h2 className="mb-5 text-xl font-semibold" style={{ color: 'var(--color-text)' }}>Create Contract</h2>
 
         <div className="space-y-4">
           {error && (
-            <div className="rounded-md px-3 py-2 text-sm" style={{ backgroundColor: 'var(--color-diff-remove)', color: 'var(--color-danger)' }}>
-              {error}
-            </div>
+            <div className="rounded-md px-3 py-2 text-sm" style={{ backgroundColor: 'var(--color-diff-remove)', color: 'var(--color-danger)' }}>{error}</div>
           )}
 
           <div>
             <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>Title</label>
-            <input
-              type="text"
-              value={title}
-              onChange={e => setTitle(e.target.value)}
-              placeholder="e.g. Marketing Operations SOP"
-              className="w-full rounded-lg border px-3 py-2 text-sm"
-              style={inputStyle}
-              autoFocus
-            />
+            <input type="text" value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Employment Contract - Full Time" className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} autoFocus />
           </div>
 
           <div>
             <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
               Employee <span className="font-normal" style={{ color: 'var(--color-text-tertiary)' }}>(optional)</span>
             </label>
-
             {selectedEmployee ? (
-              <div
-                className="flex items-center justify-between rounded-lg border px-3 py-2"
-                style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }}
-              >
+              <div className="flex items-center justify-between rounded-lg border px-3 py-2" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }}>
                 <div>
                   <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{selectedEmployee.name}</span>
-                  {selectedEmployee.department && (
-                    <span className="ml-2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{selectedEmployee.department}</span>
-                  )}
+                  {selectedEmployee.department && <span className="ml-2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{selectedEmployee.department}</span>}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setEmployeeId('')}
-                  className="text-xs"
-                  style={{ color: 'var(--color-text-tertiary)' }}
-                >
-                  Clear
-                </button>
+                <button type="button" onClick={() => setEmployeeId('')} className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>Clear</button>
               </div>
             ) : (
               <div>
                 {employees.length > 5 && (
-                  <input
-                    type="text"
-                    value={empSearch}
-                    onChange={e => setEmpSearch(e.target.value)}
-                    placeholder="Search employees..."
-                    className="mb-2 w-full rounded-lg border px-3 py-1.5 text-sm"
-                    style={inputStyle}
-                  />
+                  <input type="text" value={empSearch} onChange={e => setEmpSearch(e.target.value)} placeholder="Search employees..." className="mb-2 w-full rounded-lg border px-3 py-1.5 text-sm" style={inputStyle} />
                 )}
-                <div
-                  className="max-h-40 overflow-y-auto rounded-lg border"
-                  style={{ borderColor: 'var(--color-border)' }}
-                >
+                <div className="max-h-40 overflow-y-auto rounded-lg border" style={{ borderColor: 'var(--color-border)' }}>
                   {filteredEmployees.length === 0 ? (
-                    <p className="px-3 py-2 text-sm" style={{ color: 'var(--color-text-tertiary)' }}>
-                      {employees.length === 0 ? 'No employees yet' : 'No matches'}
-                    </p>
+                    <p className="px-3 py-2 text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{employees.length === 0 ? 'No employees yet' : 'No matches'}</p>
                   ) : (
                     filteredEmployees.map(emp => (
-                      <button
-                        key={emp.id}
-                        type="button"
-                        onClick={() => { setEmployeeId(emp.id); setEmpSearch('') }}
-                        className="flex w-full items-center justify-between px-3 py-2 text-left text-sm transition-colors"
-                        style={{ color: 'var(--color-text)' }}
+                      <button key={emp.id} type="button" onClick={() => { setEmployeeId(emp.id); setEmpSearch('') }}
+                        className="flex w-full items-center justify-between px-3 py-2 text-left text-sm transition-colors" style={{ color: 'var(--color-text)' }}
                         onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
                         onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
                       >
                         <span>{emp.name}</span>
-                        {emp.department && (
-                          <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{emp.department}</span>
-                        )}
+                        {emp.department && <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{emp.department}</span>}
                       </button>
                     ))
                   )}
@@ -657,21 +524,10 @@ function CreateSOPModal({ orgId, employees, onClose, onCreated }: {
           </div>
 
           <div className="flex items-center gap-2 border-t pt-4" style={{ borderColor: 'var(--color-border)' }}>
-            <button
-              onClick={handleCreate}
-              disabled={creating || !title.trim()}
-              className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-              style={{ backgroundColor: 'var(--color-primary)' }}
-            >
-              {creating ? 'Creating...' : 'Create SOP'}
+            <button onClick={handleCreate} disabled={creating || !title.trim()} className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50" style={{ backgroundColor: 'var(--color-primary)' }}>
+              {creating ? 'Creating...' : 'Create Contract'}
             </button>
-            <button
-              onClick={onClose}
-              className="rounded-lg border px-4 py-2 text-sm"
-              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
-            >
-              Cancel
-            </button>
+            <button onClick={onClose} className="rounded-lg border px-4 py-2 text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>Cancel</button>
           </div>
         </div>
       </div>

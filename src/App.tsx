@@ -8,6 +8,8 @@ import { Employees } from './pages/dashboard/Employees'
 import { SOPs } from './pages/dashboard/SOPs'
 import { SOPEdit } from './pages/dashboard/SOPEdit'
 import { SOPHistory } from './pages/dashboard/SOPHistory'
+import { Contracts } from './pages/dashboard/Contracts'
+import { ContractEdit } from './pages/dashboard/ContractEdit'
 import { Pending } from './pages/dashboard/Pending'
 import { Settings } from './pages/dashboard/Settings'
 import { SOPView } from './pages/public/SOPView'
@@ -53,6 +55,8 @@ function AppRoutes() {
             <Route path="/dashboard/sops" element={<SOPs user={user} />} />
             <Route path="/dashboard/sops/:id/edit" element={<SOPEdit user={user} />} />
             <Route path="/dashboard/sops/:id/history" element={<SOPHistory />} />
+            <Route path="/dashboard/contracts" element={<Contracts user={user} />} />
+            <Route path="/dashboard/contracts/:id/edit" element={<ContractEdit user={user} />} />
             <Route path="/dashboard/pending" element={<Pending user={user} />} />
             <Route path="/dashboard/settings" element={<Settings user={user} />} />
           </Route>

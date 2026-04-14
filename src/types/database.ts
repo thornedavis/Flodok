@@ -114,7 +114,7 @@ export type Database = {
         Row: {
           id: string
           org_id: string
-          employee_id: string
+          employee_id: string | null
           title: string
           content_markdown: string
           content_markdown_id: string | null
@@ -126,7 +126,7 @@ export type Database = {
         Insert: {
           id?: string
           org_id: string
-          employee_id: string
+          employee_id?: string | null
           title: string
           content_markdown: string
           content_markdown_id?: string | null
@@ -136,6 +136,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          employee_id?: string | null
           title?: string
           content_markdown?: string
           content_markdown_id?: string | null
@@ -282,6 +283,83 @@ export type Database = {
         }
         Relationships: []
       }
+      contracts: {
+        Row: {
+          id: string
+          org_id: string
+          employee_id: string | null
+          title: string
+          content_markdown: string
+          content_markdown_id: string | null
+          current_version: number
+          status: 'active' | 'draft' | 'archived'
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          org_id: string
+          employee_id?: string | null
+          title: string
+          content_markdown: string
+          content_markdown_id?: string | null
+          current_version?: number
+          status?: 'active' | 'draft' | 'archived'
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          employee_id?: string | null
+          title?: string
+          content_markdown?: string
+          content_markdown_id?: string | null
+          current_version?: number
+          status?: 'active' | 'draft' | 'archived'
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      contract_versions: {
+        Row: {
+          id: string
+          contract_id: string
+          version_number: number
+          content_markdown: string
+          content_markdown_id: string | null
+          change_summary: string | null
+          changed_by: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          contract_id: string
+          version_number: number
+          content_markdown: string
+          content_markdown_id?: string | null
+          change_summary?: string | null
+          changed_by: string
+          created_at?: string
+        }
+        Update: {
+          change_summary?: string | null
+        }
+        Relationships: []
+      }
+      contract_tags: {
+        Row: {
+          contract_id: string
+          tag_id: string
+        }
+        Insert: {
+          contract_id: string
+          tag_id: string
+        }
+        Update: {
+          contract_id?: string
+          tag_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: Record<string, never>
     Functions: {
@@ -310,3 +388,5 @@ export type SopSignature = Database['public']['Tables']['sop_signatures']['Row']
 export type PendingUpdate = Database['public']['Tables']['pending_updates']['Row']
 export type ApiKey = Database['public']['Tables']['api_keys']['Row']
 export type Tag = Database['public']['Tables']['tags']['Row']
+export type Contract = Database['public']['Tables']['contracts']['Row']
+export type ContractVersion = Database['public']['Tables']['contract_versions']['Row']

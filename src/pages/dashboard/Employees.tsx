@@ -175,7 +175,7 @@ export function Employees({ user }: { user: User }) {
             </p>
           ) : (
             <>
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-2">
                 {paginatedEmployees.map(emp => (
                   <EmployeeCard
                     key={emp.id}
@@ -528,8 +528,8 @@ function EmployeeCard({ emp, onDuplicate, onDelete, onEdit }: {
             <span
               className="mb-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium"
               style={{
-                backgroundColor: 'color-mix(in srgb, var(--color-primary) 12%, transparent)',
-                color: 'var(--color-primary)',
+                backgroundColor: 'var(--color-bg-tertiary)',
+                color: 'var(--color-text-secondary)',
               }}
             >
               {emp.department}

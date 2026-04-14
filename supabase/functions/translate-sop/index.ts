@@ -24,7 +24,7 @@ Deno.serve(async (req: Request) => {
       { global: { headers: { Authorization: authHeader } } },
     )
 
-    const { sop_id, direction = 'en-to-id' } = await req.json()
+    const { sop_id, direction = 'en-to-id', table = 'sops' } = await req.json()
     if (!sop_id) {
       return jsonResponse({ error: 'Missing required field: sop_id' }, 400)
     }
@@ -34,18 +34,21 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: 'Invalid direction. Use "en-to-id" or "id-to-en"' }, 400)
     }
 
-    // Fetch the current SOP
-    const { data: sop, error: sopError } = await supabase
-      .from('sops')
+    const validTables = ['sops', 'contracts']
+    const targetTable = validTables.includes(table) ? table : 'sops'
+
+    // Fetch the current document
+    const { data: doc, error: docError } = await supabase
+      .from(targetTable)
       .select('id, content_markdown, content_markdown_id')
       .eq('id', sop_id)
       .single()
 
-    if (sopError || !sop) {
-      return jsonResponse({ error: 'SOP not found' }, 404)
+    if (docError || !doc) {
+      return jsonResponse({ error: `${targetTable === 'contracts' ? 'Contract' : 'SOP'} not found` }, 404)
     }
 
-    const sourceContent = direction === 'en-to-id' ? sop.content_markdown : sop.content_markdown_id
+    const sourceContent = direction === 'en-to-id' ? doc.content_markdown : doc.content_markdown_id
     if (!sourceContent) {
       return jsonResponse({ error: `No ${direction === 'en-to-id' ? 'English' : 'Indonesian'} content to translate` }, 400)
     }
@@ -68,13 +71,13 @@ Deno.serve(async (req: Request) => {
       : { content_markdown: translated }
 
     await adminClient
-      .from('sops')
+      .from(targetTable)
       .update({ ...updateField, updated_at: new Date().toISOString() })
-      .eq('id', sop.id)
+      .eq('id', doc.id)
 
     return jsonResponse({
       status: 'translated',
-      sop_id: sop.id,
+      sop_id: doc.id,
       direction,
     })
   } catch (err) {

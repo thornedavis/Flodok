@@ -6,6 +6,7 @@ const navItems = [
   { path: '/dashboard', label: 'Overview', exact: true },
   { path: '/dashboard/employees', label: 'Employees' },
   { path: '/dashboard/sops', label: 'SOPs' },
+  { path: '/dashboard/contracts', label: 'Contracts' },
   { path: '/dashboard/pending', label: 'Pending' },
   { path: '/dashboard/settings', label: 'Settings' },
 ]

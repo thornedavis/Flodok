@@ -6,7 +6,7 @@ import { Link } from '@tiptap/extension-link'
 import { Underline } from '@tiptap/extension-underline'
 import { Table, TableRow, TableCell, TableHeader } from '@tiptap/extension-table'
 import { Markdown } from '@tiptap/markdown'
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, useRef, useState } from 'react'
 import type { Editor } from '@tiptap/core'
 
 interface EditorProps {
@@ -43,7 +43,11 @@ export function SOPEditor({ content, onChange }: EditorProps) {
   })
 
   useEffect(() => {
-    if (editor && content && editor.isEmpty) {
+    if (!editor || !content) return
+    // Get current editor markdown to compare
+    const currentMd = editor.getMarkdown()
+    // Only update if content differs from what editor has (avoids cursor jump on typing)
+    if (content !== currentMd) {
       editor.commands.setContent(content, { emitUpdate: false, contentType: 'markdown' })
     }
   }, [editor, content])
@@ -58,6 +62,34 @@ export function SOPEditor({ content, onChange }: EditorProps) {
       editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run()
     }
   }, [editor])
+
+  const [editorHeight, setEditorHeight] = useState(400)
+  const resizing = useRef(false)
+  const startY = useRef(0)
+  const startHeight = useRef(0)
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    resizing.current = true
+    startY.current = e.clientY
+    startHeight.current = editorHeight
+
+    function onMouseMove(e: MouseEvent) {
+      if (!resizing.current) return
+      const delta = e.clientY - startY.current
+      const newHeight = Math.max(200, Math.min(startHeight.current + delta, window.innerHeight * 0.85))
+      setEditorHeight(newHeight)
+    }
+
+    function onMouseUp() {
+      resizing.current = false
+      document.removeEventListener('mousemove', onMouseMove)
+      document.removeEventListener('mouseup', onMouseUp)
+    }
+
+    document.addEventListener('mousemove', onMouseMove)
+    document.addEventListener('mouseup', onMouseUp)
+  }, [editorHeight])
 
   if (!editor) return null
 
@@ -103,21 +135,56 @@ export function SOPEditor({ content, onChange }: EditorProps) {
         </div>
       </BubbleMenu>
 
-      {/* Editor content area */}
-      <EditorContent editor={editor} />
+      {/* Editor content area with resize */}
+      <div className="sop-editor-container" style={{ height: editorHeight }}>
+        <EditorContent editor={editor} />
+      </div>
+
+      {/* Resize handle */}
+      <div
+        className="sop-editor-resize-handle"
+        onMouseDown={handleMouseDown}
+      >
+        <svg width="10" height="10" viewBox="0 0 10 10">
+          <line x1="9" y1="1" x2="1" y2="9" stroke="var(--color-text-tertiary)" strokeWidth="1" />
+          <line x1="9" y1="4" x2="4" y2="9" stroke="var(--color-text-tertiary)" strokeWidth="1" />
+          <line x1="9" y1="7" x2="7" y2="9" stroke="var(--color-text-tertiary)" strokeWidth="1" />
+        </svg>
+      </div>
 
       <style>{`
-        .sop-editor .tiptap {
-          outline: none;
-          min-height: 400px;
-          padding: 1.5rem;
+        .sop-editor-container {
+          overflow-y: auto;
           border: 1px solid var(--color-border);
           border-top: none;
-          border-radius: 0 0 0.75rem 0.75rem;
+          background: var(--color-bg);
+        }
+
+        .sop-editor .tiptap {
+          outline: none;
+          min-height: 100%;
+          padding: 1.5rem;
           background: var(--color-bg);
           color: var(--color-text);
           font-size: 0.9375rem;
           line-height: 1.7;
+        }
+
+        .sop-editor-resize-handle {
+          display: flex;
+          justify-content: flex-end;
+          align-items: center;
+          padding: 2px 4px;
+          cursor: ns-resize;
+          user-select: none;
+          border: 1px solid var(--color-border);
+          border-top: none;
+          border-radius: 0 0 0.75rem 0.75rem;
+          background: var(--color-bg-secondary);
+        }
+
+        .sop-editor-resize-handle:hover svg line {
+          stroke: var(--color-text-secondary);
         }
 
         .sop-editor .tiptap:focus {
