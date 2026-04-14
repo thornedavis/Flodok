@@ -156,6 +156,18 @@ export function Pending({ user }: { user: User }) {
       }).eq('id', update.id),
     ])
 
+    // Create feed event if SOP is linked to an employee
+    if (sop.employee_id) {
+      await supabase.from('feed_events').insert({
+        org_id: user.org_id,
+        employee_id: sop.employee_id,
+        event_type: 'sop_updated',
+        title: sop.title,
+        description: `Version ${newVersion} — Meeting update: ${update.source_meeting || 'external source'}`,
+        metadata: { sop_id: sop.id, version: newVersion },
+      })
+    }
+
     loadData()
   }
 

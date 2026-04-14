@@ -269,6 +269,18 @@ export function SOPEdit({ user }: { user: User }) {
         change_summary: changeSummary || null,
         changed_by: user.id,
       })
+
+      // Create feed event if SOP is linked to an employee
+      if (sop.employee_id) {
+        await supabase.from('feed_events').insert({
+          org_id: user.org_id,
+          employee_id: sop.employee_id,
+          event_type: 'sop_updated',
+          title: title,
+          description: `Version ${newVersion}${changeSummary ? ' — ' + changeSummary : ''}`,
+          metadata: { sop_id: sop.id, version: newVersion },
+        })
+      }
     }
 
     // Sync tags

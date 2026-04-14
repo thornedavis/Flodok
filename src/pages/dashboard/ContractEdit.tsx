@@ -246,6 +246,17 @@ export function ContractEdit({ user }: { user: User }) {
         change_summary: changeSummary || null,
         changed_by: user.id,
       })
+
+      if (contract.employee_id) {
+        await supabase.from('feed_events').insert({
+          org_id: user.org_id,
+          employee_id: contract.employee_id,
+          event_type: 'contract_updated',
+          title: title,
+          description: `Version ${newVersion}${changeSummary ? ' — ' + changeSummary : ''}`,
+          metadata: { contract_id: contract.id, version: newVersion },
+        })
+      }
     }
 
     await supabase.from('contract_tags').delete().eq('contract_id', contract.id)

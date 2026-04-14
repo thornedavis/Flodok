@@ -4,19 +4,37 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import html2pdf from 'html2pdf.js'
 import { supabase } from '../../lib/supabase'
-import { getAvatarGradient, getInitials } from '../../lib/avatar'
+import { getAvatarGradient } from '../../lib/avatar'
 import { useTheme } from '../../hooks/useTheme'
-import type { Employee, Sop, SopSignature, Organization, Contract } from '../../types/database'
+import type { Employee, Sop, SopSignature, Organization, Contract, FeedEvent } from '../../types/database'
 
 // ─── i18n ────────────────────────────────────────────────
 type Lang = 'en' | 'id'
 
 const t = {
   en: {
+    home: 'Home',
     sops: 'SOPs',
     contracts: 'Contracts',
-    bonuses: 'Bonuses',
+    activity: 'Activity',
+    rewards: 'Rewards',
     comingSoon: 'Coming soon',
+    welcome: 'Welcome',
+    noActivity: 'No activity yet',
+    eventSopSigned: 'Signed SOP',
+    eventSopUpdated: 'SOP updated',
+    eventSopAssigned: 'New SOP assigned',
+    eventContractAssigned: 'New contract assigned',
+    eventContractUpdated: 'Contract updated',
+    eventRewardGiven: 'Reward received',
+    eventWelcome: 'Welcome aboard',
+    yourDocuments: 'Your documents',
+    activeSops: 'Active SOPs',
+    activeContracts: 'Active contracts',
+    pendingActions: 'Pending actions',
+    allSigned: 'All documents signed',
+    viewSops: 'View SOPs',
+    viewContracts: 'View Contracts',
     notFoundTitle: 'Not Found',
     notFoundDesc: 'This link is invalid or has expired.',
     loading: 'Loading...',
@@ -40,10 +58,28 @@ const t = {
     indonesian: 'Bahasa',
   },
   id: {
+    home: 'Beranda',
     sops: 'SOP',
     contracts: 'Kontrak',
-    bonuses: 'Bonus',
+    activity: 'Aktivitas',
+    rewards: 'Hadiah',
     comingSoon: 'Segera hadir',
+    noActivity: 'Belum ada aktivitas',
+    eventSopSigned: 'Menandatangani SOP',
+    eventSopUpdated: 'SOP diperbarui',
+    eventSopAssigned: 'SOP baru ditetapkan',
+    eventContractAssigned: 'Kontrak baru ditetapkan',
+    eventContractUpdated: 'Kontrak diperbarui',
+    eventRewardGiven: 'Hadiah diterima',
+    eventWelcome: 'Selamat bergabung',
+    welcome: 'Selamat datang',
+    yourDocuments: 'Dokumen Anda',
+    activeSops: 'SOP aktif',
+    activeContracts: 'Kontrak aktif',
+    pendingActions: 'Tindakan tertunda',
+    allSigned: 'Semua dokumen ditandatangani',
+    viewSops: 'Lihat SOP',
+    viewContracts: 'Lihat Kontrak',
     notFoundTitle: 'Tidak Ditemukan',
     notFoundDesc: 'Tautan ini tidak valid atau sudah kedaluwarsa.',
     loading: 'Memuat...',
@@ -68,7 +104,7 @@ const t = {
   },
 }
 
-type Tab = 'sops' | 'contracts' | 'bonuses'
+type Tab = 'home' | 'sops' | 'contracts' | 'activity' | 'rewards'
 
 // ─── Signature Fonts ─────────────────────────────────────
 const SIGNATURE_FONTS = [
@@ -87,6 +123,10 @@ if (!document.head.querySelector(`link[href="${fontLink.href}"]`)) {
 }
 
 // ─── Icons (inline SVGs) ─────────────────────────────────
+function HomeIcon() {
+  return <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+}
+
 function BellIcon({ count }: { count: number }) {
   return (
     <div className="relative">
@@ -116,8 +156,12 @@ function ContractIcon() {
   return <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
 }
 
-function StarIcon() {
-  return <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+function ActivityIcon() {
+  return <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+}
+
+function TrophyIcon() {
+  return <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
 }
 
 function MoreIcon() {
@@ -143,9 +187,10 @@ export function SOPView() {
   const [sopSignatures, setSopSignatures] = useState<Record<string, SopSignature>>({})
   const [contracts, setContracts] = useState<Contract[]>([])
   const [activeContract, setActiveContract] = useState<Contract | null>(null)
+  const [feedEvents, setFeedEvents] = useState<FeedEvent[]>([])
 
   // UI
-  const [tab, setTab] = useState<Tab>('sops')
+  const [tab, setTab] = useState<Tab>('home')
   const [selectedFont, setSelectedFont] = useState(SIGNATURE_FONTS[0].name)
   const [signing, setSigning] = useState(false)
   const [error, setError] = useState('')
@@ -230,6 +275,22 @@ export function SOPView() {
     load()
   }, [slugToken])
 
+  async function loadFeedEvents() {
+    if (!employee) return
+    const { data } = await supabase
+      .from('feed_events')
+      .select('*')
+      .eq('employee_id', employee.id)
+      .order('created_at', { ascending: false })
+      .limit(50)
+    if (data) setFeedEvents(data)
+  }
+
+  // Load feed when switching to activity tab or when employee loads
+  useEffect(() => {
+    if (employee && tab === 'activity') loadFeedEvents()
+  }, [employee, tab])
+
   // Notifications: unsigned SOPs
   const unsignedSops = sops.filter(s => !sopSignatures[s.id])
   const notificationCount = unsignedSops.length
@@ -259,6 +320,19 @@ export function SOPView() {
 
     if (sigError) { setError(sigError.message); setSigning(false); return }
     setSopSignatures(prev => ({ ...prev, [activeSop.id]: data }))
+
+    // Create feed event
+    await supabase.from('feed_events').insert({
+      org_id: employee.org_id,
+      employee_id: employee.id,
+      event_type: 'sop_signed',
+      title: activeSop.title,
+      description: `Version ${activeSop.current_version}`,
+      metadata: { sop_id: activeSop.id, version: activeSop.current_version, signature_font: selectedFont },
+    })
+    // Refresh feed if on activity tab
+    if (tab === 'activity') loadFeedEvents()
+
     setSigning(false)
   }
 
@@ -427,35 +501,91 @@ export function SOPView() {
         </div>
       </div>
 
-      {/* ─── Profile Card ─── */}
-      <div className="px-4 pb-4 pt-6">
-        <div className="mx-auto max-w-lg">
-          <div className="flex items-center gap-4">
-            {employee.photo_url ? (
-              <img src={employee.photo_url} alt={employee.name} className="h-14 w-14 rounded-full object-cover ring-2 ring-white/20" />
-            ) : (
-              <div
-                className="flex h-14 w-14 items-center justify-center rounded-full text-lg font-bold text-white ring-2 ring-white/20"
-                style={{ background: getAvatarGradient(employee.id) }}
-              >
-                {getInitials(employee.name)}
-              </div>
-            )}
-            <div className="min-w-0">
-              <h1 className="truncate text-lg font-semibold" style={{ color: 'var(--color-text)' }}>{employee.name}</h1>
-              <p className="truncate text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-                {employee.department && <span>{employee.department}</span>}
-                {employee.department && org?.name && <span> &middot; </span>}
-                {org?.name}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* ─── Content Area (scrollable, padded for bottom nav) ─── */}
       <div className="flex-1 px-4 pb-24">
         <div className="mx-auto max-w-lg">
+
+          {/* ─── Home Tab ─── */}
+          {tab === 'home' && (
+            <div className="pt-6">
+              {/* Profile */}
+              <div className="mb-6 flex flex-col items-center text-center">
+                {employee.photo_url ? (
+                  <img src={employee.photo_url} alt={employee.name} className="h-20 w-20 rounded-full object-cover ring-2 ring-white/20" />
+                ) : (
+                  <div
+                    className="h-20 w-20 rounded-full ring-2 ring-white/20"
+                    style={{ background: getAvatarGradient(employee.id) }}
+                  />
+                )}
+                <h1 className="mt-3 text-xl font-semibold" style={{ color: 'var(--color-text)' }}>{employee.name}</h1>
+                <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+                  {employee.department && <span>{employee.department}</span>}
+                  {employee.department && org?.name && <span> &middot; </span>}
+                  {org?.name}
+                </p>
+              </div>
+
+              {/* Document stats */}
+              <div className="mb-4">
+                <h2 className="mb-2 text-sm font-semibold" style={{ color: 'var(--color-text-secondary)' }}>{s.yourDocuments}</h2>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => setTab('sops')}
+                    className="rounded-xl border p-4 text-left transition-colors"
+                    style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)' }}
+                  >
+                    <div className="mb-1 flex items-center gap-2" style={{ color: 'var(--color-primary)' }}>
+                      <DocIcon />
+                      <span className="text-2xl font-bold">{sops.length}</span>
+                    </div>
+                    <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>{s.activeSops}</p>
+                  </button>
+                  <button
+                    onClick={() => setTab('contracts')}
+                    className="rounded-xl border p-4 text-left transition-colors"
+                    style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)' }}
+                  >
+                    <div className="mb-1 flex items-center gap-2" style={{ color: 'var(--color-primary)' }}>
+                      <ContractIcon />
+                      <span className="text-2xl font-bold">{contracts.length}</span>
+                    </div>
+                    <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>{s.activeContracts}</p>
+                  </button>
+                </div>
+              </div>
+
+              {/* Pending actions */}
+              <div>
+                <h2 className="mb-2 text-sm font-semibold" style={{ color: 'var(--color-text-secondary)' }}>{s.pendingActions}</h2>
+                {unsignedSops.length === 0 ? (
+                  <div className="rounded-xl border p-4 text-center" style={{ borderColor: 'var(--color-border)' }}>
+                    <CheckCircle />
+                    <p className="mt-1 text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{s.allSigned}</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {unsignedSops.map(sop => (
+                      <button
+                        key={sop.id}
+                        onClick={() => { setTab('sops'); setActiveSop(sop); setTimeout(() => signSectionRef.current?.scrollIntoView({ behavior: 'smooth' }), 100) }}
+                        className="flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-colors"
+                        style={{ borderColor: 'var(--color-border)' }}
+                      >
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: 'var(--color-diff-remove)' }}>
+                          <DocIcon />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>{sop.title}</p>
+                          <p className="text-xs" style={{ color: 'var(--color-warning)' }}>{s.needsSignature}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* ─── SOP Tab Content ─── */}
           {tab === 'sops' && (
@@ -722,10 +852,91 @@ export function SOPView() {
             </>
           )}
 
-          {/* ─── Bonuses Tab Content ─── */}
-          {tab === 'bonuses' && (
+          {/* ─── Activity Tab Content ─── */}
+          {tab === 'activity' && (
+            <>
+              {feedEvents.length === 0 ? (
+                <div className="rounded-xl border p-6 text-center" style={{ borderColor: 'var(--color-border)' }}>
+                  <div className="mx-auto flex h-10 w-10 items-center justify-center" style={{ color: 'var(--color-text-tertiary)' }}><ActivityIcon /></div>
+                  <p className="mt-2 text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{s.noActivity}</p>
+                </div>
+              ) : (
+                <div className="space-y-0">
+                  {feedEvents.map((event, i) => {
+                    const eventLabels: Record<string, string> = {
+                      sop_signed: s.eventSopSigned,
+                      sop_updated: s.eventSopUpdated,
+                      sop_assigned: s.eventSopAssigned,
+                      contract_assigned: s.eventContractAssigned,
+                      contract_updated: s.eventContractUpdated,
+                      bonus_awarded: s.eventRewardGiven,
+                      welcome: s.eventWelcome,
+                    }
+                    const eventIcons: Record<string, React.ReactNode> = {
+                      sop_signed: <CheckCircle />,
+                      sop_updated: <DocIcon />,
+                      sop_assigned: <DocIcon />,
+                      contract_assigned: <ContractIcon />,
+                      contract_updated: <ContractIcon />,
+                      bonus_awarded: <TrophyIcon />,
+                      welcome: <HomeIcon />,
+                    }
+                    const eventColors: Record<string, string> = {
+                      sop_signed: 'var(--color-success)',
+                      sop_updated: 'var(--color-primary)',
+                      sop_assigned: 'var(--color-primary)',
+                      contract_assigned: 'var(--color-primary)',
+                      contract_updated: 'var(--color-primary)',
+                      bonus_awarded: 'var(--color-warning)',
+                      welcome: 'var(--color-success)',
+                    }
+                    const isLast = i === feedEvents.length - 1
+                    const date = new Date(event.created_at)
+                    const timeStr = date.toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' })
+
+                    return (
+                      <div key={event.id} className="flex gap-3">
+                        {/* Timeline line + dot */}
+                        <div className="flex flex-col items-center">
+                          <div
+                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
+                            style={{ backgroundColor: 'var(--color-bg-secondary)', color: eventColors[event.event_type] || 'var(--color-text-tertiary)' }}
+                          >
+                            {eventIcons[event.event_type] || <ActivityIcon />}
+                          </div>
+                          {!isLast && <div className="w-px flex-1 min-h-4" style={{ backgroundColor: 'var(--color-border)' }} />}
+                        </div>
+                        {/* Content */}
+                        <div className="pb-5 pt-1 min-w-0">
+                          <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+                            {eventLabels[event.event_type] || event.event_type}
+                          </p>
+                          <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>{event.title}</p>
+                          {event.description && (
+                            <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{event.description}</p>
+                          )}
+                          {event.event_type === 'sop_signed' && event.metadata?.signature_font && (
+                            <p
+                              className="mt-1 text-lg"
+                              style={{ fontFamily: `'${event.metadata.signature_font}', cursive`, color: 'var(--color-text-secondary)' }}
+                            >
+                              {event.title}
+                            </p>
+                          )}
+                          <p className="mt-0.5 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{timeStr}</p>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* ─── Rewards Tab Content ─── */}
+          {tab === 'rewards' && (
             <div className="rounded-xl border p-6 text-center" style={{ borderColor: 'var(--color-border)' }}>
-              <div className="mx-auto flex h-10 w-10 items-center justify-center" style={{ color: 'var(--color-text-tertiary)' }}><StarIcon /></div>
+              <div className="mx-auto flex h-10 w-10 items-center justify-center" style={{ color: 'var(--color-text-tertiary)' }}><TrophyIcon /></div>
               <p className="mt-2 text-sm font-medium" style={{ color: 'var(--color-text-tertiary)' }}>{s.comingSoon}</p>
             </div>
           )}
@@ -737,9 +948,11 @@ export function SOPView() {
       <nav className="fixed bottom-0 left-0 right-0 z-30 border-t no-print" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }}>
         <div className="mx-auto flex max-w-lg">
           {([
+            { key: 'home' as Tab, label: s.home, icon: <HomeIcon /> },
             { key: 'sops' as Tab, label: s.sops, icon: <DocIcon />, badge: notificationCount },
             { key: 'contracts' as Tab, label: s.contracts, icon: <ContractIcon /> },
-            { key: 'bonuses' as Tab, label: s.bonuses, icon: <StarIcon /> },
+            { key: 'rewards' as Tab, label: s.rewards, icon: <TrophyIcon /> },
+            { key: 'activity' as Tab, label: s.activity, icon: <ActivityIcon /> },
           ]).map(item => (
             <button
               key={item.key}

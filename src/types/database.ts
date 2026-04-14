@@ -368,6 +368,34 @@ export type Database = {
         }
         Relationships: []
       }
+      feed_events: {
+        Row: {
+          id: string
+          org_id: string
+          employee_id: string | null
+          event_type: string
+          title: string
+          description: string | null
+          metadata: Record<string, unknown>
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          org_id: string
+          employee_id?: string | null
+          event_type: string
+          title: string
+          description?: string | null
+          metadata?: Record<string, unknown>
+          created_at?: string
+        }
+        Update: {
+          title?: string
+          description?: string | null
+          metadata?: Record<string, unknown>
+        }
+        Relationships: []
+      }
     }
     Views: Record<string, never>
     Functions: {
@@ -398,3 +426,4 @@ export type ApiKey = Database['public']['Tables']['api_keys']['Row']
 export type Tag = Database['public']['Tables']['tags']['Row']
 export type Contract = Database['public']['Tables']['contracts']['Row']
 export type ContractVersion = Database['public']['Tables']['contract_versions']['Row']
+export type FeedEvent = Database['public']['Tables']['feed_events']['Row']
