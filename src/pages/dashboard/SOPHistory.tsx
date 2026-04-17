@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { diffLines } from 'diff'
 import { supabase } from '../../lib/supabase'
+import { useLang } from '../../contexts/LanguageContext'
 import type { Sop, SopVersion } from '../../types/database'
 
 export function SOPHistory() {
+  const { t } = useLang()
   const { id } = useParams<{ id: string }>()
   const [sop, setSOP] = useState<Sop | null>(null)
   const [versions, setVersions] = useState<SopVersion[]>([])
@@ -23,7 +25,7 @@ export function SOPHistory() {
     load()
   }, [id])
 
-  if (!sop) return <div style={{ color: 'var(--color-text-secondary)' }}>Loading...</div>
+  if (!sop) return <div style={{ color: 'var(--color-text-secondary)' }}>{t.loading}</div>
 
   const diffResult = selectedVersion && showDiff
     ? diffLines(selectedVersion.content_markdown, sop.content_markdown)
@@ -33,21 +35,21 @@ export function SOPHistory() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{sop.title} — History</h1>
-          <p className="mt-1 text-sm" style={{ color: 'var(--color-text-secondary)' }}>Current version: v{sop.current_version}</p>
+          <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{sop.title} — {t.historySuffix}</h1>
+          <p className="mt-1 text-sm" style={{ color: 'var(--color-text-secondary)' }}>{t.currentVersionLabel(sop.current_version)}</p>
         </div>
         <Link
           to={`/dashboard/sops/${sop.id}/edit`}
           className="rounded-lg border px-4 py-2 text-sm"
           style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
         >
-          Edit SOP
+          {t.editSopButton}
         </Link>
       </div>
 
       {versions.length === 0 ? (
         <p className="py-12 text-center text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-          No version history yet. Save changes to the SOP to create versions.
+          {t.noVersionHistory}
         </p>
       ) : (
         <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
@@ -61,7 +63,7 @@ export function SOPHistory() {
                   backgroundColor: selectedVersion?.id === v.id ? 'var(--color-bg-secondary)' : 'transparent',
                 }}
               >
-                <div className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Version {v.version_number}</div>
+                <div className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{t.versionNumber(v.version_number)}</div>
                 <div className="mt-0.5 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
                   {new Date(v.created_at).toLocaleDateString()}
                   {v.change_summary && ` — ${v.change_summary}`}
@@ -75,14 +77,14 @@ export function SOPHistory() {
               <div className="rounded-xl border p-5" style={{ borderColor: 'var(--color-border)' }}>
                 <div className="mb-4 flex items-center gap-3">
                   <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
-                    Version {selectedVersion.version_number}
+                    {t.versionNumber(selectedVersion.version_number)}
                   </span>
                   <button
                     onClick={() => setShowDiff(!showDiff)}
                     className="rounded-md border px-2.5 py-1 text-xs"
                     style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
                   >
-                    {showDiff ? 'Show content' : 'Show diff vs current'}
+                    {showDiff ? t.showContent : t.showDiffVsCurrent}
                   </button>
                 </div>
 

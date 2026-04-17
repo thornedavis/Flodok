@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useLang } from '../../contexts/LanguageContext'
 
 export function Login({ onSignIn }: { onSignIn: (email: string, password: string) => Promise<{ error: unknown }> }) {
+  const { t } = useLang()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -32,14 +34,14 @@ export function Login({ onSignIn }: { onSignIn: (email: string, password: string
 
           <div>
             <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
-              Email
+              {t.emailLabel}
             </label>
             <input
               type="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
               required
-              className="w-full rounded-lg border px-3 py-2 text-sm outline-none transition-colors focus:ring-2"
+              className="w-full rounded-lg border px-3 py-2 text-sm transition-colors"
               style={{
                 borderColor: 'var(--color-border)',
                 backgroundColor: 'var(--color-bg)',
@@ -51,14 +53,14 @@ export function Login({ onSignIn }: { onSignIn: (email: string, password: string
 
           <div>
             <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
-              Password
+              {t.passwordLabel}
             </label>
             <input
               type="password"
               value={password}
               onChange={e => setPassword(e.target.value)}
               required
-              className="w-full rounded-lg border px-3 py-2 text-sm outline-none transition-colors focus:ring-2"
+              className="w-full rounded-lg border px-3 py-2 text-sm transition-colors"
               style={{
                 borderColor: 'var(--color-border)',
                 backgroundColor: 'var(--color-bg)',
@@ -74,14 +76,14 @@ export function Login({ onSignIn }: { onSignIn: (email: string, password: string
             className="w-full rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors disabled:opacity-50"
             style={{ backgroundColor: 'var(--color-primary)' }}
           >
-            {loading ? 'Signing in...' : 'Sign in'}
+            {loading ? t.signingIn : t.signIn}
           </button>
         </form>
 
         <p className="mt-6 text-center text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-          Don't have an account?{' '}
+          {t.noAccount}{' '}
           <Link to="/signup" className="font-medium" style={{ color: 'var(--color-primary)' }}>
-            Sign up
+            {t.signUp}
           </Link>
         </p>
       </div>

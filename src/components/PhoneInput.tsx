@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
+import { useLang } from '../contexts/LanguageContext'
+import type { Translations } from '../lib/translations'
 
 export interface CountryOption {
   code: string   // e.g. '+62'
@@ -62,19 +64,12 @@ function getValidationState(digits: string, country: CountryOption): 'empty' | '
   return 'valid'
 }
 
-function getValidationMessage(state: 'empty' | 'short' | 'valid' | 'long', country: CountryOption): string {
-  if (state === 'short') {
-    const expected = country.minDigits === country.maxDigits
-      ? `${country.minDigits} digits`
-      : `${country.minDigits}–${country.maxDigits} digits`
-    return `Too short — ${country.name} numbers need ${expected}`
-  }
-  if (state === 'long') {
-    const expected = country.minDigits === country.maxDigits
-      ? `${country.maxDigits} digits`
-      : `${country.minDigits}–${country.maxDigits} digits`
-    return `Too long — ${country.name} numbers need ${expected}`
-  }
+function getValidationMessage(state: 'empty' | 'short' | 'valid' | 'long', country: CountryOption, t: Translations): string {
+  const expected = country.minDigits === country.maxDigits
+    ? t.digitsExact(country.minDigits)
+    : t.digitsRange(country.minDigits, country.maxDigits)
+  if (state === 'short') return t.phoneTooShort(country.name, expected)
+  if (state === 'long') return t.phoneTooLong(country.name, expected)
   return ''
 }
 
@@ -83,6 +78,7 @@ export function PhoneInput({ value, onChange, defaultCountryCode = '+62' }: {
   onChange: (e164: string) => void
   defaultCountryCode?: string
 }) {
+  const { t } = useLang()
   const parsed = value.startsWith('+')
     ? parsePhone(value)
     : { country: findCountryByCode(defaultCountryCode), localNumber: value.replace(/^0/, '') }
@@ -117,7 +113,7 @@ export function PhoneInput({ value, onChange, defaultCountryCode = '+62' }: {
   const digits = localNumber.replace(/\s/g, '')
   const validation = getValidationState(digits, selectedCountry)
   const showError = touched && (validation === 'short' || validation === 'long')
-  const errorMessage = getValidationMessage(validation, selectedCountry)
+  const errorMessage = getValidationMessage(validation, selectedCountry, t)
 
   function handleLocalChange(e: React.ChangeEvent<HTMLInputElement>) {
     const cleaned = e.target.value.replace(/[^\d\s]/g, '')
@@ -147,7 +143,7 @@ export function PhoneInput({ value, onChange, defaultCountryCode = '+62' }: {
 
   return (
     <div>
-      <div className="flex items-stretch" ref={dropdownRef}>
+      <div className="relative flex items-stretch" ref={dropdownRef} style={{ position: 'relative' }}>
         {/* Country selector */}
         <button
           type="button"
@@ -210,7 +206,7 @@ export function PhoneInput({ value, onChange, defaultCountryCode = '+62' }: {
                 type="text"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                placeholder="Search countries..."
+                placeholder={t.searchCountriesPlaceholder}
                 className="w-full rounded-md border px-2.5 py-1.5 text-sm outline-none"
                 style={{
                   borderColor: 'var(--color-border)',

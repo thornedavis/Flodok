@@ -42,16 +42,18 @@ export function useAuth() {
     return { error }
   }
 
-  async function signUp(email: string, password: string, name: string, orgName: string) {
+  async function signUp(email: string, password: string, name: string, orgName: string, inviteToken?: string) {
     const { data: authData, error: authError } = await supabase.auth.signUp({ email, password })
     if (authError || !authData.user) return { error: authError }
 
-    // Create org + user profile via security definer function (bypasses RLS)
+    // Create org + user profile via security definer function (bypasses RLS).
+    // When inviteToken is supplied, handle_signup joins the existing org instead.
     const { error: setupError } = await supabase.rpc('handle_signup', {
       user_id: authData.user.id,
       user_email: email,
       user_name: name,
       org_name: orgName,
+      invite_token: inviteToken ?? null,
     })
     if (setupError) return { error: setupError }
 

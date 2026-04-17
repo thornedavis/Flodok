@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { SOPEditor } from '../../components/Editor'
+import { useLang } from '../../contexts/LanguageContext'
 import type { User, Contract, Tag, Employee } from '../../types/database'
 
 const GENERATE_SYSTEM_PROMPT = `You are an expert employment contract writer for workplace documentation.
@@ -25,6 +26,7 @@ Rules for all responses:
 - Do not include meta-commentary or explanations — output ONLY the contract markdown content`
 
 export function ContractEdit({ user }: { user: User }) {
+  const { t } = useLang()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [contract, setContract] = useState<Contract | null>(null)
@@ -108,7 +110,7 @@ export function ContractEdit({ user }: { user: User }) {
 
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session) { setError('Not authenticated'); setTranslating(false); return }
+      if (!session) { setError(t.notAuthenticated); setTranslating(false); return }
 
       const controller = new AbortController()
       const timeout = setTimeout(() => controller.abort(), 55000)
@@ -126,7 +128,7 @@ export function ContractEdit({ user }: { user: User }) {
 
       if (!response.ok) {
         const body = await response.json().catch(() => ({}))
-        throw new Error(body.error || `Translation failed (${response.status})`)
+        throw new Error(body.error || `${t.translationFailed} (${response.status})`)
       }
 
       const { data } = await supabase.from('contracts').select('*').eq('id', contract.id).single()
@@ -139,7 +141,7 @@ export function ContractEdit({ user }: { user: User }) {
       setTranslateDone(true)
       setTimeout(() => setTranslateDone(false), 3000)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Translation failed')
+      setError(err instanceof Error ? err.message : t.translationFailed)
     }
     setTranslating(false)
   }
@@ -151,7 +153,7 @@ export function ContractEdit({ user }: { user: User }) {
 
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session) { setError('Not authenticated'); setGenerating(false); return }
+      if (!session) { setError(t.notAuthenticated); setGenerating(false); return }
 
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-sop`,
@@ -171,7 +173,7 @@ export function ContractEdit({ user }: { user: User }) {
 
       if (!response.ok) {
         const body = await response.json().catch(() => ({}))
-        throw new Error(body.error || `Generation failed (${response.status})`)
+        throw new Error(body.error || `${t.generationFailed} (${response.status})`)
       }
 
       const reader = response.body!.getReader()
@@ -200,7 +202,7 @@ export function ContractEdit({ user }: { user: User }) {
       if (generated) setContent(generated)
       setAiPrompt('')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Generation failed')
+      setError(err instanceof Error ? err.message : t.generationFailed)
     }
     setGenerating(false)
   }
@@ -270,7 +272,7 @@ export function ContractEdit({ user }: { user: User }) {
     navigate('/dashboard/contracts')
   }
 
-  if (!contract) return <div style={{ color: 'var(--color-text-secondary)' }}>Loading...</div>
+  if (!contract) return <div style={{ color: 'var(--color-text-secondary)' }}>{t.loading}</div>
 
   const inputStyle = { borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' } as React.CSSProperties
 
@@ -287,7 +289,7 @@ export function ContractEdit({ user }: { user: User }) {
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>Edit Contract</h1>
+        <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.editContractTitle}</h1>
         <div className="flex items-center gap-3">
           <div className="relative">
             <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 inline-block h-2 w-2 rounded-full" style={{ backgroundColor: statusColors[status] }} />
@@ -297,9 +299,9 @@ export function ContractEdit({ user }: { user: User }) {
               className="appearance-none rounded-lg border py-2 pl-7 pr-8 text-sm font-medium"
               style={{ ...inputStyle, color: statusColors[status] }}
             >
-              <option value="draft">Draft</option>
-              <option value="active">Active</option>
-              <option value="archived">Archived</option>
+              <option value="draft">{t.statusDraft}</option>
+              <option value="active">{t.statusActive}</option>
+              <option value="archived">{t.statusArchived}</option>
             </select>
             <svg className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-text-tertiary)' }}>
               <polyline points="6 9 12 15 18 9" />
@@ -308,10 +310,10 @@ export function ContractEdit({ user }: { user: User }) {
           <button onClick={handleSave} disabled={saving || !hasChanges}
             className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50" style={{ backgroundColor: 'var(--color-primary)' }}>
             {saving ? (
-              <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>Saving...</>
-            ) : 'Save'}
+              <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>{t.saving}</>
+            ) : t.save}
           </button>
-          <button onClick={() => navigate('/dashboard/contracts')} className="rounded-lg border px-4 py-2 text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>Cancel</button>
+          <button onClick={() => navigate('/dashboard/contracts')} className="rounded-lg border px-4 py-2 text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>{t.cancel}</button>
         </div>
       </div>
 
@@ -322,12 +324,12 @@ export function ContractEdit({ user }: { user: User }) {
       <div className="space-y-4">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <div>
-            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>Title</label>
+            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.titleLabel}</label>
             <input type="text" value={title} onChange={e => setTitle(e.target.value)} className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>Employee</label>
+            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.employeeLabel}</label>
             <div className="relative">
               <select
                 value={employeeId || ''}
@@ -339,7 +341,7 @@ export function ContractEdit({ user }: { user: User }) {
                 className="w-full appearance-none rounded-lg border px-3 py-2 pr-8 text-sm"
                 style={inputStyle}
               >
-                <option value="">No employee linked</option>
+                <option value="">{t.noEmployeeLinked}</option>
                 {allEmployees.map(emp => (
                   <option key={emp.id} value={emp.id}>{emp.name}{emp.department ? ` (${emp.department})` : ''}</option>
                 ))}
@@ -351,7 +353,7 @@ export function ContractEdit({ user }: { user: User }) {
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>Tags</label>
+            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.tagsLabel}</label>
             <div className="flex flex-wrap gap-2">
               {allTags.map(tag => {
                 const isSelected = selectedTagIds.has(tag.id)
@@ -371,9 +373,9 @@ export function ContractEdit({ user }: { user: User }) {
               <div className="flex items-center gap-1">
                 <input type="text" value={newTagName} onChange={e => setNewTagName(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleCreateTag() } }}
-                  placeholder="New tag..." className="w-24 rounded-full border px-3 py-1 text-xs outline-none" style={inputStyle} />
+                  placeholder={t.newTagPlaceholder} className="w-24 rounded-full border px-3 py-1 text-xs outline-none" style={inputStyle} />
                 {newTagName.trim() && (
-                  <button type="button" onClick={handleCreateTag} className="rounded-full px-2 py-1 text-xs font-medium" style={{ color: 'var(--color-primary)' }}>+ Add</button>
+                  <button type="button" onClick={handleCreateTag} className="rounded-full px-2 py-1 text-xs font-medium" style={{ color: 'var(--color-primary)' }}>{t.addShort}</button>
                 )}
               </div>
             </div>
@@ -382,20 +384,20 @@ export function ContractEdit({ user }: { user: User }) {
 
         <div>
           <div className="mb-2 flex items-center justify-between">
-            <label className="block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>Content</label>
+            <label className="block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.contentLabel}</label>
             <div className="flex items-center gap-2">
               <div className="flex rounded-lg border p-0.5" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)' }}>
                 <button type="button" onClick={() => setActiveTab('en')} className="rounded-md px-3 py-1 text-xs font-medium transition-colors"
                   style={{ backgroundColor: activeTab === 'en' ? 'var(--color-bg)' : 'transparent', color: activeTab === 'en' ? 'var(--color-text)' : 'var(--color-text-tertiary)', boxShadow: activeTab === 'en' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none' }}>
-                  English
+                  {t.english}
                 </button>
                 <button type="button" onClick={() => setActiveTab('id')} className="rounded-md px-3 py-1 text-xs font-medium transition-colors"
                   style={{ backgroundColor: activeTab === 'id' ? 'var(--color-bg)' : 'transparent', color: activeTab === 'id' ? 'var(--color-text)' : 'var(--color-text-tertiary)', boxShadow: activeTab === 'id' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none' }}>
-                  Bahasa Indonesia
+                  {t.bahasaIndonesiaLabel}
                 </button>
               </div>
               <button type="button" onClick={() => handleTranslate(translateDirection)} disabled={translating || !hasSourceContent || needsSaveBeforeTranslate}
-                title={needsSaveBeforeTranslate ? 'Save your changes before translating' : undefined}
+                title={needsSaveBeforeTranslate ? t.saveChangesBeforeTranslatingHint : undefined}
                 className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all disabled:opacity-50"
                 style={{ borderColor: translateDone ? 'var(--color-success, #22c55e)' : 'var(--color-border)', color: translateDone ? 'var(--color-success, #22c55e)' : 'var(--color-text-secondary)' }}
                 onMouseOver={e => { if (!translateDone) e.currentTarget.style.borderColor = 'var(--color-primary)' }}
@@ -410,10 +412,10 @@ export function ContractEdit({ user }: { user: User }) {
                     <path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/>
                   </svg>
                 )}
-                {needsSaveBeforeTranslate ? 'Save before translating' : translating ? 'Translating...' : translateDone ? 'Complete' : (
+                {needsSaveBeforeTranslate ? t.saveBeforeTranslating : translating ? t.translating : translateDone ? t.translateComplete : (
                   activeTab === 'en'
-                    ? (contentId ? 'Re-translate to ID' : 'Translate to ID')
-                    : (content ? 'Re-translate to EN' : 'Translate to EN')
+                    ? (contentId ? t.retranslateToId : t.translateToId)
+                    : (content ? t.retranslateToEn : t.translateToEn)
                 )}
               </button>
             </div>
@@ -431,19 +433,19 @@ export function ContractEdit({ user }: { user: User }) {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-primary)' }}>
               <path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" />
             </svg>
-            AI Generate
+            {t.aiGenerate}
           </label>
           <div className="flex gap-2">
             <input type="text" value={aiPrompt} onChange={e => setAiPrompt(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleGenerate() } }}
               placeholder={content
-                ? 'e.g. "Add a non-compete clause" or "Update the probation period to 6 months"'
-                : `e.g. "Generate an employment contract for a ${employee?.department || 'full-time'} position"`}
+                ? t.aiContractPromptWithContent
+                : t.aiContractPromptEmpty(employee?.department || 'full-time')}
               disabled={generating} className="flex-1 rounded-lg border px-3 py-2 text-sm outline-none disabled:opacity-50" style={inputStyle} />
             <button type="button" onClick={handleGenerate} disabled={generating || !aiPrompt.trim()}
               className="flex shrink-0 items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-60" style={{ backgroundColor: 'var(--color-primary)' }}>
               {generating && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>}
-              {generating ? 'Generating...' : 'Generate'}
+              {generating ? t.generating : t.generate}
             </button>
           </div>
         </div>

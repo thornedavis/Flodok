@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { SOPEditor } from '../../components/Editor'
+import { useLang } from '../../contexts/LanguageContext'
 import type { User, Sop, Tag, Employee } from '../../types/database'
 
 function fireTranslation(sopId: string, direction: 'en-to-id' | 'id-to-en') {
@@ -19,6 +20,7 @@ function fireTranslation(sopId: string, direction: 'en-to-id' | 'id-to-en') {
 }
 
 export function SOPEdit({ user }: { user: User }) {
+  const { t } = useLang()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [sop, setSOP] = useState<Sop | null>(null)
@@ -111,7 +113,7 @@ export function SOPEdit({ user }: { user: User }) {
 
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session) { setError('Not authenticated'); setTranslating(false); return }
+      if (!session) { setError(t.notAuthenticated); setTranslating(false); return }
 
       const controller = new AbortController()
       const timeout = setTimeout(() => controller.abort(), 55000)
@@ -132,7 +134,7 @@ export function SOPEdit({ user }: { user: User }) {
 
       if (!response.ok) {
         const body = await response.json().catch(() => ({}))
-        throw new Error(body.error || `Translation failed (${response.status})`)
+        throw new Error(body.error || `${t.translationFailed} (${response.status})`)
       }
 
       // Reload the full SOP so the local baseline matches the DB.
@@ -148,7 +150,7 @@ export function SOPEdit({ user }: { user: User }) {
       setTranslateDone(true)
       setTimeout(() => setTranslateDone(false), 3000)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Translation failed')
+      setError(err instanceof Error ? err.message : t.translationFailed)
     }
 
     setTranslating(false)
@@ -161,7 +163,7 @@ export function SOPEdit({ user }: { user: User }) {
 
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session) { setError('Not authenticated'); setGenerating(false); return }
+      if (!session) { setError(t.notAuthenticated); setGenerating(false); return }
 
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-sop`,
@@ -183,7 +185,7 @@ export function SOPEdit({ user }: { user: User }) {
 
       if (!response.ok) {
         const body = await response.json().catch(() => ({}))
-        throw new Error(body.error || `Generation failed (${response.status})`)
+        throw new Error(body.error || `${t.generationFailed} (${response.status})`)
       }
 
       // Parse SSE stream — collect all content, then set once at end
@@ -222,7 +224,7 @@ export function SOPEdit({ user }: { user: User }) {
       }
       setAiPrompt('')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Generation failed')
+      setError(err instanceof Error ? err.message : t.generationFailed)
     }
 
     setGenerating(false)
@@ -302,7 +304,7 @@ export function SOPEdit({ user }: { user: User }) {
     navigate('/dashboard/sops')
   }
 
-  if (!sop) return <div style={{ color: 'var(--color-text-secondary)' }}>Loading...</div>
+  if (!sop) return <div style={{ color: 'var(--color-text-secondary)' }}>{t.loading}</div>
 
   const inputStyle = {
     borderColor: 'var(--color-border)',
@@ -323,7 +325,7 @@ export function SOPEdit({ user }: { user: User }) {
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>Edit SOP</h1>
+        <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.editSopTitle}</h1>
         <div className="flex items-center gap-3">
           <div className="relative">
             <span
@@ -336,9 +338,9 @@ export function SOPEdit({ user }: { user: User }) {
               className="appearance-none rounded-lg border py-2 pl-7 pr-8 text-sm font-medium"
               style={{ ...inputStyle, color: statusColors[status] }}
             >
-              <option value="draft">Draft</option>
-              <option value="active">Active</option>
-              <option value="archived">Archived</option>
+              <option value="draft">{t.statusDraft}</option>
+              <option value="active">{t.statusActive}</option>
+              <option value="archived">{t.statusArchived}</option>
             </select>
             <svg className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-text-tertiary)' }}>
               <polyline points="6 9 12 15 18 9" />
@@ -355,16 +357,16 @@ export function SOPEdit({ user }: { user: User }) {
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
                   <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
                 </svg>
-                Saving...
+                {t.saving}
               </>
-            ) : 'Save'}
+            ) : t.save}
           </button>
           <button
             onClick={() => navigate('/dashboard/sops')}
             className="rounded-lg border px-4 py-2 text-sm"
             style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
           >
-            Cancel
+            {t.cancel}
           </button>
         </div>
       </div>
@@ -379,7 +381,7 @@ export function SOPEdit({ user }: { user: User }) {
         {/* Title + Employee + Tags row */}
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <div>
-            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>Title</label>
+            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.titleLabel}</label>
             <input
               type="text"
               value={title}
@@ -391,7 +393,7 @@ export function SOPEdit({ user }: { user: User }) {
 
           {/* Employee */}
           <div>
-            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>Employee</label>
+            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.employeeLabel}</label>
             <div className="relative">
               <select
                 value={employeeId || ''}
@@ -403,7 +405,7 @@ export function SOPEdit({ user }: { user: User }) {
                 className="w-full appearance-none rounded-lg border px-3 py-2 pr-8 text-sm"
                 style={inputStyle}
               >
-                <option value="">No employee linked</option>
+                <option value="">{t.noEmployeeLinked}</option>
                 {allEmployees.map(emp => (
                   <option key={emp.id} value={emp.id}>
                     {emp.name}{emp.department ? ` (${emp.department})` : ''}
@@ -418,7 +420,7 @@ export function SOPEdit({ user }: { user: User }) {
 
           {/* Tags */}
           <div>
-            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>Tags</label>
+            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.tagsLabel}</label>
             <div className="flex flex-wrap gap-2">
               {allTags.map(tag => {
                 const isSelected = selectedTagIds.has(tag.id)
@@ -444,7 +446,7 @@ export function SOPEdit({ user }: { user: User }) {
                   value={newTagName}
                   onChange={e => setNewTagName(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleCreateTag() } }}
-                  placeholder="New tag..."
+                  placeholder={t.newTagPlaceholder}
                   className="w-24 rounded-full border px-3 py-1 text-xs outline-none"
                   style={inputStyle}
                 />
@@ -455,7 +457,7 @@ export function SOPEdit({ user }: { user: User }) {
                     className="rounded-full px-2 py-1 text-xs font-medium"
                     style={{ color: 'var(--color-primary)' }}
                   >
-                    + Add
+                    {t.addShort}
                   </button>
                 )}
               </div>
@@ -465,7 +467,7 @@ export function SOPEdit({ user }: { user: User }) {
 
         <div>
           <div className="mb-2 flex items-center justify-between">
-            <label className="block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>Content</label>
+            <label className="block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.contentLabel}</label>
             <div className="flex items-center gap-2">
               <div
                 className="flex rounded-lg border p-0.5"
@@ -481,7 +483,7 @@ export function SOPEdit({ user }: { user: User }) {
                     boxShadow: activeTab === 'en' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
                   }}
                 >
-                  English
+                  {t.english}
                 </button>
                 <button
                   type="button"
@@ -493,14 +495,14 @@ export function SOPEdit({ user }: { user: User }) {
                     boxShadow: activeTab === 'id' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
                   }}
                 >
-                  Bahasa Indonesia
+                  {t.bahasaIndonesiaLabel}
                 </button>
               </div>
               <button
                 type="button"
                 onClick={() => handleTranslate(translateDirection)}
                 disabled={translating || !hasSourceContent || needsSaveBeforeTranslate}
-                title={needsSaveBeforeTranslate ? 'Save your changes before translating' : undefined}
+                title={needsSaveBeforeTranslate ? t.saveChangesBeforeTranslatingHint : undefined}
                 className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all disabled:opacity-50"
                 style={{
                   borderColor: translateDone ? 'var(--color-success, #22c55e)' : 'var(--color-border)',
@@ -527,10 +529,10 @@ export function SOPEdit({ user }: { user: User }) {
                     <path d="M14 18h6"/>
                   </svg>
                 )}
-                {needsSaveBeforeTranslate ? 'Save before translating' : translating ? 'Translating...' : translateDone ? 'Complete' : (
+                {needsSaveBeforeTranslate ? t.saveBeforeTranslating : translating ? t.translating : translateDone ? t.translateComplete : (
                   activeTab === 'en'
-                    ? (contentId ? 'Re-translate to ID' : 'Translate to ID')
-                    : (content ? 'Re-translate to EN' : 'Translate to EN')
+                    ? (contentId ? t.retranslateToId : t.translateToId)
+                    : (content ? t.retranslateToEn : t.translateToEn)
                 )}
               </button>
             </div>
@@ -554,7 +556,7 @@ export function SOPEdit({ user }: { user: User }) {
               <path d="M2 17l10 5 10-5" />
               <path d="M2 12l10 5 10-5" />
             </svg>
-            AI Generate
+            {t.aiGenerate}
           </label>
           <div className="flex gap-2">
             <input
@@ -563,8 +565,8 @@ export function SOPEdit({ user }: { user: User }) {
               onChange={e => setAiPrompt(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleGenerate() } }}
               placeholder={content
-                ? 'e.g. "Add a section on reporting procedures" or "Make the daily tasks more detailed"'
-                : `e.g. "Generate an SOP for a ${employee?.department || 'marketing'} role covering daily responsibilities and processes"`}
+                ? t.aiPromptWithContent
+                : t.aiPromptEmpty(employee?.department || 'marketing')}
               disabled={generating}
               className="flex-1 rounded-lg border px-3 py-2 text-sm outline-none disabled:opacity-50"
               style={inputStyle}
@@ -581,7 +583,7 @@ export function SOPEdit({ user }: { user: User }) {
                   <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
                 </svg>
               )}
-              {generating ? 'Generating...' : 'Generate'}
+              {generating ? t.generating : t.generate}
             </button>
           </div>
         </div>

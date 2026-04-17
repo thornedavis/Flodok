@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useLang } from '../../contexts/LanguageContext'
 
 export function Signup({ onSignUp }: { onSignUp: (email: string, password: string, name: string, orgName: string) => Promise<{ error: unknown }> }) {
+  const { t } = useLang()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
@@ -27,12 +29,12 @@ export function Signup({ onSignUp }: { onSignUp: (email: string, password: strin
     return (
       <div className="flex min-h-screen items-center justify-center px-4" style={{ backgroundColor: 'var(--color-bg)' }}>
         <div className="w-full max-w-sm text-center">
-          <h1 className="mb-4 text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>Check your email</h1>
+          <h1 className="mb-4 text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.checkYourEmail}</h1>
           <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-            We sent a confirmation link to <strong>{email}</strong>. Click it to activate your account.
+            {t.confirmationSentTo} <strong>{email}</strong>. {t.clickToActivate}
           </p>
           <Link to="/login" className="mt-6 inline-block text-sm font-medium" style={{ color: 'var(--color-primary)' }}>
-            Back to sign in
+            {t.backToSignIn}
           </Link>
         </div>
       </div>
@@ -50,10 +52,10 @@ export function Signup({ onSignUp }: { onSignUp: (email: string, password: strin
     <div className="flex min-h-screen items-center justify-center px-4" style={{ backgroundColor: 'var(--color-bg)' }}>
       <div className="w-full max-w-sm">
         <h1 className="mb-2 text-center text-2xl font-semibold tracking-tight" style={{ color: 'var(--color-text)' }}>
-          Create your account
+          {t.createAccountTitle}
         </h1>
         <p className="mb-8 text-center text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-          Set up your organization on Flodok
+          {t.setupOrgTagline}
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -65,49 +67,49 @@ export function Signup({ onSignUp }: { onSignUp: (email: string, password: strin
 
           <div>
             <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
-              Your name
+              {t.yourNameLabel}
             </label>
             <input
               type="text"
               value={name}
               onChange={e => setName(e.target.value)}
               required
-              className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2"
+              className="w-full rounded-lg border px-3 py-2 text-sm"
               style={inputStyle}
             />
           </div>
 
           <div>
             <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
-              Organization name
+              {t.organizationName}
             </label>
             <input
               type="text"
               value={orgName}
               onChange={e => setOrgName(e.target.value)}
               required
-              className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2"
+              className="w-full rounded-lg border px-3 py-2 text-sm"
               style={inputStyle}
             />
           </div>
 
           <div>
             <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
-              Email
+              {t.emailLabel}
             </label>
             <input
               type="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
               required
-              className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2"
+              className="w-full rounded-lg border px-3 py-2 text-sm"
               style={inputStyle}
             />
           </div>
 
           <div>
             <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
-              Password
+              {t.passwordLabel}
             </label>
             <input
               type="password"
@@ -115,7 +117,7 @@ export function Signup({ onSignUp }: { onSignUp: (email: string, password: strin
               onChange={e => setPassword(e.target.value)}
               required
               minLength={6}
-              className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2"
+              className="w-full rounded-lg border px-3 py-2 text-sm"
               style={inputStyle}
             />
           </div>
@@ -126,14 +128,14 @@ export function Signup({ onSignUp }: { onSignUp: (email: string, password: strin
             className="w-full rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors disabled:opacity-50"
             style={{ backgroundColor: 'var(--color-primary)' }}
           >
-            {loading ? 'Creating account...' : 'Create account'}
+            {loading ? t.creatingAccount : t.createAccount}
           </button>
         </form>
 
         <p className="mt-6 text-center text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-          Already have an account?{' '}
+          {t.alreadyHaveAccount}{' '}
           <Link to="/login" className="font-medium" style={{ color: 'var(--color-primary)' }}>
-            Sign in
+            {t.signIn}
           </Link>
         </p>
       </div>

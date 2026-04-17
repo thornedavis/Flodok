@@ -3,6 +3,7 @@ import { useAuth } from './hooks/useAuth'
 import { DashboardLayout, PublicLayout } from './components/Layout'
 import { Login } from './pages/auth/Login'
 import { Signup } from './pages/auth/Signup'
+import { AcceptInvite } from './pages/auth/AcceptInvite'
 import { Overview } from './pages/dashboard/Overview'
 import { Employees } from './pages/dashboard/Employees'
 import { SOPs } from './pages/dashboard/SOPs'
@@ -31,6 +32,9 @@ function AppRoutes() {
       <Route element={<PublicLayout />}>
         <Route path="/sop/:slugToken" element={<SOPView />} />
       </Route>
+
+      {/* Invite acceptance — always accessible */}
+      <Route path="/invite/:token" element={<AcceptInvite onSignUp={signUp} />} />
 
       {/* Auth routes */}
       {!session ? (

@@ -5,6 +5,7 @@ import { generateSlug, generateAccessToken } from '../../lib/slug'
 import { getAvatarGradient } from '../../lib/avatar'
 import { PhoneInput } from '../../components/PhoneInput'
 import { DepartmentSelect } from '../../components/DepartmentSelect'
+import { useLang } from '../../contexts/LanguageContext'
 import type { User, Employee, Organization } from '../../types/database'
 
 const MAX_AVATAR_SIZE = 2 * 1024 * 1024 // 2 MB
@@ -16,6 +17,7 @@ export function EmployeeEditModal({ user, employeeId, onClose, onSaved }: {
   onClose: () => void
   onSaved: () => void
 }) {
+  const { t } = useLang()
   const [employee, setEmployee] = useState<Employee | null>(null)
   const [org, setOrg] = useState<Organization | null>(null)
   const [name, setName] = useState('')
@@ -73,11 +75,11 @@ export function EmployeeEditModal({ user, employeeId, onClose, onSaved }: {
     if (!file) return
 
     if (!ALLOWED_TYPES.includes(file.type)) {
-      setError('Please upload a JPEG, PNG, or WebP image.')
+      setError(t.avatarInvalidType)
       return
     }
     if (file.size > MAX_AVATAR_SIZE) {
-      setError('Image must be under 2 MB.')
+      setError(t.avatarTooLarge)
       return
     }
 
@@ -124,7 +126,7 @@ export function EmployeeEditModal({ user, employeeId, onClose, onSaved }: {
     setError('')
 
     if (!isValidE164(phone)) {
-      setError('Invalid phone number format')
+      setError(t.invalidPhone)
       return
     }
 
@@ -145,14 +147,14 @@ export function EmployeeEditModal({ user, employeeId, onClose, onSaved }: {
 
   async function handleDuplicate() {
     if (!employee || !org) return
-    const newName = prompt('Name for the new employee (SOP will be copied):', `${employee.name} (Copy)`)
+    const newName = prompt(t.promptDuplicateName, t.copyOfName(employee.name))
     if (!newName) return
-    const newPhone = prompt('Phone number for the new employee:')
+    const newPhone = prompt(t.promptDuplicatePhone)
     if (!newPhone) return
 
     const ph = normalizePhone(newPhone, org.default_country_code)
     if (!isValidE164(ph)) {
-      alert('Invalid phone number format')
+      alert(t.invalidPhone)
       return
     }
 
@@ -188,7 +190,7 @@ export function EmployeeEditModal({ user, employeeId, onClose, onSaved }: {
 
   async function handleDelete() {
     if (!employee) return
-    if (!confirm(`Delete ${employee.name}? This will also delete their SOP.`)) return
+    if (!confirm(t.deleteEmployeeConfirm(employee.name))) return
     await supabase.from('employees').delete().eq('id', employee.id)
     onSaved()
   }
@@ -244,10 +246,10 @@ export function EmployeeEditModal({ user, employeeId, onClose, onSaved }: {
         </button>
 
         {!employee ? (
-          <div className="py-12 text-center text-sm" style={{ color: 'var(--color-text-secondary)' }}>Loading...</div>
+          <div className="py-12 text-center text-sm" style={{ color: 'var(--color-text-secondary)' }}>{t.loading}</div>
         ) : (
           <>
-            <h2 className="mb-5 text-xl font-semibold" style={{ color: 'var(--color-text)' }}>Edit Employee</h2>
+            <h2 className="mb-5 text-xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.editEmployeeTitle}</h2>
 
             <form onSubmit={handleSubmit} className="space-y-4">
               {error && (
@@ -258,7 +260,7 @@ export function EmployeeEditModal({ user, employeeId, onClose, onSaved }: {
 
               {/* Avatar */}
               <div>
-                <label className="mb-2 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>Photo</label>
+                <label className="mb-2 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.photoLabel}</label>
                 <div className="flex items-center gap-4">
                   <div
                     className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full"
@@ -273,7 +275,7 @@ export function EmployeeEditModal({ user, employeeId, onClose, onSaved }: {
                       className="cursor-pointer rounded-lg border px-3 py-1.5 text-sm transition-colors"
                       style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
                     >
-                      {uploading ? 'Uploading...' : 'Upload'}
+                      {uploading ? t.uploading : t.upload}
                       <input
                         type="file"
                         accept="image/jpeg,image/png,image/webp"
@@ -290,7 +292,7 @@ export function EmployeeEditModal({ user, employeeId, onClose, onSaved }: {
                         className="text-xs"
                         style={{ color: 'var(--color-danger)' }}
                       >
-                        Remove
+                        {t.remove}
                       </button>
                     )}
                   </div>
@@ -298,43 +300,43 @@ export function EmployeeEditModal({ user, employeeId, onClose, onSaved }: {
               </div>
 
               <div>
-                <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>Name</label>
+                <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.nameLabel}</label>
                 <input type="text" value={name} onChange={e => setName(e.target.value)} required className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
               </div>
 
               <div>
-                <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>Phone (WhatsApp)</label>
+                <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.phoneWhatsAppLabel}</label>
                 <div className="relative">
                   <PhoneInput value={phone} onChange={setPhone} defaultCountryCode={org?.default_country_code} />
                 </div>
               </div>
 
               <div>
-                <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>Department</label>
+                <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.departmentLabel}</label>
                 <DepartmentSelect value={department} onChange={setDepartment} departments={departments} />
               </div>
 
               <div>
-                <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>Email (optional)</label>
+                <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.emailOptionalLabel}</label>
                 <input type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
               </div>
 
               <div>
-                <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>KTP/NIK Number (optional)</label>
+                <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.ktpNikOptionalLabel}</label>
                 <input type="text" value={ktpNik} onChange={e => setKtpNik(e.target.value)} placeholder="e.g. 5171234567890001" className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
               </div>
 
               <div>
-                <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>Address (optional)</label>
-                <textarea value={address} onChange={e => setAddress(e.target.value)} placeholder="Employee's residential address..." rows={2} className="w-full resize-none rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
+                <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.addressOptionalLabel}</label>
+                <textarea value={address} onChange={e => setAddress(e.target.value)} placeholder={t.addressPlaceholder} rows={2} className="w-full resize-none rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
               </div>
 
               <div>
-                <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>Notes (internal only)</label>
+                <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.notesInternalLabel}</label>
                 <textarea
                   value={notes}
                   onChange={e => setNotes(e.target.value)}
-                  placeholder="Internal notes about this employee..."
+                  placeholder={t.notesPlaceholder}
                   rows={3}
                   className="w-full resize-none rounded-lg border px-3 py-2 text-sm"
                   style={inputStyle}
@@ -342,8 +344,8 @@ export function EmployeeEditModal({ user, employeeId, onClose, onSaved }: {
               </div>
 
               <div>
-                <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>Employee Portal Link</label>
-                <p className="mb-1.5 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>Share this link with the employee to view their SOPs and contracts.</p>
+                <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.employeePortalLink}</label>
+                <p className="mb-1.5 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.shareLinkHint}</p>
                 <div className="flex items-center gap-2">
                   <input type="text" readOnly value={portalUrl} className="w-full rounded-lg border px-3 py-2 text-sm" style={{ ...inputStyle, backgroundColor: 'var(--color-bg-tertiary)' }} />
                   <button
@@ -352,24 +354,24 @@ export function EmployeeEditModal({ user, employeeId, onClose, onSaved }: {
                     className="shrink-0 rounded-lg border px-3 py-2 text-sm"
                     style={{ borderColor: 'var(--color-border)', color: copied ? 'var(--color-success)' : 'var(--color-text-secondary)' }}
                   >
-                    {copied ? 'Copied!' : 'Copy'}
+                    {copied ? t.copied : t.copy}
                   </button>
                 </div>
               </div>
 
               <div className="flex items-center gap-2 border-t pt-4" style={{ borderColor: 'var(--color-border)' }}>
                 <button type="submit" disabled={saving} className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50" style={{ backgroundColor: 'var(--color-primary)' }}>
-                  {saving ? 'Saving...' : 'Save changes'}
+                  {saving ? t.saving : t.saveChanges}
                 </button>
                 <button type="button" onClick={onClose} className="rounded-lg border px-4 py-2 text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>
-                  Cancel
+                  {t.cancel}
                 </button>
                 <div className="ml-auto flex gap-2">
                   <button type="button" onClick={handleDuplicate} className="rounded-lg border px-4 py-2 text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>
-                    Duplicate
+                    {t.duplicate}
                   </button>
                   <button type="button" onClick={handleDelete} className="rounded-lg px-4 py-2 text-sm" style={{ color: 'var(--color-danger)' }}>
-                    Delete
+                    {t.delete}
                   </button>
                 </div>
               </div>

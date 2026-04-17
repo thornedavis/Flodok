@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { useLang } from '../../contexts/LanguageContext'
 import type { User, Contract, Employee, Tag } from '../../types/database'
 
 type ContractWithEmployee = Contract & { employee: Employee | null; tagIds: string[] }
 
 export function Contracts({ user }: { user: User }) {
   const navigate = useNavigate()
+  const { t } = useLang()
   const [contracts, setContracts] = useState<ContractWithEmployee[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
   const [allTags, setAllTags] = useState<Tag[]>([])
@@ -106,7 +108,7 @@ export function Contracts({ user }: { user: User }) {
       .insert({
         org_id: user.org_id,
         employee_id: contract.employee_id,
-        title: `${contract.title} (Copy)`,
+        title: t.copyOfName(contract.title),
         content_markdown: contract.content_markdown,
         content_markdown_id: contract.content_markdown_id,
         status: 'draft' as const,
@@ -119,14 +121,14 @@ export function Contracts({ user }: { user: User }) {
   }
 
   async function handleDelete(contract: ContractWithEmployee) {
-    if (!confirm(`Delete "${contract.title}"? This cannot be undone.`)) return
+    if (!confirm(t.deleteContractConfirm(contract.title))) return
     const { error } = await supabase.from('contracts').delete().eq('id', contract.id)
     if (error) { alert(error.message); return }
     setContracts(prev => prev.filter(c => c.id !== contract.id))
     setMenuOpenId(null)
   }
 
-  if (loading) return <div style={{ color: 'var(--color-text-secondary)' }}>Loading...</div>
+  if (loading) return <div style={{ color: 'var(--color-text-secondary)' }}>{t.loading}</div>
 
   const statusColors: Record<string, string> = {
     active: 'var(--color-success)',
@@ -134,21 +136,27 @@ export function Contracts({ user }: { user: User }) {
     archived: 'var(--color-text-tertiary)',
   }
 
+  const statusLabels: Record<string, string> = {
+    active: t.statusActive,
+    draft: t.statusDraft,
+    archived: t.statusArchived,
+  }
+
   return (
     <div className="grid gap-8 lg:grid-cols-[1fr_280px]" style={{ alignItems: 'start' }}>
       <div>
         <div className="mb-6 flex items-center justify-between">
-          <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>Contracts</h1>
+          <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.contractsTitle}</h1>
           <div className="flex items-center gap-3">
             <span className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-              {filtered.length} {filtered.length === 1 ? 'Contract' : 'Contracts'}
+              {t.contractCount(filtered.length)}
             </span>
             <button
               onClick={() => setShowCreateModal(true)}
               className="rounded-lg px-4 py-2 text-sm font-medium text-white"
               style={{ backgroundColor: 'var(--color-primary)' }}
             >
-              Create Contract
+              {t.createContract}
             </button>
           </div>
         </div>
@@ -156,8 +164,8 @@ export function Contracts({ user }: { user: User }) {
         {filtered.length === 0 ? (
           <p className="py-12 text-center text-sm" style={{ color: 'var(--color-text-secondary)' }}>
             {contracts.length === 0
-              ? 'No contracts yet. Click "Create Contract" to get started.'
-              : 'No contracts match your filters.'}
+              ? t.noContractsYet
+              : t.noContractsMatchFilters}
           </p>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -211,7 +219,7 @@ export function Contracts({ user }: { user: User }) {
                             <rect x="9" y="9" width="13" height="13" rx="2" />
                             <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                           </svg>
-                          Duplicate
+                          {t.duplicate}
                         </button>
                         <button
                           onClick={e => { e.stopPropagation(); handleDelete(contract) }}
@@ -226,7 +234,7 @@ export function Contracts({ user }: { user: User }) {
                             <path d="M10 11v6" />
                             <path d="M14 11v6" />
                           </svg>
-                          Delete
+                          {t.delete}
                         </button>
                       </div>
                     </>
@@ -273,7 +281,7 @@ export function Contracts({ user }: { user: User }) {
                 <div className="mt-3 flex items-center gap-2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
                   <span className="inline-flex items-center gap-1" style={{ color: statusColors[contract.status] }}>
                     <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: statusColors[contract.status] }} />
-                    {contract.status.charAt(0).toUpperCase() + contract.status.slice(1)}
+                    {statusLabels[contract.status] || contract.status}
                   </span>
                   <span>&middot;</span>
                   <span>v{contract.current_version}</span>
@@ -297,7 +305,7 @@ export function Contracts({ user }: { user: User }) {
               type="text"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Search contracts..."
+              placeholder={t.searchContractsPlaceholder}
               className="w-full rounded-lg border py-2 pl-9 pr-3 text-sm outline-none transition-colors focus:border-[var(--color-border-strong)]"
               style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
             />
@@ -306,8 +314,8 @@ export function Contracts({ user }: { user: User }) {
 
         {departments.length > 0 && (
           <div>
-            <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Departments</h3>
-            <p className="mb-3 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>Filter by team.</p>
+            <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>{t.departments}</h3>
+            <p className="mb-3 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.filterByTeam}</p>
             <div className="space-y-1">
               {departments.map(dept => {
                 const isActive = activeDepartments.has(dept)
@@ -334,8 +342,8 @@ export function Contracts({ user }: { user: User }) {
         )}
 
         <div>
-          <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Status</h3>
-          <p className="mb-3 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>Filter by contract status.</p>
+          <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>{t.statusLabel}</h3>
+          <p className="mb-3 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.filterByContractStatus}</p>
           <div className="space-y-1">
             {statuses.map(status => {
               const isActive = activeStatuses.has(status)
@@ -344,7 +352,7 @@ export function Contracts({ user }: { user: User }) {
                 <button
                   key={status}
                   onClick={() => toggleStatus(status)}
-                  className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm capitalize transition-all"
+                  className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm transition-all"
                   style={{
                     backgroundColor: isActive ? 'color-mix(in srgb, var(--color-primary) 10%, transparent)' : 'transparent',
                     color: isActive ? 'var(--color-primary)' : 'var(--color-text)',
@@ -355,7 +363,7 @@ export function Contracts({ user }: { user: User }) {
                 >
                   <span className="flex items-center gap-2">
                     <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: statusColors[status] }} />
-                    {status}
+                    {statusLabels[status]}
                   </span>
                   <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{count}</span>
                 </button>
@@ -366,8 +374,8 @@ export function Contracts({ user }: { user: User }) {
 
         {allTags.length > 0 && (
           <div>
-            <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Tags</h3>
-            <p className="mb-3 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>Filter by tag.</p>
+            <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>{t.tagsLabel}</h3>
+            <p className="mb-3 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.filterByTag}</p>
             <div className="space-y-1">
               {allTags.map(tag => {
                 const isActive = activeTags.has(tag.id)
@@ -400,7 +408,7 @@ export function Contracts({ user }: { user: User }) {
             className="text-xs font-medium"
             style={{ color: 'var(--color-primary)' }}
           >
-            Clear all filters
+            {t.clearAllFilters}
           </button>
         )}
       </aside>
@@ -418,17 +426,6 @@ export function Contracts({ user }: { user: User }) {
 }
 
 type ContractType = 'pkwt' | 'pkwtt'
-
-const CONTRACT_TYPE_INFO: Record<ContractType, { label: string; description: string }> = {
-  pkwt: {
-    label: 'Fixed Term (PKWT)',
-    description: 'Perjanjian Kerja Waktu Tertentu — for contract/temporary employees. Has a defined start and end date, max 5 years including extensions. No probation period allowed.',
-  },
-  pkwtt: {
-    label: 'Permanent (PKWTT)',
-    description: 'Perjanjian Kerja Waktu Tidak Tertentu — for permanent employees. No end date. May include a probation period of up to 3 months.',
-  },
-}
 
 function formatCurrency(val: string) {
   const num = val.replace(/\D/g, '')
@@ -670,6 +667,11 @@ function CreateContractModal({ orgId, employees, onClose, onCreated }: {
   onClose: () => void
   onCreated: (id: string) => void
 }) {
+  const { t } = useLang()
+  const contractTypeInfo: Record<ContractType, { label: string; description: string }> = {
+    pkwt: { label: t.contractTypeFixedTerm, description: t.contractTypePkwtDesc },
+    pkwtt: { label: t.contractTypePermanent, description: t.contractTypePkwttDesc },
+  }
   const [title, setTitle] = useState('')
   const [employeeId, setEmployeeId] = useState('')
   const [empSearch, setEmpSearch] = useState('')
@@ -704,7 +706,7 @@ function CreateContractModal({ orgId, employees, onClose, onCreated }: {
   const selectedEmployee = employees.find(e => e.id === employeeId)
 
   async function handleCreate() {
-    if (!title.trim()) { setError('Title is required'); return }
+    if (!title.trim()) { setError(t.titleRequired); return }
     setError('')
     setCreating(true)
 
@@ -754,7 +756,7 @@ function CreateContractModal({ orgId, employees, onClose, onCreated }: {
           </svg>
         </button>
 
-        <h2 className="mb-5 text-xl font-semibold" style={{ color: 'var(--color-text)' }}>Create Contract</h2>
+        <h2 className="mb-5 text-xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.createContract}</h2>
 
         <div className="space-y-4">
           {error && (
@@ -763,11 +765,11 @@ function CreateContractModal({ orgId, employees, onClose, onCreated }: {
 
           {/* Contract Type Toggle */}
           <div>
-            <label className="mb-2 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>Contract Type</label>
+            <label className="mb-2 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.contractTypeLabel}</label>
             <div className="grid grid-cols-2 gap-2">
               {(['pkwt', 'pkwtt'] as const).map(type => {
                 const isSelected = contractType === type
-                const info = CONTRACT_TYPE_INFO[type]
+                const info = contractTypeInfo[type]
                 return (
                   <button
                     key={type}
@@ -792,14 +794,14 @@ function CreateContractModal({ orgId, employees, onClose, onCreated }: {
 
           {/* Title */}
           <div>
-            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>Title</label>
-            <input type="text" value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Employment Contract - Katut Ruti" className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} autoFocus />
+            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.titleLabel}</label>
+            <input type="text" value={title} onChange={e => setTitle(e.target.value)} placeholder={t.contractTitlePlaceholder} className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} autoFocus />
           </div>
 
           {/* Employee */}
           <div>
             <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
-              Employee <span className="font-normal" style={{ color: 'var(--color-text-tertiary)' }}>(optional)</span>
+              {t.employeeLabel} <span className="font-normal" style={{ color: 'var(--color-text-tertiary)' }}>{t.optional}</span>
             </label>
             {selectedEmployee ? (
               <div className="flex items-center justify-between rounded-lg border px-3 py-2" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }}>
@@ -807,15 +809,15 @@ function CreateContractModal({ orgId, employees, onClose, onCreated }: {
                   <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{selectedEmployee.name}</span>
                   {selectedEmployee.department && <span className="ml-2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{selectedEmployee.department}</span>}
                 </div>
-                <button type="button" onClick={() => { setEmployeeId(''); setKtpNumber(''); setEmployeeAddress('') }} className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>Clear</button>
+                <button type="button" onClick={() => { setEmployeeId(''); setKtpNumber(''); setEmployeeAddress('') }} className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.clear}</button>
               </div>
             ) : (
               <div className="relative">
-                <input type="text" value={empSearch} onChange={e => setEmpSearch(e.target.value)} placeholder="Search employees..." className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
+                <input type="text" value={empSearch} onChange={e => setEmpSearch(e.target.value)} placeholder={t.searchEmployeesPlaceholder} className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
                 {empSearch.trim() && (
                   <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-32 overflow-y-auto rounded-lg border shadow-lg" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }}>
                     {filteredEmployees.length === 0 ? (
-                      <p className="px-3 py-2 text-sm" style={{ color: 'var(--color-text-tertiary)' }}>No matches</p>
+                      <p className="px-3 py-2 text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{t.noMatches}</p>
                     ) : (
                       filteredEmployees.map(emp => (
                         <button key={emp.id} type="button" onClick={() => { setEmployeeId(emp.id); setEmpSearch(''); if (emp.ktp_nik) setKtpNumber(emp.ktp_nik); if (emp.address) setEmployeeAddress(emp.address) }}
@@ -837,46 +839,46 @@ function CreateContractModal({ orgId, employees, onClose, onCreated }: {
           {/* Quick-fill fields */}
           <div className="border-t pt-4" style={{ borderColor: 'var(--color-border)' }}>
             <h3 className="mb-3 text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
-              Contract Details
-              <span className="ml-2 font-normal text-xs" style={{ color: 'var(--color-text-tertiary)' }}>All fields can be edited later</span>
+              {t.contractDetails}
+              <span className="ml-2 font-normal text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.allFieldsEditableLater}</span>
             </h3>
 
             <div className="space-y-3">
               {/* Employee details */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>KTP / NIK Number</label>
+                  <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.ktpNikNumberLabel}</label>
                   <input type="text" value={ktpNumber} onChange={e => setKtpNumber(e.target.value)} placeholder="3171..." className="w-full rounded-lg border px-3 py-1.5 text-sm" style={inputStyle} />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>Work Location</label>
-                  <input type="text" value={workLocation} onChange={e => setWorkLocation(e.target.value)} placeholder="e.g. Jl. Raya Ubud" className="w-full rounded-lg border px-3 py-1.5 text-sm" style={inputStyle} />
+                  <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.workLocationLabel}</label>
+                  <input type="text" value={workLocation} onChange={e => setWorkLocation(e.target.value)} placeholder={t.workLocationPlaceholder} className="w-full rounded-lg border px-3 py-1.5 text-sm" style={inputStyle} />
                 </div>
               </div>
 
               <div>
-                <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>Employee Address</label>
-                <input type="text" value={employeeAddress} onChange={e => setEmployeeAddress(e.target.value)} placeholder="Full address" className="w-full rounded-lg border px-3 py-1.5 text-sm" style={inputStyle} />
+                <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.employeeAddressLabel}</label>
+                <input type="text" value={employeeAddress} onChange={e => setEmployeeAddress(e.target.value)} placeholder={t.fullAddressPlaceholder} className="w-full rounded-lg border px-3 py-1.5 text-sm" style={inputStyle} />
               </div>
 
               {/* Dates */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>Start Date</label>
+                  <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.startDateLabel}</label>
                   <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full rounded-lg border px-3 py-1.5 text-sm" style={inputStyle} />
                 </div>
                 {contractType === 'pkwt' ? (
                   <div>
-                    <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>End Date</label>
+                    <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.endDateLabel}</label>
                     <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full rounded-lg border px-3 py-1.5 text-sm" style={inputStyle} />
                   </div>
                 ) : (
                   <div>
-                    <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>Probation (months)</label>
+                    <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.probationMonthsLabel}</label>
                     <select value={probationMonths} onChange={e => setProbationMonths(e.target.value)} className="w-full rounded-lg border px-3 py-1.5 text-sm" style={inputStyle}>
-                      <option value="1">1 month</option>
-                      <option value="2">2 months</option>
-                      <option value="3">3 months</option>
+                      <option value="1">{t.monthOption(1)}</option>
+                      <option value="2">{t.monthOption(2)}</option>
+                      <option value="3">{t.monthOption(3)}</option>
                     </select>
                   </div>
                 )}
@@ -886,8 +888,8 @@ function CreateContractModal({ orgId, employees, onClose, onCreated }: {
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                    Base Salary
-                    <span className="ml-1" style={{ color: 'var(--color-text-tertiary)' }}>/mo</span>
+                    {t.baseSalaryLabel}
+                    <span className="ml-1" style={{ color: 'var(--color-text-tertiary)' }}>{t.perMonth}</span>
                   </label>
                   <div className="relative">
                     <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>Rp</span>
@@ -897,8 +899,8 @@ function CreateContractModal({ orgId, employees, onClose, onCreated }: {
                 </div>
                 <div>
                   <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                    Transport
-                    <span className="ml-1" style={{ color: 'var(--color-text-tertiary)' }}>/mo</span>
+                    {t.transportLabel}
+                    <span className="ml-1" style={{ color: 'var(--color-text-tertiary)' }}>{t.perMonth}</span>
                   </label>
                   <div className="relative">
                     <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>Rp</span>
@@ -908,8 +910,8 @@ function CreateContractModal({ orgId, employees, onClose, onCreated }: {
                 </div>
                 <div>
                   <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                    Meal
-                    <span className="ml-1" style={{ color: 'var(--color-text-tertiary)' }}>/mo</span>
+                    {t.mealLabel}
+                    <span className="ml-1" style={{ color: 'var(--color-text-tertiary)' }}>{t.perMonth}</span>
                   </label>
                   <div className="relative">
                     <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>Rp</span>
@@ -922,26 +924,26 @@ function CreateContractModal({ orgId, employees, onClose, onCreated }: {
               {/* Working hours */}
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>Hours / day</label>
+                  <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.hoursPerDayLabel}</label>
                   <select value={hoursPerDay} onChange={e => setHoursPerDay(e.target.value)} className="w-full rounded-lg border px-3 py-1.5 text-sm" style={inputStyle}>
-                    <option value="7">7 hours</option>
-                    <option value="8">8 hours</option>
+                    <option value="7">{t.hoursOption(7)}</option>
+                    <option value="8">{t.hoursOption(8)}</option>
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>Days / week</label>
+                  <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.daysPerWeekLabel}</label>
                   <select value={daysPerWeek} onChange={e => setDaysPerWeek(e.target.value)} className="w-full rounded-lg border px-3 py-1.5 text-sm" style={inputStyle}>
-                    <option value="5">5 days</option>
-                    <option value="6">6 days</option>
+                    <option value="5">{t.daysOption(5)}</option>
+                    <option value="6">{t.daysOption(6)}</option>
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>Annual leave</label>
+                  <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.annualLeaveLabel}</label>
                   <select value={annualLeave} onChange={e => setAnnualLeave(e.target.value)} className="w-full rounded-lg border px-3 py-1.5 text-sm" style={inputStyle}>
-                    <option value="12">12 days</option>
-                    <option value="14">14 days</option>
-                    <option value="15">15 days</option>
-                    <option value="20">20 days</option>
+                    <option value="12">{t.daysOption(12)}</option>
+                    <option value="14">{t.daysOption(14)}</option>
+                    <option value="15">{t.daysOption(15)}</option>
+                    <option value="20">{t.daysOption(20)}</option>
                   </select>
                 </div>
               </div>
@@ -950,9 +952,9 @@ function CreateContractModal({ orgId, employees, onClose, onCreated }: {
 
           <div className="flex items-center gap-2 border-t pt-4" style={{ borderColor: 'var(--color-border)' }}>
             <button onClick={handleCreate} disabled={creating || !title.trim()} className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50" style={{ backgroundColor: 'var(--color-primary)' }}>
-              {creating ? 'Creating...' : 'Create Contract'}
+              {creating ? t.creating : t.createContract}
             </button>
-            <button onClick={onClose} className="rounded-lg border px-4 py-2 text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>Cancel</button>
+            <button onClick={onClose} className="rounded-lg border px-4 py-2 text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>{t.cancel}</button>
           </div>
         </div>
       </div>

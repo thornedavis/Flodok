@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { useLang } from '../../contexts/LanguageContext'
 import type { User, Sop, Employee, Tag } from '../../types/database'
 
 type SopWithEmployee = Sop & { employee: Employee | null; tagIds: string[] }
 
 export function SOPs({ user }: { user: User }) {
   const navigate = useNavigate()
+  const { t } = useLang()
   const [sops, setSOPs] = useState<SopWithEmployee[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
   const [allTags, setAllTags] = useState<Tag[]>([])
@@ -114,7 +116,7 @@ export function SOPs({ user }: { user: User }) {
       .insert({
         org_id: user.org_id,
         employee_id: sop.employee_id,
-        title: `${sop.title} (Copy)`,
+        title: t.copyOfName(sop.title),
         content_markdown: sop.content_markdown,
         content_markdown_id: sop.content_markdown_id,
         status: 'draft' as const,
@@ -127,14 +129,14 @@ export function SOPs({ user }: { user: User }) {
   }
 
   async function handleDelete(sop: SopWithEmployee) {
-    if (!confirm(`Delete "${sop.title}"? This cannot be undone.`)) return
+    if (!confirm(t.deleteSopConfirm(sop.title))) return
     const { error } = await supabase.from('sops').delete().eq('id', sop.id)
     if (error) { alert(error.message); return }
     setSOPs(prev => prev.filter(s => s.id !== sop.id))
     setMenuOpenId(null)
   }
 
-  if (loading) return <div style={{ color: 'var(--color-text-secondary)' }}>Loading...</div>
+  if (loading) return <div style={{ color: 'var(--color-text-secondary)' }}>{t.loading}</div>
 
   const statusColors: Record<string, string> = {
     active: 'var(--color-success)',
@@ -142,22 +144,28 @@ export function SOPs({ user }: { user: User }) {
     archived: 'var(--color-text-tertiary)',
   }
 
+  const statusLabels: Record<string, string> = {
+    active: t.statusActive,
+    draft: t.statusDraft,
+    archived: t.statusArchived,
+  }
+
   return (
     <div className="grid gap-8 lg:grid-cols-[1fr_280px]" style={{ alignItems: 'start' }}>
       {/* Main content — SOP cards grid */}
       <div>
         <div className="mb-6 flex items-center justify-between">
-          <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>SOPs</h1>
+          <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.sopsTitle}</h1>
           <div className="flex items-center gap-3">
             <span className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-              {filtered.length} {filtered.length === 1 ? 'SOP' : 'SOPs'}
+              {t.sopCount(filtered.length)}
             </span>
             <button
               onClick={() => setShowCreateModal(true)}
               className="rounded-lg px-4 py-2 text-sm font-medium text-white"
               style={{ backgroundColor: 'var(--color-primary)' }}
             >
-              Create SOP
+              {t.createSop}
             </button>
           </div>
         </div>
@@ -165,8 +173,8 @@ export function SOPs({ user }: { user: User }) {
         {filtered.length === 0 ? (
           <p className="py-12 text-center text-sm" style={{ color: 'var(--color-text-secondary)' }}>
             {sops.length === 0
-              ? 'No SOPs yet. Click "Create SOP" to get started.'
-              : 'No SOPs match your filters.'}
+              ? t.noSopsYet
+              : t.noSopsMatchFilters}
           </p>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -220,7 +228,7 @@ export function SOPs({ user }: { user: User }) {
                             <rect x="9" y="9" width="13" height="13" rx="2" />
                             <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                           </svg>
-                          Duplicate
+                          {t.duplicate}
                         </button>
                         <button
                           onClick={e => { e.stopPropagation(); handleDelete(sop) }}
@@ -235,7 +243,7 @@ export function SOPs({ user }: { user: User }) {
                             <path d="M10 11v6" />
                             <path d="M14 11v6" />
                           </svg>
-                          Delete
+                          {t.delete}
                         </button>
                       </div>
                     </>
@@ -292,7 +300,7 @@ export function SOPs({ user }: { user: User }) {
                     style={{ color: statusColors[sop.status] }}
                   >
                     <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: statusColors[sop.status] }} />
-                    {sop.status.charAt(0).toUpperCase() + sop.status.slice(1)}
+                    {statusLabels[sop.status] || sop.status}
                   </span>
                   <span>&middot;</span>
                   <span>v{sop.current_version}</span>
@@ -330,7 +338,7 @@ export function SOPs({ user }: { user: User }) {
               type="text"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Search SOPs..."
+              placeholder={t.searchSopsPlaceholder}
               className="w-full rounded-lg border py-2 pl-9 pr-3 text-sm outline-none transition-colors focus:border-[var(--color-border-strong)]"
               style={{
                 borderColor: 'var(--color-border)',
@@ -345,10 +353,10 @@ export function SOPs({ user }: { user: User }) {
         {departments.length > 0 && (
           <div>
             <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>
-              Departments
+              {t.departments}
             </h3>
             <p className="mb-3 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-              Filter by team.
+              {t.filterByTeam}
             </p>
             <div className="space-y-1">
               {departments.map(dept => {
@@ -380,10 +388,10 @@ export function SOPs({ user }: { user: User }) {
         {/* Status */}
         <div>
           <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>
-            Status
+            {t.statusLabel}
           </h3>
           <p className="mb-3 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-            Filter by SOP status.
+            {t.filterBySopStatus}
           </p>
           <div className="space-y-1">
             {statuses.map(status => {
@@ -393,7 +401,7 @@ export function SOPs({ user }: { user: User }) {
                 <button
                   key={status}
                   onClick={() => toggleStatus(status)}
-                  className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm capitalize transition-all"
+                  className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm transition-all"
                   style={{
                     backgroundColor: isActive ? 'color-mix(in srgb, var(--color-primary) 10%, transparent)' : 'transparent',
                     color: isActive ? 'var(--color-primary)' : 'var(--color-text)',
@@ -404,7 +412,7 @@ export function SOPs({ user }: { user: User }) {
                 >
                   <span className="flex items-center gap-2">
                     <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: statusColors[status] }} />
-                    {status}
+                    {statusLabels[status]}
                   </span>
                   <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
                     {count}
@@ -419,10 +427,10 @@ export function SOPs({ user }: { user: User }) {
         {allTags.length > 0 && (
           <div>
             <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>
-              Tags
+              {t.tagsLabel}
             </h3>
             <p className="mb-3 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-              Filter by tag.
+              {t.filterByTag}
             </p>
             <div className="space-y-1">
               {allTags.map(tag => {
@@ -464,7 +472,7 @@ export function SOPs({ user }: { user: User }) {
             className="text-xs font-medium"
             style={{ color: 'var(--color-primary)' }}
           >
-            Clear all filters
+            {t.clearAllFilters}
           </button>
         )}
       </aside>
@@ -487,6 +495,7 @@ function CreateSOPModal({ orgId, employees, onClose, onCreated }: {
   onClose: () => void
   onCreated: (sopId: string) => void
 }) {
+  const { t } = useLang()
   const [title, setTitle] = useState('')
   const [employeeId, setEmployeeId] = useState<string>('')
   const [empSearch, setEmpSearch] = useState('')
@@ -511,7 +520,7 @@ function CreateSOPModal({ orgId, employees, onClose, onCreated }: {
   const selectedEmployee = employees.find(e => e.id === employeeId)
 
   async function handleCreate() {
-    if (!title.trim()) { setError('Title is required'); return }
+    if (!title.trim()) { setError(t.titleRequired); return }
     setError('')
     setCreating(true)
 
@@ -566,7 +575,7 @@ function CreateSOPModal({ orgId, employees, onClose, onCreated }: {
           </svg>
         </button>
 
-        <h2 className="mb-5 text-xl font-semibold" style={{ color: 'var(--color-text)' }}>Create SOP</h2>
+        <h2 className="mb-5 text-xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.createSop}</h2>
 
         <div className="space-y-4">
           {error && (
@@ -576,12 +585,12 @@ function CreateSOPModal({ orgId, employees, onClose, onCreated }: {
           )}
 
           <div>
-            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>Title</label>
+            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.titleLabel}</label>
             <input
               type="text"
               value={title}
               onChange={e => setTitle(e.target.value)}
-              placeholder="e.g. Marketing Operations SOP"
+              placeholder={t.sopTitlePlaceholder}
               className="w-full rounded-lg border px-3 py-2 text-sm"
               style={inputStyle}
               autoFocus
@@ -590,7 +599,7 @@ function CreateSOPModal({ orgId, employees, onClose, onCreated }: {
 
           <div>
             <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
-              Employee <span className="font-normal" style={{ color: 'var(--color-text-tertiary)' }}>(optional)</span>
+              {t.employeeLabel} <span className="font-normal" style={{ color: 'var(--color-text-tertiary)' }}>{t.optional}</span>
             </label>
 
             {selectedEmployee ? (
@@ -610,7 +619,7 @@ function CreateSOPModal({ orgId, employees, onClose, onCreated }: {
                   className="text-xs"
                   style={{ color: 'var(--color-text-tertiary)' }}
                 >
-                  Clear
+                  {t.clear}
                 </button>
               </div>
             ) : (
@@ -619,7 +628,7 @@ function CreateSOPModal({ orgId, employees, onClose, onCreated }: {
                   type="text"
                   value={empSearch}
                   onChange={e => setEmpSearch(e.target.value)}
-                  placeholder="Search employees..."
+                  placeholder={t.searchEmployeesPlaceholder}
                   className="w-full rounded-lg border px-3 py-2 text-sm"
                   style={inputStyle}
                 />
@@ -629,7 +638,7 @@ function CreateSOPModal({ orgId, employees, onClose, onCreated }: {
                     style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }}
                   >
                     {filteredEmployees.length === 0 ? (
-                      <p className="px-3 py-2 text-sm" style={{ color: 'var(--color-text-tertiary)' }}>No matches</p>
+                      <p className="px-3 py-2 text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{t.noMatches}</p>
                     ) : (
                       filteredEmployees.map(emp => (
                         <button
@@ -661,14 +670,14 @@ function CreateSOPModal({ orgId, employees, onClose, onCreated }: {
               className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
               style={{ backgroundColor: 'var(--color-primary)' }}
             >
-              {creating ? 'Creating...' : 'Create SOP'}
+              {creating ? t.creating : t.createSop}
             </button>
             <button
               onClick={onClose}
               className="rounded-lg border px-4 py-2 text-sm"
               style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
             >
-              Cancel
+              {t.cancel}
             </button>
           </div>
         </div>

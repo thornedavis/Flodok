@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { useLang } from '../../contexts/LanguageContext'
 import type { User } from '../../types/database'
 
 interface Stats {
@@ -11,6 +12,7 @@ interface Stats {
 }
 
 export function Overview({ user }: { user: User }) {
+  const { t } = useLang()
   const [stats, setStats] = useState<Stats>({ employeeCount: 0, activeSOPs: 0, pendingSignatures: 0, pendingUpdates: 0 })
   const [loading, setLoading] = useState(true)
 
@@ -41,18 +43,18 @@ export function Overview({ user }: { user: User }) {
     load()
   }, [user.org_id])
 
-  if (loading) return <div style={{ color: 'var(--color-text-secondary)' }}>Loading...</div>
+  if (loading) return <div style={{ color: 'var(--color-text-secondary)' }}>{t.loading}</div>
 
   const cards = [
-    { label: 'Employees', value: stats.employeeCount, link: '/dashboard/employees' },
-    { label: 'Active SOPs', value: stats.activeSOPs, link: '/dashboard/sops' },
-    { label: 'Awaiting Signature', value: stats.pendingSignatures, link: '/dashboard/sops' },
-    { label: 'Pending Updates', value: stats.pendingUpdates, link: '/dashboard/pending' },
+    { label: t.overviewEmployees, value: stats.employeeCount, link: '/dashboard/employees' },
+    { label: t.overviewActiveSops, value: stats.activeSOPs, link: '/dashboard/sops' },
+    { label: t.overviewAwaitingSignature, value: stats.pendingSignatures, link: '/dashboard/sops' },
+    { label: t.overviewPendingUpdates, value: stats.pendingUpdates, link: '/dashboard/pending' },
   ]
 
   return (
     <div>
-      <h1 className="mb-6 text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>Dashboard</h1>
+      <h1 className="mb-6 text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.overviewTitle}</h1>
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         {cards.map(card => (

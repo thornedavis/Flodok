@@ -8,6 +8,7 @@ export type Database = {
           logo_url: string | null
           review_mode: boolean
           default_country_code: string
+          phone: string | null
           created_at: string
         }
         Insert: {
@@ -16,6 +17,7 @@ export type Database = {
           logo_url?: string | null
           review_mode?: boolean
           default_country_code?: string
+          phone?: string | null
           created_at?: string
         }
         Update: {
@@ -24,6 +26,7 @@ export type Database = {
           logo_url?: string | null
           review_mode?: boolean
           default_country_code?: string
+          phone?: string | null
         }
         Relationships: []
       }
@@ -34,6 +37,8 @@ export type Database = {
           email: string
           name: string
           role: string
+          photo_url: string | null
+          phone: string | null
           created_at: string
         }
         Insert: {
@@ -42,6 +47,8 @@ export type Database = {
           email: string
           name: string
           role?: string
+          photo_url?: string | null
+          phone?: string | null
           created_at?: string
         }
         Update: {
@@ -49,6 +56,8 @@ export type Database = {
           email?: string
           name?: string
           role?: string
+          photo_url?: string | null
+          phone?: string | null
         }
         Relationships: []
       }
@@ -396,6 +405,43 @@ export type Database = {
         }
         Relationships: []
       }
+      org_invitations: {
+        Row: {
+          id: string
+          org_id: string
+          email: string
+          token: string
+          role: string
+          invited_by: string | null
+          status: 'pending' | 'accepted' | 'revoked' | 'expired'
+          expires_at: string
+          created_at: string
+          accepted_at: string | null
+          accepted_by: string | null
+        }
+        Insert: {
+          id?: string
+          org_id: string
+          email: string
+          token: string
+          role?: string
+          invited_by?: string | null
+          status?: 'pending' | 'accepted' | 'revoked' | 'expired'
+          expires_at?: string
+          created_at?: string
+          accepted_at?: string | null
+          accepted_by?: string | null
+        }
+        Update: {
+          email?: string
+          role?: string
+          status?: 'pending' | 'accepted' | 'revoked' | 'expired'
+          expires_at?: string
+          accepted_at?: string | null
+          accepted_by?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: Record<string, never>
     Functions: {
@@ -405,8 +451,16 @@ export type Database = {
           user_email: string
           user_name: string
           org_name: string
+          invite_token?: string | null
         }
         Returns: string
+      }
+      admin_update_user_role: {
+        Args: {
+          target_user_id: string
+          new_role: 'admin' | 'manager'
+        }
+        Returns: void
       }
     }
     Enums: Record<string, never>
@@ -427,3 +481,4 @@ export type Tag = Database['public']['Tables']['tags']['Row']
 export type Contract = Database['public']['Tables']['contracts']['Row']
 export type ContractVersion = Database['public']['Tables']['contract_versions']['Row']
 export type FeedEvent = Database['public']['Tables']['feed_events']['Row']
+export type OrgInvitation = Database['public']['Tables']['org_invitations']['Row']

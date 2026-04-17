@@ -6,9 +6,12 @@ import { getAvatarGradient } from '../../lib/avatar'
 import { PhoneInput } from '../../components/PhoneInput'
 import { DepartmentSelect } from '../../components/DepartmentSelect'
 import { EmployeeEditModal } from './EmployeeEdit'
+import { useLang } from '../../contexts/LanguageContext'
+import type { Translations } from '../../lib/translations'
 import type { User, Employee, Organization } from '../../types/database'
 
 export function Employees({ user }: { user: User }) {
+  const { t } = useLang()
   const [employees, setEmployees] = useState<Employee[]>([])
   const [org, setOrg] = useState<Organization | null>(null)
   const [loading, setLoading] = useState(true)
@@ -35,14 +38,14 @@ export function Employees({ user }: { user: User }) {
   }
 
   async function handleDuplicate(emp: Employee) {
-    const newName = prompt('Name for the new employee (SOP will be copied):', `${emp.name} (Copy)`)
+    const newName = prompt(t.promptDuplicateName, t.copyOfName(emp.name))
     if (!newName) return
-    const newPhone = prompt('Phone number for the new employee:')
+    const newPhone = prompt(t.promptDuplicatePhone)
     if (!newPhone) return
 
     const phone = normalizePhone(newPhone, org?.default_country_code)
     if (!isValidE164(phone)) {
-      alert('Invalid phone number format')
+      alert(t.invalidPhone)
       return
     }
 
@@ -77,7 +80,7 @@ export function Employees({ user }: { user: User }) {
   }
 
   async function handleDelete(emp: Employee) {
-    if (!confirm(`Delete ${emp.name}? This will also delete their SOP.`)) return
+    if (!confirm(t.deleteEmployeeConfirm(emp.name))) return
     await supabase.from('employees').delete().eq('id', emp.id)
     loadData()
   }
@@ -99,14 +102,14 @@ export function Employees({ user }: { user: User }) {
   }
 
   async function handleRenameDepartment(oldName: string) {
-    const newName = prompt(`Rename department "${oldName}" to:`, oldName)
+    const newName = prompt(t.renameDepartmentPrompt(oldName), oldName)
     if (!newName || newName.trim() === oldName) return
     const trimmed = newName.trim()
 
     // Check for duplicate (case-insensitive)
     const existing = departments.find(d => d.toLowerCase() === trimmed.toLowerCase() && d !== oldName)
     if (existing) {
-      if (!confirm(`Department "${existing}" already exists. Merge "${oldName}" into "${existing}"?`)) return
+      if (!confirm(t.mergeDepartmentConfirm(existing, oldName))) return
       // Merge into existing name
       await supabase.from('employees').update({ department: existing }).eq('org_id', user.org_id).eq('department', oldName)
     } else {
@@ -117,7 +120,7 @@ export function Employees({ user }: { user: User }) {
 
   async function handleDeleteDepartment(dept: string) {
     const count = getDepartmentCount(dept)
-    if (!confirm(`Remove department "${dept}"? This will clear the department field from ${count} employee${count === 1 ? '' : 's'}.`)) return
+    if (!confirm(t.removeDepartmentConfirm(dept, count))) return
     await supabase.from('employees').update({ department: null }).eq('org_id', user.org_id).eq('department', dept)
     setActiveDepartments(prev => {
       const next = new Set(prev)
@@ -144,7 +147,7 @@ export function Employees({ user }: { user: User }) {
   // Reset page when filters change
   useEffect(() => { setEmpCurrentPage(1) }, [searchQuery, activeDepartments, empPageSize])
 
-  if (loading) return <div style={{ color: 'var(--color-text-secondary)' }}>Loading...</div>
+  if (loading) return <div style={{ color: 'var(--color-text-secondary)' }}>{t.loading}</div>
 
   return (
     <div>
@@ -152,17 +155,17 @@ export function Employees({ user }: { user: User }) {
         {/* Main content — employee cards */}
         <div>
           <div className="mb-6 flex items-center justify-between">
-            <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>Employees</h1>
+            <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.employeesTitle}</h1>
             <div className="flex items-center gap-3">
               <span className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-                {filtered.length} {filtered.length === 1 ? 'employee' : 'employees'}
+                {t.employeeCount(filtered.length)}
               </span>
               <button
                 onClick={() => setShowAdd(true)}
                 className="rounded-lg px-4 py-2 text-sm font-medium text-white"
                 style={{ backgroundColor: 'var(--color-primary)' }}
               >
-                Add employee
+                {t.addEmployee}
               </button>
             </div>
           </div>
@@ -170,8 +173,8 @@ export function Employees({ user }: { user: User }) {
           {filtered.length === 0 ? (
             <p className="py-12 text-center text-sm" style={{ color: 'var(--color-text-secondary)' }}>
               {employees.length === 0
-                ? 'No employees yet. Add your first employee to get started.'
-                : 'No employees match your filters.'}
+                ? t.noEmployeesYet
+                : t.noEmployeesMatchFilters}
             </p>
           ) : (
             <>
@@ -180,6 +183,7 @@ export function Employees({ user }: { user: User }) {
                   <EmployeeCard
                     key={emp.id}
                     emp={emp}
+                    t={t}
                     onDuplicate={() => handleDuplicate(emp)}
                     onDelete={() => handleDelete(emp)}
                     onEdit={() => setEditingId(emp.id)}
@@ -199,10 +203,10 @@ export function Employees({ user }: { user: User }) {
                       backgroundColor: 'var(--color-bg-elevated)',
                     }}
                   >
-                    Previous
+                    {t.previous}
                   </button>
                   <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-                    Page {empCurrentPage} of {empTotalPages}
+                    {t.pageOfPages(empCurrentPage, empTotalPages)}
                   </span>
                   <button
                     onClick={() => setEmpCurrentPage(p => Math.min(empTotalPages, p + 1))}
@@ -214,7 +218,7 @@ export function Employees({ user }: { user: User }) {
                       backgroundColor: 'var(--color-bg-elevated)',
                     }}
                   >
-                    Next
+                    {t.next}
                   </button>
                   <select
                     value={empPageSize}
@@ -222,9 +226,9 @@ export function Employees({ user }: { user: User }) {
                     className="rounded-lg border px-2 py-1.5 text-xs"
                     style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
                   >
-                    <option value={12}>12 per page</option>
-                    <option value={24}>24 per page</option>
-                    <option value={48}>48 per page</option>
+                    <option value={12}>{t.perPage(12)}</option>
+                    <option value={24}>{t.perPage(24)}</option>
+                    <option value={48}>{t.perPage(48)}</option>
                   </select>
                 </div>
               )}
@@ -257,7 +261,7 @@ export function Employees({ user }: { user: User }) {
                 type="text"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Search employees..."
+                placeholder={t.searchEmployeesPlaceholder}
                 className="w-full rounded-lg border py-2 pl-9 pr-3 text-sm outline-none transition-colors focus:border-[var(--color-border-strong)]"
                 style={{
                   borderColor: 'var(--color-border)',
@@ -272,10 +276,10 @@ export function Employees({ user }: { user: User }) {
           {departments.length > 0 && (
             <div>
               <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>
-                Departments
+                {t.departments}
               </h3>
               <p className="mb-3 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                Filter by team. Right-click to manage.
+                {t.filterByTeamHint}
               </p>
               <div className="space-y-1">
                 {departments.map(dept => {
@@ -306,7 +310,7 @@ export function Employees({ user }: { user: User }) {
                           style={{ color: 'var(--color-text-tertiary)' }}
                           onMouseOver={e => { e.currentTarget.style.color = 'var(--color-text)' }}
                           onMouseOut={e => { e.currentTarget.style.color = 'var(--color-text-tertiary)' }}
-                          title="Rename department"
+                          title={t.renameDepartment}
                         >
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
@@ -319,7 +323,7 @@ export function Employees({ user }: { user: User }) {
                           style={{ color: 'var(--color-text-tertiary)' }}
                           onMouseOver={e => { e.currentTarget.style.color = 'var(--color-danger)' }}
                           onMouseOut={e => { e.currentTarget.style.color = 'var(--color-text-tertiary)' }}
-                          title="Remove department"
+                          title={t.removeDepartment}
                         >
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <line x1="18" y1="6" x2="6" y2="18" />
@@ -337,19 +341,19 @@ export function Employees({ user }: { user: User }) {
           {/* Quick stats */}
           <div>
             <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>
-              Summary
+              {t.summary}
             </h3>
             <div className="mt-3 space-y-2">
               <div className="flex items-center justify-between text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-                <span>Total employees</span>
+                <span>{t.totalEmployees}</span>
                 <span style={{ color: 'var(--color-text)' }}>{employees.length}</span>
               </div>
               <div className="flex items-center justify-between text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-                <span>Departments</span>
+                <span>{t.departments}</span>
                 <span style={{ color: 'var(--color-text)' }}>{departments.length}</span>
               </div>
               <div className="flex items-center justify-between text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-                <span>No department</span>
+                <span>{t.noDepartment}</span>
                 <span style={{ color: 'var(--color-text)' }}>{employees.filter(e => !e.department).length}</span>
               </div>
             </div>
@@ -365,7 +369,7 @@ export function Employees({ user }: { user: User }) {
               className="text-xs font-medium"
               style={{ color: 'var(--color-primary)' }}
             >
-              Clear all filters
+              {t.clearAllFilters}
             </button>
           )}
         </aside>
@@ -394,6 +398,7 @@ export function Employees({ user }: { user: User }) {
 }
 
 function CopyButton({ value }: { value: string }) {
+  const { t } = useLang()
   const [copied, setCopied] = useState(false)
 
   async function handleCopy(e: React.MouseEvent) {
@@ -419,7 +424,7 @@ function CopyButton({ value }: { value: string }) {
       onClick={handleCopy}
       className="shrink-0 rounded p-0.5 transition-colors"
       style={{ color: copied ? 'var(--color-success)' : 'var(--color-text-tertiary)' }}
-      title={copied ? 'Copied!' : 'Copy'}
+      title={copied ? t.copied : t.copy}
     >
       {copied ? (
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -435,8 +440,9 @@ function CopyButton({ value }: { value: string }) {
   )
 }
 
-function EmployeeCard({ emp, onDuplicate, onDelete, onEdit }: {
+function EmployeeCard({ emp, t, onDuplicate, onDelete, onEdit }: {
   emp: Employee
+  t: Translations
   onDuplicate: () => void
   onDelete: () => void
   onEdit: () => void
@@ -496,7 +502,7 @@ function EmployeeCard({ emp, onDuplicate, onDelete, onEdit }: {
               onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
               onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
             >
-              Duplicate
+              {t.duplicate}
             </button>
             <button
               onClick={e => { e.preventDefault(); e.stopPropagation(); setMenuOpen(false); onDelete() }}
@@ -505,7 +511,7 @@ function EmployeeCard({ emp, onDuplicate, onDelete, onEdit }: {
               onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
               onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
             >
-              Delete
+              {t.delete}
             </button>
           </div>
         )}
@@ -570,6 +576,7 @@ function AddEmployeeForm({ orgId, countryCode, departments, onDone, onCancel }: 
   onDone: () => void
   onCancel: () => void
 }) {
+  const { t } = useLang()
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
@@ -587,11 +594,11 @@ function AddEmployeeForm({ orgId, countryCode, departments, onDone, onCancel }: 
     if (!file) return
 
     if (!ALLOWED_AVATAR_TYPES.includes(file.type)) {
-      setError('Please upload a JPEG, PNG, or WebP image.')
+      setError(t.avatarInvalidType)
       return
     }
     if (file.size > MAX_AVATAR_SIZE) {
-      setError('Image must be under 2 MB.')
+      setError(t.avatarTooLarge)
       return
     }
 
@@ -611,7 +618,7 @@ function AddEmployeeForm({ orgId, countryCode, departments, onDone, onCancel }: 
     setError('')
 
     if (!isValidE164(phone)) {
-      setError('Invalid phone number format')
+      setError(t.invalidPhone)
       return
     }
 
@@ -646,7 +653,7 @@ function AddEmployeeForm({ orgId, countryCode, departments, onDone, onCancel }: 
     await supabase.from('sops').insert({
       org_id: orgId,
       employee_id: emp.id,
-      title: `${name}'s SOP`,
+      title: t.defaultSopTitle(name),
       content_markdown: '',
       status: 'draft',
     })
@@ -695,7 +702,7 @@ function AddEmployeeForm({ orgId, countryCode, departments, onDone, onCancel }: 
           </svg>
         </button>
 
-        <h2 className="mb-5 text-xl font-semibold" style={{ color: 'var(--color-text)' }}>New Employee</h2>
+        <h2 className="mb-5 text-xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.newEmployee}</h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
@@ -706,7 +713,7 @@ function AddEmployeeForm({ orgId, countryCode, departments, onDone, onCancel }: 
 
           {/* Avatar */}
           <div>
-            <label className="mb-2 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>Photo</label>
+            <label className="mb-2 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.photoLabel}</label>
             <div className="flex items-center gap-4">
               <div
                 className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full"
@@ -721,7 +728,7 @@ function AddEmployeeForm({ orgId, countryCode, departments, onDone, onCancel }: 
                   className="cursor-pointer rounded-lg border px-3 py-1.5 text-sm transition-colors"
                   style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
                 >
-                  {avatarPreview ? 'Change' : 'Upload'}
+                  {avatarPreview ? t.change : t.upload}
                   <input
                     type="file"
                     accept="image/jpeg,image/png,image/webp"
@@ -736,7 +743,7 @@ function AddEmployeeForm({ orgId, countryCode, departments, onDone, onCancel }: 
                     className="text-xs"
                     style={{ color: 'var(--color-danger)' }}
                   >
-                    Remove
+                    {t.remove}
                   </button>
                 )}
               </div>
@@ -744,37 +751,37 @@ function AddEmployeeForm({ orgId, countryCode, departments, onDone, onCancel }: 
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>Name *</label>
+            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.nameLabel} *</label>
             <input type="text" value={name} onChange={e => setName(e.target.value)} required className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>Phone (WhatsApp) *</label>
+            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.phoneWhatsAppLabel} *</label>
             <div className="relative">
               <PhoneInput value={phone} onChange={setPhone} defaultCountryCode={countryCode} />
             </div>
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>Department</label>
+            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.departmentLabel}</label>
             <DepartmentSelect value={department} onChange={setDepartment} departments={departments} />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>Email (optional)</label>
+            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.emailOptionalLabel}</label>
             <input type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>KTP/NIK Number (optional)</label>
+            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.ktpNikOptionalLabel}</label>
             <input type="text" value={ktpNik} onChange={e => setKtpNik(e.target.value)} placeholder="e.g. 5171234567890001" className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>Address (optional)</label>
-            <textarea value={address} onChange={e => setAddress(e.target.value)} placeholder="Employee's residential address..." rows={2} className="w-full resize-none rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
+            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.addressOptionalLabel}</label>
+            <textarea value={address} onChange={e => setAddress(e.target.value)} placeholder={t.addressPlaceholder} rows={2} className="w-full resize-none rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>Notes (internal only)</label>
+            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.notesInternalLabel}</label>
             <textarea
               value={notes}
               onChange={e => setNotes(e.target.value)}
-              placeholder="Internal notes about this employee..."
+              placeholder={t.notesPlaceholder}
               rows={3}
               className="w-full resize-none rounded-lg border px-3 py-2 text-sm"
               style={inputStyle}
@@ -783,10 +790,10 @@ function AddEmployeeForm({ orgId, countryCode, departments, onDone, onCancel }: 
 
           <div className="flex items-center gap-2 border-t pt-4" style={{ borderColor: 'var(--color-border)' }}>
             <button type="submit" disabled={saving} className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50" style={{ backgroundColor: 'var(--color-primary)' }}>
-              {saving ? 'Adding...' : 'Add employee'}
+              {saving ? t.adding : t.addEmployee}
             </button>
             <button type="button" onClick={onCancel} className="rounded-lg border px-4 py-2 text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>
-              Cancel
+              {t.cancel}
             </button>
           </div>
         </form>

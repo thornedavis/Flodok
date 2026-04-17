@@ -6,103 +6,8 @@ import html2pdf from 'html2pdf.js'
 import { supabase } from '../../lib/supabase'
 import { getAvatarGradient } from '../../lib/avatar'
 import { useTheme } from '../../hooks/useTheme'
+import { useLang } from '../../contexts/LanguageContext'
 import type { Employee, Sop, SopSignature, Organization, Contract, FeedEvent } from '../../types/database'
-
-// ─── i18n ────────────────────────────────────────────────
-type Lang = 'en' | 'id'
-
-const t = {
-  en: {
-    home: 'Home',
-    sops: 'SOPs',
-    contracts: 'Contracts',
-    activity: 'Activity',
-    rewards: 'Rewards',
-    comingSoon: 'Coming soon',
-    welcome: 'Welcome',
-    noActivity: 'No activity yet',
-    eventSopSigned: 'Signed SOP',
-    eventSopUpdated: 'SOP updated',
-    eventSopAssigned: 'New SOP assigned',
-    eventContractAssigned: 'New contract assigned',
-    eventContractUpdated: 'Contract updated',
-    eventRewardGiven: 'Reward received',
-    eventWelcome: 'Welcome aboard',
-    yourDocuments: 'Your documents',
-    activeSops: 'Active SOPs',
-    activeContracts: 'Active contracts',
-    pendingActions: 'Pending actions',
-    allSigned: 'All documents signed',
-    viewSops: 'View SOPs',
-    viewContracts: 'View Contracts',
-    notFoundTitle: 'Not Found',
-    notFoundDesc: 'This link is invalid or has expired.',
-    loading: 'Loading...',
-    noActiveSops: 'No active SOPs yet.',
-    noActiveContracts: 'No active contracts yet.',
-    version: 'Version',
-    acknowledgeTitle: 'Acknowledge & Sign',
-    acknowledgeDesc: 'By selecting a signature style below, you acknowledge that you have read and understood this SOP.',
-    chooseStyle: 'Choose your signature style',
-    confirmSign: 'Confirm & Sign',
-    signing: 'Signing...',
-    signedBy: 'Signed by',
-    notifications: 'Notifications',
-    noNotifications: 'All caught up!',
-    needsSignature: 'Needs your signature',
-    docOptions: 'Options',
-    downloadPdf: 'Download PDF',
-    downloadingPdf: 'Generating...',
-    contentLang: 'Content language',
-    english: 'English',
-    indonesian: 'Bahasa',
-  },
-  id: {
-    home: 'Beranda',
-    sops: 'SOP',
-    contracts: 'Kontrak',
-    activity: 'Aktivitas',
-    rewards: 'Hadiah',
-    comingSoon: 'Segera hadir',
-    noActivity: 'Belum ada aktivitas',
-    eventSopSigned: 'Menandatangani SOP',
-    eventSopUpdated: 'SOP diperbarui',
-    eventSopAssigned: 'SOP baru ditetapkan',
-    eventContractAssigned: 'Kontrak baru ditetapkan',
-    eventContractUpdated: 'Kontrak diperbarui',
-    eventRewardGiven: 'Hadiah diterima',
-    eventWelcome: 'Selamat bergabung',
-    welcome: 'Selamat datang',
-    yourDocuments: 'Dokumen Anda',
-    activeSops: 'SOP aktif',
-    activeContracts: 'Kontrak aktif',
-    pendingActions: 'Tindakan tertunda',
-    allSigned: 'Semua dokumen ditandatangani',
-    viewSops: 'Lihat SOP',
-    viewContracts: 'Lihat Kontrak',
-    notFoundTitle: 'Tidak Ditemukan',
-    notFoundDesc: 'Tautan ini tidak valid atau sudah kedaluwarsa.',
-    loading: 'Memuat...',
-    noActiveSops: 'Belum ada SOP aktif.',
-    noActiveContracts: 'Belum ada kontrak aktif.',
-    version: 'Versi',
-    acknowledgeTitle: 'Konfirmasi & Tanda Tangan',
-    acknowledgeDesc: 'Dengan memilih gaya tanda tangan di bawah, Anda mengonfirmasi bahwa Anda telah membaca dan memahami SOP ini.',
-    chooseStyle: 'Pilih gaya tanda tangan Anda',
-    confirmSign: 'Konfirmasi & Tanda Tangan',
-    signing: 'Menandatangani...',
-    signedBy: 'Ditandatangani oleh',
-    notifications: 'Notifikasi',
-    noNotifications: 'Semua sudah diperbarui!',
-    needsSignature: 'Perlu tanda tangan Anda',
-    docOptions: 'Opsi',
-    downloadPdf: 'Unduh PDF',
-    downloadingPdf: 'Membuat...',
-    contentLang: 'Bahasa konten',
-    english: 'English',
-    indonesian: 'Bahasa',
-  },
-}
 
 type Tab = 'home' | 'sops' | 'contracts' | 'activity' | 'rewards'
 
@@ -176,7 +81,7 @@ function CheckCircle() {
 export function SOPView() {
   const { slugToken } = useParams<{ slugToken: string }>()
   const { theme, toggle: toggleTheme } = useTheme()
-  const [lang, setLang] = useState<Lang>('id')
+  const { lang, setLang, t: s } = useLang()
   const [employee, setEmployee] = useState<Employee | null>(null)
   const [org, setOrg] = useState<Organization | null>(null)
   const [notFound, setNotFound] = useState(false)
@@ -196,15 +101,13 @@ export function SOPView() {
   const [error, setError] = useState('')
   const [showNotifications, setShowNotifications] = useState(false)
   const [showDocMenu, setShowDocMenu] = useState(false)
-  const [docContentLang, setDocContentLang] = useState<'en' | 'id'>('en')
+  const [docContentLang, setDocContentLang] = useState<'en' | 'id'>('id')
 
   const signSectionRef = useRef<HTMLDivElement>(null)
   const notifRef = useRef<HTMLDivElement>(null)
   const docMenuRef = useRef<HTMLDivElement>(null)
   const docContentRef = useRef<HTMLDivElement>(null)
   const [downloading, setDownloading] = useState(false)
-
-  const s = t[lang]
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -444,11 +347,27 @@ export function SOPView() {
           <div className="flex items-center gap-3">
             {/* Language toggle */}
             <button
-              onClick={() => setLang(l => l === 'en' ? 'id' : 'en')}
-              className="rounded-md px-2 py-1 text-xs font-semibold"
-              style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}
+              onClick={() => {
+                const next = lang === 'en' ? 'id' : 'en'
+                setLang(next)
+                setDocContentLang(next)
+              }}
+              className="flex items-center gap-1.5 rounded-md px-2 py-1.5 transition-colors hover:opacity-70"
+              style={{ color: 'var(--color-text-secondary)' }}
+              title={lang === 'en' ? s.switchToId : s.switchToEn}
+              aria-label={lang === 'en' ? s.switchToId : s.switchToEn}
             >
-              {lang === 'en' ? 'EN' : 'ID'}
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="m5 8 6 6"/>
+                <path d="m4 14 6-6 2-3"/>
+                <path d="M2 5h12"/>
+                <path d="M7 2h1"/>
+                <path d="m22 22-5-10-5 10"/>
+                <path d="M14 18h6"/>
+              </svg>
+              <span className="hidden text-xs font-semibold sm:inline">
+                {lang === 'en' ? 'EN' : 'ID'}
+              </span>
             </button>
 
             {/* Theme toggle */}

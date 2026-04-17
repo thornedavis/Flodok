@@ -1,10 +1,12 @@
 import { useState, useRef, useEffect } from 'react'
+import { useLang } from '../contexts/LanguageContext'
 
 export function DepartmentSelect({ value, onChange, departments }: {
   value: string
   onChange: (value: string) => void
   departments: string[]
 }) {
+  const { t } = useLang()
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [creating, setCreating] = useState(false)
@@ -95,7 +97,7 @@ export function DepartmentSelect({ value, onChange, departments }: {
             </span>
           </span>
         ) : (
-          <span>Select department...</span>
+          <span>{t.selectDepartment}</span>
         )}
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-text-tertiary)' }}>
           <polyline points="6 9 12 15 18 9" />
@@ -116,7 +118,7 @@ export function DepartmentSelect({ value, onChange, departments }: {
                 type="text"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                placeholder="Search departments..."
+                placeholder={t.searchDepartmentsPlaceholder}
                 className="w-full rounded-md border px-2.5 py-1.5 text-sm outline-none"
                 style={{
                   borderColor: 'var(--color-border)',
@@ -138,7 +140,7 @@ export function DepartmentSelect({ value, onChange, departments }: {
                 onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
                 onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
               >
-                Clear department
+                {t.clearDepartment}
               </button>
             )}
 
@@ -179,7 +181,7 @@ export function DepartmentSelect({ value, onChange, departments }: {
 
             {filtered.length === 0 && search && (
               <div className="px-3 py-2 text-sm" style={{ color: 'var(--color-text-tertiary)' }}>
-                No departments match "{search}"
+                {t.noDepartmentsMatch(search)}
               </div>
             )}
           </div>
@@ -197,7 +199,7 @@ export function DepartmentSelect({ value, onChange, departments }: {
                     if (e.key === 'Enter') { e.preventDefault(); handleCreate() }
                     if (e.key === 'Escape') { setCreating(false); setNewDept('') }
                   }}
-                  placeholder="Department name"
+                  placeholder={t.departmentNamePlaceholder}
                   className="flex-1 rounded-md border px-2.5 py-1.5 text-sm outline-none"
                   style={{
                     borderColor: 'var(--color-border)',
@@ -211,7 +213,7 @@ export function DepartmentSelect({ value, onChange, departments }: {
                   className="rounded-md px-2.5 py-1.5 text-sm font-medium text-white"
                   style={{ backgroundColor: 'var(--color-primary)' }}
                 >
-                  Add
+                  {t.add}
                 </button>
               </div>
             ) : (
@@ -227,7 +229,7 @@ export function DepartmentSelect({ value, onChange, departments }: {
                   <line x1="12" y1="5" x2="12" y2="19" />
                   <line x1="5" y1="12" x2="19" y2="12" />
                 </svg>
-                Create new department
+                {t.createNewDepartment}
               </button>
             )}
           </div>

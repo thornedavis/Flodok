@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { SOPEditor } from '../../components/Editor'
 import { Avatar } from '../../components/Avatar'
 import { DiffPanel } from '../../components/DiffPanel'
+import { useLang } from '../../contexts/LanguageContext'
 import type { User, PendingUpdate, Employee, Sop } from '../../types/database'
 
 type Change = { section?: string; summary?: string; content_markdown?: string; change_type?: string }
@@ -52,6 +53,7 @@ function getChangeSummaries(update: PendingUpdate): string[] {
 const ROUTER_URL = 'https://flodok-router.thorne-davis.workers.dev'
 
 export function Pending({ user }: { user: User }) {
+  const { t } = useLang()
   const [updates, setUpdates] = useState<EnrichedUpdate[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
   const [loading, setLoading] = useState(true)
@@ -126,12 +128,12 @@ export function Pending({ user }: { user: User }) {
 
   async function handleApprove(update: EnrichedUpdate) {
     if (!update.employee_id) {
-      alert('Assign an employee first before approving.')
+      alert(t.assignEmpFirst)
       return
     }
 
     const sop = update.currentSop
-    if (!sop) { alert('No SOP found for this employee.'); return }
+    if (!sop) { alert(t.noSopFound); return }
 
     const finalContent = getFinalContent(update)
     const newVersion = sop.current_version + 1
@@ -317,7 +319,7 @@ export function Pending({ user }: { user: User }) {
         .limit(1)
 
       if (!keys?.length) {
-        setPollResult('No active API key found. Create one in Settings.')
+        setPollResult(t.noApiKeyFound)
         setPolling(false)
         return
       }
@@ -332,15 +334,15 @@ export function Pending({ user }: { user: User }) {
 
       const data = await res.json() as { status: string; found?: number; processed?: number }
       if (data.processed && data.processed > 0) {
-        setPollResult(`Found ${data.processed} new transcript${data.processed > 1 ? 's' : ''}. Processing...`)
+        setPollResult(t.foundTranscripts(data.processed))
         // Reload after a delay to let processing complete
         setTimeout(() => { loadData(); setPollResult(null) }, 5000)
       } else {
-        setPollResult('No new transcripts found.')
+        setPollResult(t.noNewTranscripts)
         setTimeout(() => setPollResult(null), 3000)
       }
     } catch (err) {
-      setPollResult('Failed to check for updates.')
+      setPollResult(t.failedToCheck)
       setTimeout(() => setPollResult(null), 3000)
     }
     setPolling(false)
@@ -359,7 +361,7 @@ export function Pending({ user }: { user: User }) {
     return items
   }, [allPending, pendingFilterEmployee, pendingSort])
 
-  if (loading) return <div style={{ color: 'var(--color-text-secondary)' }}>Loading...</div>
+  if (loading) return <div style={{ color: 'var(--color-text-secondary)' }}>{t.loading}</div>
 
   const statusColors: Record<string, string> = {
     pending: 'var(--color-warning)',
@@ -368,11 +370,17 @@ export function Pending({ user }: { user: User }) {
     auto_applied: 'var(--color-primary)',
   }
 
+  const statusLabels: Record<string, string> = {
+    approved: t.approvedLabel,
+    rejected: t.rejectedLabel,
+    auto_applied: t.autoAppliedLabel,
+  }
+
   return (
     <div>
       {/* Pending Updates Section */}
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>Pending Updates</h2>
+        <h2 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.pendingUpdatesTitle}</h2>
         <div className="flex items-center gap-3">
           {pollResult && (
             <span className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>{pollResult}</span>
@@ -400,7 +408,7 @@ export function Pending({ user }: { user: User }) {
             >
               <path d="M21 12a9 9 0 1 1-6.219-8.56" />
             </svg>
-            {polling ? 'Checking...' : 'Check for Updates'}
+            {polling ? t.checking : t.checkForUpdates}
           </button>
         </div>
       </div>
@@ -414,7 +422,7 @@ export function Pending({ user }: { user: User }) {
             className="rounded-lg border px-3 py-1.5 text-xs"
             style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
           >
-            <option value="">All employees</option>
+            <option value="">{t.allEmployeesOption}</option>
             {employees
               .filter(e => allPending.some(u => u.employee_id === e.id))
               .map(e => (
@@ -428,8 +436,8 @@ export function Pending({ user }: { user: User }) {
             className="rounded-lg border px-3 py-1.5 text-xs"
             style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
           >
-            <option value="newest">Newest first</option>
-            <option value="oldest">Oldest first</option>
+            <option value="newest">{t.newestFirst}</option>
+            <option value="oldest">{t.oldestFirst}</option>
           </select>
 
           {pendingFilterEmployee && (
@@ -438,12 +446,12 @@ export function Pending({ user }: { user: User }) {
               className="text-xs underline"
               style={{ color: 'var(--color-text-tertiary)' }}
             >
-              Clear filter
+              {t.clearFilter}
             </button>
           )}
 
           <span className="ml-auto text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-            {pendingOnly.length} item{pendingOnly.length !== 1 ? 's' : ''}
+            {t.itemCount(pendingOnly.length)}
           </span>
         </div>
       )}
@@ -451,8 +459,8 @@ export function Pending({ user }: { user: User }) {
       {pendingOnly.length === 0 ? (
         <p className="py-12 text-center text-sm" style={{ color: 'var(--color-text-secondary)' }}>
           {allPending.length === 0
-            ? 'No pending updates. Updates from the API will appear here.'
-            : 'No items match your filter.'}
+            ? t.noPendingUpdates
+            : t.noItemsMatchFilter}
         </p>
       ) : (
         <div className="space-y-3">
@@ -480,7 +488,7 @@ export function Pending({ user }: { user: User }) {
                     />
                     <div>
                       <div className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>
-                        {update.employee ? `${update.employee.name}'s SOP` : 'Unmatched employee'}
+                        {update.employee ? t.defaultSopTitle(update.employee.name) : t.unmatchedEmployee}
                       </div>
                       <div className="mt-0.5 flex items-center gap-2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
                         <span>{new Date(update.created_at).toLocaleString()}</span>
@@ -530,7 +538,7 @@ export function Pending({ user }: { user: User }) {
                           className="rounded-lg border px-2 py-1 text-xs"
                           style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
                         >
-                          <option value="" disabled>Assign employee...</option>
+                          <option value="" disabled>{t.assignEmployeePrompt}</option>
                           {employees.map(e => (
                             <option key={e.id} value={e.id}>{e.name}</option>
                           ))}
@@ -557,7 +565,7 @@ export function Pending({ user }: { user: User }) {
 
                     {/* Full SOP editor — editable final version */}
                     <div className="mb-1 text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>
-                      Final version (editable)
+                      {t.finalVersionEditable}
                     </div>
                     <div className="mb-4">
                       <SOPEditor
@@ -574,14 +582,14 @@ export function Pending({ user }: { user: User }) {
                         className="rounded-lg px-4 py-2 text-sm font-medium text-white"
                         style={{ backgroundColor: 'var(--color-success)' }}
                       >
-                        Approve
+                        {t.approve}
                       </button>
                       <button
                         onClick={() => handleReject(update)}
                         className="rounded-lg px-4 py-2 text-sm font-medium"
                         style={{ color: 'var(--color-danger)' }}
                       >
-                        Reject
+                        {t.reject}
                       </button>
                     </div>
                   </div>
@@ -594,7 +602,7 @@ export function Pending({ user }: { user: User }) {
 
       {resolved.length > 0 && (
         <div className="mt-10">
-          <h2 className="mb-4 text-xl font-semibold" style={{ color: 'var(--color-text)' }}>Resolved</h2>
+          <h2 className="mb-4 text-xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.resolvedTitle}</h2>
 
           {/* Filters */}
           <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -604,7 +612,7 @@ export function Pending({ user }: { user: User }) {
               className="rounded-lg border px-3 py-1.5 text-xs"
               style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
             >
-              <option value="">All employees</option>
+              <option value="">{t.allEmployeesOption}</option>
               {employees
                 .filter(e => resolved.some(u => u.employee_id === e.id))
                 .map(e => (
@@ -618,10 +626,10 @@ export function Pending({ user }: { user: User }) {
               className="rounded-lg border px-3 py-1.5 text-xs"
               style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
             >
-              <option value="">All statuses</option>
-              <option value="approved">Approved</option>
-              <option value="rejected">Rejected</option>
-              <option value="auto_applied">Auto-applied</option>
+              <option value="">{t.allStatuses}</option>
+              <option value="approved">{t.approvedLabel}</option>
+              <option value="rejected">{t.rejectedLabel}</option>
+              <option value="auto_applied">{t.autoAppliedLabel}</option>
             </select>
 
             <div className="flex items-center gap-1.5">
@@ -631,16 +639,16 @@ export function Pending({ user }: { user: User }) {
                 onChange={e => setFilterDateFrom(e.target.value)}
                 className="rounded-lg border px-3 py-1.5 text-xs"
                 style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
-                placeholder="From"
+                placeholder={t.fromDate}
               />
-              <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>to</span>
+              <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.toDate}</span>
               <input
                 type="date"
                 value={filterDateTo}
                 onChange={e => setFilterDateTo(e.target.value)}
                 className="rounded-lg border px-3 py-1.5 text-xs"
                 style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
-                placeholder="To"
+                placeholder={t.toDateLabel}
               />
             </div>
 
@@ -650,13 +658,13 @@ export function Pending({ user }: { user: User }) {
                 className="text-xs underline"
                 style={{ color: 'var(--color-text-tertiary)' }}
               >
-                Clear filters
+                {t.clearFilters}
               </button>
             )}
 
             <div className="ml-auto flex items-center gap-2">
               <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                {filteredResolved.length} result{filteredResolved.length !== 1 ? 's' : ''}
+                {t.resultCount(filteredResolved.length)}
               </span>
               <select
                 value={pageSize}
@@ -664,9 +672,9 @@ export function Pending({ user }: { user: User }) {
                 className="rounded-lg border px-2 py-1.5 text-xs"
                 style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
               >
-                <option value={10}>10 per page</option>
-                <option value={20}>20 per page</option>
-                <option value={50}>50 per page</option>
+                <option value={10}>{t.perPage(10)}</option>
+                <option value={20}>{t.perPage(20)}</option>
+                <option value={50}>{t.perPage(50)}</option>
               </select>
             </div>
           </div>
@@ -720,7 +728,7 @@ export function Pending({ user }: { user: User }) {
 
                     <div className="flex items-center gap-3">
                       <span className="text-xs font-medium" style={{ color: statusColors[update.status] }}>
-                        {update.status}
+                        {statusLabels[update.status] || update.status}
                       </span>
                       <svg
                         width="16"
@@ -756,7 +764,7 @@ export function Pending({ user }: { user: User }) {
                       {/* Resolved metadata */}
                       {update.resolved_at && (
                         <div className="mb-4 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                          {update.status === 'approved' ? 'Approved' : update.status === 'rejected' ? 'Rejected' : 'Resolved'} on{' '}
+                          {update.status === 'approved' ? t.approvedOn : update.status === 'rejected' ? t.rejectedOn : t.resolvedOn}{' '}
                           {new Date(update.resolved_at).toLocaleString()}
                         </div>
                       )}
@@ -764,7 +772,7 @@ export function Pending({ user }: { user: User }) {
                       {/* Diff panel */}
                       {loadingDiff === update.id ? (
                         <div className="py-4 text-center text-sm" style={{ color: 'var(--color-text-tertiary)' }}>
-                          Loading diff...
+                          {t.loadingDiff}
                         </div>
                       ) : diffData ? (
                         <DiffPanel
@@ -792,10 +800,10 @@ export function Pending({ user }: { user: User }) {
                   backgroundColor: 'var(--color-bg-elevated)',
                 }}
               >
-                Previous
+                {t.previous}
               </button>
               <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-                Page {currentPage} of {totalPages}
+                {t.pageOfPages(currentPage, totalPages)}
               </span>
               <button
                 onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
@@ -807,7 +815,7 @@ export function Pending({ user }: { user: User }) {
                   backgroundColor: 'var(--color-bg-elevated)',
                 }}
               >
-                Next
+                {t.next}
               </button>
             </div>
           )}
