@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { normalizePhone, isValidE164, formatPhone } from '../../lib/phone'
 import { generateSlug, generateAccessToken } from '../../lib/slug'
 import { getAvatarGradient } from '../../lib/avatar'
 import { PhoneInput } from '../../components/PhoneInput'
 import { DepartmentsMultiSelect } from '../../components/DepartmentsMultiSelect'
-import { EmployeeEditModal } from './EmployeeEdit'
 import { useLang } from '../../contexts/LanguageContext'
 import { getEmployeeDepts } from '../../lib/employee'
 import type { Translations } from '../../lib/translations'
@@ -13,11 +13,11 @@ import type { User, Employee, Organization } from '../../types/database'
 
 export function Employees({ user }: { user: User }) {
   const { t } = useLang()
+  const navigate = useNavigate()
   const [employees, setEmployees] = useState<Employee[]>([])
   const [org, setOrg] = useState<Organization | null>(null)
   const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
-  const [editingId, setEditingId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [activeDepartments, setActiveDepartments] = useState<Set<string>>(new Set())
   const [empPageSize, setEmpPageSize] = useState(12)
@@ -211,7 +211,7 @@ export function Employees({ user }: { user: User }) {
                     t={t}
                     onDuplicate={() => handleDuplicate(emp)}
                     onDelete={() => handleDelete(emp)}
-                    onEdit={() => setEditingId(emp.id)}
+                    onEdit={() => navigate(`/dashboard/employees/${emp.id}/edit`)}
                   />
                 ))}
               </div>
@@ -399,15 +399,6 @@ export function Employees({ user }: { user: User }) {
           )}
         </aside>
       </div>
-
-      {editingId && (
-        <EmployeeEditModal
-          user={user}
-          employeeId={editingId}
-          onClose={() => setEditingId(null)}
-          onSaved={() => { setEditingId(null); loadData() }}
-        />
-      )}
 
       {showAdd && (
         <AddEmployeeForm
@@ -614,6 +605,7 @@ function AddEmployeeForm({ orgId, countryCode, departments, onDone, onCancel }: 
   const [notes, setNotes] = useState('')
   const [ktpNik, setKtpNik] = useState('')
   const [address, setAddress] = useState('')
+  const [dateOfBirth, setDateOfBirth] = useState('')
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
   const [error, setError] = useState('')
@@ -668,6 +660,7 @@ function AddEmployeeForm({ orgId, countryCode, departments, onDone, onCancel }: 
         notes: notes || null,
         ktp_nik: ktpNik || null,
         address: address || null,
+        date_of_birth: dateOfBirth || null,
         slug,
         access_token: token,
       })
@@ -813,6 +806,10 @@ function AddEmployeeForm({ orgId, countryCode, departments, onDone, onCancel }: 
           <div>
             <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.ktpNikOptionalLabel}</label>
             <input type="text" value={ktpNik} onChange={e => setKtpNik(e.target.value)} placeholder="e.g. 5171234567890001" className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.dateOfBirthLabel}</label>
+            <input type="date" value={dateOfBirth} onChange={e => setDateOfBirth(e.target.value)} className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.addressOptionalLabel}</label>

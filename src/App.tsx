@@ -6,6 +6,7 @@ import { Signup } from './pages/auth/Signup'
 import { AcceptInvite } from './pages/auth/AcceptInvite'
 import { Overview } from './pages/dashboard/Overview'
 import { Employees } from './pages/dashboard/Employees'
+import { EmployeeEdit } from './pages/dashboard/EmployeeEdit'
 import { SOPs } from './pages/dashboard/SOPs'
 import { SOPEdit } from './pages/dashboard/SOPEdit'
 import { SOPHistory } from './pages/dashboard/SOPHistory'
@@ -55,6 +56,7 @@ function AppRoutes() {
           <Route element={<DashboardLayout user={user} onSignOut={signOut} />}>
             <Route path="/dashboard" element={<Overview user={user} />} />
             <Route path="/dashboard/employees" element={<Employees user={user} />} />
+            <Route path="/dashboard/employees/:id/edit" element={<EmployeeEdit user={user} />} />
 
             <Route path="/dashboard/sops" element={<SOPs user={user} />} />
             <Route path="/dashboard/sops/:id/edit" element={<SOPEdit user={user} />} />

@@ -102,6 +102,7 @@ export const translations = {
     emailOptionalLabel: 'Email (optional)',
     ktpNikOptionalLabel: 'KTP/NIK Number (optional)',
     addressOptionalLabel: 'Address (optional)',
+    dateOfBirthLabel: 'Date of birth',
     addressPlaceholder: "Employee's residential address...",
     notesInternalLabel: 'Notes (internal only)',
     notesPlaceholder: 'Internal notes about this employee...',
@@ -408,6 +409,11 @@ export const translations = {
     breadcrumbEdit: 'Edit',
     breadcrumbHistory: 'History',
 
+    // Employee edit — section headings
+    sectionProfile: 'Profile',
+    sectionDocuments: 'Documents',
+    sectionInternal: 'Internal',
+
     // Dashboard — rich view
     quickActionsLabel: 'Quick actions',
     quickActionAddEmployee: 'Add employee',
@@ -548,6 +554,7 @@ export const translations = {
     emailOptionalLabel: 'Email (opsional)',
     ktpNikOptionalLabel: 'Nomor KTP/NIK (opsional)',
     addressOptionalLabel: 'Alamat (opsional)',
+    dateOfBirthLabel: 'Tanggal lahir',
     addressPlaceholder: 'Alamat tempat tinggal karyawan...',
     notesInternalLabel: 'Catatan (hanya internal)',
     notesPlaceholder: 'Catatan internal tentang karyawan ini...',
@@ -853,6 +860,11 @@ export const translations = {
     // Breadcrumbs
     breadcrumbEdit: 'Ubah',
     breadcrumbHistory: 'Riwayat',
+
+    // Employee edit — section headings
+    sectionProfile: 'Profil',
+    sectionDocuments: 'Dokumen',
+    sectionInternal: 'Internal',
 
     // Dashboard — rich view
     quickActionsLabel: 'Aksi cepat',

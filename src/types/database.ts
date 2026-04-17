@@ -76,6 +76,7 @@ export type Database = {
           ktp_photo_url: string | null
           kk_photo_url: string | null
           address: string | null
+          date_of_birth: string | null
           slug: string
           access_token: string
           created_at: string
@@ -94,6 +95,7 @@ export type Database = {
           ktp_photo_url?: string | null
           kk_photo_url?: string | null
           address?: string | null
+          date_of_birth?: string | null
           slug: string
           access_token: string
           created_at?: string
@@ -110,6 +112,7 @@ export type Database = {
           ktp_photo_url?: string | null
           kk_photo_url?: string | null
           address?: string | null
+          date_of_birth?: string | null
           slug?: string
           access_token?: string
         }
