@@ -70,8 +70,11 @@ export type Database = {
           email: string | null
           photo_url: string | null
           department: string | null
+          departments: string[]
           notes: string | null
           ktp_nik: string | null
+          ktp_photo_url: string | null
+          kk_photo_url: string | null
           address: string | null
           slug: string
           access_token: string
@@ -85,8 +88,11 @@ export type Database = {
           email?: string | null
           photo_url?: string | null
           department?: string | null
+          departments?: string[]
           notes?: string | null
           ktp_nik?: string | null
+          ktp_photo_url?: string | null
+          kk_photo_url?: string | null
           address?: string | null
           slug: string
           access_token: string
@@ -98,8 +104,11 @@ export type Database = {
           email?: string | null
           photo_url?: string | null
           department?: string | null
+          departments?: string[]
           notes?: string | null
           ktp_nik?: string | null
+          ktp_photo_url?: string | null
+          kk_photo_url?: string | null
           address?: string | null
           slug?: string
           access_token?: string
@@ -377,6 +386,31 @@ export type Database = {
         }
         Relationships: []
       }
+      contract_signatures: {
+        Row: {
+          id: string
+          contract_id: string
+          version_number: number
+          employee_id: string
+          typed_name: string
+          signature_font: string | null
+          signed_at: string
+        }
+        Insert: {
+          id?: string
+          contract_id: string
+          version_number: number
+          employee_id: string
+          typed_name: string
+          signature_font?: string | null
+          signed_at?: string
+        }
+        Update: {
+          typed_name?: string
+          signature_font?: string | null
+        }
+        Relationships: []
+      }
       feed_events: {
         Row: {
           id: string
@@ -482,3 +516,4 @@ export type Contract = Database['public']['Tables']['contracts']['Row']
 export type ContractVersion = Database['public']['Tables']['contract_versions']['Row']
 export type FeedEvent = Database['public']['Tables']['feed_events']['Row']
 export type OrgInvitation = Database['public']['Tables']['org_invitations']['Row']
+export type ContractSignature = Database['public']['Tables']['contract_signatures']['Row']

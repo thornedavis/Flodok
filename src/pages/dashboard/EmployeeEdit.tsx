@@ -4,7 +4,8 @@ import { normalizePhone, isValidE164 } from '../../lib/phone'
 import { generateSlug, generateAccessToken } from '../../lib/slug'
 import { getAvatarGradient } from '../../lib/avatar'
 import { PhoneInput } from '../../components/PhoneInput'
-import { DepartmentSelect } from '../../components/DepartmentSelect'
+import { DepartmentsMultiSelect } from '../../components/DepartmentsMultiSelect'
+import { DocumentUpload } from '../../components/DocumentUpload'
 import { useLang } from '../../contexts/LanguageContext'
 import type { User, Employee, Organization } from '../../types/database'
 
@@ -23,39 +24,54 @@ export function EmployeeEditModal({ user, employeeId, onClose, onSaved }: {
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
-  const [department, setDepartment] = useState('')
+  const [empDepartments, setEmpDepartments] = useState<string[]>([])
   const [notes, setNotes] = useState('')
   const [ktpNik, setKtpNik] = useState('')
   const [address, setAddress] = useState('')
   const [photoUrl, setPhotoUrl] = useState<string | null>(null)
+  const [ktpPhotoUrl, setKtpPhotoUrl] = useState<string | null>(null)
+  const [kkPhotoUrl, setKkPhotoUrl] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const [copied, setCopied] = useState(false)
-  const [departments, setDepartments] = useState<string[]>([])
+  const [orgDepartments, setOrgDepartments] = useState<string[]>([])
 
   useEffect(() => {
     async function load() {
       const [empResult, orgResult, allEmpsResult] = await Promise.all([
         supabase.from('employees').select('*').eq('id', employeeId).single(),
         supabase.from('organizations').select('*').eq('id', user.org_id).single(),
-        supabase.from('employees').select('department').eq('org_id', user.org_id),
+        supabase.from('employees').select('department, departments').eq('org_id', user.org_id),
       ])
       if (empResult.data) {
         setEmployee(empResult.data)
         setName(empResult.data.name)
         setPhone(empResult.data.phone)
         setEmail(empResult.data.email || '')
-        setDepartment(empResult.data.department || '')
+        // Prefer the new array column; fall back to legacy single-value for records
+        // that predate the multi-dept migration.
+        const initial = empResult.data.departments && empResult.data.departments.length > 0
+          ? empResult.data.departments
+          : empResult.data.department
+          ? [empResult.data.department]
+          : []
+        setEmpDepartments(initial)
         setNotes(empResult.data.notes || '')
         setKtpNik(empResult.data.ktp_nik || '')
         setAddress(empResult.data.address || '')
         setPhotoUrl(empResult.data.photo_url)
+        setKtpPhotoUrl(empResult.data.ktp_photo_url)
+        setKkPhotoUrl(empResult.data.kk_photo_url)
       }
       setOrg(orgResult.data)
       if (allEmpsResult.data) {
-        const depts = [...new Set(allEmpsResult.data.map(e => e.department).filter(Boolean) as string[])].sort()
-        setDepartments(depts)
+        const all = new Set<string>()
+        for (const e of allEmpsResult.data) {
+          if (e.department) all.add(e.department)
+          for (const d of e.departments || []) all.add(d)
+        }
+        setOrgDepartments([...all].sort())
       }
     }
     load()
@@ -133,7 +149,21 @@ export function EmployeeEditModal({ user, employeeId, onClose, onSaved }: {
     setSaving(true)
     const { error: updateError } = await supabase
       .from('employees')
-      .update({ name, phone, email: email || null, department: department || null, notes: notes || null, ktp_nik: ktpNik || null, address: address || null, photo_url: photoUrl })
+      .update({
+        name,
+        phone,
+        email: email || null,
+        departments: empDepartments,
+        // Mirror first department into legacy single column so existing filters
+        // (SOPs, Contracts, Overview) keep working until those sites migrate.
+        department: empDepartments[0] || null,
+        notes: notes || null,
+        ktp_nik: ktpNik || null,
+        address: address || null,
+        photo_url: photoUrl,
+        ktp_photo_url: ktpPhotoUrl,
+        kk_photo_url: kkPhotoUrl,
+      })
       .eq('id', employeeId)
 
     if (updateError) {
@@ -163,7 +193,15 @@ export function EmployeeEditModal({ user, employeeId, onClose, onSaved }: {
 
     const { data: newEmp, error } = await supabase
       .from('employees')
-      .insert({ org_id: employee.org_id, name: newName, phone: ph, department: employee.department, slug, access_token: token })
+      .insert({
+        org_id: employee.org_id,
+        name: newName,
+        phone: ph,
+        departments: empDepartments,
+        department: empDepartments[0] || null,
+        slug,
+        access_token: token,
+      })
       .select()
       .single()
 
@@ -312,8 +350,8 @@ export function EmployeeEditModal({ user, employeeId, onClose, onSaved }: {
               </div>
 
               <div>
-                <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.departmentLabel}</label>
-                <DepartmentSelect value={department} onChange={setDepartment} departments={departments} />
+                <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.departmentsLabel}</label>
+                <DepartmentsMultiSelect value={empDepartments} onChange={setEmpDepartments} availableDepartments={orgDepartments} />
               </div>
 
               <div>
@@ -324,6 +362,16 @@ export function EmployeeEditModal({ user, employeeId, onClose, onSaved }: {
               <div>
                 <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.ktpNikOptionalLabel}</label>
                 <input type="text" value={ktpNik} onChange={e => setKtpNik(e.target.value)} placeholder="e.g. 5171234567890001" className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.ktpPhotoLabel}</label>
+                <DocumentUpload employeeId={employeeId} kind="ktp" photoUrl={ktpPhotoUrl} onChange={setKtpPhotoUrl} label={name} />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.kkPhotoLabel}</label>
+                <DocumentUpload employeeId={employeeId} kind="kk" photoUrl={kkPhotoUrl} onChange={setKkPhotoUrl} label={name} />
               </div>
 
               <div>

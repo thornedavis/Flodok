@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { SOPEditor } from '../../components/Editor'
 import { useLang } from '../../contexts/LanguageContext'
+import { primaryDept, deptsJoined } from '../../lib/employee'
 import type { User, Sop, Tag, Employee } from '../../types/database'
 
 function fireTranslation(sopId: string, direction: 'en-to-id' | 'id-to-en') {
@@ -176,7 +177,7 @@ export function SOPEdit({ user }: { user: User }) {
           body: JSON.stringify({
             prompt: aiPrompt,
             employee_name: employee?.name,
-            department: employee?.department,
+            department: employee ? deptsJoined(employee) : undefined,
             title,
             existing_content: content || undefined,
           }),
@@ -408,7 +409,7 @@ export function SOPEdit({ user }: { user: User }) {
                 <option value="">{t.noEmployeeLinked}</option>
                 {allEmployees.map(emp => (
                   <option key={emp.id} value={emp.id}>
-                    {emp.name}{emp.department ? ` (${emp.department})` : ''}
+                    {emp.name}{primaryDept(emp) ? ` (${primaryDept(emp)})` : ''}
                   </option>
                 ))}
               </select>
@@ -566,7 +567,7 @@ export function SOPEdit({ user }: { user: User }) {
               onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleGenerate() } }}
               placeholder={content
                 ? t.aiPromptWithContent
-                : t.aiPromptEmpty(employee?.department || 'marketing')}
+                : t.aiPromptEmpty((employee && primaryDept(employee)) || 'marketing')}
               disabled={generating}
               className="flex-1 rounded-lg border px-3 py-2 text-sm outline-none disabled:opacity-50"
               style={inputStyle}

@@ -4,9 +4,10 @@ import { normalizePhone, isValidE164, formatPhone } from '../../lib/phone'
 import { generateSlug, generateAccessToken } from '../../lib/slug'
 import { getAvatarGradient } from '../../lib/avatar'
 import { PhoneInput } from '../../components/PhoneInput'
-import { DepartmentSelect } from '../../components/DepartmentSelect'
+import { DepartmentsMultiSelect } from '../../components/DepartmentsMultiSelect'
 import { EmployeeEditModal } from './EmployeeEdit'
 import { useLang } from '../../contexts/LanguageContext'
+import { getEmployeeDepts } from '../../lib/employee'
 import type { Translations } from '../../lib/translations'
 import type { User, Employee, Organization } from '../../types/database'
 
@@ -54,7 +55,15 @@ export function Employees({ user }: { user: User }) {
 
     const { data: newEmp, error } = await supabase
       .from('employees')
-      .insert({ org_id: user.org_id, name: newName, phone, department: emp.department, slug, access_token: token })
+      .insert({
+        org_id: user.org_id,
+        name: newName,
+        phone,
+        departments: getEmployeeDepts(emp),
+        department: getEmployeeDepts(emp)[0] || null,
+        slug,
+        access_token: token,
+      })
       .select()
       .single()
 
@@ -85,11 +94,11 @@ export function Employees({ user }: { user: User }) {
     loadData()
   }
 
-  // Derive departments
-  const departments = [...new Set(employees.map(e => e.department).filter(Boolean) as string[])].sort()
+  // Derive departments — collect from each employee's array, falling back to legacy
+  const departments = [...new Set(employees.flatMap(e => getEmployeeDepts(e)))].sort()
 
   function getDepartmentCount(dept: string) {
-    return employees.filter(e => e.department === dept).length
+    return employees.filter(e => getEmployeeDepts(e).includes(dept)).length
   }
 
   function toggleDepartment(dept: string) {
@@ -106,22 +115,36 @@ export function Employees({ user }: { user: User }) {
     if (!newName || newName.trim() === oldName) return
     const trimmed = newName.trim()
 
-    // Check for duplicate (case-insensitive)
     const existing = departments.find(d => d.toLowerCase() === trimmed.toLowerCase() && d !== oldName)
-    if (existing) {
-      if (!confirm(t.mergeDepartmentConfirm(existing, oldName))) return
-      // Merge into existing name
-      await supabase.from('employees').update({ department: existing }).eq('org_id', user.org_id).eq('department', oldName)
-    } else {
-      await supabase.from('employees').update({ department: trimmed }).eq('org_id', user.org_id).eq('department', oldName)
-    }
+    const target = existing
+      ? (confirm(t.mergeDepartmentConfirm(existing, oldName)) ? existing : null)
+      : trimmed
+    if (!target) return
+
+    const affected = employees.filter(e => getEmployeeDepts(e).includes(oldName))
+    await Promise.all(affected.map(emp => {
+      // Replace oldName with target, dedupe
+      const next = [...new Set(getEmployeeDepts(emp).map(d => d === oldName ? target : d))]
+      return supabase.from('employees').update({
+        departments: next,
+        department: next[0] || null,
+      }).eq('id', emp.id)
+    }))
     loadData()
   }
 
   async function handleDeleteDepartment(dept: string) {
     const count = getDepartmentCount(dept)
     if (!confirm(t.removeDepartmentConfirm(dept, count))) return
-    await supabase.from('employees').update({ department: null }).eq('org_id', user.org_id).eq('department', dept)
+
+    const affected = employees.filter(e => getEmployeeDepts(e).includes(dept))
+    await Promise.all(affected.map(emp => {
+      const next = getEmployeeDepts(emp).filter(d => d !== dept)
+      return supabase.from('employees').update({
+        departments: next,
+        department: next[0] || null,
+      }).eq('id', emp.id)
+    }))
     setActiveDepartments(prev => {
       const next = new Set(prev)
       next.delete(dept)
@@ -132,12 +155,14 @@ export function Employees({ user }: { user: User }) {
 
   // Filter
   const filtered = employees.filter(e => {
-    const matchesDept = activeDepartments.size === 0 || activeDepartments.has(e.department || '')
-    const matchesSearch = !searchQuery.trim() ||
-      e.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      e.phone.includes(searchQuery) ||
-      e.department?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      e.email?.toLowerCase().includes(searchQuery.toLowerCase())
+    const empDepts = getEmployeeDepts(e)
+    const matchesDept = activeDepartments.size === 0 || empDepts.some(d => activeDepartments.has(d))
+    const q = searchQuery.trim().toLowerCase()
+    const matchesSearch = !q ||
+      e.name.toLowerCase().includes(q) ||
+      e.phone.includes(q) ||
+      empDepts.some(d => d.toLowerCase().includes(q)) ||
+      e.email?.toLowerCase().includes(q)
     return matchesDept && matchesSearch
   })
 
@@ -354,7 +379,7 @@ export function Employees({ user }: { user: User }) {
               </div>
               <div className="flex items-center justify-between text-sm" style={{ color: 'var(--color-text-secondary)' }}>
                 <span>{t.noDepartment}</span>
-                <span style={{ color: 'var(--color-text)' }}>{employees.filter(e => !e.department).length}</span>
+                <span style={{ color: 'var(--color-text)' }}>{employees.filter(e => getEmployeeDepts(e).length === 0).length}</span>
               </div>
             </div>
           </div>
@@ -530,16 +555,21 @@ function EmployeeCard({ emp, t, onDuplicate, onDelete, onEdit }: {
 
         {/* Details */}
         <div className="min-w-0 flex-1">
-          {emp.department && (
-            <span
-              className="mb-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium"
-              style={{
-                backgroundColor: 'var(--color-bg-tertiary)',
-                color: 'var(--color-text-secondary)',
-              }}
-            >
-              {emp.department}
-            </span>
+          {getEmployeeDepts(emp).length > 0 && (
+            <div className="mb-1 flex flex-wrap gap-1">
+              {getEmployeeDepts(emp).map(dept => (
+                <span
+                  key={dept}
+                  className="inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium"
+                  style={{
+                    backgroundColor: 'var(--color-bg-tertiary)',
+                    color: 'var(--color-text-secondary)',
+                  }}
+                >
+                  {dept}
+                </span>
+              ))}
+            </div>
           )}
           <h3 className="text-sm font-semibold leading-snug" style={{ color: 'var(--color-text)' }}>
             {emp.name}
@@ -580,7 +610,7 @@ function AddEmployeeForm({ orgId, countryCode, departments, onDone, onCancel }: 
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
-  const [department, setDepartment] = useState('')
+  const [empDepartments, setEmpDepartments] = useState<string[]>([])
   const [notes, setNotes] = useState('')
   const [ktpNik, setKtpNik] = useState('')
   const [address, setAddress] = useState('')
@@ -628,7 +658,19 @@ function AddEmployeeForm({ orgId, countryCode, departments, onDone, onCancel }: 
 
     const { data: emp, error: empError } = await supabase
       .from('employees')
-      .insert({ org_id: orgId, name, phone, email: email || null, department: department || null, notes: notes || null, ktp_nik: ktpNik || null, address: address || null, slug, access_token: token })
+      .insert({
+        org_id: orgId,
+        name,
+        phone,
+        email: email || null,
+        departments: empDepartments,
+        department: empDepartments[0] || null,
+        notes: notes || null,
+        ktp_nik: ktpNik || null,
+        address: address || null,
+        slug,
+        access_token: token,
+      })
       .select()
       .single()
 
@@ -761,8 +803,8 @@ function AddEmployeeForm({ orgId, countryCode, departments, onDone, onCancel }: 
             </div>
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.departmentLabel}</label>
-            <DepartmentSelect value={department} onChange={setDepartment} departments={departments} />
+            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.departmentsLabel}</label>
+            <DepartmentsMultiSelect value={empDepartments} onChange={setEmpDepartments} availableDepartments={departments} />
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.emailOptionalLabel}</label>

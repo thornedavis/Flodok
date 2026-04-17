@@ -7,7 +7,8 @@ import { supabase } from '../../lib/supabase'
 import { getAvatarGradient } from '../../lib/avatar'
 import { useTheme } from '../../hooks/useTheme'
 import { useLang } from '../../contexts/LanguageContext'
-import type { Employee, Sop, SopSignature, Organization, Contract, FeedEvent } from '../../types/database'
+import { primaryDept } from '../../lib/employee'
+import type { Employee, Sop, SopSignature, Organization, Contract, ContractSignature, FeedEvent } from '../../types/database'
 
 type Tab = 'home' | 'sops' | 'contracts' | 'activity' | 'rewards'
 
@@ -92,6 +93,7 @@ export function SOPView() {
   const [sopSignatures, setSopSignatures] = useState<Record<string, SopSignature>>({})
   const [contracts, setContracts] = useState<Contract[]>([])
   const [activeContract, setActiveContract] = useState<Contract | null>(null)
+  const [contractSignatures, setContractSignatures] = useState<Record<string, ContractSignature>>({})
   const [feedEvents, setFeedEvents] = useState<FeedEvent[]>([])
 
   // UI
@@ -155,7 +157,7 @@ export function SOPView() {
       setContracts(contractList)
       if (contractList.length > 0) setActiveContract(contractList[0])
 
-      // Load signatures
+      // Load signatures (SOPs)
       if (sopList.length > 0) {
         const { data: sigs } = await supabase
           .from('sop_signatures')
@@ -172,6 +174,26 @@ export function SOPView() {
             }
           }
           setSopSignatures(sigMap)
+        }
+      }
+
+      // Load signatures (contracts)
+      if (contractList.length > 0) {
+        const { data: csigs } = await supabase
+          .from('contract_signatures')
+          .select('*')
+          .in('contract_id', contractList.map(c => c.id))
+          .eq('employee_id', emp.id)
+
+        if (csigs) {
+          const sigMap: Record<string, ContractSignature> = {}
+          for (const sig of csigs) {
+            const contract = contractList.find(c => c.id === sig.contract_id)
+            if (contract && sig.version_number === contract.current_version) {
+              sigMap[sig.contract_id] = sig
+            }
+          }
+          setContractSignatures(sigMap)
         }
       }
     }
@@ -234,6 +256,38 @@ export function SOPView() {
       metadata: { sop_id: activeSop.id, version: activeSop.current_version, signature_font: selectedFont },
     })
     // Refresh feed if on activity tab
+    if (tab === 'activity') loadFeedEvents()
+
+    setSigning(false)
+  }
+
+  async function handleSignContract() {
+    if (!activeContract || !employee) return
+    setSigning(true)
+
+    const { data, error: sigError } = await supabase
+      .from('contract_signatures')
+      .insert({
+        contract_id: activeContract.id,
+        version_number: activeContract.current_version,
+        employee_id: employee.id,
+        typed_name: employee.name,
+        signature_font: selectedFont,
+      })
+      .select()
+      .single()
+
+    if (sigError) { setError(sigError.message); setSigning(false); return }
+    setContractSignatures(prev => ({ ...prev, [activeContract.id]: data }))
+
+    await supabase.from('feed_events').insert({
+      org_id: employee.org_id,
+      employee_id: employee.id,
+      event_type: 'contract_signed',
+      title: activeContract.title,
+      description: `Version ${activeContract.current_version}`,
+      metadata: { contract_id: activeContract.id, version: activeContract.current_version, signature_font: selectedFont },
+    })
     if (tab === 'activity') loadFeedEvents()
 
     setSigning(false)
@@ -439,8 +493,8 @@ export function SOPView() {
                 )}
                 <h1 className="mt-3 text-xl font-semibold" style={{ color: 'var(--color-text)' }}>{employee.name}</h1>
                 <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-                  {employee.department && <span>{employee.department}</span>}
-                  {employee.department && org?.name && <span> &middot; </span>}
+                  {primaryDept(employee) && <span>{primaryDept(employee)}</span>}
+                  {primaryDept(employee) && org?.name && <span> &middot; </span>}
                   {org?.name}
                 </p>
               </div>
@@ -764,6 +818,65 @@ export function SOPView() {
                           {getDocContent(activeContract)}
                         </ReactMarkdown>
                       </div>
+
+                      {/* Contract signature */}
+                      <div className="mt-8 border-t pt-6 no-print" style={{ borderColor: 'var(--color-border)' }}>
+                        {contractSignatures[activeContract.id] ? (
+                          <div className="rounded-xl border p-4" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)' }}>
+                            <div className="flex items-center gap-3">
+                              <CheckCircle />
+                              <div>
+                                <p
+                                  className="text-xl"
+                                  style={{ fontFamily: `'${contractSignatures[activeContract.id].signature_font || 'Dancing Script'}', cursive`, color: 'var(--color-text)' }}
+                                >
+                                  {contractSignatures[activeContract.id].typed_name}
+                                </p>
+                                <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                                  {new Date(contractSignatures[activeContract.id].signed_at).toLocaleString()} &middot; {s.version} {contractSignatures[activeContract.id].version_number}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div>
+                            <h3 className="mb-1 text-base font-semibold" style={{ color: 'var(--color-text)' }}>{s.acknowledgeTitle}</h3>
+                            <p className="mb-3 text-sm" style={{ color: 'var(--color-text-secondary)' }}>{s.acknowledgeContractDesc}</p>
+                            <p className="mb-2 text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>{s.chooseStyle}</p>
+                            <div className="mb-4 grid grid-cols-2 gap-2">
+                              {SIGNATURE_FONTS.map(font => (
+                                <button
+                                  key={font.name}
+                                  type="button"
+                                  onClick={() => setSelectedFont(font.name)}
+                                  className="rounded-xl border px-4 py-3 text-left transition-colors"
+                                  style={{
+                                    borderColor: selectedFont === font.name ? 'var(--color-primary)' : 'var(--color-border)',
+                                    backgroundColor: selectedFont === font.name ? 'var(--color-bg-secondary)' : 'transparent',
+                                  }}
+                                >
+                                  <span
+                                    className="block truncate text-xl"
+                                    style={{ fontFamily: `'${font.name}', cursive`, color: 'var(--color-text)' }}
+                                  >
+                                    {employee.name}
+                                  </span>
+                                  <span className="mt-0.5 block text-[10px]" style={{ color: 'var(--color-text-tertiary)' }}>{font.label}</span>
+                                </button>
+                              ))}
+                            </div>
+                            <button
+                              onClick={handleSignContract}
+                              disabled={signing}
+                              className="w-full rounded-xl px-5 py-3 text-sm font-semibold text-white disabled:opacity-50"
+                              style={{ backgroundColor: 'var(--color-primary)' }}
+                            >
+                              {signing ? s.signing : s.confirmSign}
+                            </button>
+                            {error && <p className="mt-2 text-sm" style={{ color: 'var(--color-danger)' }}>{error}</p>}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
                 </>
@@ -788,6 +901,7 @@ export function SOPView() {
                       sop_assigned: s.eventSopAssigned,
                       contract_assigned: s.eventContractAssigned,
                       contract_updated: s.eventContractUpdated,
+                      contract_signed: s.eventContractSigned,
                       bonus_awarded: s.eventRewardGiven,
                       welcome: s.eventWelcome,
                     }
@@ -797,6 +911,7 @@ export function SOPView() {
                       sop_assigned: <DocIcon />,
                       contract_assigned: <ContractIcon />,
                       contract_updated: <ContractIcon />,
+                      contract_signed: <CheckCircle />,
                       bonus_awarded: <TrophyIcon />,
                       welcome: <HomeIcon />,
                     }

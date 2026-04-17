@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { SOPEditor } from '../../components/Editor'
 import { useLang } from '../../contexts/LanguageContext'
+import { primaryDept, deptsJoined } from '../../lib/employee'
 import type { User, Contract, Tag, Employee } from '../../types/database'
 
 const GENERATE_SYSTEM_PROMPT = `You are an expert employment contract writer for workplace documentation.
@@ -163,7 +164,7 @@ export function ContractEdit({ user }: { user: User }) {
           body: JSON.stringify({
             prompt: aiPrompt,
             employee_name: employee?.name,
-            department: employee?.department,
+            department: employee ? deptsJoined(employee) : undefined,
             title,
             existing_content: content || undefined,
             system_prompt: GENERATE_SYSTEM_PROMPT,
@@ -343,7 +344,7 @@ export function ContractEdit({ user }: { user: User }) {
               >
                 <option value="">{t.noEmployeeLinked}</option>
                 {allEmployees.map(emp => (
-                  <option key={emp.id} value={emp.id}>{emp.name}{emp.department ? ` (${emp.department})` : ''}</option>
+                  <option key={emp.id} value={emp.id}>{emp.name}{primaryDept(emp) ? ` (${primaryDept(emp)})` : ''}</option>
                 ))}
               </select>
               <svg className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-text-tertiary)' }}>
@@ -440,7 +441,7 @@ export function ContractEdit({ user }: { user: User }) {
               onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleGenerate() } }}
               placeholder={content
                 ? t.aiContractPromptWithContent
-                : t.aiContractPromptEmpty(employee?.department || 'full-time')}
+                : t.aiContractPromptEmpty((employee && primaryDept(employee)) || 'full-time')}
               disabled={generating} className="flex-1 rounded-lg border px-3 py-2 text-sm outline-none disabled:opacity-50" style={inputStyle} />
             <button type="button" onClick={handleGenerate} disabled={generating || !aiPrompt.trim()}
               className="flex shrink-0 items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-60" style={{ backgroundColor: 'var(--color-primary)' }}>

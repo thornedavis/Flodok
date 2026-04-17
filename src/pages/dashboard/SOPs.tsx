@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
+import { getEmployeeDepts, primaryDept } from '../../lib/employee'
 import type { User, Sop, Employee, Tag } from '../../types/database'
 
 type SopWithEmployee = Sop & { employee: Employee | null; tagIds: string[] }
@@ -52,13 +53,13 @@ export function SOPs({ user }: { user: User }) {
   }, [user.org_id])
 
   // Derive departments from employees
-  const departments = [...new Set(sops.map(s => s.employee?.department).filter(Boolean) as string[])].sort()
+  const departments = [...new Set(sops.flatMap(s => s.employee ? getEmployeeDepts(s.employee) : []))].sort()
 
   const statuses = ['active', 'draft', 'archived'] as const
 
   // Count SOPs per department (from all SOPs, not filtered)
   function getDepartmentCount(dept: string) {
-    return sops.filter(s => s.employee?.department === dept).length
+    return sops.filter(s => s.employee && getEmployeeDepts(s.employee).includes(dept)).length
   }
 
   function getStatusCount(status: string) {
@@ -100,13 +101,15 @@ export function SOPs({ user }: { user: User }) {
 
   // Filter SOPs
   const filtered = sops.filter(s => {
-    const matchesDept = activeDepartments.size === 0 || activeDepartments.has(s.employee?.department || '')
+    const empDepts = s.employee ? getEmployeeDepts(s.employee) : []
+    const matchesDept = activeDepartments.size === 0 || empDepts.some(d => activeDepartments.has(d))
     const matchesStatus = activeStatuses.size === 0 || activeStatuses.has(s.status)
     const matchesTags = activeTags.size === 0 || s.tagIds.some(tid => activeTags.has(tid))
-    const matchesSearch = !searchQuery.trim() ||
-      s.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.employee?.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.employee?.department?.toLowerCase().includes(searchQuery.toLowerCase())
+    const q = searchQuery.trim().toLowerCase()
+    const matchesSearch = !q ||
+      s.title.toLowerCase().includes(q) ||
+      s.employee?.name.toLowerCase().includes(q) ||
+      empDepts.some(d => d.toLowerCase().includes(q))
     return matchesDept && matchesStatus && matchesTags && matchesSearch
   })
 
@@ -250,17 +253,22 @@ export function SOPs({ user }: { user: User }) {
                   )}
                 </div>
 
-                {/* Department badge */}
-                {sop.employee?.department && (
-                  <span
-                    className="mb-3 inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium"
-                    style={{
-                      backgroundColor: 'var(--color-bg-tertiary)',
-                      color: 'var(--color-text-secondary)',
-                    }}
-                  >
-                    {sop.employee.department}
-                  </span>
+                {/* Department badges */}
+                {sop.employee && getEmployeeDepts(sop.employee).length > 0 && (
+                  <div className="mb-3 flex flex-wrap gap-1">
+                    {getEmployeeDepts(sop.employee).map(d => (
+                      <span
+                        key={d}
+                        className="inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium"
+                        style={{
+                          backgroundColor: 'var(--color-bg-tertiary)',
+                          color: 'var(--color-text-secondary)',
+                        }}
+                      >
+                        {d}
+                      </span>
+                    ))}
+                  </div>
                 )}
 
                 <h3 className="text-sm font-semibold leading-snug" style={{ color: 'var(--color-text)' }}>
@@ -513,7 +521,7 @@ function CreateSOPModal({ orgId, employees, onClose, onCreated }: {
   const filteredEmployees = empSearch.trim()
     ? employees.filter(e =>
         e.name.toLowerCase().includes(empSearch.toLowerCase()) ||
-        e.department?.toLowerCase().includes(empSearch.toLowerCase())
+        getEmployeeDepts(e).some(d => d.toLowerCase().includes(empSearch.toLowerCase()))
       )
     : employees
 
@@ -609,8 +617,8 @@ function CreateSOPModal({ orgId, employees, onClose, onCreated }: {
               >
                 <div>
                   <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{selectedEmployee.name}</span>
-                  {selectedEmployee.department && (
-                    <span className="ml-2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{selectedEmployee.department}</span>
+                  {primaryDept(selectedEmployee) && (
+                    <span className="ml-2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{primaryDept(selectedEmployee)}</span>
                   )}
                 </div>
                 <button
@@ -651,8 +659,8 @@ function CreateSOPModal({ orgId, employees, onClose, onCreated }: {
                           onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
                         >
                           <span>{emp.name}</span>
-                          {emp.department && (
-                            <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{emp.department}</span>
+                          {primaryDept(emp) && (
+                            <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{primaryDept(emp)}</span>
                           )}
                         </button>
                       ))

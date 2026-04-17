@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
+import { getEmployeeDepts, primaryDept, deptsJoined } from '../../lib/employee'
 import type { User, Contract, Employee, Tag } from '../../types/database'
 
 type ContractWithEmployee = Contract & { employee: Employee | null; tagIds: string[] }
@@ -50,11 +51,11 @@ export function Contracts({ user }: { user: User }) {
     load()
   }, [user.org_id])
 
-  const departments = [...new Set(contracts.map(c => c.employee?.department).filter(Boolean) as string[])].sort()
+  const departments = [...new Set(contracts.flatMap(c => c.employee ? getEmployeeDepts(c.employee) : []))].sort()
   const statuses = ['active', 'draft', 'archived'] as const
 
   function getDepartmentCount(dept: string) {
-    return contracts.filter(c => c.employee?.department === dept).length
+    return contracts.filter(c => c.employee && getEmployeeDepts(c.employee).includes(dept)).length
   }
 
   function getStatusCount(status: string) {
@@ -92,13 +93,15 @@ export function Contracts({ user }: { user: User }) {
   const tagNameMap = new Map(allTags.map(t => [t.id, t]))
 
   const filtered = contracts.filter(c => {
-    const matchesDept = activeDepartments.size === 0 || activeDepartments.has(c.employee?.department || '')
+    const empDepts = c.employee ? getEmployeeDepts(c.employee) : []
+    const matchesDept = activeDepartments.size === 0 || empDepts.some(d => activeDepartments.has(d))
     const matchesStatus = activeStatuses.size === 0 || activeStatuses.has(c.status)
     const matchesTags = activeTags.size === 0 || c.tagIds.some(tid => activeTags.has(tid))
-    const matchesSearch = !searchQuery.trim() ||
-      c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.employee?.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.employee?.department?.toLowerCase().includes(searchQuery.toLowerCase())
+    const q = searchQuery.trim().toLowerCase()
+    const matchesSearch = !q ||
+      c.title.toLowerCase().includes(q) ||
+      c.employee?.name.toLowerCase().includes(q) ||
+      empDepts.some(d => d.toLowerCase().includes(q))
     return matchesDept && matchesStatus && matchesTags && matchesSearch
   })
 
@@ -241,13 +244,18 @@ export function Contracts({ user }: { user: User }) {
                   )}
                 </div>
 
-                {contract.employee?.department && (
-                  <span
-                    className="mb-3 inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium"
-                    style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}
-                  >
-                    {contract.employee.department}
-                  </span>
+                {contract.employee && getEmployeeDepts(contract.employee).length > 0 && (
+                  <div className="mb-3 flex flex-wrap gap-1">
+                    {getEmployeeDepts(contract.employee).map(d => (
+                      <span
+                        key={d}
+                        className="inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium"
+                        style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}
+                      >
+                        {d}
+                      </span>
+                    ))}
+                  </div>
                 )}
 
                 <h3 className="text-sm font-semibold leading-snug" style={{ color: 'var(--color-text)' }}>
@@ -700,7 +708,7 @@ function CreateContractModal({ orgId, employees, onClose, onCreated }: {
   }, [onClose])
 
   const filteredEmployees = empSearch.trim()
-    ? employees.filter(e => e.name.toLowerCase().includes(empSearch.toLowerCase()) || e.department?.toLowerCase().includes(empSearch.toLowerCase()))
+    ? employees.filter(e => e.name.toLowerCase().includes(empSearch.toLowerCase()) || getEmployeeDepts(e).some(d => d.toLowerCase().includes(empSearch.toLowerCase())))
     : employees
 
   const selectedEmployee = employees.find(e => e.id === employeeId)
@@ -714,8 +722,8 @@ function CreateContractModal({ orgId, employees, onClose, onCreated }: {
       employeeName: selectedEmployee?.name || '',
       employeeAddress,
       ktpNumber,
-      position: selectedEmployee?.department ? `${selectedEmployee.department} Staff` : '',
-      department: selectedEmployee?.department || '',
+      position: selectedEmployee ? (primaryDept(selectedEmployee) ? `${primaryDept(selectedEmployee)} Staff` : '') : '',
+      department: selectedEmployee ? deptsJoined(selectedEmployee) : '',
       workLocation,
       startDate,
       endDate,
@@ -807,7 +815,7 @@ function CreateContractModal({ orgId, employees, onClose, onCreated }: {
               <div className="flex items-center justify-between rounded-lg border px-3 py-2" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }}>
                 <div>
                   <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{selectedEmployee.name}</span>
-                  {selectedEmployee.department && <span className="ml-2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{selectedEmployee.department}</span>}
+                  {primaryDept(selectedEmployee) && <span className="ml-2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{primaryDept(selectedEmployee)}</span>}
                 </div>
                 <button type="button" onClick={() => { setEmployeeId(''); setKtpNumber(''); setEmployeeAddress('') }} className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.clear}</button>
               </div>
@@ -826,7 +834,7 @@ function CreateContractModal({ orgId, employees, onClose, onCreated }: {
                           onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
                         >
                           <span>{emp.name}</span>
-                          {emp.department && <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{emp.department}</span>}
+                          {primaryDept(emp) && <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{primaryDept(emp)}</span>}
                         </button>
                       ))
                     )}
