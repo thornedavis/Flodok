@@ -1,4 +1,4 @@
-import { corsHeaders, jsonResponse, getSupabaseAdmin, validateApiKey } from '../_shared/auth.ts'
+import { corsHeaders, jsonResponse, getSupabaseAdmin, validateWorkerOrApiKey } from '../_shared/auth.ts'
 import { normalizePhone } from '../_shared/phone.ts'
 import { translateToIndonesian } from '../_shared/translate.ts'
 
@@ -13,10 +13,10 @@ Deno.serve(async (req: Request) => {
 
   try {
     const supabase = getSupabaseAdmin()
-    const apiKeyRecord = await validateApiKey(req, supabase)
+    const authed = await validateWorkerOrApiKey(req, supabase)
 
-    if (!apiKeyRecord) {
-      return jsonResponse({ error: 'Invalid API key' }, 401)
+    if (!authed) {
+      return jsonResponse({ error: 'Unauthorized' }, 401)
     }
 
     // Parse request body
@@ -31,7 +31,7 @@ Deno.serve(async (req: Request) => {
     const { data: org } = await supabase
       .from('organizations')
       .select('review_mode, default_country_code')
-      .eq('id', apiKeyRecord.org_id)
+      .eq('id', authed.org_id)
       .single()
 
     // Normalize phone number
@@ -41,7 +41,7 @@ Deno.serve(async (req: Request) => {
     const { data: employee } = await supabase
       .from('employees')
       .select('id')
-      .eq('org_id', apiKeyRecord.org_id)
+      .eq('org_id', authed.org_id)
       .eq('phone', phone)
       .single()
 
@@ -50,7 +50,7 @@ Deno.serve(async (req: Request) => {
       const { data: update } = await supabase
         .from('pending_updates')
         .insert({
-          org_id: apiKeyRecord.org_id,
+          org_id: authed.org_id,
           employee_id: null,
           employee_identifier: employee_phone,
           proposed_changes: { changes },
@@ -68,7 +68,7 @@ Deno.serve(async (req: Request) => {
       const { data: update } = await supabase
         .from('pending_updates')
         .insert({
-          org_id: apiKeyRecord.org_id,
+          org_id: authed.org_id,
           employee_id: employee.id,
           employee_identifier: employee_phone,
           proposed_changes: { changes },
@@ -136,7 +136,7 @@ Deno.serve(async (req: Request) => {
     const { data: update } = await supabase
       .from('pending_updates')
       .insert({
-        org_id: apiKeyRecord.org_id,
+        org_id: authed.org_id,
         employee_id: employee.id,
         employee_identifier: employee_phone,
         proposed_changes: { changes },

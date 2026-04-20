@@ -2,7 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 export const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, content-type',
+  'Access-Control-Allow-Headers': 'authorization, content-type, x-worker-token, x-worker-org-id',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
 }
 
@@ -59,4 +59,42 @@ export async function validateApiKey(
     .then(() => {})
 
   return apiKeyRecord
+}
+
+/**
+ * Validates the Cloudflare Worker's service token against WORKER_SERVICE_TOKEN.
+ * The Worker passes the org it's acting for via the `X-Worker-Org-Id` header.
+ * Returns `{ org_id }` on success, null otherwise.
+ *
+ * Use alongside validateApiKey for endpoints that serve both external API-key
+ * callers and the internal Worker (employees, sop-updates).
+ */
+export function validateWorkerToken(req: Request): { org_id: string } | null {
+  const token = req.headers.get('x-worker-token')
+  const expected = Deno.env.get('WORKER_SERVICE_TOKEN')
+  if (!token || !expected) return null
+  if (token.length !== expected.length) return null
+  let diff = 0
+  for (let i = 0; i < token.length; i++) diff |= token.charCodeAt(i) ^ expected.charCodeAt(i)
+  if (diff !== 0) return null
+
+  const orgId = req.headers.get('x-worker-org-id')
+  if (!orgId) return null
+  return { org_id: orgId }
+}
+
+/**
+ * Unified auth: accepts either a Bearer `flk_*` API key OR the Worker's
+ * service token. Returns `{ org_id }` for both; callers don't need to know
+ * which path was used.
+ */
+export async function validateWorkerOrApiKey(
+  req: Request,
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+): Promise<{ org_id: string } | null> {
+  const worker = validateWorkerToken(req)
+  if (worker) return worker
+  const apiKey = await validateApiKey(req, supabase)
+  if (apiKey) return { org_id: apiKey.org_id }
+  return null
 }

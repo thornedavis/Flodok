@@ -1,4 +1,4 @@
-import { corsHeaders, jsonResponse, getSupabaseAdmin, validateApiKey } from '../_shared/auth.ts'
+import { corsHeaders, jsonResponse, getSupabaseAdmin, validateWorkerOrApiKey } from '../_shared/auth.ts'
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -11,10 +11,10 @@ Deno.serve(async (req: Request) => {
 
   try {
     const supabase = getSupabaseAdmin()
-    const apiKeyRecord = await validateApiKey(req, supabase)
+    const authed = await validateWorkerOrApiKey(req, supabase)
 
-    if (!apiKeyRecord) {
-      return jsonResponse({ error: 'Invalid API key' }, 401)
+    if (!authed) {
+      return jsonResponse({ error: 'Unauthorized' }, 401)
     }
 
     const url = new URL(req.url)
@@ -24,7 +24,7 @@ Deno.serve(async (req: Request) => {
     const { data: employees } = await supabase
       .from('employees')
       .select('id, name, phone, email')
-      .eq('org_id', apiKeyRecord.org_id)
+      .eq('org_id', authed.org_id)
       .order('name')
 
     if (!includeSop) {
@@ -35,7 +35,7 @@ Deno.serve(async (req: Request) => {
     const { data: sops } = await supabase
       .from('sops')
       .select('id, employee_id, title, content_markdown, current_version, updated_at')
-      .eq('org_id', apiKeyRecord.org_id)
+      .eq('org_id', authed.org_id)
 
     const sopByEmployee = new Map(
       (sops || []).map(s => [s.employee_id, {

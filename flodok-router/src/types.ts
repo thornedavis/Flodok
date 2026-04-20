@@ -2,6 +2,17 @@
 
 export interface Env {
   KV: KVNamespace;
+  // Set via `wrangler secret put`:
+  SUPABASE_URL: string;
+  WORKER_SERVICE_TOKEN: string;
+  ENCRYPTION_KEY: string;
+  // Operator-owned OpenRouter account — shared across all orgs. Fair-use
+  // throttling lives at the app layer (processing_logs counter), not here.
+  OPENROUTER_API_KEY: string;
+  OPENROUTER_MODEL?: string;
+  // Optional — if set, requests to the legacy /webhook/fireflies path route
+  // to this org for a grace period while users update their Fireflies URLs.
+  LEGACY_WEBHOOK_ORG_ID?: string;
 }
 
 // --- Fireflies Types ---
@@ -111,14 +122,13 @@ export interface OrgConfig {
   org_name: string;
   fireflies_api_key: string;
   fireflies_webhook_secret?: string;
-  flodok_api_key: string;
-  flodok_api_base: string;
   asana_access_token?: string;
   asana_workspace_id?: string;
   asana_project_id?: string;
-  openrouter_api_key: string;
-  openrouter_model: string;
   enabled: boolean;
+  // Incremented on every credential change. Used as a cache-busting hint so
+  // the Worker can treat KV-cached configs as stale without a DB round trip.
+  config_version: number;
 }
 
 // --- Processing Log ---

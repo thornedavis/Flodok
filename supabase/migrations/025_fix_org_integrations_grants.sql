@@ -1,0 +1,23 @@
+-- Fix: grant SELECT on org_integrations to authenticated so the public view
+-- (security_invoker = true) can actually read underlying rows.
+--
+-- Background: migration 023 did `revoke all from authenticated, anon` on the
+-- base table to prevent accidental ciphertext leaks. It then created a
+-- security-invoker view that hides the ciphertext column. But because the
+-- view queries the base table as the CALLER, the caller needs base-table
+-- SELECT privilege. Without it the view returns zero rows regardless of RLS
+-- policy.
+--
+-- Row-level access is still restricted by the existing policy
+-- "Admins view own org integrations metadata" — only owner/admin can see
+-- their own org's rows. The grant here is a privilege check, not an access
+-- control decision.
+--
+-- The ciphertext column is still not exposed to admins through any normal
+-- path: the UI uses the public view, which selects everything EXCEPT the
+-- ciphertext column. Direct queries to the base table by admins would return
+-- ciphertext, but that's acceptable — they already have the keys to rotate
+-- or delete the credential, and without ENCRYPTION_KEY (Worker-only) the
+-- ciphertext is not useful.
+
+grant select on public.org_integrations to authenticated;

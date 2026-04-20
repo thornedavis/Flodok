@@ -6,10 +6,14 @@ import { useRole } from '../../hooks/useRole'
 import { getAvatarGradient } from '../../lib/avatar'
 import { AvatarUpload } from '../../components/AvatarUpload'
 import { PhoneInput } from '../../components/PhoneInput'
-import { CountrySelect } from '../../components/CountrySelect'
+import { AddressFields, type AddressValue } from '../../components/AddressFields'
 import { isValidE164 } from '../../lib/phone'
 import type { Translations } from '../../lib/translations'
-import type { User, Organization, ApiKey, OrgInvitation } from '../../types/database'
+import type { User, Organization, OrgInvitation } from '../../types/database'
+import { IntegrationCard } from '../../components/integrations/IntegrationCard'
+import { ConnectFirefliesDialog } from '../../components/integrations/ConnectFirefliesDialog'
+import { ConnectAsanaDialog } from '../../components/integrations/ConnectAsanaDialog'
+import { listIntegrations, deleteIntegration, type IntegrationRow } from '../../lib/integrations'
 
 type Tab = 'account' | 'organization' | 'integrations' | 'billing'
 
@@ -124,82 +128,133 @@ function AccountTab({ user, t }: { user: User; t: Translations }) {
   }
 
   return (
-    <section className="space-y-4">
-      <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>{t.yourProfile}</h2>
-      <form onSubmit={handleSave} className="space-y-4 rounded-xl border p-5" style={{ borderColor: 'var(--color-border)' }}>
-        {error && (
-          <div className="rounded-md px-3 py-2 text-sm" style={{ backgroundColor: 'var(--color-diff-remove)', color: 'var(--color-danger)' }}>
-            {error}
-          </div>
-        )}
-
-        <div>
-          <label className="mb-2 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.photoLabel}</label>
-          <AvatarUpload
-            id={user.id}
-            storagePrefix="user"
-            photoUrl={photoUrl}
-            label={user.name}
-            onChange={handlePhotoChange}
-          />
-        </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.fullNameLabel}</label>
-          <input
-            type="text"
-            value={name}
-            onChange={e => setName(e.target.value)}
-            required
-            className="w-full rounded-lg border px-3 py-2 text-sm"
-            style={inputStyle}
-          />
-        </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.phoneWhatsAppLabel}</label>
-          <PhoneInput value={phone} onChange={setPhone} defaultCountryCode={org?.default_country_code} />
-        </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.emailAddressLabel}</label>
-          <input
-            type="email"
-            value={user.email}
-            readOnly
-            className="w-full rounded-lg border px-3 py-2 text-sm"
-            style={{ ...inputStyle, backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}
-          />
-          <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.emailChangeHint}</p>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <button
-            type="submit"
-            disabled={saving || !dirty}
-            className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-            style={{ backgroundColor: 'var(--color-primary)' }}
-          >
-            {saving ? t.saving : t.save}
-          </button>
-          {savedAt && !dirty && (
-            <span className="text-xs" style={{ color: 'var(--color-success)' }}>{t.profileSaved}</span>
+    <div className="space-y-10">
+      <section className="space-y-5">
+        <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>{t.yourProfile}</h2>
+        <form onSubmit={handleSave} className="space-y-5">
+          {error && (
+            <div className="rounded-md px-3 py-2 text-sm" style={{ backgroundColor: 'var(--color-diff-remove)', color: 'var(--color-danger)' }}>
+              {error}
+            </div>
           )}
-        </div>
-      </form>
-    </section>
+
+          <div>
+            <label className="mb-2 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.photoLabel}</label>
+            <AvatarUpload
+              id={user.id}
+              storagePrefix="user"
+              photoUrl={photoUrl}
+              label={user.name}
+              onChange={handlePhotoChange}
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.fullNameLabel}</label>
+            <input
+              type="text"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              required
+              className="w-full rounded-lg border px-3 py-2 text-sm"
+              style={inputStyle}
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.phoneWhatsAppLabel}</label>
+            <PhoneInput value={phone} onChange={setPhone} defaultCountryCode={org?.default_country_code} />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.emailAddressLabel}</label>
+            <input
+              type="email"
+              value={user.email}
+              readOnly
+              className="w-full rounded-lg border px-3 py-2 text-sm"
+              style={{ ...inputStyle, backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}
+            />
+            <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.emailChangeHint}</p>
+          </div>
+
+          <div className="flex items-center gap-3 pt-1">
+            <button
+              type="submit"
+              disabled={saving || !dirty}
+              className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+              style={{ backgroundColor: 'var(--color-primary)' }}
+            >
+              {saving ? t.saving : t.save}
+            </button>
+            {savedAt && !dirty && (
+              <span className="text-xs" style={{ color: 'var(--color-success)' }}>{t.profileSaved}</span>
+            )}
+          </div>
+        </form>
+      </section>
+
+      <section className="space-y-5 border-t pt-10" style={{ borderColor: 'var(--color-border)' }}>
+        <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>{t.securitySection}</h2>
+        <PasswordResetRow email={user.email} t={t} />
+      </section>
+    </div>
+  )
+}
+
+function PasswordResetRow({ email, t }: { email: string; t: Translations }) {
+  const [sending, setSending] = useState(false)
+  const [sentAt, setSentAt] = useState<number | null>(null)
+  const [error, setError] = useState('')
+
+  async function handleSend() {
+    setSending(true)
+    setError('')
+    const redirectTo = `${window.location.origin}/reset-password`
+    const { error: sendError } = await supabase.auth.resetPasswordForEmail(email, { redirectTo })
+    if (sendError) setError(sendError.message)
+    else setSentAt(Date.now())
+    setSending(false)
+  }
+
+  return (
+    <div>
+      <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.passwordLabel}</label>
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={handleSend}
+          disabled={sending}
+          className="rounded-lg border px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50"
+          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', backgroundColor: 'var(--color-bg)' }}
+          onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
+          onMouseOut={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg)' }}
+        >
+          {sending ? t.sendingResetLink : t.sendResetLink}
+        </button>
+        {sentAt && (
+          <span className="text-xs" style={{ color: 'var(--color-success)' }}>{t.resetLinkSent}</span>
+        )}
+      </div>
+      <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.resetLinkHint}</p>
+      {error && (
+        <p className="mt-1 text-xs" style={{ color: 'var(--color-danger)' }}>{error}</p>
+      )}
+    </div>
   )
 }
 
 // ─── Organization tab ───────────────────────────────────
 
+const EMPTY_ADDRESS: AddressValue = { street: '', city: '', province: '', postal_code: '', country: 'ID' }
+
 function OrganizationTab({ user, t }: { user: User; t: Translations }) {
   const { isAdmin } = useRole(user)
   const [org, setOrg] = useState<Organization | null>(null)
   const [orgName, setOrgName] = useState('')
-  const [countryCode, setCountryCode] = useState('+62')
   const [orgPhone, setOrgPhone] = useState('')
   const [logoUrl, setLogoUrl] = useState<string | null>(null)
+  const [address, setAddress] = useState<AddressValue>(EMPTY_ADDRESS)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => { loadData() }, [user.org_id])
@@ -209,9 +264,15 @@ function OrganizationTab({ user, t }: { user: User; t: Translations }) {
     if (data) {
       setOrg(data)
       setOrgName(data.name)
-      setCountryCode(data.default_country_code)
       setOrgPhone(data.phone || '')
       setLogoUrl(data.logo_url)
+      setAddress({
+        street: data.address_street || '',
+        city: data.address_city || '',
+        province: data.address_province || '',
+        postal_code: data.address_postal_code || '',
+        country: data.address_country || 'ID',
+      })
     }
   }
 
@@ -234,11 +295,18 @@ function OrganizationTab({ user, t }: { user: User; t: Translations }) {
   }
 
   const phoneValid = !orgPhone || isValidE164(orgPhone)
+  const addressDirty = !!org && (
+    address.street !== (org.address_street || '') ||
+    address.city !== (org.address_city || '') ||
+    address.province !== (org.address_province || '') ||
+    address.postal_code !== (org.address_postal_code || '') ||
+    address.country !== (org.address_country || 'ID')
+  )
   const dirty = !!org && (
     orgName.trim() !== org.name ||
-    countryCode.trim() !== org.default_country_code ||
-    (orgPhone || null) !== (org.phone || null)
-  ) && orgName.trim().length > 0 && countryCode.trim().length > 0 && phoneValid
+    (orgPhone || null) !== (org.phone || null) ||
+    addressDirty
+  ) && orgName.trim().length > 0 && phoneValid
 
   async function handleSaveOrg(e: React.FormEvent) {
     e.preventDefault()
@@ -246,8 +314,12 @@ function OrganizationTab({ user, t }: { user: User; t: Translations }) {
     setSaving(true)
     const { data } = await supabase.from('organizations').update({
       name: orgName.trim(),
-      default_country_code: countryCode.trim(),
       phone: orgPhone || null,
+      address_street: address.street.trim() || null,
+      address_city: address.city.trim() || null,
+      address_province: address.province.trim() || null,
+      address_postal_code: address.postal_code.trim() || null,
+      address_country: address.country,
     }).eq('id', user.org_id).select().single()
     if (data) setOrg(data)
     setSaving(false)
@@ -258,12 +330,12 @@ function OrganizationTab({ user, t }: { user: User; t: Translations }) {
   return (
     <div className="space-y-10">
       {/* Org details */}
-      <section>
-        <h2 className="mb-4 text-lg font-semibold" style={{ color: 'var(--color-text)' }}>{t.organizationSection}</h2>
+      <section className="space-y-5">
+        <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>{t.organizationSection}</h2>
         {!isAdmin && (
-          <p className="mb-3 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.adminOnlyHint}</p>
+          <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.adminOnlyHint}</p>
         )}
-        <form onSubmit={handleSaveOrg} className="space-y-4 rounded-xl border p-5" style={{ borderColor: 'var(--color-border)' }}>
+        <form onSubmit={handleSaveOrg} className="space-y-5">
           <div>
             <label className="mb-2 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.organizationLogoLabel}</label>
             <AvatarUpload
@@ -292,7 +364,7 @@ function OrganizationTab({ user, t }: { user: User; t: Translations }) {
           <div>
             <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.organizationPhoneLabel}</label>
             {isAdmin ? (
-              <PhoneInput value={orgPhone} onChange={setOrgPhone} defaultCountryCode={countryCode} />
+              <PhoneInput value={orgPhone} onChange={setOrgPhone} defaultCountryCode={org?.default_country_code} />
             ) : (
               <input
                 type="text"
@@ -305,8 +377,8 @@ function OrganizationTab({ user, t }: { user: User; t: Translations }) {
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.defaultCountryCode}</label>
-            <CountrySelect value={countryCode} onChange={setCountryCode} disabled={!isAdmin} />
+            <label className="mb-2 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.organizationAddressLabel}</label>
+            <AddressFields value={address} onChange={setAddress} disabled={!isAdmin} />
           </div>
 
           {isAdmin && (
@@ -699,23 +771,21 @@ function InviteMemberModal({ user, t, existingInvites, onClose, onCreated }: {
 // ─── Integrations tab ───────────────────────────────────
 
 function IntegrationsTab({ user, t }: { user: User; t: Translations }) {
-  const [apiKeys, setApiKeys] = useState<ApiKey[]>([])
-  const [newKeyName, setNewKeyName] = useState('')
-  const [generatedKey, setGeneratedKey] = useState('')
-  const [loading, setLoading] = useState(true)
+  const [integrations, setIntegrations] = useState<IntegrationRow[]>([])
   const [reviewMode, setReviewMode] = useState<boolean | null>(null)
   const [updatingReviewMode, setUpdatingReviewMode] = useState(false)
+  const [activeDialog, setActiveDialog] = useState<'fireflies' | 'asana' | null>(null)
+  const [busyProvider, setBusyProvider] = useState<string | null>(null)
 
   useEffect(() => { loadData() }, [user.org_id])
 
   async function loadData() {
-    const [keysResult, orgResult] = await Promise.all([
-      supabase.from('api_keys').select('*').eq('org_id', user.org_id).order('created_at', { ascending: false }),
+    const [rows, orgResult] = await Promise.all([
+      listIntegrations(user.org_id).catch(() => []),
       supabase.from('organizations').select('review_mode').eq('id', user.org_id).single(),
     ])
-    setApiKeys(keysResult.data || [])
+    setIntegrations(rows)
     if (orgResult.data) setReviewMode(orgResult.data.review_mode)
-    setLoading(false)
   }
 
   async function handleToggleReviewMode(next: boolean) {
@@ -727,39 +797,21 @@ function IntegrationsTab({ user, t }: { user: User; t: Translations }) {
     setUpdatingReviewMode(false)
   }
 
-  async function handleGenerateKey() {
-    if (!newKeyName.trim()) return
-
-    const array = new Uint8Array(32)
-    crypto.getRandomValues(array)
-    const key = 'flk_live_' + Array.from(array).map(b => b.toString(16).padStart(2, '0')).join('')
-    const prefix = key.slice(0, 16) + '...'
-
-    const encoder = new TextEncoder()
-    const data = encoder.encode(key)
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data)
-    const hashArray = Array.from(new Uint8Array(hashBuffer))
-    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
-
-    const { error } = await supabase.from('api_keys').insert({
-      org_id: user.org_id,
-      key_hash: hashHex,
-      key_prefix: prefix,
-      name: newKeyName.trim(),
-    })
-
-    if (error) { alert(error.message); return }
-
-    setGeneratedKey(key)
-    setNewKeyName('')
-    loadData()
+  async function handleDisconnect(provider: 'fireflies' | 'asana') {
+    if (!confirm(t.integrationDisconnectConfirm)) return
+    setBusyProvider(provider)
+    try {
+      await deleteIntegration(provider)
+      await loadData()
+    } catch (e) {
+      alert(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusyProvider(null)
+    }
   }
 
-  async function handleRevokeKey(keyId: string) {
-    if (!confirm(t.revokeKeyConfirm)) return
-    await supabase.from('api_keys').delete().eq('id', keyId)
-    loadData()
-  }
+  const fireflies = integrations.find(i => i.provider === 'fireflies') ?? null
+  const asana = integrations.find(i => i.provider === 'asana') ?? null
 
   return (
     <div className="space-y-10">
@@ -797,111 +849,52 @@ function IntegrationsTab({ user, t }: { user: User; t: Translations }) {
         </div>
       </section>
 
-      {/* API Keys */}
+      {/* Third-party integrations */}
       <section>
-        <h2 className="mb-4 text-lg font-semibold" style={{ color: 'var(--color-text)' }}>{t.apiKeysSection}</h2>
-
-        {generatedKey && (
-          <div className="mb-4 overflow-hidden rounded-xl border p-4" style={{ borderColor: 'var(--color-success)', backgroundColor: 'var(--color-diff-add)' }}>
-            <div className="mb-3 flex items-center justify-between">
-              <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
-                {t.apiKeyGenerated}
-              </p>
-              <button
-                onClick={() => { navigator.clipboard.writeText(generatedKey); setGeneratedKey('') }}
-                className="shrink-0 cursor-pointer rounded-lg px-3 py-1.5 text-sm font-medium text-white"
-                style={{ backgroundColor: 'var(--color-success)' }}
-              >
-                {t.copyAndDismiss}
-              </button>
-            </div>
-            <input
-              type="text"
-              readOnly
-              value={generatedKey}
-              onFocus={e => e.target.select()}
-              className="w-full rounded-lg border px-3 py-2 font-mono text-xs"
-              style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
-            />
-          </div>
-        )}
-
-        <div className="mb-4 flex items-end gap-2">
-          <div className="flex-1">
-            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.keyName}</label>
-            <input
-              type="text"
-              value={newKeyName}
-              onChange={e => setNewKeyName(e.target.value)}
-              placeholder={t.keyNamePlaceholder}
-              className="w-full rounded-lg border px-3 py-2 text-sm"
-              style={inputStyle}
-            />
-          </div>
-          <button
-            onClick={handleGenerateKey}
-            disabled={!newKeyName.trim()}
-            className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-            style={{ backgroundColor: 'var(--color-primary)' }}
-          >
-            {t.generate}
-          </button>
-        </div>
-
-        {!loading && apiKeys.length > 0 && (
-          <div className="divide-y rounded-xl border" style={{ borderColor: 'var(--color-border)' }}>
-            {apiKeys.map(key => (
-              <div key={key.id} className="flex items-center justify-between px-5 py-3">
-                <div>
-                  <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{key.name}</span>
-                  <span className="ml-2 text-xs font-mono" style={{ color: 'var(--color-text-tertiary)' }}>{key.key_prefix}</span>
-                  <div className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                    {t.createdOn} {new Date(key.created_at).toLocaleDateString()}
-                    {key.last_used_at && ` · ${t.lastUsedOn} ${new Date(key.last_used_at).toLocaleDateString()}`}
-                  </div>
-                </div>
-                <button
-                  onClick={() => handleRevokeKey(key.id)}
-                  className="text-xs"
-                  style={{ color: 'var(--color-danger)' }}
-                >
-                  {t.revoke}
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* Third-party integrations placeholder */}
-      <section>
-        <div
-          className="rounded-xl border border-dashed p-8 text-center"
-          style={{ borderColor: 'var(--color-border)' }}
-        >
-          <svg
-            width="28"
-            height="28"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="mx-auto mb-3"
-            style={{ color: 'var(--color-text-tertiary)' }}
-          >
-            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-          </svg>
-          <h3 className="mb-1 text-base font-semibold" style={{ color: 'var(--color-text)' }}>
-            {t.integrationsComingSoonTitle}
-          </h3>
-          <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>
-            {t.integrationsComingSoonDesc}
-          </p>
+        <h2 className="mb-4 text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
+          {t.integrationsSectionTitle}
+        </h2>
+        <div className="space-y-3">
+          <IntegrationCard
+            title={t.firefliesTitle}
+            description={t.firefliesDesc}
+            row={fireflies}
+            onConnect={() => setActiveDialog('fireflies')}
+            onDisconnect={() => handleDisconnect('fireflies')}
+            onVerified={loadData}
+            busy={busyProvider === 'fireflies'}
+            t={t}
+          />
+          <IntegrationCard
+            title={t.asanaTitle}
+            description={t.asanaDesc}
+            row={asana}
+            onConnect={() => setActiveDialog('asana')}
+            onDisconnect={() => handleDisconnect('asana')}
+            onVerified={loadData}
+            busy={busyProvider === 'asana'}
+            t={t}
+          />
         </div>
       </section>
+
+      {activeDialog === 'fireflies' && (
+        <ConnectFirefliesDialog
+          orgId={user.org_id}
+          existing={fireflies}
+          onClose={() => setActiveDialog(null)}
+          onSaved={async () => { setActiveDialog(null); await loadData() }}
+          t={t}
+        />
+      )}
+      {activeDialog === 'asana' && (
+        <ConnectAsanaDialog
+          existing={asana}
+          onClose={() => setActiveDialog(null)}
+          onSaved={async () => { setActiveDialog(null); await loadData() }}
+          t={t}
+        />
+      )}
     </div>
   )
 }

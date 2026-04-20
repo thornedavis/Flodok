@@ -1,15 +1,23 @@
 import type {
+  Env,
   FlodokEmployee,
   FlodokEmployeeWithSOP,
   SOPUpdate,
   UnmatchedSOPItem,
 } from "./types";
 
+// The Worker authenticates to Flodok's Supabase Edge Functions using the
+// operator-owned WORKER_SERVICE_TOKEN plus an `X-Worker-Org-Id` header that
+// declares which org the call is for. This replaces the older per-org
+// `flk_live_*` bearer — users never have to know about internal plumbing.
+
 async function flodokFetch(
-  url: string,
-  apiKey: string,
+  env: Env,
+  orgId: string,
+  path: string,
   options: RequestInit = {},
 ): Promise<Response> {
+  const url = `${env.SUPABASE_URL}/functions/v1/${path}`;
   let lastError: Error | null = null;
 
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -22,7 +30,8 @@ async function flodokFetch(
         ...options,
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
+          "X-Worker-Token": env.WORKER_SERVICE_TOKEN,
+          "X-Worker-Org-Id": orgId,
           ...options.headers,
         },
       });
@@ -45,38 +54,36 @@ async function flodokFetch(
 }
 
 export async function fetchEmployeeRoster(
-  apiBase: string,
-  apiKey: string,
+  env: Env,
+  orgId: string,
 ): Promise<FlodokEmployee[]> {
-  const response = await flodokFetch(
-    `${apiBase}/employees?include_sop=false`,
-    apiKey,
-  );
+  const response = await flodokFetch(env, orgId, "employees?include_sop=false");
   const data = (await response.json()) as { employees: FlodokEmployee[] };
   return data.employees;
 }
 
 export async function fetchEmployeesWithSOPs(
-  apiBase: string,
-  apiKey: string,
+  env: Env,
+  orgId: string,
   employeeIds: string[],
 ): Promise<FlodokEmployeeWithSOP[]> {
   const ids = employeeIds.join(",");
   const response = await flodokFetch(
-    `${apiBase}/employees?include_sop=true&ids=${ids}`,
-    apiKey,
+    env,
+    orgId,
+    `employees?include_sop=true&ids=${ids}`,
   );
   const data = (await response.json()) as { employees: FlodokEmployeeWithSOP[] };
   return data.employees;
 }
 
 export async function submitSOPUpdate(
-  apiBase: string,
-  apiKey: string,
+  env: Env,
+  orgId: string,
   update: SOPUpdate,
   sourceMeeting: string,
 ): Promise<{ status: string; update_id: string }> {
-  const response = await flodokFetch(`${apiBase}/sop-updates`, apiKey, {
+  const response = await flodokFetch(env, orgId, "sop-updates", {
     method: "POST",
     body: JSON.stringify({
       employee_phone: update.employee_phone,
@@ -94,12 +101,12 @@ export async function submitSOPUpdate(
 }
 
 export async function submitUnmatchedItem(
-  apiBase: string,
-  apiKey: string,
+  env: Env,
+  orgId: string,
   item: UnmatchedSOPItem,
   sourceMeeting: string,
 ): Promise<{ status: string; update_id: string }> {
-  const response = await flodokFetch(`${apiBase}/sop-updates`, apiKey, {
+  const response = await flodokFetch(env, orgId, "sop-updates", {
     method: "POST",
     body: JSON.stringify({
       employee_phone: null,

@@ -17,11 +17,18 @@ import {
   buildFullAnalysisUserMessage,
 } from "./prompts";
 import { chunkTranscript, formatTranscriptText, needsChunking } from "./chunking";
+import { writeProcessingLog } from "./config";
+
+const DEFAULT_OPENROUTER_MODEL = "anthropic/claude-sonnet-4.5";
+
+function modelFor(env: Env): string {
+  return env.OPENROUTER_MODEL ?? DEFAULT_OPENROUTER_MODEL;
+}
 
 export async function processWebhook(
   meetingId: string,
   config: OrgConfig,
-  kv: KVNamespace,
+  env: Env,
 ): Promise<void> {
   const log: ProcessingLog = {
     meeting_id: meetingId,
@@ -36,31 +43,27 @@ export async function processWebhook(
   };
 
   try {
-    // Step 2: Fetch transcript
     const transcript = await fetchTranscript(meetingId, config.fireflies_api_key);
     log.meeting_title = transcript.title;
     log.meeting_date = transcript.date;
 
-    // Step 3: Fetch lightweight roster
-    const roster = await fetchEmployeeRoster(config.flodok_api_base, config.flodok_api_key);
+    const roster = await fetchEmployeeRoster(env, config.org_id);
 
-    // Handle chunking for very long transcripts
     if (needsChunking(transcript.sentences)) {
-      await processChunked(transcript, roster, config, log);
+      await processChunked(transcript, roster, config, env, log);
     } else {
       const transcriptText = formatTranscriptText(transcript.sentences);
-      await processSingle(transcript, transcriptText, roster, config, log);
+      await processSingle(transcript, transcriptText, roster, config, env, log);
     }
   } catch (err) {
     log.errors.push(err instanceof Error ? err.message : String(err));
   }
 
-  // Step 8: Log results
-  await kv.put(
-    `log:${config.org_id}:${meetingId}`,
-    JSON.stringify(log),
-    { expirationTtl: 60 * 60 * 24 * 30 }, // 30 days
-  );
+  try {
+    await writeProcessingLog(env, config.org_id, log);
+  } catch (err) {
+    console.error(`Failed to write processing log for ${meetingId}:`, err);
+  }
 }
 
 async function processSingle(
@@ -68,9 +71,9 @@ async function processSingle(
   transcriptText: string,
   roster: { id: string; name: string; phone: string; email?: string }[],
   config: OrgConfig,
+  env: Env,
   log: ProcessingLog,
 ): Promise<void> {
-  // Step 4: LLM Call 1 — Name extraction
   const nameExtractionUserMsg = buildNameExtractionUserMessage(
     roster,
     transcript.title,
@@ -81,28 +84,21 @@ async function processSingle(
   const nameRaw = await callLLM(
     NAME_EXTRACTION_SYSTEM_PROMPT,
     nameExtractionUserMsg,
-    config.openrouter_api_key,
-    config.openrouter_model,
+    env.OPENROUTER_API_KEY,
+    modelFor(env),
   );
 
   const nameResult = parseLLMJson<NameExtractionResult>(nameRaw);
   log.employees_matched = nameResult.matched_employees.length;
 
-  // If no employees matched, do a simplified task-only analysis
   if (nameResult.matched_employees.length === 0) {
-    await processTasksOnly(transcript, transcriptText, config, log);
+    await processTasksOnly(transcript, transcriptText, config, env, log);
     return;
   }
 
-  // Step 5: Fetch matched employees' SOPs
   const matchedIds = nameResult.matched_employees.map((e) => e.employee_id);
-  const employeesWithSOPs = await fetchEmployeesWithSOPs(
-    config.flodok_api_base,
-    config.flodok_api_key,
-    matchedIds,
-  );
+  const employeesWithSOPs = await fetchEmployeesWithSOPs(env, config.org_id, matchedIds);
 
-  // Step 6: LLM Call 2 — Full analysis
   const fullAnalysisUserMsg = buildFullAnalysisUserMessage(
     nameRaw,
     employeesWithSOPs,
@@ -114,20 +110,20 @@ async function processSingle(
   const analysisRaw = await callLLM(
     FULL_ANALYSIS_SYSTEM_PROMPT,
     fullAnalysisUserMsg,
-    config.openrouter_api_key,
-    config.openrouter_model,
+    env.OPENROUTER_API_KEY,
+    modelFor(env),
   );
 
   const analysis = parseLLMJson<FullAnalysisResult>(analysisRaw);
 
-  // Step 7: Route outputs
-  await routeOutputs(analysis, transcript, config, log);
+  await routeOutputs(analysis, transcript, config, env, log);
 }
 
 async function processTasksOnly(
   transcript: FirefliesTranscript,
   transcriptText: string,
   config: OrgConfig,
+  env: Env,
   log: ProcessingLog,
 ): Promise<void> {
   const taskOnlyPrompt = `You are a meeting task extractor. Extract action items from the transcript.
@@ -149,47 +145,44 @@ Return ONLY valid JSON:
   const raw = await callLLM(
     taskOnlyPrompt,
     `## Meeting Transcript: ${transcript.title} - ${transcript.date}\n${transcriptText}`,
-    config.openrouter_api_key,
-    config.openrouter_model,
+    env.OPENROUTER_API_KEY,
+    modelFor(env),
   );
 
   const analysis = parseLLMJson<FullAnalysisResult>(raw);
-  await routeOutputs(analysis, transcript, config, log);
+  await routeOutputs(analysis, transcript, config, env, log);
 }
 
 async function processChunked(
   transcript: FirefliesTranscript,
   roster: { id: string; name: string; phone: string; email?: string }[],
   config: OrgConfig,
+  env: Env,
   log: ProcessingLog,
 ): Promise<void> {
   const chunks = chunkTranscript(transcript.sentences);
-  const allAnalyses: FullAnalysisResult[] = [];
 
   for (const chunk of chunks) {
     await processSingle(
-      { ...transcript, sentences: [] }, // sentences not needed — we pass text directly
+      { ...transcript, sentences: [] },
       chunk.text,
       roster,
       config,
+      env,
       log,
     );
   }
-
-  // Note: processSingle routes outputs directly per chunk.
-  // Deduplication across chunks is handled by Asana/Flodok accepting duplicates gracefully.
-  // For a more robust solution, collect all results and deduplicate before routing.
 }
 
 async function routeOutputs(
   analysis: FullAnalysisResult,
   transcript: FirefliesTranscript,
   config: OrgConfig,
+  env: Env,
   log: ProcessingLog,
 ): Promise<void> {
   const sourceMeeting = `${transcript.title} - ${transcript.date}`;
 
-  // Route tasks to Asana (non-blocking — failures don't stop SOP updates)
   const taskPromises = analysis.tasks.map(async (task) => {
     if (!config.asana_access_token || !config.asana_workspace_id || !config.asana_project_id) {
       log.errors.push("Asana not configured — skipping task creation");
@@ -212,15 +205,9 @@ async function routeOutputs(
     }
   });
 
-  // Route SOP updates to Flodok
   const sopPromises = analysis.sop_updates.map(async (update) => {
     try {
-      await submitSOPUpdate(
-        config.flodok_api_base,
-        config.flodok_api_key,
-        update,
-        sourceMeeting,
-      );
+      await submitSOPUpdate(env, config.org_id, update, sourceMeeting);
       log.sop_updates_sent++;
     } catch (err) {
       log.errors.push(
@@ -229,15 +216,9 @@ async function routeOutputs(
     }
   });
 
-  // Route unmatched items to Flodok
   const unmatchedPromises = analysis.unmatched_sop_items.map(async (item) => {
     try {
-      await submitUnmatchedItem(
-        config.flodok_api_base,
-        config.flodok_api_key,
-        item,
-        sourceMeeting,
-      );
+      await submitUnmatchedItem(env, config.org_id, item, sourceMeeting);
       log.unmatched_items++;
     } catch (err) {
       log.errors.push(
