@@ -9,6 +9,11 @@ export type Database = {
           review_mode: boolean
           default_country_code: string
           phone: string | null
+          address_street: string | null
+          address_city: string | null
+          address_province: string | null
+          address_postal_code: string | null
+          address_country: string
           created_at: string
         }
         Insert: {
@@ -18,6 +23,11 @@ export type Database = {
           review_mode?: boolean
           default_country_code?: string
           phone?: string | null
+          address_street?: string | null
+          address_city?: string | null
+          address_province?: string | null
+          address_postal_code?: string | null
+          address_country?: string
           created_at?: string
         }
         Update: {
@@ -27,6 +37,11 @@ export type Database = {
           review_mode?: boolean
           default_country_code?: string
           phone?: string | null
+          address_street?: string | null
+          address_city?: string | null
+          address_province?: string | null
+          address_postal_code?: string | null
+          address_country?: string
         }
         Relationships: []
       }

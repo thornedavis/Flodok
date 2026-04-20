@@ -4,6 +4,7 @@ import { DashboardLayout, PublicLayout } from './components/Layout'
 import { Login } from './pages/auth/Login'
 import { Signup } from './pages/auth/Signup'
 import { AcceptInvite } from './pages/auth/AcceptInvite'
+import { ResetPassword } from './pages/auth/ResetPassword'
 import { Overview } from './pages/dashboard/Overview'
 import { Employees } from './pages/dashboard/Employees'
 import { EmployeeEdit } from './pages/dashboard/EmployeeEdit'
@@ -29,6 +30,10 @@ function AppRoutes() {
 
   return (
     <Routes>
+      {/* Password recovery — matches before session check so the recovery
+          session doesn't get bounced to /dashboard. */}
+      <Route path="/reset-password" element={<ResetPassword />} />
+
       {/* Public SOP view */}
       <Route element={<PublicLayout />}>
         <Route path="/sop/:slugToken" element={<SOPView />} />

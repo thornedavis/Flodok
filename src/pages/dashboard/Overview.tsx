@@ -33,6 +33,8 @@ interface EmployeeLite {
   photo_url: string | null
   department: string | null
   departments: string[]
+  date_of_birth: string | null
+  created_at: string
 }
 
 interface ActivityBucket {
@@ -67,6 +69,7 @@ interface DashboardData {
   totalHeadcount: number
   coverage: CoverageBreakdown | null
   employeesById: Record<string, EmployeeLite>
+  employees: EmployeeLite[]
 }
 
 const DEPT_COLORS = [
@@ -116,7 +119,10 @@ export function Overview({ user }: { user: User }) {
         <div className="lg:col-span-2">
           <RecentActivity orgId={user.org_id} initial={data.recent} employeesById={data.employeesById} t={t} lang={lang} />
         </div>
-        <TeamComposition slices={data.departments} totalHeadcount={data.totalHeadcount} t={t} />
+        <div className="flex flex-col gap-6">
+          <UpcomingCalendar employees={data.employees} t={t} lang={lang} />
+          <TeamComposition slices={data.departments} totalHeadcount={data.totalHeadcount} t={t} />
+        </div>
       </div>
     </div>
   )
@@ -131,7 +137,7 @@ async function loadDashboard(orgId: string): Promise<DashboardData> {
   const windowStartIso = new Date(windowStartMs).toISOString()
 
   const [empResult, sopResult, contractResult, pendingResult, feedWindowResult, recentResult, sigResult, csigResult] = await Promise.all([
-    supabase.from('employees').select('id, name, photo_url, department, departments').eq('org_id', orgId),
+    supabase.from('employees').select('id, name, photo_url, department, departments, date_of_birth, created_at').eq('org_id', orgId),
     supabase.from('sops').select('id, status, current_version, employee_id').eq('org_id', orgId),
     supabase.from('contracts').select('id, status, current_version, employee_id').eq('org_id', orgId),
     supabase.from('pending_updates').select('id', { count: 'exact', head: true }).eq('org_id', orgId).eq('status', 'pending'),
@@ -228,6 +234,7 @@ async function loadDashboard(orgId: string): Promise<DashboardData> {
     totalHeadcount: employees.length,
     coverage,
     employeesById,
+    employees,
   }
 }
 
@@ -901,6 +908,352 @@ function TeamComposition({ slices, totalHeadcount, t }: {
       )}
     </Card>
   )
+}
+
+// ─── Upcoming calendar ──────────────────────────────────
+
+type CalendarFilter = 'all' | 'birthdays' | 'anniversaries'
+
+interface KeyDateEvent {
+  date: Date
+  employeeId: string
+  employeeName: string
+  type: 'birthday' | 'anniversary'
+  years: number
+}
+
+const BIRTHDAY_COLOR = '#10b981'
+const ANNIVERSARY_COLOR = '#f59e0b'
+
+function UpcomingCalendar({ employees, t, lang }: {
+  employees: EmployeeLite[]
+  t: Translations
+  lang: string
+}) {
+  const [filter, setFilter] = useState<CalendarFilter>('all')
+  const today = useMemo(() => {
+    const d = new Date()
+    d.setHours(0, 0, 0, 0)
+    return d
+  }, [])
+  const [viewMonth, setViewMonth] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1))
+
+  const allEvents = useMemo(() => computeKeyDates(employees, today), [employees, today])
+
+  const filtered = useMemo(() => {
+    if (filter === 'all') return allEvents
+    if (filter === 'birthdays') return allEvents.filter(e => e.type === 'birthday')
+    return allEvents.filter(e => e.type === 'anniversary')
+  }, [allEvents, filter])
+
+  // Events occurring within the viewed month (recurring every year, so we map
+  // the employee's m/d into the current view year).
+  const monthEvents = useMemo(() => {
+    const map = new Map<number, KeyDateEvent[]>()
+    const year = viewMonth.getFullYear()
+    const month = viewMonth.getMonth()
+    for (const emp of employees) {
+      if (filter !== 'anniversaries' && emp.date_of_birth) {
+        const src = parseDateOnly(emp.date_of_birth)
+        if (src && src.getMonth() === month) {
+          const day = src.getDate()
+          pushEvent(map, day, {
+            date: new Date(year, month, day),
+            employeeId: emp.id,
+            employeeName: emp.name,
+            type: 'birthday',
+            years: year - src.getFullYear(),
+          })
+        }
+      }
+      if (filter !== 'birthdays') {
+        const src = new Date(emp.created_at)
+        if (!isNaN(src.getTime()) && src.getMonth() === month) {
+          const day = src.getDate()
+          const years = year - src.getFullYear()
+          if (years >= 1) {
+            pushEvent(map, day, {
+              date: new Date(year, month, day),
+              employeeId: emp.id,
+              employeeName: emp.name,
+              type: 'anniversary',
+              years,
+            })
+          }
+        }
+      }
+    }
+    return map
+  }, [employees, viewMonth, filter])
+
+  const upcoming = useMemo(() => {
+    const in90 = today.getTime() + 90 * 86400000
+    return filtered
+      .filter(e => e.date.getTime() >= today.getTime() && e.date.getTime() <= in90)
+      .sort((a, b) => a.date.getTime() - b.date.getTime())
+      .slice(0, 5)
+  }, [filtered, today])
+
+  const locale = lang === 'id' ? 'id-ID' : undefined
+  const filterPills: { key: CalendarFilter; label: string }[] = [
+    { key: 'all', label: t.calendarFilterAll },
+    { key: 'birthdays', label: t.calendarFilterBirthdays },
+    { key: 'anniversaries', label: t.calendarFilterAnniversaries },
+  ]
+
+  return (
+    <Card>
+      <div className="mb-3">
+        <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{t.calendarTitle}</h3>
+        <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.calendarSubtitle}</p>
+      </div>
+
+      <div className="mb-3 flex flex-wrap gap-1">
+        {filterPills.map(p => {
+          const active = filter === p.key
+          return (
+            <button
+              key={p.key}
+              type="button"
+              onClick={() => setFilter(p.key)}
+              className="rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors"
+              style={{
+                borderColor: active ? 'var(--color-text)' : 'var(--color-border)',
+                backgroundColor: active ? 'var(--color-bg-tertiary)' : 'transparent',
+                color: active ? 'var(--color-text)' : 'var(--color-text-secondary)',
+              }}
+            >
+              {p.label}
+            </button>
+          )
+        })}
+      </div>
+
+      <MonthGrid
+        viewMonth={viewMonth}
+        today={today}
+        monthEvents={monthEvents}
+        locale={locale}
+        onPrev={() => setViewMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() - 1, 1))}
+        onNext={() => setViewMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 1))}
+      />
+
+      <ul className="mt-4 space-y-2">
+        {upcoming.length === 0 ? (
+          <li className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.calendarEmpty}</li>
+        ) : upcoming.map((evt, i) => (
+          <li key={`${evt.employeeId}-${evt.type}-${i}`} className="flex items-start gap-2 text-xs">
+            <span
+              className="mt-1.5 inline-block h-1.5 w-1.5 shrink-0 rounded-full"
+              style={{ backgroundColor: evt.type === 'birthday' ? BIRTHDAY_COLOR : ANNIVERSARY_COLOR }}
+            />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="truncate font-medium" style={{ color: 'var(--color-text)' }}>{evt.employeeName}</span>
+                <span className="shrink-0" style={{ color: 'var(--color-text-tertiary)' }}>
+                  {formatRelativeDay(evt.date, today, lang, t)}
+                </span>
+              </div>
+              <div style={{ color: 'var(--color-text-secondary)' }}>
+                {evt.type === 'birthday'
+                  ? `${t.calendarEventBirthday} · ${t.calendarTurningAge.replace('{n}', String(evt.years))}`
+                  : `${t.calendarEventAnniversary} · ${evt.years === 1 ? t.calendarOneYearAtCompany : t.calendarYearsAtCompany.replace('{n}', String(evt.years))}`}
+              </div>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  )
+}
+
+function MonthGrid({ viewMonth, today, monthEvents, locale, onPrev, onNext }: {
+  viewMonth: Date
+  today: Date
+  monthEvents: Map<number, KeyDateEvent[]>
+  locale: string | undefined
+  onPrev: () => void
+  onNext: () => void
+}) {
+  const year = viewMonth.getFullYear()
+  const month = viewMonth.getMonth()
+  const firstDay = new Date(year, month, 1)
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  // Monday-first week: JS getDay() returns 0=Sun..6=Sat → shift to 0=Mon..6=Sun
+  const leadingBlanks = (firstDay.getDay() + 6) % 7
+
+  const weekdayLabels = useMemo(() => {
+    // Week starting Monday 2024-01-01
+    const base = new Date(2024, 0, 1)
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(base)
+      d.setDate(base.getDate() + i)
+      return d.toLocaleDateString(locale, { weekday: 'narrow' })
+    })
+  }, [locale])
+
+  const cells: (number | null)[] = []
+  for (let i = 0; i < leadingBlanks; i++) cells.push(null)
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d)
+  while (cells.length % 7 !== 0) cells.push(null)
+
+  const monthLabel = viewMonth.toLocaleDateString(locale, { month: 'long', year: 'numeric' })
+
+  return (
+    <div>
+      <div className="mb-2 flex items-center justify-between">
+        <button
+          type="button"
+          onClick={onPrev}
+          aria-label="Previous month"
+          className="rounded-md p-1 transition-colors"
+          style={{ color: 'var(--color-text-secondary)' }}
+          onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
+          onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+        </button>
+        <span className="text-xs font-medium capitalize" style={{ color: 'var(--color-text)' }}>{monthLabel}</span>
+        <button
+          type="button"
+          onClick={onNext}
+          aria-label="Next month"
+          className="rounded-md p-1 transition-colors"
+          style={{ color: 'var(--color-text-secondary)' }}
+          onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
+          onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </button>
+      </div>
+
+      <div className="grid grid-cols-7 gap-1 text-center">
+        {weekdayLabels.map((label, i) => (
+          <div key={i} className="text-[10px] font-medium uppercase" style={{ color: 'var(--color-text-tertiary)' }}>
+            {label}
+          </div>
+        ))}
+        {cells.map((day, i) => {
+          if (day === null) return <div key={i} className="aspect-square" />
+          const cellDate = new Date(year, month, day)
+          const isToday = cellDate.getTime() === today.getTime()
+          const events = monthEvents.get(day) || []
+          const hasBirthday = events.some(e => e.type === 'birthday')
+          const hasAnniv = events.some(e => e.type === 'anniversary')
+          const tooltip = events.map(e => `${e.employeeName} · ${e.type === 'birthday' ? '🎂' : '🎉'}`).join('\n')
+
+          // Today wins visually. Otherwise tint the cell by the event type —
+          // birthdays win over anniversaries when both fall on the same day,
+          // but we still show both indicator dots so nothing is hidden.
+          let bgColor = 'transparent'
+          let textColor = 'var(--color-text-secondary)'
+          let fontWeight = 400
+          if (isToday) {
+            bgColor = '#3b82f6'
+            textColor = '#ffffff'
+            fontWeight = 600
+          } else if (hasBirthday) {
+            bgColor = `color-mix(in srgb, ${BIRTHDAY_COLOR} 22%, transparent)`
+            textColor = 'var(--color-text)'
+            fontWeight = 500
+          } else if (hasAnniv) {
+            bgColor = `color-mix(in srgb, ${ANNIVERSARY_COLOR} 22%, transparent)`
+            textColor = 'var(--color-text)'
+            fontWeight = 500
+          }
+
+          return (
+            <div
+              key={i}
+              className="relative flex aspect-square flex-col items-center justify-center rounded-md text-[11px]"
+              style={{
+                backgroundColor: bgColor,
+                color: textColor,
+                fontWeight,
+                cursor: events.length > 0 ? 'help' : 'default',
+              }}
+              title={tooltip || undefined}
+            >
+              <span>{day}</span>
+              {(hasBirthday || hasAnniv) && (
+                <div className="absolute bottom-1 flex gap-0.5">
+                  {hasBirthday && <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: isToday ? '#ffffff' : BIRTHDAY_COLOR }} />}
+                  {hasAnniv && <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: isToday ? '#ffffff' : ANNIVERSARY_COLOR }} />}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function parseDateOnly(s: string): Date | null {
+  // Parses 'YYYY-MM-DD' as a local date (avoids timezone shift that new Date(s) causes).
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s)
+  if (!m) return null
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+}
+
+function pushEvent(map: Map<number, KeyDateEvent[]>, day: number, evt: KeyDateEvent) {
+  const list = map.get(day)
+  if (list) list.push(evt)
+  else map.set(day, [evt])
+}
+
+function computeKeyDates(employees: EmployeeLite[], today: Date): KeyDateEvent[] {
+  const events: KeyDateEvent[] = []
+  for (const emp of employees) {
+    if (emp.date_of_birth) {
+      const src = parseDateOnly(emp.date_of_birth)
+      if (src) {
+        const next = nextAnnualOccurrence(src, today)
+        events.push({
+          date: next,
+          employeeId: emp.id,
+          employeeName: emp.name,
+          type: 'birthday',
+          years: next.getFullYear() - src.getFullYear(),
+        })
+      }
+    }
+    const src = new Date(emp.created_at)
+    if (!isNaN(src.getTime())) {
+      const next = nextAnnualOccurrence(src, today)
+      const years = next.getFullYear() - src.getFullYear()
+      if (years >= 1) {
+        events.push({
+          date: next,
+          employeeId: emp.id,
+          employeeName: emp.name,
+          type: 'anniversary',
+          years,
+        })
+      }
+    }
+  }
+  return events
+}
+
+function nextAnnualOccurrence(src: Date, from: Date): Date {
+  const candidate = new Date(from.getFullYear(), src.getMonth(), src.getDate())
+  if (candidate.getTime() < from.getTime()) {
+    candidate.setFullYear(from.getFullYear() + 1)
+  }
+  return candidate
+}
+
+function formatRelativeDay(date: Date, today: Date, lang: string, t: Translations): string {
+  const days = Math.round((date.getTime() - today.getTime()) / 86400000)
+  if (days === 0) return t.calendarToday
+  if (days === 1) return t.calendarTomorrow
+  if (days < 14) return t.calendarInDays.replace('{n}', String(days))
+  return date.toLocaleDateString(lang === 'id' ? 'id-ID' : undefined, { month: 'short', day: 'numeric' })
 }
 
 // ─── Card shell ─────────────────────────────────────────
