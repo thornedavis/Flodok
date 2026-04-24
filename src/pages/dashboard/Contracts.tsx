@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
 import { getEmployeeDepts, primaryDept, deptsJoined } from '../../lib/employee'
+import { formatIdrDigits as formatCurrency } from '../../lib/credits'
+import { InfoTooltip } from '../../components/InfoTooltip'
 import type { User, Contract, Employee, Tag } from '../../types/database'
 
 type ContractWithEmployee = Contract & { employee: Employee | null; tagIds: string[] }
@@ -435,12 +437,6 @@ export function Contracts({ user }: { user: User }) {
 
 type ContractType = 'pkwt' | 'pkwtt'
 
-function formatCurrency(val: string) {
-  const num = val.replace(/\D/g, '')
-  if (!num) return ''
-  return Number(num).toLocaleString('id-ID')
-}
-
 function generateContractMarkdown(
   type: ContractType,
   fields: {
@@ -454,8 +450,7 @@ function generateContractMarkdown(
     endDate: string
     probationMonths: string
     baseSalary: string
-    transportAllowance: string
-    mealAllowance: string
+    allowance: string
     hoursPerDay: string
     daysPerWeek: string
     annualLeave: string
@@ -471,8 +466,7 @@ function generateContractMarkdown(
   const start = fields.startDate || '[Start Date]'
   const end = fields.endDate || '[End Date]'
   const salary = fields.baseSalary ? `Rp ${formatCurrency(fields.baseSalary)}` : '[Base Salary]'
-  const transport = fields.transportAllowance ? `Rp ${formatCurrency(fields.transportAllowance)}` : '-'
-  const meal = fields.mealAllowance ? `Rp ${formatCurrency(fields.mealAllowance)}` : '-'
+  const allowance = fields.allowance ? `Rp ${formatCurrency(fields.allowance)}` : '-'
   const hours = fields.hoursPerDay || '8'
   const days = fields.daysPerWeek || '6'
   const leave = fields.annualLeave || '12'
@@ -534,9 +528,7 @@ The parties agree to the following terms and conditions:
 
 3.1 **Base Salary:** The Employee shall receive a monthly base salary of **${salary}** (gross), payable on the last working day of each month.
 
-3.2 **Allowances:**
-- Transport Allowance: **${transport}** per month
-- Meal Allowance: **${meal}** per month
+3.2 **Allowances:** **${allowance}** per month, covering transport, meals, and other elastic components of compensation.
 
 3.3 **THR (Tunjangan Hari Raya):** The Employee is entitled to a religious holiday bonus equivalent to one month's salary after 12 months of continuous service, or pro-rated for service less than 12 months.
 
@@ -632,43 +624,6 @@ Date: ____________________________
   return md
 }
 
-function InfoTooltip({ text }: { text: string }) {
-  const [show, setShow] = useState(false)
-  const btnRef = useRef<HTMLButtonElement>(null)
-  const [pos, setPos] = useState({ top: 0, left: 0 })
-
-  const handleEnter = () => {
-    if (btnRef.current) {
-      const rect = btnRef.current.getBoundingClientRect()
-      setPos({ top: rect.bottom + 6, left: rect.left + rect.width / 2 })
-    }
-    setShow(true)
-  }
-
-  return (
-    <span className="inline-flex">
-      <button
-        ref={btnRef}
-        type="button"
-        className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold"
-        style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-tertiary)' }}
-        onMouseEnter={handleEnter}
-        onMouseLeave={() => setShow(false)}
-      >
-        i
-      </button>
-      {show && (
-        <div
-          className="fixed z-50 w-64 -translate-x-1/2 rounded-lg border p-3 text-xs shadow-lg"
-          style={{ top: pos.top, left: pos.left, backgroundColor: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
-        >
-          {text}
-        </div>
-      )}
-    </span>
-  )
-}
-
 function CreateContractModal({ orgId, employees, onClose, onCreated }: {
   orgId: string
   employees: Employee[]
@@ -695,8 +650,7 @@ function CreateContractModal({ orgId, employees, onClose, onCreated }: {
   const [endDate, setEndDate] = useState('')
   const [probationMonths, setProbationMonths] = useState('3')
   const [baseSalary, setBaseSalary] = useState('')
-  const [transportAllowance, setTransportAllowance] = useState('')
-  const [mealAllowance, setMealAllowance] = useState('')
+  const [allowance, setAllowance] = useState('')
   const [hoursPerDay, setHoursPerDay] = useState('8')
   const [daysPerWeek, setDaysPerWeek] = useState('6')
   const [annualLeave, setAnnualLeave] = useState('12')
@@ -729,16 +683,30 @@ function CreateContractModal({ orgId, employees, onClose, onCreated }: {
       endDate,
       probationMonths,
       baseSalary,
-      transportAllowance,
-      mealAllowance,
+      allowance,
       hoursPerDay,
       daysPerWeek,
       annualLeave,
     })
 
+    const baseWageIdr = baseSalary ? Number(baseSalary) : null
+    const allowanceIdr = allowance ? Number(allowance) : null
+    const hoursPerDayInt = hoursPerDay ? Number(hoursPerDay) : null
+    const daysPerWeekInt = daysPerWeek ? Number(daysPerWeek) : null
+
     const { data, error: insertError } = await supabase
       .from('contracts')
-      .insert({ org_id: orgId, employee_id: employeeId || null, title: title.trim(), content_markdown: markdown, status: 'draft' as const })
+      .insert({
+        org_id: orgId,
+        employee_id: employeeId || null,
+        title: title.trim(),
+        content_markdown: markdown,
+        status: 'draft' as const,
+        base_wage_idr: baseWageIdr,
+        allowance_idr: allowanceIdr,
+        hours_per_day: hoursPerDayInt,
+        days_per_week: daysPerWeekInt,
+      })
       .select()
       .single()
 
@@ -893,38 +861,27 @@ function CreateContractModal({ orgId, employees, onClose, onCreated }: {
               </div>
 
               {/* Compensation */}
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                    {t.baseSalaryLabel}
+                    {t.baseWageLabel}
                     <span className="ml-1" style={{ color: 'var(--color-text-tertiary)' }}>{t.perMonth}</span>
                   </label>
                   <div className="relative">
                     <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>Rp</span>
-                    <input type="text" value={baseSalary ? formatCurrency(baseSalary) : ''} onChange={e => setBaseSalary(e.target.value.replace(/\D/g, ''))}
+                    <input type="text" inputMode="numeric" value={formatCurrency(baseSalary)} onChange={e => setBaseSalary(e.target.value.replace(/\D/g, ''))}
                       placeholder="5,000,000" className="w-full rounded-lg border py-1.5 pl-8 pr-3 text-sm" style={inputStyle} />
                   </div>
                 </div>
                 <div>
                   <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                    {t.transportLabel}
+                    {t.allowanceLabel}
                     <span className="ml-1" style={{ color: 'var(--color-text-tertiary)' }}>{t.perMonth}</span>
                   </label>
                   <div className="relative">
                     <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>Rp</span>
-                    <input type="text" value={transportAllowance ? formatCurrency(transportAllowance) : ''} onChange={e => setTransportAllowance(e.target.value.replace(/\D/g, ''))}
-                      placeholder="500,000" className="w-full rounded-lg border py-1.5 pl-8 pr-3 text-sm" style={inputStyle} />
-                  </div>
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                    {t.mealLabel}
-                    <span className="ml-1" style={{ color: 'var(--color-text-tertiary)' }}>{t.perMonth}</span>
-                  </label>
-                  <div className="relative">
-                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>Rp</span>
-                    <input type="text" value={mealAllowance ? formatCurrency(mealAllowance) : ''} onChange={e => setMealAllowance(e.target.value.replace(/\D/g, ''))}
-                      placeholder="500,000" className="w-full rounded-lg border py-1.5 pl-8 pr-3 text-sm" style={inputStyle} />
+                    <input type="text" inputMode="numeric" value={formatCurrency(allowance)} onChange={e => setAllowance(e.target.value.replace(/\D/g, ''))}
+                      placeholder="1,000,000" className="w-full rounded-lg border py-1.5 pl-8 pr-3 text-sm" style={inputStyle} />
                   </div>
                 </div>
               </div>

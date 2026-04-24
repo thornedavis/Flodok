@@ -14,6 +14,7 @@ export type Database = {
           address_province: string | null
           address_postal_code: string | null
           address_country: string
+          credits_divisor: number
           created_at: string
         }
         Insert: {
@@ -28,6 +29,7 @@ export type Database = {
           address_province?: string | null
           address_postal_code?: string | null
           address_country?: string
+          credits_divisor?: number
           created_at?: string
         }
         Update: {
@@ -42,6 +44,7 @@ export type Database = {
           address_province?: string | null
           address_postal_code?: string | null
           address_country?: string
+          credits_divisor?: number
         }
         Relationships: []
       }
@@ -337,6 +340,10 @@ export type Database = {
           content_markdown_id: string | null
           current_version: number
           status: 'active' | 'draft' | 'archived'
+          base_wage_idr: number | null
+          allowance_idr: number | null
+          hours_per_day: number | null
+          days_per_week: number | null
           created_at: string
           updated_at: string
         }
@@ -349,6 +356,10 @@ export type Database = {
           content_markdown_id?: string | null
           current_version?: number
           status?: 'active' | 'draft' | 'archived'
+          base_wage_idr?: number | null
+          allowance_idr?: number | null
+          hours_per_day?: number | null
+          days_per_week?: number | null
           created_at?: string
           updated_at?: string
         }
@@ -359,6 +370,10 @@ export type Database = {
           content_markdown_id?: string | null
           current_version?: number
           status?: 'active' | 'draft' | 'archived'
+          base_wage_idr?: number | null
+          allowance_idr?: number | null
+          hours_per_day?: number | null
+          days_per_week?: number | null
           updated_at?: string
         }
         Relationships: []
@@ -457,6 +472,114 @@ export type Database = {
         }
         Relationships: []
       }
+      allowance_adjustments: {
+        Row: {
+          id: string
+          org_id: string
+          employee_id: string
+          period_month: string
+          amount_idr: number
+          reason: string
+          awarded_by: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          org_id: string
+          employee_id: string
+          period_month?: string
+          amount_idr: number
+          reason: string
+          awarded_by: string
+          created_at?: string
+        }
+        Update: never
+        Relationships: []
+      }
+      credit_adjustments: {
+        Row: {
+          id: string
+          org_id: string
+          employee_id: string
+          period_month: string
+          amount: number
+          reason: string
+          awarded_by: string
+          payout_idr: number | null
+          paid_out_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          org_id: string
+          employee_id: string
+          period_month?: string
+          amount: number
+          reason: string
+          awarded_by: string
+          payout_idr?: number | null
+          paid_out_at?: string | null
+          created_at?: string
+        }
+        Update: never
+        Relationships: []
+      }
+      achievement_definitions: {
+        Row: {
+          id: string
+          org_id: string
+          name: string
+          description: string | null
+          icon: string | null
+          trigger_type: 'manual' | 'auto'
+          trigger_rule: Record<string, unknown> | null
+          is_featured: boolean
+          is_active: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          org_id: string
+          name: string
+          description?: string | null
+          icon?: string | null
+          trigger_type: 'manual' | 'auto'
+          trigger_rule?: Record<string, unknown> | null
+          is_featured?: boolean
+          is_active?: boolean
+          created_at?: string
+        }
+        Update: {
+          name?: string
+          description?: string | null
+          icon?: string | null
+          trigger_type?: 'manual' | 'auto'
+          trigger_rule?: Record<string, unknown> | null
+          is_featured?: boolean
+          is_active?: boolean
+        }
+        Relationships: []
+      }
+      achievement_unlocks: {
+        Row: {
+          id: string
+          employee_id: string
+          achievement_id: string
+          unlocked_at: string
+          awarded_by: string | null
+          reason: string | null
+        }
+        Insert: {
+          id?: string
+          employee_id: string
+          achievement_id: string
+          unlocked_at?: string
+          awarded_by?: string | null
+          reason?: string | null
+        }
+        Update: never
+        Relationships: []
+      }
       org_invitations: {
         Row: {
           id: string
@@ -514,6 +637,32 @@ export type Database = {
         }
         Returns: void
       }
+      current_period_month: {
+        Args: Record<string, never>
+        Returns: string
+      }
+      close_credit_period: {
+        Args: {
+          target_employee_id: string
+          target_period_month: string
+        }
+        Returns: number
+      }
+      portal_home: {
+        Args: {
+          emp_slug: string
+          emp_token: string
+        }
+        Returns: Record<string, unknown>
+      }
+      portal_leaderboard: {
+        Args: {
+          emp_slug: string
+          emp_token: string
+          period_kind?: 'month' | 'quarter' | 'all-time'
+        }
+        Returns: Record<string, unknown>
+      }
     }
     Enums: Record<string, never>
   }
@@ -535,3 +684,7 @@ export type ContractVersion = Database['public']['Tables']['contract_versions'][
 export type FeedEvent = Database['public']['Tables']['feed_events']['Row']
 export type OrgInvitation = Database['public']['Tables']['org_invitations']['Row']
 export type ContractSignature = Database['public']['Tables']['contract_signatures']['Row']
+export type AllowanceAdjustment = Database['public']['Tables']['allowance_adjustments']['Row']
+export type CreditAdjustment = Database['public']['Tables']['credit_adjustments']['Row']
+export type AchievementDefinition = Database['public']['Tables']['achievement_definitions']['Row']
+export type AchievementUnlock = Database['public']['Tables']['achievement_unlocks']['Row']

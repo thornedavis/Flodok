@@ -4,13 +4,48 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import html2pdf from 'html2pdf.js'
 import { supabase } from '../../lib/supabase'
-import { getAvatarGradient } from '../../lib/avatar'
 import { useTheme } from '../../hooks/useTheme'
 import { useLang } from '../../contexts/LanguageContext'
 import { primaryDept } from '../../lib/employee'
+import { formatIdr, allowanceGradientColor } from '../../lib/credits'
+import { CompensationRing, ShieldPath, WalletPath, CoinPath } from '../../components/portal/CompensationRing'
+import { StatRow } from '../../components/portal/StatRow'
+import { AvatarWithBadge } from '../../components/portal/AvatarWithBadge'
 import type { Employee, Sop, SopSignature, Organization, Contract, ContractSignature, FeedEvent } from '../../types/database'
 
-type Tab = 'home' | 'sops' | 'contracts' | 'activity' | 'rewards'
+type PortalHomeData = {
+  employee: { id: string; name: string; photo_url: string | null; department: string | null; departments: string[]; created_at: string }
+  org: { id: string; name: string; logo_url: string | null; credits_divisor: number }
+  contract: { base_wage_idr: number | null; allowance_idr: number | null; hours_per_day: number | null; days_per_week: number | null } | null
+  period_month: string
+  days_employed: number
+  hours_per_week: number
+  lifetime_xp: number
+  allowance_adjustments: Array<{ id: string; amount_idr: number; reason: string; created_at: string }>
+  allowance_sum: number
+  credit_adjustments: Array<{ id: string; amount: number; reason: string; created_at: string; paid_out_at: string | null; payout_idr: number | null }>
+  credit_net: number
+  credit_frozen: boolean
+  achievements: Array<{ unlock_id: string; unlocked_at: string; reason: string | null; name: string; icon: string | null; description: string | null; is_featured: boolean }>
+}
+
+type Tab = 'home' | 'sops' | 'contracts' | 'activity' | 'leaderboard'
+
+type LeaderboardData = {
+  period_kind: 'month' | 'quarter' | 'all-time'
+  period_label: string
+  viewer_employee_id: string
+  org: { id: string; name: string; credits_divisor: number }
+  rows: Array<{
+    employee_id: string
+    name: string
+    photo_url: string | null
+    departments: string[]
+    net_credits: number
+    achievements_count: number
+    top_achievements: Array<{ name: string; icon: string | null; unlocked_at: string; is_featured?: boolean }>
+  }>
+}
 
 // ─── Signature Fonts ─────────────────────────────────────
 const SIGNATURE_FONTS = [
@@ -95,6 +130,7 @@ export function SOPView() {
   const [activeContract, setActiveContract] = useState<Contract | null>(null)
   const [contractSignatures, setContractSignatures] = useState<Record<string, ContractSignature>>({})
   const [feedEvents, setFeedEvents] = useState<FeedEvent[]>([])
+  const [portal, setPortal] = useState<PortalHomeData | null>(null)
 
   // UI
   const [tab, setTab] = useState<Tab>('home')
@@ -141,11 +177,14 @@ export function SOPView() {
       if (!emp) { setNotFound(true); return }
       setEmployee(emp)
 
-      const [sopsResult, contractsResult, orgResult] = await Promise.all([
+      const [sopsResult, contractsResult, orgResult, portalResult] = await Promise.all([
         supabase.from('sops').select('*').eq('employee_id', emp.id).eq('status', 'active').order('created_at'),
         supabase.from('contracts').select('*').eq('employee_id', emp.id).eq('status', 'active').order('created_at'),
         supabase.from('organizations').select('*').eq('id', emp.org_id).single(),
+        supabase.rpc('portal_home', { emp_slug: slug, emp_token: token }),
       ])
+
+      if (portalResult.data) setPortal(portalResult.data as unknown as PortalHomeData)
 
       setOrg(orgResult.data)
 
@@ -393,9 +432,34 @@ export function SOPView() {
 
       {/* ─── Top Bar ─── */}
       <div className="sticky top-0 z-30 border-b px-4 py-2 no-print" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }}>
-        <div className="mx-auto flex max-w-lg items-center justify-between">
-          {/* Left: org name */}
-          <span className="text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>{org?.name || 'Flodok'}</span>
+        <div className="relative mx-auto flex max-w-lg items-center justify-between">
+          {/* Left: org identity */}
+          <div className="flex min-w-0 items-center gap-2">
+            {org?.logo_url && (
+              <img
+                src={org.logo_url}
+                alt=""
+                className="h-5 w-5 shrink-0 rounded object-contain"
+              />
+            )}
+            <span className="truncate text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>
+              {org?.name || 'Flodok'}
+            </span>
+          </div>
+
+          {/* Center: employee identity */}
+          {employee && (
+            <div className="pointer-events-none absolute left-1/2 flex min-w-0 max-w-[60%] -translate-x-1/2 items-baseline gap-1.5">
+              <span className="truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+                {employee.name}
+              </span>
+              {primaryDept(employee) && (
+                <span className="hidden shrink-0 text-xs sm:inline" style={{ color: 'var(--color-text-tertiary)' }}>
+                  · {primaryDept(employee)}
+                </span>
+              )}
+            </div>
+          )}
 
           {/* Right: controls */}
           <div className="flex items-center gap-3">
@@ -480,84 +544,18 @@ export function SOPView() {
 
           {/* ─── Home Tab ─── */}
           {tab === 'home' && (
-            <div className="pt-6">
-              {/* Profile */}
-              <div className="mb-6 flex flex-col items-center text-center">
-                {employee.photo_url ? (
-                  <img src={employee.photo_url} alt={employee.name} className="h-20 w-20 rounded-full object-cover ring-2 ring-white/20" />
-                ) : (
-                  <div
-                    className="h-20 w-20 rounded-full ring-2 ring-white/20"
-                    style={{ background: getAvatarGradient(employee.id) }}
-                  />
-                )}
-                <h1 className="mt-3 text-xl font-semibold" style={{ color: 'var(--color-text)' }}>{employee.name}</h1>
-                <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-                  {primaryDept(employee) && <span>{primaryDept(employee)}</span>}
-                  {primaryDept(employee) && org?.name && <span> &middot; </span>}
-                  {org?.name}
-                </p>
-              </div>
-
-              {/* Document stats */}
-              <div className="mb-4">
-                <h2 className="mb-2 text-sm font-semibold" style={{ color: 'var(--color-text-secondary)' }}>{s.yourDocuments}</h2>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    onClick={() => setTab('sops')}
-                    className="rounded-xl border p-4 text-left transition-colors"
-                    style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)' }}
-                  >
-                    <div className="mb-1 flex items-center gap-2" style={{ color: 'var(--color-primary)' }}>
-                      <DocIcon />
-                      <span className="text-2xl font-bold">{sops.length}</span>
-                    </div>
-                    <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>{s.activeSops}</p>
-                  </button>
-                  <button
-                    onClick={() => setTab('contracts')}
-                    className="rounded-xl border p-4 text-left transition-colors"
-                    style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)' }}
-                  >
-                    <div className="mb-1 flex items-center gap-2" style={{ color: 'var(--color-primary)' }}>
-                      <ContractIcon />
-                      <span className="text-2xl font-bold">{contracts.length}</span>
-                    </div>
-                    <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>{s.activeContracts}</p>
-                  </button>
-                </div>
-              </div>
-
-              {/* Pending actions */}
-              <div>
-                <h2 className="mb-2 text-sm font-semibold" style={{ color: 'var(--color-text-secondary)' }}>{s.pendingActions}</h2>
-                {unsignedSops.length === 0 ? (
-                  <div className="rounded-xl border p-4 text-center" style={{ borderColor: 'var(--color-border)' }}>
-                    <CheckCircle />
-                    <p className="mt-1 text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{s.allSigned}</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {unsignedSops.map(sop => (
-                      <button
-                        key={sop.id}
-                        onClick={() => { setTab('sops'); setActiveSop(sop); setTimeout(() => signSectionRef.current?.scrollIntoView({ behavior: 'smooth' }), 100) }}
-                        className="flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-colors"
-                        style={{ borderColor: 'var(--color-border)' }}
-                      >
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: 'var(--color-diff-remove)' }}>
-                          <DocIcon />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>{sop.title}</p>
-                          <p className="text-xs" style={{ color: 'var(--color-warning)' }}>{s.needsSignature}</p>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
+            <HomeTab
+              employee={employee}
+              portal={portal}
+              s={s}
+              lang={lang}
+              unsignedSops={unsignedSops}
+              onOpenSop={sop => {
+                setTab('sops')
+                setActiveSop(sop)
+                setTimeout(() => signSectionRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
+              }}
+            />
           )}
 
           {/* ─── SOP Tab Content ─── */}
@@ -967,12 +965,12 @@ export function SOPView() {
             </>
           )}
 
-          {/* ─── Rewards Tab Content ─── */}
-          {tab === 'rewards' && (
-            <div className="rounded-xl border p-6 text-center" style={{ borderColor: 'var(--color-border)' }}>
-              <div className="mx-auto flex h-10 w-10 items-center justify-center" style={{ color: 'var(--color-text-tertiary)' }}><TrophyIcon /></div>
-              <p className="mt-2 text-sm font-medium" style={{ color: 'var(--color-text-tertiary)' }}>{s.comingSoon}</p>
-            </div>
+          {/* ─── Leaderboard Tab Content ─── */}
+          {tab === 'leaderboard' && employee && (
+            <LeaderboardTab
+              slugToken={slugToken!}
+              s={s}
+            />
           )}
 
         </div>
@@ -985,7 +983,7 @@ export function SOPView() {
             { key: 'home' as Tab, label: s.home, icon: <HomeIcon /> },
             { key: 'sops' as Tab, label: s.sops, icon: <DocIcon />, badge: notificationCount },
             { key: 'contracts' as Tab, label: s.contracts, icon: <ContractIcon /> },
-            { key: 'rewards' as Tab, label: s.rewards, icon: <TrophyIcon /> },
+            { key: 'leaderboard' as Tab, label: s.leaderboard, icon: <TrophyIcon /> },
             { key: 'activity' as Tab, label: s.activity, icon: <ActivityIcon /> },
           ]).map(item => (
             <button
@@ -1019,6 +1017,470 @@ export function SOPView() {
         <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>{org?.name}</div>
       </div>
       <div className="print-footer">Generated by Flodok</div>
+    </div>
+  )
+}
+
+// ─── Home Tab ────────────────────────────────────────────
+
+function HomeTab({
+  employee,
+  portal,
+  s,
+  lang,
+  unsignedSops,
+  onOpenSop,
+}: {
+  employee: Employee
+  portal: PortalHomeData | null
+  s: ReturnType<typeof useLang>['t']
+  lang: 'en' | 'id'
+  unsignedSops: Sop[]
+  onOpenSop: (sop: Sop) => void
+}) {
+  const divisor = portal?.org.credits_divisor ?? 1000
+  const baseWage = portal?.contract?.base_wage_idr ?? null
+  const baselineAllowance = portal?.contract?.allowance_idr ?? 0
+  const effectiveAllowance = Math.max(0, baselineAllowance + (portal?.allowance_sum ?? 0))
+  const allowancePct = baselineAllowance > 0
+    ? Math.round((effectiveAllowance / baselineAllowance) * 100)
+    : 0
+  const creditsNet = portal?.credit_net ?? 0
+  const projectedCreditsIdr = creditsNet > 0 && divisor > 0 && baselineAllowance > 0
+    ? Math.round((creditsNet * baselineAllowance) / divisor)
+    : 0
+  const hasContract = !!portal?.contract && baseWage !== null
+  const allowanceColor = allowanceGradientColor(allowancePct / 100)
+  const creditsColor = portal?.credit_frozen ? 'var(--color-text-tertiary)' : '#2dd4bf'
+  const ringSegments = [
+    { key: 'base', valueIdr: baseWage ?? 0, color: 'var(--color-text-secondary)', icon: <ShieldPath /> },
+    { key: 'allowance', valueIdr: effectiveAllowance, color: allowanceColor, icon: <WalletPath /> },
+    { key: 'credits', valueIdr: projectedCreditsIdr, color: creditsColor, icon: <CoinPath /> },
+  ]
+
+  return (
+    <div className="pt-6">
+      {/* Hero: ring */}
+      <div className="mb-6 flex flex-col items-center">
+        <CompensationRing
+          segments={ringSegments}
+          photoUrl={employee.photo_url}
+          employeeId={employee.id}
+          size={300}
+        />
+      </div>
+
+      {/* Wallet balance */}
+      <WalletBalance
+        hasContract={hasContract}
+        baseWage={baseWage ?? 0}
+        effectiveAllowance={effectiveAllowance}
+        baselineAllowance={baselineAllowance}
+        creditsNet={creditsNet}
+        divisor={divisor}
+        frozen={!!portal?.credit_frozen}
+        s={s}
+        lang={lang}
+      />
+
+      {/* Stat rows */}
+      <div className="mb-6 space-y-2">
+        <StatRow
+          icon={<ShieldIcon />}
+          label={s.portalBaseWage}
+          info={s.portalBaseWageInfo}
+          value={hasContract ? formatIdr(baseWage ?? 0, lang) : '—'}
+        />
+        <StatRow
+          icon={<WalletIcon />}
+          label={s.portalAllowance}
+          info={s.portalAllowanceInfo}
+          value={hasContract ? formatIdr(effectiveAllowance, lang) : '—'}
+          accent={hasContract ? allowanceColor : undefined}
+        >
+          {portal && portal.allowance_adjustments.length > 0 ? (
+            <ul className="space-y-2">
+              {portal.allowance_adjustments.map(adj => (
+                <li key={adj.id} className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm" style={{ color: 'var(--color-text)' }}>{adj.reason}</p>
+                    <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                      {new Date(adj.created_at).toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-US', { day: 'numeric', month: 'short' })}
+                    </p>
+                  </div>
+                  <span
+                    className="shrink-0 text-xs font-semibold"
+                    style={{ color: adj.amount_idr > 0 ? 'var(--color-success, #16a34a)' : 'var(--color-danger)' }}
+                  >
+                    {adj.amount_idr > 0 ? '+' : ''}{formatIdr(adj.amount_idr, lang)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{s.portalNoAllowanceAdjustments}</p>
+          )}
+        </StatRow>
+        <StatRow
+          icon={<CreditsIcon />}
+          label={s.portalCredits}
+          info={s.portalCreditsInfo}
+          value={creditsNet}
+          accent={creditsColor}
+        >
+          {portal && portal.credit_adjustments.length > 0 ? (
+            <ul className="space-y-2">
+              {portal.credit_adjustments.map(adj => (
+                <li key={adj.id} className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm" style={{ color: 'var(--color-text)' }}>{adj.reason}</p>
+                    <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                      {new Date(adj.created_at).toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-US', { day: 'numeric', month: 'short' })}
+                      {adj.paid_out_at && adj.payout_idr != null && <> · {formatIdr(adj.payout_idr, lang)}</>}
+                    </p>
+                  </div>
+                  <span
+                    className="shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold"
+                    style={{
+                      backgroundColor: adj.amount > 0 ? 'var(--color-success-bg, #dcfce7)' : 'var(--color-diff-remove)',
+                      color: adj.amount > 0 ? 'var(--color-success, #16a34a)' : 'var(--color-danger)',
+                    }}
+                  >
+                    {adj.amount > 0 ? '+' : ''}{adj.amount}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{s.portalNoCreditsActivity}</p>
+          )}
+        </StatRow>
+        <StatRow
+          icon={<SparkIcon />}
+          label={s.portalExperience}
+          info={s.portalExperienceInfo}
+          value={s.portalExperienceXp(portal?.lifetime_xp ?? 0)}
+          accent="var(--color-text-secondary)"
+        >
+          {portal && (portal.days_employed > 0 || portal.hours_per_week > 0) ? (
+            <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+              {s.portalExperienceBreakdown(portal.days_employed, Math.round(portal.hours_per_week))}
+            </p>
+          ) : (
+            <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{s.portalNoContractYet}</p>
+          )}
+        </StatRow>
+        <StatRow
+          icon={<TrophyIcon />}
+          label={s.portalAchievements}
+          info={s.portalAchievementsInfo}
+          value={portal?.achievements.length ?? 0}
+          accent="var(--color-warning)"
+        >
+          {portal && portal.achievements.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {portal.achievements.map(a => (
+                <div
+                  key={a.unlock_id}
+                  className="flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm"
+                  style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary, var(--color-bg))' }}
+                  title={a.description || a.reason || undefined}
+                >
+                  <span className="text-lg">{a.icon || '🏅'}</span>
+                  <span style={{ color: 'var(--color-text)' }}>{a.name}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{s.portalNoAchievements}</p>
+          )}
+        </StatRow>
+      </div>
+
+      {/* Pending actions */}
+      {unsignedSops.length > 0 && (
+        <div>
+          <h2 className="mb-2 text-sm font-semibold" style={{ color: 'var(--color-text-secondary)' }}>{s.pendingActions}</h2>
+          <div className="space-y-2">
+            {unsignedSops.map(sop => (
+              <button
+                key={sop.id}
+                onClick={() => onOpenSop(sop)}
+                className="flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-colors"
+                style={{ borderColor: 'var(--color-border)' }}
+              >
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: 'var(--color-diff-remove)' }}>
+                  <DocIcon />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>{sop.title}</p>
+                  <p className="text-xs" style={{ color: 'var(--color-warning)' }}>{s.needsSignature}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function WalletBalance({
+  hasContract,
+  baseWage,
+  effectiveAllowance,
+  baselineAllowance,
+  creditsNet,
+  divisor,
+  frozen,
+  s,
+  lang,
+}: {
+  hasContract: boolean
+  baseWage: number
+  effectiveAllowance: number
+  baselineAllowance: number
+  creditsNet: number
+  divisor: number
+  frozen: boolean
+  s: ReturnType<typeof useLang>['t']
+  lang: 'en' | 'id'
+}) {
+  if (!hasContract) {
+    return (
+      <div className="mb-6 text-center">
+        <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{s.portalMonthlyPayout}</p>
+        <p className="mt-1 text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{s.portalSetupCompensation}</p>
+      </div>
+    )
+  }
+
+  // Positive credits project into IDR; negatives don't reduce contracted pay.
+  const projectedCreditsIdr = creditsNet > 0 && divisor > 0 && baselineAllowance > 0
+    ? Math.round((creditsNet * baselineAllowance) / divisor)
+    : 0
+  const total = baseWage + effectiveAllowance + projectedCreditsIdr
+  const baseline = baseWage + baselineAllowance
+  const delta = total - baseline
+
+  const amountColor = delta > 0
+    ? 'var(--color-success, #16a34a)'
+    : delta < 0
+      ? 'var(--color-danger)'
+      : 'var(--color-text)'
+  const trendColor = delta > 0
+    ? 'var(--color-success, #16a34a)'
+    : delta < 0
+      ? 'var(--color-danger)'
+      : 'var(--color-text-tertiary)'
+
+  return (
+    <div className="mb-6 text-center">
+      <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+        {s.portalMonthlyPayout}
+        {projectedCreditsIdr > 0 && !frozen && (
+          <span className="ml-1.5 rounded-full px-1.5 py-0.5 text-[9px] font-medium" style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-tertiary)' }}>
+            {s.portalPayoutProjected}
+          </span>
+        )}
+      </p>
+      <p className="mt-1 text-4xl font-semibold tabular-nums" style={{ color: amountColor }}>
+        {formatIdr(total, lang)}
+      </p>
+      <div
+        className="mt-1 inline-flex items-center gap-1 text-xs font-medium"
+        style={{ color: trendColor }}
+      >
+        <TrendIcon direction={delta > 0 ? 'up' : delta < 0 ? 'down' : 'flat'} />
+        {delta === 0
+          ? s.portalSteady
+          : <>{delta > 0 ? '+' : ''}{formatIdr(delta, lang)} {s.portalVsBaseline}</>}
+      </div>
+    </div>
+  )
+}
+
+function TrendIcon({ direction }: { direction: 'up' | 'down' | 'flat' }) {
+  if (direction === 'up') {
+    return (
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
+        <polyline points="17 6 23 6 23 12" />
+      </svg>
+    )
+  }
+  if (direction === 'down') {
+    return (
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="23 18 13.5 8.5 8.5 13.5 1 6" />
+        <polyline points="17 18 23 18 23 12" />
+      </svg>
+    )
+  }
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="5" y1="12" x2="19" y2="12" />
+    </svg>
+  )
+}
+
+function ShieldIcon() {
+  return <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+}
+
+function WalletIcon() {
+  return <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>
+}
+
+function CreditsIcon() {
+  return <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M9 9h6M9 15h6"/></svg>
+}
+
+function SparkIcon() {
+  return <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v6M12 16v6M4.22 4.22l4.24 4.24M15.54 15.54l4.24 4.24M2 12h6M16 12h6M4.22 19.78l4.24-4.24M15.54 8.46l4.24-4.24"/></svg>
+}
+
+// ─── Leaderboard Tab ─────────────────────────────────────
+
+function LeaderboardTab({
+  slugToken,
+  s,
+}: {
+  slugToken: string
+  s: ReturnType<typeof useLang>['t']
+}) {
+  const [period, setPeriod] = useState<'month' | 'quarter' | 'all-time'>('month')
+  const [data, setData] = useState<LeaderboardData | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true)
+      const lastDash = slugToken.lastIndexOf('-')
+      if (lastDash === -1) { setLoading(false); return }
+      const slug = slugToken.slice(0, lastDash)
+      const token = slugToken.slice(lastDash + 1)
+      const { data: rpcData } = await supabase.rpc('portal_leaderboard', {
+        emp_slug: slug,
+        emp_token: token,
+        period_kind: period,
+      })
+      setData(rpcData as unknown as LeaderboardData)
+      setLoading(false)
+    }
+    load()
+  }, [slugToken, period])
+
+  const periodOptions: Array<{ key: 'month' | 'quarter' | 'all-time'; label: string }> = [
+    { key: 'month', label: s.leaderboardPeriodMonth },
+    { key: 'quarter', label: s.leaderboardPeriodQuarter },
+    { key: 'all-time', label: s.leaderboardPeriodAllTime },
+  ]
+
+  const rows = data?.rows ?? []
+  const viewerId = data?.viewer_employee_id
+
+  return (
+    <div className="pt-4">
+      {/* Period selector */}
+      <div
+        className="mb-4 flex rounded-lg p-0.5"
+        style={{ backgroundColor: 'var(--color-bg-tertiary)' }}
+      >
+        {periodOptions.map(opt => {
+          const active = period === opt.key
+          return (
+            <button
+              key={opt.key}
+              type="button"
+              onClick={() => setPeriod(opt.key)}
+              className="flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
+              style={{
+                backgroundColor: active ? 'var(--color-bg)' : 'transparent',
+                color: active ? 'var(--color-text)' : 'var(--color-text-tertiary)',
+                boxShadow: active ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
+              }}
+            >
+              {opt.label}
+            </button>
+          )
+        })}
+      </div>
+
+      {loading && rows.length === 0 ? (
+        <p className="py-6 text-center text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{s.loading}</p>
+      ) : rows.length === 0 ? (
+        <div className="rounded-xl border p-6 text-center" style={{ borderColor: 'var(--color-border)' }}>
+          <div className="mx-auto flex h-10 w-10 items-center justify-center" style={{ color: 'var(--color-text-tertiary)' }}><TrophyIcon /></div>
+          <p className="mt-2 text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{s.leaderboardEmpty}</p>
+        </div>
+      ) : (
+        <ul className="space-y-1.5">
+          {rows.map((row, i) => {
+            const rank = i + 1
+            const isViewer = row.employee_id === viewerId
+            const dept = row.departments[0]
+            return (
+              <li
+                key={row.employee_id}
+                className="flex items-center gap-3 rounded-xl border px-3 py-2.5"
+                style={{
+                  borderColor: isViewer ? 'var(--color-primary)' : 'var(--color-border)',
+                  backgroundColor: isViewer ? 'color-mix(in srgb, var(--color-primary) 8%, transparent)' : 'transparent',
+                }}
+              >
+                <span
+                  className="w-6 shrink-0 text-center text-sm font-semibold tabular-nums"
+                  style={{
+                    color: rank <= 3 ? 'var(--color-primary)' : 'var(--color-text-tertiary)',
+                  }}
+                >
+                  {rank}
+                </span>
+                <AvatarWithBadge
+                  employeeId={row.employee_id}
+                  photoUrl={row.photo_url}
+                  name={row.name}
+                  size={36}
+                  badges={row.top_achievements}
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+                    {row.name}
+                    {isViewer && (
+                      <span className="ml-2 rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: 'var(--color-primary)', color: 'white' }}>
+                        {s.leaderboardYou}
+                      </span>
+                    )}
+                  </p>
+                  <p className="truncate text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                    {dept}
+                    {dept && row.achievements_count > 0 && ' · '}
+                    {row.achievements_count > 0 && s.leaderboardAchievementsCount(row.achievements_count)}
+                  </p>
+                </div>
+                <span
+                  className="shrink-0 text-sm font-semibold tabular-nums"
+                  style={{
+                    color: row.net_credits > 0
+                      ? 'var(--color-primary)'
+                      : row.net_credits < 0
+                        ? 'var(--color-danger)'
+                        : 'var(--color-text-tertiary)',
+                  }}
+                >
+                  {row.net_credits > 0 ? '+' : ''}{row.net_credits}
+                </span>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+      {data?.period_label && rows.length > 0 && (
+        <p className="mt-3 text-center text-[10px]" style={{ color: 'var(--color-text-tertiary)' }}>
+          {data.period_label} · {s.leaderboardNetCreditsFooter}
+        </p>
+      )}
     </div>
   )
 }

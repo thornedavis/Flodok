@@ -15,7 +15,7 @@ import { ConnectFirefliesDialog } from '../../components/integrations/ConnectFir
 import { ConnectAsanaDialog } from '../../components/integrations/ConnectAsanaDialog'
 import { listIntegrations, deleteIntegration, type IntegrationRow } from '../../lib/integrations'
 
-type Tab = 'account' | 'organization' | 'integrations' | 'billing'
+type Tab = 'account' | 'organization' | 'integrations' | 'achievements' | 'billing'
 
 const inputStyle: React.CSSProperties = {
   borderColor: 'var(--color-border)',
@@ -32,6 +32,7 @@ export function Settings({ user }: { user: User }) {
   let tab: Tab = 'account'
   if (rawTab === 'organization' || rawTab === 'billing') tab = rawTab
   else if (rawTab === 'integrations' && isAdmin) tab = 'integrations'
+  else if (rawTab === 'achievements' && isAdmin) tab = 'achievements'
 
   function setTab(next: Tab) {
     setParams({ tab: next }, { replace: true })
@@ -47,12 +48,16 @@ export function Settings({ user }: { user: User }) {
         {isAdmin && (
           <TabButton active={tab === 'integrations'} onClick={() => setTab('integrations')}>{t.settingsIntegrationsTab}</TabButton>
         )}
+        {isAdmin && (
+          <TabButton active={tab === 'achievements'} onClick={() => setTab('achievements')}>{t.achievementDefsTitle}</TabButton>
+        )}
         <TabButton active={tab === 'billing'} onClick={() => setTab('billing')}>{t.settingsBillingTab}</TabButton>
       </div>
 
       {tab === 'account' && <AccountTab user={user} t={t} />}
       {tab === 'organization' && <OrganizationTab user={user} t={t} />}
       {tab === 'integrations' && isAdmin && <IntegrationsTab user={user} t={t} />}
+      {tab === 'achievements' && isAdmin && <AchievementsTab user={user} t={t} />}
       {tab === 'billing' && <BillingTab t={t} />}
     </div>
   )
@@ -255,6 +260,7 @@ function OrganizationTab({ user, t }: { user: User; t: Translations }) {
   const [orgPhone, setOrgPhone] = useState('')
   const [logoUrl, setLogoUrl] = useState<string | null>(null)
   const [address, setAddress] = useState<AddressValue>(EMPTY_ADDRESS)
+  const [creditsDivisor, setCreditsDivisor] = useState<string>('1000')
   const [saving, setSaving] = useState(false)
 
   useEffect(() => { loadData() }, [user.org_id])
@@ -273,6 +279,7 @@ function OrganizationTab({ user, t }: { user: User; t: Translations }) {
         postal_code: data.address_postal_code || '',
         country: data.address_country || 'ID',
       })
+      setCreditsDivisor(String(data.credits_divisor ?? 1000))
     }
   }
 
@@ -302,11 +309,15 @@ function OrganizationTab({ user, t }: { user: User; t: Translations }) {
     address.postal_code !== (org.address_postal_code || '') ||
     address.country !== (org.address_country || 'ID')
   )
+  const parsedDivisor = Number(creditsDivisor)
+  const divisorValid = Number.isFinite(parsedDivisor) && parsedDivisor > 0 && Number.isInteger(parsedDivisor)
+  const divisorDirty = !!org && divisorValid && parsedDivisor !== org.credits_divisor
   const dirty = !!org && (
     orgName.trim() !== org.name ||
     (orgPhone || null) !== (org.phone || null) ||
-    addressDirty
-  ) && orgName.trim().length > 0 && phoneValid
+    addressDirty ||
+    divisorDirty
+  ) && orgName.trim().length > 0 && phoneValid && divisorValid
 
   async function handleSaveOrg(e: React.FormEvent) {
     e.preventDefault()
@@ -320,6 +331,7 @@ function OrganizationTab({ user, t }: { user: User; t: Translations }) {
       address_province: address.province.trim() || null,
       address_postal_code: address.postal_code.trim() || null,
       address_country: address.country,
+      credits_divisor: parsedDivisor,
     }).eq('id', user.org_id).select().single()
     if (data) setOrg(data)
     setSaving(false)
@@ -379,6 +391,22 @@ function OrganizationTab({ user, t }: { user: User; t: Translations }) {
           <div>
             <label className="mb-2 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.organizationAddressLabel}</label>
             <AddressFields value={address} onChange={setAddress} disabled={!isAdmin} />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.creditsDivisorLabel}</label>
+            <input
+              type="number"
+              inputMode="numeric"
+              min={1}
+              step={1}
+              value={creditsDivisor}
+              onChange={e => setCreditsDivisor(e.target.value)}
+              readOnly={!isAdmin}
+              className="w-full rounded-lg border px-3 py-2 text-sm md:w-48"
+              style={isAdmin ? inputStyle : { ...inputStyle, backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}
+            />
+            <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.creditsDivisorHelp}</p>
           </div>
 
           {isAdmin && (
@@ -894,6 +922,265 @@ function IntegrationsTab({ user, t }: { user: User; t: Translations }) {
           onSaved={async () => { setActiveDialog(null); await loadData() }}
           t={t}
         />
+      )}
+    </div>
+  )
+}
+
+// ─── Achievements tab ───────────────────────────────────
+
+function AchievementsTab({ user, t }: { user: User; t: Translations }) {
+  type Def = {
+    id: string
+    name: string
+    description: string | null
+    icon: string | null
+    trigger_type: 'manual' | 'auto'
+    is_featured: boolean
+    is_active: boolean
+  }
+  const [defs, setDefs] = useState<Def[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showForm, setShowForm] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [formName, setFormName] = useState('')
+  const [formDescription, setFormDescription] = useState('')
+  const [formIcon, setFormIcon] = useState('🏅')
+  const [formTriggerType, setFormTriggerType] = useState<'manual' | 'auto'>('manual')
+  const [formFeatured, setFormFeatured] = useState(false)
+  const [formActive, setFormActive] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => { loadData() }, [user.org_id])
+
+  async function loadData() {
+    setLoading(true)
+    const { data } = await supabase
+      .from('achievement_definitions')
+      .select('id, name, description, icon, trigger_type, is_featured, is_active')
+      .eq('org_id', user.org_id)
+      .order('is_featured', { ascending: false })
+      .order('name')
+    setDefs((data || []) as Def[])
+    setLoading(false)
+  }
+
+  function resetForm() {
+    setEditingId(null)
+    setFormName('')
+    setFormDescription('')
+    setFormIcon('🏅')
+    setFormTriggerType('manual')
+    setFormFeatured(false)
+    setFormActive(true)
+    setError('')
+  }
+
+  function openNew() {
+    resetForm()
+    setShowForm(true)
+  }
+
+  function openEdit(def: Def) {
+    setEditingId(def.id)
+    setFormName(def.name)
+    setFormDescription(def.description || '')
+    setFormIcon(def.icon || '🏅')
+    setFormTriggerType(def.trigger_type)
+    setFormFeatured(def.is_featured)
+    setFormActive(def.is_active)
+    setError('')
+    setShowForm(true)
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    const name = formName.trim()
+    if (!name) { setError(t.titleRequired); return }
+    setSaving(true)
+    setError('')
+    const payload = {
+      name,
+      description: formDescription.trim() || null,
+      icon: formIcon.trim() || null,
+      trigger_type: formTriggerType,
+      trigger_rule: formTriggerType === 'auto' ? {} : null,
+      is_featured: formFeatured,
+      is_active: formActive,
+    }
+    const { error: dbError } = editingId
+      ? await supabase.from('achievement_definitions').update(payload).eq('id', editingId)
+      : await supabase.from('achievement_definitions').insert({ org_id: user.org_id, ...payload })
+    setSaving(false)
+    if (dbError) { setError(dbError.message); return }
+    setShowForm(false)
+    resetForm()
+    await loadData()
+  }
+
+  async function handleDelete(def: Def) {
+    if (!confirm(t.deleteAchievementConfirm(def.name))) return
+    await supabase.from('achievement_definitions').delete().eq('id', def.id)
+    await loadData()
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>{t.achievementDefsTitle}</h2>
+        <button
+          type="button"
+          onClick={openNew}
+          className="rounded-lg px-3 py-1.5 text-sm font-medium text-white"
+          style={{ backgroundColor: 'var(--color-primary)' }}
+        >
+          {t.newAchievement}
+        </button>
+      </div>
+
+      {loading ? (
+        <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{t.loading}</p>
+      ) : defs.length === 0 ? (
+        <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{t.noAchievementsYet}</p>
+      ) : (
+        <ul className="space-y-2">
+          {defs.map(def => (
+            <li
+              key={def.id}
+              className="flex items-center justify-between gap-3 rounded-xl border px-4 py-3"
+              style={{ borderColor: 'var(--color-border)', opacity: def.is_active ? 1 : 0.5 }}
+            >
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="text-2xl">{def.icon || '🏅'}</span>
+                <div className="min-w-0">
+                  <p className="flex items-center gap-2 text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+                    {def.name}
+                    {def.is_featured && (
+                      <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-tertiary)' }}>
+                        ★
+                      </span>
+                    )}
+                    <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-tertiary)' }}>
+                      {def.trigger_type === 'manual' ? 'manual' : 'auto'}
+                    </span>
+                  </p>
+                  {def.description && (
+                    <p className="truncate text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{def.description}</p>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => openEdit(def)}
+                  className="rounded-lg px-2 py-1 text-xs"
+                  style={{ color: 'var(--color-text-secondary)' }}
+                >
+                  {t.edit}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDelete(def)}
+                  className="rounded-lg px-2 py-1 text-xs"
+                  style={{ color: 'var(--color-danger)' }}
+                >
+                  {t.delete}
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {showForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }} onClick={() => setShowForm(false)}>
+          <div
+            className="w-full max-w-md rounded-xl border p-5 shadow-lg"
+            style={{ backgroundColor: 'var(--color-bg)', borderColor: 'var(--color-border)' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 className="mb-4 text-base font-semibold" style={{ color: 'var(--color-text)' }}>
+              {editingId ? t.edit : t.newAchievement}
+            </h3>
+            <form onSubmit={handleSubmit} className="space-y-3">
+              <div>
+                <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.achievementName}</label>
+                <input
+                  type="text"
+                  value={formName}
+                  onChange={e => setFormName(e.target.value)}
+                  required
+                  autoFocus
+                  className="w-full rounded-lg border px-3 py-2 text-sm"
+                  style={inputStyle}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.achievementIcon}</label>
+                <input
+                  type="text"
+                  value={formIcon}
+                  onChange={e => setFormIcon(e.target.value)}
+                  maxLength={4}
+                  className="w-full rounded-lg border px-3 py-2 text-center text-2xl md:w-24"
+                  style={inputStyle}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.achievementDescription}</label>
+                <textarea
+                  value={formDescription}
+                  onChange={e => setFormDescription(e.target.value)}
+                  rows={2}
+                  className="w-full rounded-lg border px-3 py-2 text-sm"
+                  style={inputStyle}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.achievementTriggerType}</label>
+                <select
+                  value={formTriggerType}
+                  onChange={e => setFormTriggerType(e.target.value as 'manual' | 'auto')}
+                  className="w-full rounded-lg border px-3 py-2 text-sm"
+                  style={inputStyle}
+                >
+                  <option value="manual">{t.triggerManual}</option>
+                  <option value="auto">{t.triggerAuto}</option>
+                </select>
+              </div>
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-2 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+                  <input type="checkbox" checked={formFeatured} onChange={e => setFormFeatured(e.target.checked)} />
+                  {t.isFeaturedLabel}
+                </label>
+                <label className="flex items-center gap-2 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+                  <input type="checkbox" checked={formActive} onChange={e => setFormActive(e.target.checked)} />
+                  {t.isActiveLabel}
+                </label>
+              </div>
+              {error && <p className="text-sm" style={{ color: 'var(--color-danger)' }}>{error}</p>}
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowForm(false)}
+                  className="rounded-lg border px-4 py-2 text-sm"
+                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
+                >
+                  {t.cancel}
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                  style={{ backgroundColor: 'var(--color-primary)' }}
+                >
+                  {saving ? t.saving : t.save}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   )

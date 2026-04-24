@@ -4,6 +4,8 @@ import { supabase } from '../../lib/supabase'
 import { SOPEditor } from '../../components/Editor'
 import { useLang } from '../../contexts/LanguageContext'
 import { primaryDept, deptsJoined } from '../../lib/employee'
+import { formatIdrDigits } from '../../lib/credits'
+import { InfoTooltip } from '../../components/InfoTooltip'
 import type { User, Contract, Tag, Employee } from '../../types/database'
 
 const GENERATE_SYSTEM_PROMPT = `You are an expert employment contract writer for workplace documentation.
@@ -41,6 +43,10 @@ export function ContractEdit({ user }: { user: User }) {
   const [translating, setTranslating] = useState(false)
   const [translateDone, setTranslateDone] = useState(false)
   const [status, setStatus] = useState<'active' | 'draft' | 'archived'>('draft')
+  const [baseWageIdr, setBaseWageIdr] = useState<string>('')
+  const [allowanceIdr, setAllowanceIdr] = useState<string>('')
+  const [hoursPerDay, setHoursPerDay] = useState<string>('')
+  const [daysPerWeek, setDaysPerWeek] = useState<string>('')
   const [changeSummary] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -70,6 +76,10 @@ export function ContractEdit({ user }: { user: User }) {
         setContentId(contractResult.data.content_markdown_id)
         setStatus(contractResult.data.status)
         setEmployeeId(contractResult.data.employee_id)
+        setBaseWageIdr(contractResult.data.base_wage_idr?.toString() ?? '')
+        setAllowanceIdr(contractResult.data.allowance_idr?.toString() ?? '')
+        setHoursPerDay(contractResult.data.hours_per_day?.toString() ?? '')
+        setDaysPerWeek(contractResult.data.days_per_week?.toString() ?? '')
 
         if (contractResult.data.employee_id) {
           const emp = (empsResult.data || []).find(e => e.id === contractResult.data.employee_id)
@@ -208,11 +218,21 @@ export function ContractEdit({ user }: { user: User }) {
     setGenerating(false)
   }
 
+  const parsedBaseWage = baseWageIdr.trim() === '' ? null : Number(baseWageIdr)
+  const parsedAllowance = allowanceIdr.trim() === '' ? null : Number(allowanceIdr)
+  const parsedHoursPerDay = hoursPerDay.trim() === '' ? null : Number(hoursPerDay)
+  const parsedDaysPerWeek = daysPerWeek.trim() === '' ? null : Number(daysPerWeek)
   const enChanged = contract ? content !== contract.content_markdown : false
   const idChanged = contract ? contentId !== contract.content_markdown_id : false
   const employeeChanged = contract ? employeeId !== contract.employee_id : false
+  const wagesChanged = contract ? (
+    parsedBaseWage !== contract.base_wage_idr ||
+    parsedAllowance !== contract.allowance_idr ||
+    parsedHoursPerDay !== contract.hours_per_day ||
+    parsedDaysPerWeek !== contract.days_per_week
+  ) : false
   const hasChanges = contract ? (
-    enChanged || idChanged || employeeChanged ||
+    enChanged || idChanged || employeeChanged || wagesChanged ||
     title !== contract.title ||
     status !== contract.status ||
     changeSummary !== ''
@@ -226,6 +246,14 @@ export function ContractEdit({ user }: { user: User }) {
     const newVersion = contract.current_version + 1
     const contentChanged = enChanged || idChanged
 
+    const baseWageValid = parsedBaseWage === null || (Number.isFinite(parsedBaseWage) && parsedBaseWage >= 0)
+    const allowanceValid = parsedAllowance === null || (Number.isFinite(parsedAllowance) && parsedAllowance >= 0)
+    if (!baseWageValid || !allowanceValid) {
+      setError(t.contractInvalidWages)
+      setSaving(false)
+      return
+    }
+
     const { error: updateError } = await supabase
       .from('contracts')
       .update({
@@ -234,6 +262,10 @@ export function ContractEdit({ user }: { user: User }) {
         content_markdown: content,
         content_markdown_id: contentId,
         status,
+        base_wage_idr: parsedBaseWage,
+        allowance_idr: parsedAllowance,
+        hours_per_day: parsedHoursPerDay,
+        days_per_week: parsedDaysPerWeek,
         current_version: contentChanged ? newVersion : contract.current_version,
         updated_at: new Date().toISOString(),
       })
@@ -379,6 +411,84 @@ export function ContractEdit({ user }: { user: User }) {
                   <button type="button" onClick={handleCreateTag} className="rounded-full px-2 py-1 text-xs font-medium" style={{ color: 'var(--color-primary)' }}>{t.addShort}</button>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="py-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div>
+              <label className="mb-1 flex items-center text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+                {t.baseWageLabel}
+                <InfoTooltip text={t.baseWageHelp} />
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={formatIdrDigits(baseWageIdr)}
+                  onChange={e => setBaseWageIdr(e.target.value.replace(/\D/g, ''))}
+                  placeholder={t.amountIdrPlaceholder}
+                  className="w-full rounded-lg border px-3 py-2 pr-12 text-sm"
+                  style={inputStyle}
+                />
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.idr}</span>
+              </div>
+            </div>
+            <div>
+              <label className="mb-1 flex items-center text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+                {t.allowanceLabel}
+                <InfoTooltip text={t.allowanceHelp} />
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={formatIdrDigits(allowanceIdr)}
+                  onChange={e => setAllowanceIdr(e.target.value.replace(/\D/g, ''))}
+                  placeholder={t.amountIdrPlaceholder}
+                  className="w-full rounded-lg border px-3 py-2 pr-12 text-sm"
+                  style={inputStyle}
+                />
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.idr}</span>
+              </div>
+            </div>
+            <div>
+              <label className="mb-1 flex items-center text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+                {t.hoursPerDayLabel}
+                <InfoTooltip text={t.hoursPerDayHelp} />
+              </label>
+              <select
+                value={hoursPerDay}
+                onChange={e => setHoursPerDay(e.target.value)}
+                className="w-full rounded-lg border px-3 py-2 text-sm"
+                style={inputStyle}
+              >
+                <option value="">—</option>
+                <option value="6">{t.hoursOption(6)}</option>
+                <option value="7">{t.hoursOption(7)}</option>
+                <option value="8">{t.hoursOption(8)}</option>
+                <option value="9">{t.hoursOption(9)}</option>
+                <option value="10">{t.hoursOption(10)}</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 flex items-center text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+                {t.daysPerWeekLabel}
+                <InfoTooltip text={t.daysPerWeekHelp} />
+              </label>
+              <select
+                value={daysPerWeek}
+                onChange={e => setDaysPerWeek(e.target.value)}
+                className="w-full rounded-lg border px-3 py-2 text-sm"
+                style={inputStyle}
+              >
+                <option value="">—</option>
+                <option value="4">{t.daysOption(4)}</option>
+                <option value="5">{t.daysOption(5)}</option>
+                <option value="6">{t.daysOption(6)}</option>
+                <option value="7">{t.daysOption(7)}</option>
+              </select>
             </div>
           </div>
         </div>

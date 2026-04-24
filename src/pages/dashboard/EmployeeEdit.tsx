@@ -8,7 +8,10 @@ import { PhoneInput } from '../../components/PhoneInput'
 import { DepartmentsMultiSelect } from '../../components/DepartmentsMultiSelect'
 import { DocumentUpload } from '../../components/DocumentUpload'
 import { useLang } from '../../contexts/LanguageContext'
-import type { User, Employee, Organization } from '../../types/database'
+import { CreditsSection } from '../../components/employee/CreditsSection'
+import { AllowanceSection } from '../../components/employee/AllowanceSection'
+import { AchievementsSection } from '../../components/employee/AchievementsSection'
+import type { User, Employee, Organization, Contract } from '../../types/database'
 
 const MAX_AVATAR_SIZE = 2 * 1024 * 1024 // 2 MB
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp']
@@ -20,6 +23,7 @@ export function EmployeeEdit({ user }: { user: User }) {
 
   const [employee, setEmployee] = useState<Employee | null>(null)
   const [org, setOrg] = useState<Organization | null>(null)
+  const [activeContract, setActiveContract] = useState<Contract | null>(null)
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
@@ -41,11 +45,20 @@ export function EmployeeEdit({ user }: { user: User }) {
     if (!employeeId) return
     const id = employeeId
     async function load() {
-      const [empResult, orgResult, allEmpsResult] = await Promise.all([
+      const [empResult, orgResult, allEmpsResult, contractResult] = await Promise.all([
         supabase.from('employees').select('*').eq('id', id).single(),
         supabase.from('organizations').select('*').eq('id', user.org_id).single(),
         supabase.from('employees').select('department, departments').eq('org_id', user.org_id),
+        supabase
+          .from('contracts')
+          .select('*')
+          .eq('employee_id', id)
+          .eq('status', 'active')
+          .order('updated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
       ])
+      setActiveContract(contractResult.data)
       if (empResult.data) {
         setEmployee(empResult.data)
         setName(empResult.data.name)
@@ -456,6 +469,25 @@ export function EmployeeEdit({ user }: { user: User }) {
             </div>
           </div>
         </section>
+
+        {employeeId && org && (
+          <>
+            <AllowanceSection
+              user={user}
+              employeeId={employeeId}
+              baselineIdr={activeContract?.allowance_idr ?? null}
+            />
+
+            <CreditsSection
+              user={user}
+              employeeId={employeeId}
+              divisor={org.credits_divisor}
+              allowanceIdr={activeContract?.allowance_idr ?? null}
+            />
+
+            <AchievementsSection user={user} employeeId={employeeId} />
+          </>
+        )}
 
       </form>
     </div>
