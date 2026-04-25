@@ -4,6 +4,7 @@ import { SOPEditor } from '../../components/Editor'
 import { Avatar } from '../../components/Avatar'
 import { DiffPanel } from '../../components/DiffPanel'
 import { useLang } from '../../contexts/LanguageContext'
+import { writeSnapshot } from '../../lib/snapshotApi'
 import type { User, PendingUpdate, Employee, Sop } from '../../types/database'
 
 type Change = { section?: string; summary?: string; content_markdown?: string; change_type?: string }
@@ -136,37 +137,40 @@ export function Pending({ user }: { user: User }) {
     if (!sop) { alert(t.noSopFound); return }
 
     const finalContent = getFinalContent(update)
-    const newVersion = sop.current_version + 1
+    const changeSummary = `Meeting update: ${update.source_meeting || 'external source'}`
 
-    await Promise.all([
-      supabase.from('sops').update({
-        content_markdown: finalContent,
-        current_version: newVersion,
-        updated_at: new Date().toISOString(),
-      }).eq('id', sop.id),
-      supabase.from('sop_versions').insert({
-        sop_id: sop.id,
-        version_number: newVersion,
-        content_markdown: finalContent,
-        change_summary: `Meeting update: ${update.source_meeting || 'external source'}`,
-        changed_by: 'api',
-      }),
-      supabase.from('pending_updates').update({
-        status: 'approved',
-        reviewed_by: user.id,
-        resolved_at: new Date().toISOString(),
-      }).eq('id', update.id),
-    ])
+    // Funnel through the snapshot helper so the version row gets the same
+    // resolved_markdown / translation_status columns as edits made through
+    // SOPEdit. Previously this path inserted only content_markdown, leaving
+    // the snapshot bilingually empty even when ID got translated later.
+    let result
+    try {
+      result = await writeSnapshot({
+        table: 'sops',
+        doc_id: sop.id,
+        new_content_en: finalContent,
+        change_summary: changeSummary,
+        changed_by: user.id,
+      })
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to apply update')
+      return
+    }
 
-    // Create feed event if SOP is linked to an employee
+    await supabase.from('pending_updates').update({
+      status: 'approved',
+      reviewed_by: user.id,
+      resolved_at: new Date().toISOString(),
+    }).eq('id', update.id)
+
     if (sop.employee_id) {
       await supabase.from('feed_events').insert({
         org_id: user.org_id,
         employee_id: sop.employee_id,
         event_type: 'sop_updated',
         title: sop.title,
-        description: `Version ${newVersion} — Meeting update: ${update.source_meeting || 'external source'}`,
-        metadata: { sop_id: sop.id, version: newVersion },
+        description: `Version ${result.version_number} — ${changeSummary}`,
+        metadata: { sop_id: sop.id, version: result.version_number },
       })
     }
 

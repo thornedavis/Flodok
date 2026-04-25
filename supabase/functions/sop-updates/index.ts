@@ -1,6 +1,6 @@
 import { corsHeaders, jsonResponse, getSupabaseAdmin, validateWorkerOrApiKey } from '../_shared/auth.ts'
 import { normalizePhone } from '../_shared/phone.ts'
-import { translateToIndonesian } from '../_shared/translate.ts'
+import { writeSnapshot } from '../_shared/snapshot.ts'
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -109,27 +109,17 @@ Deno.serve(async (req: Request) => {
           : newContent
       }
 
-      // Translate the full merged English content to Indonesian
-      const { text: mergedContentId } = await translateToIndonesian(mergedContent)
-
-      const newVersion = sop.current_version + 1
-
-      await Promise.all([
-        supabase.from('sops').update({
-          content_markdown: mergedContent,
-          content_markdown_id: mergedContentId || sop.content_markdown_id || null,
-          current_version: newVersion,
-          updated_at: new Date().toISOString(),
-        }).eq('id', sop.id),
-        supabase.from('sop_versions').insert({
-          sop_id: sop.id,
-          version_number: newVersion,
-          content_markdown: mergedContent,
-          content_markdown_id: mergedContentId || sop.content_markdown_id || null,
-          change_summary: `Auto-applied from ${source_meeting || 'API'}`,
-          changed_by: 'api',
-        }),
-      ])
+      // Funnel through the shared snapshot writer so this path produces the
+      // same version-row columns (resolved_markdown_*, translation_status)
+      // as user-driven saves. The helper handles EN→ID translation, the
+      // live-row update, and the snapshot insert.
+      await writeSnapshot(supabase, {
+        table: 'sops',
+        doc_id: sop.id,
+        new_content_en: mergedContent,
+        change_summary: `Auto-applied from ${source_meeting || 'API'}`,
+        changed_by: 'api',
+      })
     }
 
     // Record for audit trail

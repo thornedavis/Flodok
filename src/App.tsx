@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { createBrowserRouter, RouterProvider, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './hooks/useAuth'
 import { DashboardLayout, PublicLayout } from './components/Layout'
 import { Login } from './pages/auth/Login'
@@ -13,6 +13,8 @@ import { SOPEdit } from './pages/dashboard/SOPEdit'
 import { SOPHistory } from './pages/dashboard/SOPHistory'
 import { Contracts } from './pages/dashboard/Contracts'
 import { ContractEdit } from './pages/dashboard/ContractEdit'
+import { ContractHistory } from './pages/dashboard/ContractHistory'
+import { Performance } from './pages/dashboard/Performance'
 import { Pending } from './pages/dashboard/Pending'
 import { Settings } from './pages/dashboard/Settings'
 import { SOPView } from './pages/public/SOPView'
@@ -68,6 +70,8 @@ function AppRoutes() {
             <Route path="/dashboard/sops/:id/history" element={<SOPHistory />} />
             <Route path="/dashboard/contracts" element={<Contracts user={user} />} />
             <Route path="/dashboard/contracts/:id/edit" element={<ContractEdit user={user} />} />
+            <Route path="/dashboard/contracts/:id/history" element={<ContractHistory />} />
+            <Route path="/dashboard/performance" element={<Performance user={user} />} />
             <Route path="/dashboard/pending" element={<Pending user={user} />} />
             <Route path="/dashboard/settings" element={<Settings user={user} />} />
           </Route>
@@ -83,10 +87,12 @@ function AppRoutes() {
   )
 }
 
+// Data router is required for `useBlocker` (used by the unsaved-changes
+// warning). The single catch-all route lets the existing nested <Routes>
+// inside <AppRoutes> keep working without restructuring the auth-conditional
+// route tree.
+const router = createBrowserRouter([{ path: '*', element: <AppRoutes /> }])
+
 export default function App() {
-  return (
-    <BrowserRouter>
-      <AppRoutes />
-    </BrowserRouter>
-  )
+  return <RouterProvider router={router} />
 }

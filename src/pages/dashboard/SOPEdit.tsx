@@ -1,30 +1,19 @@
 import { useEffect, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { SOPEditor } from '../../components/Editor'
 import { useLang } from '../../contexts/LanguageContext'
 import { primaryDept, deptsJoined } from '../../lib/employee'
-import type { User, Sop, Tag, Employee } from '../../types/database'
-
-function fireTranslation(sopId: string, direction: 'en-to-id' | 'id-to-en') {
-  supabase.auth.getSession().then(({ data: { session } }) => {
-    if (!session) return
-    fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/translate-sop`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({ sop_id: sopId, direction }),
-    }).catch(() => {})
-  })
-}
+import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning'
+import { writeSnapshot } from '../../lib/snapshotApi'
+import type { User, Sop, Tag, Employee, Organization } from '../../types/database'
 
 export function SOPEdit({ user }: { user: User }) {
   const { t } = useLang()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [sop, setSOP] = useState<Sop | null>(null)
+  const [organization, setOrganization] = useState<Organization | null>(null)
   const [employee, setEmployee] = useState<Employee | null>(null)
   const [allEmployees, setAllEmployees] = useState<Employee[]>([])
   const [employeeId, setEmployeeId] = useState<string | null>(null)
@@ -50,14 +39,16 @@ export function SOPEdit({ user }: { user: User }) {
 
   useEffect(() => {
     async function load() {
-      const [sopResult, tagsResult, sopTagsResult, empsResult] = await Promise.all([
+      const [sopResult, tagsResult, sopTagsResult, empsResult, orgResult] = await Promise.all([
         supabase.from('sops').select('*').eq('id', id!).single(),
         supabase.from('tags').select('*').eq('org_id', user.org_id).order('name'),
         supabase.from('sop_tags').select('tag_id').eq('sop_id', id!),
         supabase.from('employees').select('*').eq('org_id', user.org_id).order('name'),
+        supabase.from('organizations').select('*').eq('id', user.org_id).single(),
       ])
 
       setAllEmployees(empsResult.data || [])
+      setOrganization(orgResult.data)
 
       if (sopResult.data) {
         setSOP(sopResult.data)
@@ -241,52 +232,32 @@ export function SOPEdit({ user }: { user: User }) {
     changeSummary !== ''
   ) : false
 
+  const bypassUnsavedWarning = useUnsavedChangesWarning(hasChanges, t.unsavedChangesPrompt)
+
   async function handleSave() {
     if (!sop) return
     setError('')
     setSaving(true)
 
-    const newVersion = sop.current_version + 1
     const contentChanged = enChanged || idChanged
 
+    // Write metadata (title, status, employee_id) first so the snapshot
+    // helper — which re-reads the row to render merge fields — sees the
+    // about-to-be-saved employee. The snapshot helper then owns content,
+    // content_markdown_id, and current_version.
     const { error: updateError } = await supabase
       .from('sops')
       .update({
         title,
         employee_id: employeeId,
-        content_markdown: content,
-        content_markdown_id: contentId,
         status,
-        current_version: contentChanged ? newVersion : sop.current_version,
         updated_at: new Date().toISOString(),
       })
       .eq('id', sop.id)
 
     if (updateError) { setError(updateError.message); setSaving(false); return }
 
-    if (contentChanged) {
-      await supabase.from('sop_versions').insert({
-        sop_id: sop.id,
-        version_number: newVersion,
-        content_markdown: content,
-        change_summary: changeSummary || null,
-        changed_by: user.id,
-      })
-
-      // Create feed event if SOP is linked to an employee
-      if (sop.employee_id) {
-        await supabase.from('feed_events').insert({
-          org_id: user.org_id,
-          employee_id: sop.employee_id,
-          event_type: 'sop_updated',
-          title: title,
-          description: `Version ${newVersion}${changeSummary ? ' — ' + changeSummary : ''}`,
-          metadata: { sop_id: sop.id, version: newVersion },
-        })
-      }
-    }
-
-    // Sync tags
+    // Sync tags (metadata — not part of the version snapshot).
     await supabase.from('sop_tags').delete().eq('sop_id', sop.id)
     if (selectedTagIds.size > 0) {
       await supabase.from('sop_tags').insert(
@@ -294,14 +265,63 @@ export function SOPEdit({ user }: { user: User }) {
       )
     }
 
-    // Fire-and-forget translation if content changed
-    if (enChanged) {
-      fireTranslation(sop.id, 'en-to-id')
-    } else if (idChanged) {
-      fireTranslation(sop.id, 'id-to-en')
+    if (!contentChanged) {
+      setSaving(false)
+      bypassUnsavedWarning()
+      navigate('/dashboard/sops')
+      return
+    }
+
+    // One round-trip: the snapshot helper translates the missing side,
+    // renders merge fields, updates the live row's content + bumps
+    // current_version, and inserts the version row. Pass only the side(s)
+    // the user actually changed so the helper knows which to translate.
+    setTranslating(true)
+    let result
+    try {
+      result = await writeSnapshot({
+        table: 'sops',
+        doc_id: sop.id,
+        new_content_en: enChanged ? content : undefined,
+        new_content_id: idChanged ? contentId : undefined,
+        change_summary: changeSummary || null,
+        changed_by: user.id,
+      })
+    } catch (err) {
+      setTranslating(false)
+      setSaving(false)
+      setError(err instanceof Error ? err.message : 'Snapshot failed')
+      return
+    }
+    setTranslating(false)
+
+    // Sync local state to whatever the helper finalized so the form matches
+    // the DB after a save (avoids "unsaved changes" reappearing).
+    setContent(result.content_markdown)
+    setContentId(result.content_markdown_id)
+    setSOP({ ...sop, content_markdown: result.content_markdown, content_markdown_id: result.content_markdown_id, current_version: result.version_number, title, employee_id: employeeId, status })
+
+    if (employeeId) {
+      await supabase.from('feed_events').insert({
+        org_id: user.org_id,
+        employee_id: employeeId,
+        event_type: 'sop_updated',
+        title: title,
+        description: `Version ${result.version_number}${changeSummary ? ' — ' + changeSummary : ''}`,
+        metadata: { sop_id: sop.id, version: result.version_number },
+      })
     }
 
     setSaving(false)
+
+    // If the auto-translate failed the snapshot still landed — but surface
+    // it inline rather than navigating away silently.
+    if (result.translation_status === 'failed') {
+      setError(t.snapshotTranslationFailed)
+      return
+    }
+
+    bypassUnsavedWarning()
     navigate('/dashboard/sops')
   }
 
@@ -358,10 +378,17 @@ export function SOPEdit({ user }: { user: User }) {
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
                   <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
                 </svg>
-                {t.saving}
+                {translating ? t.savingTranslating : t.saving}
               </>
-            ) : t.save}
+            ) : (enChanged !== idChanged) ? t.saveAndTranslate : t.save}
           </button>
+          <Link
+            to={`/dashboard/sops/${sop.id}/history`}
+            className="rounded-lg border px-4 py-2 text-sm"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
+          >
+            {t.historyLinkLabel}
+          </Link>
           <button
             onClick={() => navigate('/dashboard/sops')}
             className="rounded-lg border px-4 py-2 text-sm"
@@ -540,9 +567,37 @@ export function SOPEdit({ user }: { user: User }) {
           </div>
 
           {activeTab === 'en' ? (
-            <SOPEditor key="en" content={content} onChange={setContent} />
+            <SOPEditor
+              key="en"
+              content={content}
+              onChange={setContent}
+              mergeFields={{
+                scope: 'sop',
+                lang: 'en',
+                getContext: () => ({
+                  employee: allEmployees.find(e => e.id === employeeId) ?? null,
+                  organization,
+                  today: new Date(),
+                  lang: 'en',
+                }),
+              }}
+            />
           ) : (
-            <SOPEditor key="id" content={contentId || ''} onChange={setContentId} />
+            <SOPEditor
+              key="id"
+              content={contentId || ''}
+              onChange={setContentId}
+              mergeFields={{
+                scope: 'sop',
+                lang: 'id',
+                getContext: () => ({
+                  employee: allEmployees.find(e => e.id === employeeId) ?? null,
+                  organization,
+                  today: new Date(),
+                  lang: 'id',
+                }),
+              }}
+            />
           )}
         </div>
 

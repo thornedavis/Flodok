@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { SOPEditor } from '../../components/Editor'
 import { useLang } from '../../contexts/LanguageContext'
 import { primaryDept, deptsJoined } from '../../lib/employee'
+import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning'
 import { formatIdrDigits } from '../../lib/credits'
 import { InfoTooltip } from '../../components/InfoTooltip'
-import type { User, Contract, Tag, Employee } from '../../types/database'
+import { writeSnapshot } from '../../lib/snapshotApi'
+import type { User, Contract, Tag, Employee, Organization } from '../../types/database'
 
 const GENERATE_SYSTEM_PROMPT = `You are an expert employment contract writer for workplace documentation.
 
@@ -33,6 +35,7 @@ export function ContractEdit({ user }: { user: User }) {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [contract, setContract] = useState<Contract | null>(null)
+  const [organization, setOrganization] = useState<Organization | null>(null)
   const [employee, setEmployee] = useState<Employee | null>(null)
   const [allEmployees, setAllEmployees] = useState<Employee[]>([])
   const [employeeId, setEmployeeId] = useState<string | null>(null)
@@ -60,14 +63,16 @@ export function ContractEdit({ user }: { user: User }) {
 
   useEffect(() => {
     async function load() {
-      const [contractResult, tagsResult, contractTagsResult, empsResult] = await Promise.all([
+      const [contractResult, tagsResult, contractTagsResult, empsResult, orgResult] = await Promise.all([
         supabase.from('contracts').select('*').eq('id', id!).single(),
         supabase.from('tags').select('*').eq('org_id', user.org_id).order('name'),
         supabase.from('contract_tags').select('tag_id').eq('contract_id', id!),
         supabase.from('employees').select('*').eq('org_id', user.org_id).order('name'),
+        supabase.from('organizations').select('*').eq('id', user.org_id).single(),
       ])
 
       setAllEmployees(empsResult.data || [])
+      setOrganization(orgResult.data)
 
       if (contractResult.data) {
         setContract(contractResult.data)
@@ -238,13 +243,19 @@ export function ContractEdit({ user }: { user: User }) {
     changeSummary !== ''
   ) : false
 
+  const bypassUnsavedWarning = useUnsavedChangesWarning(hasChanges, t.unsavedChangesPrompt)
+
   async function handleSave() {
     if (!contract) return
     setError('')
     setSaving(true)
 
-    const newVersion = contract.current_version + 1
     const contentChanged = enChanged || idChanged
+    // Contracts snapshot their structured wage/hours/employee state alongside
+    // content. Without this, wage edits that leave the markdown untouched
+    // would silently overwrite the live row with no version trail.
+    const structuralChanged = wagesChanged || employeeChanged
+    const snapshotNeeded = contentChanged || structuralChanged
 
     const baseWageValid = parsedBaseWage === null || (Number.isFinite(parsedBaseWage) && parsedBaseWage >= 0)
     const allowanceValid = parsedAllowance === null || (Number.isFinite(parsedAllowance) && parsedAllowance >= 0)
@@ -254,45 +265,19 @@ export function ContractEdit({ user }: { user: User }) {
       return
     }
 
+    // Metadata-only fields the snapshot doesn't own (title, status). The
+    // snapshot helper handles employee_id + structural fields + content +
+    // version bump.
     const { error: updateError } = await supabase
       .from('contracts')
       .update({
         title,
-        employee_id: employeeId,
-        content_markdown: content,
-        content_markdown_id: contentId,
         status,
-        base_wage_idr: parsedBaseWage,
-        allowance_idr: parsedAllowance,
-        hours_per_day: parsedHoursPerDay,
-        days_per_week: parsedDaysPerWeek,
-        current_version: contentChanged ? newVersion : contract.current_version,
         updated_at: new Date().toISOString(),
       })
       .eq('id', contract.id)
 
     if (updateError) { setError(updateError.message); setSaving(false); return }
-
-    if (contentChanged) {
-      await supabase.from('contract_versions').insert({
-        contract_id: contract.id,
-        version_number: newVersion,
-        content_markdown: content,
-        change_summary: changeSummary || null,
-        changed_by: user.id,
-      })
-
-      if (contract.employee_id) {
-        await supabase.from('feed_events').insert({
-          org_id: user.org_id,
-          employee_id: contract.employee_id,
-          event_type: 'contract_updated',
-          title: title,
-          description: `Version ${newVersion}${changeSummary ? ' — ' + changeSummary : ''}`,
-          metadata: { contract_id: contract.id, version: newVersion },
-        })
-      }
-    }
 
     await supabase.from('contract_tags').delete().eq('contract_id', contract.id)
     if (selectedTagIds.size > 0) {
@@ -301,7 +286,72 @@ export function ContractEdit({ user }: { user: User }) {
       )
     }
 
+    if (!snapshotNeeded) {
+      setSaving(false)
+      bypassUnsavedWarning()
+      navigate('/dashboard/contracts')
+      return
+    }
+
+    setTranslating(true)
+    let result
+    try {
+      result = await writeSnapshot({
+        table: 'contracts',
+        doc_id: contract.id,
+        new_content_en: enChanged ? content : undefined,
+        new_content_id: idChanged ? contentId : undefined,
+        change_summary: changeSummary || null,
+        changed_by: user.id,
+        employee_id: employeeId,
+        base_wage_idr: parsedBaseWage,
+        allowance_idr: parsedAllowance,
+        hours_per_day: parsedHoursPerDay,
+        days_per_week: parsedDaysPerWeek,
+      })
+    } catch (err) {
+      setTranslating(false)
+      setSaving(false)
+      setError(err instanceof Error ? err.message : 'Snapshot failed')
+      return
+    }
+    setTranslating(false)
+
+    setContent(result.content_markdown)
+    setContentId(result.content_markdown_id)
+    setContract({
+      ...contract,
+      title,
+      status,
+      content_markdown: result.content_markdown,
+      content_markdown_id: result.content_markdown_id,
+      current_version: result.version_number,
+      employee_id: employeeId,
+      base_wage_idr: parsedBaseWage,
+      allowance_idr: parsedAllowance,
+      hours_per_day: parsedHoursPerDay,
+      days_per_week: parsedDaysPerWeek,
+    })
+
+    if (employeeId) {
+      await supabase.from('feed_events').insert({
+        org_id: user.org_id,
+        employee_id: employeeId,
+        event_type: 'contract_updated',
+        title: title,
+        description: `Version ${result.version_number}${changeSummary ? ' — ' + changeSummary : ''}`,
+        metadata: { contract_id: contract.id, version: result.version_number },
+      })
+    }
+
     setSaving(false)
+
+    if (result.translation_status === 'failed') {
+      setError(t.snapshotTranslationFailed)
+      return
+    }
+
+    bypassUnsavedWarning()
     navigate('/dashboard/contracts')
   }
 
@@ -343,9 +393,10 @@ export function ContractEdit({ user }: { user: User }) {
           <button onClick={handleSave} disabled={saving || !hasChanges}
             className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50" style={{ backgroundColor: 'var(--color-primary)' }}>
             {saving ? (
-              <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>{t.saving}</>
-            ) : t.save}
+              <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>{translating ? t.savingTranslating : t.saving}</>
+            ) : (enChanged !== idChanged) ? t.saveAndTranslate : t.save}
           </button>
+          <Link to={`/dashboard/contracts/${contract.id}/history`} className="rounded-lg border px-4 py-2 text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>{t.historyLinkLabel}</Link>
           <button onClick={() => navigate('/dashboard/contracts')} className="rounded-lg border px-4 py-2 text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>{t.cancel}</button>
         </div>
       </div>
@@ -418,9 +469,24 @@ export function ContractEdit({ user }: { user: User }) {
         <div className="py-4">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
-              <label className="mb-1 flex items-center text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+              <label className="mb-1 flex items-center gap-1 text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
                 {t.baseWageLabel}
                 <InfoTooltip text={t.baseWageHelp} />
+                <a
+                  href="https://satudata.kemnaker.go.id/data/kumpulan-data/3005"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={t.baseWageReferenceLink}
+                  aria-label={t.baseWageReferenceLink}
+                  className="ml-1 inline-flex items-center transition-opacity hover:opacity-70"
+                  style={{ color: 'var(--color-text-tertiary)' }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                    <polyline points="15 3 21 3 21 9" />
+                    <line x1="10" y1="14" x2="21" y2="3" />
+                  </svg>
+                </a>
               </label>
               <div className="relative">
                 <input
@@ -533,9 +599,53 @@ export function ContractEdit({ user }: { user: User }) {
           </div>
 
           {activeTab === 'en' ? (
-            <SOPEditor key="en" content={content} onChange={setContent} />
+            <SOPEditor
+              key="en"
+              content={content}
+              onChange={setContent}
+              mergeFields={{
+                scope: 'contract',
+                lang: 'en',
+                getContext: () => ({
+                  employee: allEmployees.find(e => e.id === employeeId) ?? null,
+                  organization,
+                  contract: contract ? {
+                    ...contract,
+                    base_wage_idr: parsedBaseWage,
+                    allowance_idr: parsedAllowance,
+                    hours_per_day: parsedHoursPerDay,
+                    days_per_week: parsedDaysPerWeek,
+                    employee_id: employeeId,
+                  } : null,
+                  today: new Date(),
+                  lang: 'en',
+                }),
+              }}
+            />
           ) : (
-            <SOPEditor key="id" content={contentId || ''} onChange={setContentId} />
+            <SOPEditor
+              key="id"
+              content={contentId || ''}
+              onChange={setContentId}
+              mergeFields={{
+                scope: 'contract',
+                lang: 'id',
+                getContext: () => ({
+                  employee: allEmployees.find(e => e.id === employeeId) ?? null,
+                  organization,
+                  contract: contract ? {
+                    ...contract,
+                    base_wage_idr: parsedBaseWage,
+                    allowance_idr: parsedAllowance,
+                    hours_per_day: parsedHoursPerDay,
+                    days_per_week: parsedDaysPerWeek,
+                    employee_id: employeeId,
+                  } : null,
+                  today: new Date(),
+                  lang: 'id',
+                }),
+              }}
+            />
           )}
         </div>
 

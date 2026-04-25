@@ -75,10 +75,14 @@ Deno.serve(async (req: Request) => {
       .update({ ...updateField, updated_at: new Date().toISOString() })
       .eq('id', doc.id)
 
+    // Return the translated text so callers (e.g. Save flow) can write a
+    // version snapshot with both languages in a single transaction without
+    // a follow-up round-trip to read back the row we just wrote.
     return jsonResponse({
       status: 'translated',
       sop_id: doc.id,
       direction,
+      translated,
     })
   } catch (err) {
     console.error('translate-sop error:', err)
