@@ -8,9 +8,10 @@ import { PhoneInput } from '../../components/PhoneInput'
 import { DepartmentsMultiSelect } from '../../components/DepartmentsMultiSelect'
 import { DocumentUpload } from '../../components/DocumentUpload'
 import { useLang } from '../../contexts/LanguageContext'
-import { CreditsSection } from '../../components/employee/CreditsSection'
-import { AllowanceSection } from '../../components/employee/AllowanceSection'
+import { useBreadcrumbTrailing } from '../../contexts/BreadcrumbContext'
 import { AchievementsSection } from '../../components/employee/AchievementsSection'
+import { CompensationOverview } from '../../components/employee/CompensationOverview'
+import { EmployeeActivityLog } from '../../components/employee/EmployeeActivityLog'
 import type { User, Employee, Organization, Contract } from '../../types/database'
 
 const MAX_AVATAR_SIZE = 2 * 1024 * 1024 // 2 MB
@@ -21,9 +22,13 @@ export function EmployeeEdit({ user }: { user: User }) {
   const { id: employeeId } = useParams<{ id: string }>()
   const navigate = useNavigate()
 
+  type Tab = 'profile' | 'documents' | 'compensation' | 'achievements'
+  const [tab, setTab] = useState<Tab>('profile')
+
   const [employee, setEmployee] = useState<Employee | null>(null)
   const [org, setOrg] = useState<Organization | null>(null)
   const [activeContract, setActiveContract] = useState<Contract | null>(null)
+  const [allowanceRefreshKey, setAllowanceRefreshKey] = useState(0)
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
@@ -40,6 +45,8 @@ export function EmployeeEdit({ user }: { user: User }) {
   const [saving, setSaving] = useState(false)
   const [copied, setCopied] = useState(false)
   const [orgDepartments, setOrgDepartments] = useState<string[]>([])
+
+  useBreadcrumbTrailing(employee?.name ?? null)
 
   useEffect(() => {
     if (!employeeId) return
@@ -293,12 +300,37 @@ export function EmployeeEdit({ user }: { user: User }) {
     notes !== (employee.notes || '') ||
     !deptsEqual
 
+  const tabs: { key: Tab; label: string }[] = [
+    { key: 'profile', label: t.tabProfile },
+    { key: 'documents', label: t.tabDocuments },
+    { key: 'compensation', label: t.tabCompensation },
+    { key: 'achievements', label: t.tabAchievements },
+  ]
+  const isFormTab = tab === 'profile' || tab === 'documents'
+
   return (
     <div>
-      <div className="mb-8 flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>
-          {t.editEmployeeTitle}
-        </h1>
+      <div className="mb-6 flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <h1 className="truncate text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>
+            {employee.name}
+          </h1>
+          <a
+            href={portalUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={t.openPortalAria}
+            title={t.openPortalAria}
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-[var(--color-bg-tertiary)]"
+            style={{ color: 'var(--color-text-tertiary)' }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15 3h6v6" />
+              <path d="M10 14 21 3" />
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+            </svg>
+          </a>
+        </div>
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -324,172 +356,215 @@ export function EmployeeEdit({ user }: { user: User }) {
           >
             {t.cancel}
           </button>
-          <button
-            type="submit"
-            form="employee-edit-form"
-            disabled={saving || !hasChanges}
-            className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-            style={{ backgroundColor: 'var(--color-primary)' }}
-          >
-            {saving ? t.saving : t.save}
-          </button>
+          {isFormTab && (
+            <button
+              type="submit"
+              form="employee-edit-form"
+              disabled={saving || !hasChanges}
+              className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+              style={{ backgroundColor: 'var(--color-primary)' }}
+            >
+              {saving ? t.saving : t.save}
+            </button>
+          )}
         </div>
       </div>
 
-      <form id="employee-edit-form" onSubmit={handleSubmit} className="space-y-10">
-        {error && (
-          <div className="rounded-md px-3 py-2 text-sm" style={{ backgroundColor: 'var(--color-diff-remove)', color: 'var(--color-danger)' }}>
-            {error}
-          </div>
-        )}
+      {/* Tab strip */}
+      <div className="mb-8 flex gap-1 overflow-x-auto border-b" style={{ borderColor: 'var(--color-border)' }}>
+        {tabs.map(({ key, label }) => {
+          const active = tab === key
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setTab(key)}
+              className="relative -mb-px whitespace-nowrap px-3 py-2 text-sm font-medium transition-colors"
+              style={{
+                color: active ? 'var(--color-text)' : 'var(--color-text-tertiary)',
+                borderBottom: active ? '2px solid var(--color-primary)' : '2px solid transparent',
+              }}
+            >
+              {label}
+            </button>
+          )
+        })}
+      </div>
 
-        {/* Profile section */}
-        <section>
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider" style={sectionHeadingStyle}>{t.sectionProfile}</h2>
+      {isFormTab && (
+        <form id="employee-edit-form" onSubmit={handleSubmit} className="space-y-10">
+          {error && (
+            <div className="rounded-md px-3 py-2 text-sm" style={{ backgroundColor: 'var(--color-diff-remove)', color: 'var(--color-danger)' }}>
+              {error}
+            </div>
+          )}
 
-          <div>
-            <label className="mb-2 block text-sm font-medium" style={fieldLabelStyle}>{t.photoLabel}</label>
-            <div className="flex items-center gap-4">
-              <div
-                className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full"
-                style={{ background: photoUrl ? 'var(--color-bg-tertiary)' : getAvatarGradient(employeeId) }}
-              >
-                {photoUrl && (
-                  <img src={photoUrl} alt={name} className="h-full w-full object-cover" />
-                )}
+          {tab === 'profile' && (
+            <>
+              <section>
+                <div>
+                  <label className="mb-2 block text-sm font-medium" style={fieldLabelStyle}>{t.photoLabel}</label>
+                  <div className="flex items-center gap-4">
+                    <div
+                      className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full"
+                      style={{ background: photoUrl ? 'var(--color-bg-tertiary)' : getAvatarGradient(employeeId) }}
+                    >
+                      {photoUrl && (
+                        <img src={photoUrl} alt={name} className="h-full w-full object-cover" />
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label
+                        className="cursor-pointer rounded-lg border px-3 py-1.5 text-sm transition-colors"
+                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
+                      >
+                        {uploading ? t.uploading : t.upload}
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          onChange={handleAvatarChange}
+                          disabled={uploading}
+                          className="hidden"
+                        />
+                      </label>
+                      {photoUrl && (
+                        <button
+                          type="button"
+                          onClick={handleRemoveAvatar}
+                          disabled={uploading}
+                          className="text-xs"
+                          style={{ color: 'var(--color-danger)' }}
+                        >
+                          {t.remove}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium" style={fieldLabelStyle}>{t.nameLabel}</label>
+                    <input type="text" value={name} onChange={e => setName(e.target.value)} required className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium" style={fieldLabelStyle}>{t.dateOfBirthLabel}</label>
+                    <input type="date" value={dateOfBirth} onChange={e => setDateOfBirth(e.target.value)} className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium" style={fieldLabelStyle}>{t.phoneWhatsAppLabel}</label>
+                    <PhoneInput value={phone} onChange={setPhone} defaultCountryCode={org?.default_country_code} />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium" style={fieldLabelStyle}>{t.emailOptionalLabel}</label>
+                    <input type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium" style={fieldLabelStyle}>{t.departmentsLabel}</label>
+                    <DepartmentsMultiSelect value={empDepartments} onChange={setEmpDepartments} availableDepartments={orgDepartments} />
+                  </div>
+                </div>
+              </section>
+
+              <section>
+                <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider" style={sectionHeadingStyle}>{t.sectionInternal}</h2>
+                <div className="space-y-4">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium" style={fieldLabelStyle}>{t.notesInternalLabel}</label>
+                    <textarea
+                      value={notes}
+                      onChange={e => setNotes(e.target.value)}
+                      placeholder={t.notesPlaceholder}
+                      rows={3}
+                      className="w-full resize-none rounded-lg border px-3 py-2 text-sm"
+                      style={inputStyle}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-sm font-medium" style={fieldLabelStyle}>{t.employeePortalLink}</label>
+                    <p className="mb-1.5 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.shareLinkHint}</p>
+                    <div className="flex items-center gap-2">
+                      <input type="text" readOnly value={portalUrl} className="w-full rounded-lg border px-3 py-2 text-sm" style={{ ...inputStyle, backgroundColor: 'var(--color-bg-tertiary)' }} />
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(portalUrl)}
+                        className="shrink-0 rounded-lg border px-3 py-2 text-sm"
+                        style={{ borderColor: 'var(--color-border)', color: copied ? 'var(--color-success)' : 'var(--color-text-secondary)' }}
+                      >
+                        {copied ? t.copied : t.copy}
+                      </button>
+                      <a
+                        href={portalUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={t.openPortalAria}
+                        title={t.openPortalAria}
+                        className="inline-flex h-[38px] shrink-0 items-center justify-center rounded-lg border px-3 text-sm"
+                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M15 3h6v6" />
+                          <path d="M10 14 21 3" />
+                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                        </svg>
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </>
+          )}
+
+          {tab === 'documents' && (
+            <section>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-sm font-medium" style={fieldLabelStyle}>{t.ktpNikOptionalLabel}</label>
+                  <input type="text" value={ktpNik} onChange={e => setKtpNik(e.target.value)} placeholder="e.g. 5171234567890001" className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium" style={fieldLabelStyle}>{t.addressOptionalLabel}</label>
+                  <textarea value={address} onChange={e => setAddress(e.target.value)} placeholder={t.addressPlaceholder} rows={2} className="w-full resize-none rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium" style={fieldLabelStyle}>{t.ktpPhotoLabel}</label>
+                  <DocumentUpload employeeId={employeeId} kind="ktp" photoUrl={ktpPhotoUrl} onChange={setKtpPhotoUrl} label={name} />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium" style={fieldLabelStyle}>{t.kkPhotoLabel}</label>
+                  <DocumentUpload employeeId={employeeId} kind="kk" photoUrl={kkPhotoUrl} onChange={setKkPhotoUrl} label={name} />
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <label
-                  className="cursor-pointer rounded-lg border px-3 py-1.5 text-sm transition-colors"
-                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
-                >
-                  {uploading ? t.uploading : t.upload}
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    onChange={handleAvatarChange}
-                    disabled={uploading}
-                    className="hidden"
-                  />
-                </label>
-                {photoUrl && (
-                  <button
-                    type="button"
-                    onClick={handleRemoveAvatar}
-                    disabled={uploading}
-                    className="text-xs"
-                    style={{ color: 'var(--color-danger)' }}
-                  >
-                    {t.remove}
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
+            </section>
+          )}
+        </form>
+      )}
 
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-sm font-medium" style={fieldLabelStyle}>{t.nameLabel}</label>
-              <input type="text" value={name} onChange={e => setName(e.target.value)} required className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium" style={fieldLabelStyle}>{t.dateOfBirthLabel}</label>
-              <input type="date" value={dateOfBirth} onChange={e => setDateOfBirth(e.target.value)} className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium" style={fieldLabelStyle}>{t.phoneWhatsAppLabel}</label>
-              <PhoneInput value={phone} onChange={setPhone} defaultCountryCode={org?.default_country_code} />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium" style={fieldLabelStyle}>{t.emailOptionalLabel}</label>
-              <input type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium" style={fieldLabelStyle}>{t.departmentsLabel}</label>
-              <DepartmentsMultiSelect value={empDepartments} onChange={setEmpDepartments} availableDepartments={orgDepartments} />
-            </div>
-          </div>
-        </section>
+      {tab === 'compensation' && employeeId && org && (
+        <div className="space-y-10">
+          <CompensationOverview
+            user={user}
+            employeeId={employeeId}
+            contract={activeContract}
+            photoUrl={photoUrl}
+            divisor={org.credits_divisor}
+            refreshKey={allowanceRefreshKey}
+            onChange={() => setAllowanceRefreshKey(k => k + 1)}
+          />
 
-        {/* Documents section */}
-        <section>
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider" style={sectionHeadingStyle}>{t.sectionDocuments}</h2>
+          <EmployeeActivityLog employeeId={employeeId} refreshKey={allowanceRefreshKey} />
+        </div>
+      )}
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-sm font-medium" style={fieldLabelStyle}>{t.ktpNikOptionalLabel}</label>
-              <input type="text" value={ktpNik} onChange={e => setKtpNik(e.target.value)} placeholder="e.g. 5171234567890001" className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium" style={fieldLabelStyle}>{t.addressOptionalLabel}</label>
-              <textarea value={address} onChange={e => setAddress(e.target.value)} placeholder={t.addressPlaceholder} rows={2} className="w-full resize-none rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium" style={fieldLabelStyle}>{t.ktpPhotoLabel}</label>
-              <DocumentUpload employeeId={employeeId} kind="ktp" photoUrl={ktpPhotoUrl} onChange={setKtpPhotoUrl} label={name} />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium" style={fieldLabelStyle}>{t.kkPhotoLabel}</label>
-              <DocumentUpload employeeId={employeeId} kind="kk" photoUrl={kkPhotoUrl} onChange={setKkPhotoUrl} label={name} />
-            </div>
-          </div>
-        </section>
-
-        {/* Internal / sharing section */}
-        <section>
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider" style={sectionHeadingStyle}>{t.sectionInternal}</h2>
-
-          <div className="space-y-4">
-            <div>
-              <label className="mb-1 block text-sm font-medium" style={fieldLabelStyle}>{t.notesInternalLabel}</label>
-              <textarea
-                value={notes}
-                onChange={e => setNotes(e.target.value)}
-                placeholder={t.notesPlaceholder}
-                rows={3}
-                className="w-full resize-none rounded-lg border px-3 py-2 text-sm"
-                style={inputStyle}
-              />
-            </div>
-
-            <div>
-              <label className="mb-1 block text-sm font-medium" style={fieldLabelStyle}>{t.employeePortalLink}</label>
-              <p className="mb-1.5 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.shareLinkHint}</p>
-              <div className="flex items-center gap-2">
-                <input type="text" readOnly value={portalUrl} className="w-full rounded-lg border px-3 py-2 text-sm" style={{ ...inputStyle, backgroundColor: 'var(--color-bg-tertiary)' }} />
-                <button
-                  type="button"
-                  onClick={() => copyToClipboard(portalUrl)}
-                  className="shrink-0 rounded-lg border px-3 py-2 text-sm"
-                  style={{ borderColor: 'var(--color-border)', color: copied ? 'var(--color-success)' : 'var(--color-text-secondary)' }}
-                >
-                  {copied ? t.copied : t.copy}
-                </button>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {employeeId && org && (
-          <>
-            <AllowanceSection
-              user={user}
-              employeeId={employeeId}
-              baselineIdr={activeContract?.allowance_idr ?? null}
-            />
-
-            <CreditsSection
-              user={user}
-              employeeId={employeeId}
-              divisor={org.credits_divisor}
-              allowanceIdr={activeContract?.allowance_idr ?? null}
-            />
-
-            <AchievementsSection user={user} employeeId={employeeId} />
-          </>
-        )}
-
-      </form>
+      {tab === 'achievements' && employeeId && (
+        <AchievementsSection
+          user={user}
+          employeeId={employeeId}
+          employee={employee}
+          activeContract={activeContract}
+        />
+      )}
     </div>
   )
 }

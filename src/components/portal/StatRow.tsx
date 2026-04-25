@@ -7,6 +7,7 @@ export function StatRow({
   info,
   value,
   accent,
+  actions,
   children,
   defaultOpen = false,
 }: {
@@ -15,6 +16,7 @@ export function StatRow({
   info?: string
   value: ReactNode
   accent?: string
+  actions?: ReactNode
   children?: ReactNode
   defaultOpen?: boolean
 }) {
@@ -39,8 +41,8 @@ export function StatRow({
         className={`flex w-full items-center gap-3 px-4 py-2.5 ${expandable ? 'cursor-pointer' : ''}`}
       >
         <div
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
-          style={{ backgroundColor: 'var(--color-bg-secondary, var(--color-bg))', color: accent || 'var(--color-text-secondary)' }}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg [&_svg]:h-[20px] [&_svg]:w-[20px]"
+          style={{ backgroundColor: accent || 'var(--color-bg-tertiary)', color: 'rgba(255, 255, 255, 0.9)' }}
         >
           {icon}
         </div>
@@ -55,6 +57,11 @@ export function StatRow({
           </p>
           <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{value}</p>
         </div>
+        {actions && (
+          <div className="flex shrink-0 items-center gap-1.5" onClick={e => e.stopPropagation()}>
+            {actions}
+          </div>
+        )}
         {expandable && (
           <svg
             width="16"

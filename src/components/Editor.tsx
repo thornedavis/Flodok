@@ -8,13 +8,25 @@ import { Table, TableRow, TableCell, TableHeader } from '@tiptap/extension-table
 import { Markdown } from '@tiptap/markdown'
 import { useEffect, useCallback, useRef, useState } from 'react'
 import type { Editor } from '@tiptap/core'
+import { MergeFieldExtension, MERGE_FIELD_STYLES } from './editor/MergeField'
+import { MergeFieldButton } from './editor/MergeFieldButton'
+import type { MergeContext, Lang } from '../lib/mergeFields'
+
+export type MergeFieldsConfig = {
+  scope: 'sop' | 'contract'
+  lang?: Lang
+  // Called by every pill on render to resolve its display value, so the
+  // pills stay in sync with whatever form state the host owns.
+  getContext: () => MergeContext
+}
 
 interface EditorProps {
   content: string
   onChange: (markdown: string) => void
+  mergeFields?: MergeFieldsConfig
 }
 
-export function SOPEditor({ content, onChange }: EditorProps) {
+export function SOPEditor({ content, onChange, mergeFields }: EditorProps) {
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -32,6 +44,7 @@ export function SOPEditor({ content, onChange }: EditorProps) {
       TableRow,
       TableCell,
       TableHeader,
+      ...(mergeFields ? [MergeFieldExtension.configure({ getContext: mergeFields.getContext })] : []),
       Markdown,
     ],
     content,
@@ -40,7 +53,7 @@ export function SOPEditor({ content, onChange }: EditorProps) {
       const md = editor.getMarkdown()
       onChange(md)
     },
-  })
+  }, [mergeFields?.scope])
 
   useEffect(() => {
     if (!editor || !content) return
@@ -96,7 +109,7 @@ export function SOPEditor({ content, onChange }: EditorProps) {
   return (
     <div className="sop-editor">
       {/* Fixed toolbar */}
-      <Toolbar editor={editor} onSetLink={setLink} />
+      <Toolbar editor={editor} onSetLink={setLink} mergeFields={mergeFields} />
 
       {/* Floating toolbar on text selection */}
       <BubbleMenu editor={editor}>
@@ -297,12 +310,13 @@ export function SOPEditor({ content, onChange }: EditorProps) {
         .sop-editor .tiptap strong {
           font-weight: 600;
         }
+        ${MERGE_FIELD_STYLES}
       `}</style>
     </div>
   )
 }
 
-export function SOPViewer({ content }: { content: string }) {
+export function SOPViewer({ content, mergeFields }: { content: string; mergeFields?: MergeFieldsConfig }) {
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -317,12 +331,13 @@ export function SOPViewer({ content }: { content: string }) {
       TableRow,
       TableCell,
       TableHeader,
+      ...(mergeFields ? [MergeFieldExtension.configure({ getContext: mergeFields.getContext })] : []),
       Markdown,
     ],
     content,
     contentType: 'markdown',
     editable: false,
-  })
+  }, [mergeFields?.scope])
 
   useEffect(() => {
     if (editor) {
@@ -435,6 +450,7 @@ export function SOPViewer({ content }: { content: string }) {
         .sop-viewer .tiptap strong {
           font-weight: 600;
         }
+        ${MERGE_FIELD_STYLES}
       `}</style>
     </div>
   )
@@ -442,7 +458,7 @@ export function SOPViewer({ content }: { content: string }) {
 
 /* ---- Fixed Toolbar ---- */
 
-function Toolbar({ editor, onSetLink }: { editor: Editor; onSetLink: () => void }) {
+function Toolbar({ editor, onSetLink, mergeFields }: { editor: Editor; onSetLink: () => void; mergeFields?: MergeFieldsConfig }) {
   return (
     <div
       className="flex flex-wrap items-center gap-0.5 rounded-t-xl border px-2 py-1.5"
@@ -555,6 +571,13 @@ function Toolbar({ editor, onSetLink }: { editor: Editor; onSetLink: () => void 
       >
         <LinkIcon />
       </ToolbarButton>
+
+      {mergeFields && (
+        <>
+          <Divider />
+          <MergeFieldButton editor={editor} scope={mergeFields.scope} lang={mergeFields.lang} />
+        </>
+      )}
     </div>
   )
 }

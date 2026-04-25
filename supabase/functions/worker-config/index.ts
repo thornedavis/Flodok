@@ -92,6 +92,15 @@ async function handleResolve(supabase: SupabaseClient, body: ResolveRequest) {
   })
 }
 
+async function handleAutoClosePeriods(supabase: SupabaseClient) {
+  // Delegates to the SQL RPC, which gates itself on the `service_role` grant.
+  // The RPC reads org.pay_day_of_month + today's Asia/Jakarta date to freeze
+  // the correct period for any org whose pay day matches today.
+  const { data, error } = await supabase.rpc('auto_close_periods')
+  if (error) return jsonResponse({ error: error.message }, 500)
+  return jsonResponse(data)
+}
+
 async function handleListActiveOrgs(supabase: SupabaseClient) {
   // Distinct list of orgs that have an active fireflies integration (polling
   // target). Cron only needs orgs with fireflies — Asana is triggered inline
@@ -270,6 +279,8 @@ Deno.serve(async (req: Request) => {
         return await handleResolve(supabase, body as ResolveRequest)
       case '/list-active-orgs':
         return await handleListActiveOrgs(supabase)
+      case '/auto-close-periods':
+        return await handleAutoClosePeriods(supabase)
       case '/dedup-claim':
         return await handleDedupClaim(supabase, body as DedupClaimRequest)
       case '/log-processing':

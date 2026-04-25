@@ -6,6 +6,11 @@ type Segment = {
   valueIdr: number
   color: string
   icon: ReactNode
+  // When set, the slot reserves space proportional to baselineIdr instead of
+  // valueIdr. The "missing" portion (baselineIdr − valueIdr) renders as a
+  // low-opacity ghost arc at the trailing edge so the loss is visible.
+  // Only meaningful when baselineIdr >= valueIdr >= 0.
+  baselineIdr?: number
 }
 
 type RingProps = {
@@ -28,7 +33,6 @@ const EMPTY_SLOT_DEG = 10
 // gap needs to be larger than that by a few degrees to give a clean visible
 // break between adjacent colored arcs.
 const GAP_DEG = 18
-const ICON_INSET_DEG = 8
 const START_ANGLE = 0      // top of the ring; segments flow clockwise
 
 function polarToCartesian(cx: number, cy: number, r: number, degFromTop: number) {
@@ -58,8 +62,15 @@ function ArcIcon({ angleDeg, color, children }: { angleDeg: number; color: strin
 }
 
 export function CompensationRing({ segments, photoUrl, employeeId, size = 300 }: RingProps) {
-  const presentTotal = segments.reduce((s, seg) => s + Math.max(0, seg.valueIdr), 0)
-  const emptyCount = segments.filter(s => s.valueIdr <= 0).length
+  // Sizing uses the slot footprint — valueIdr for normal segments, baselineIdr
+  // for segments with a ghost reservation. This keeps the allowance arc at its
+  // full width even as its foreground fill shrinks.
+  function slotIdr(seg: Segment) {
+    return Math.max(seg.valueIdr, seg.baselineIdr ?? 0, 0)
+  }
+
+  const presentTotal = segments.reduce((s, seg) => s + slotIdr(seg), 0)
+  const emptyCount = segments.filter(s => slotIdr(s) <= 0).length
 
   // Empty slots take a fixed small width (just enough for their icon). The
   // rest of the circle, minus gaps, is split proportionally between the
@@ -69,15 +80,26 @@ export function CompensationRing({ segments, photoUrl, employeeId, size = 300 }:
   const totalEmptyDeg = emptyCount * EMPTY_SLOT_DEG
   const arcBudget = Math.max(0, 360 - totalGapDeg - totalEmptyDeg)
 
-  const slots: Array<{ seg: Segment; isArc: boolean; start: number; end: number }> = []
+  type Slot = {
+    seg: Segment
+    isArc: boolean
+    start: number
+    end: number
+    // Fill boundary inside [start, end] for foreground arc. When less than
+    // `end`, the gap between `fillEnd` and `end` renders as a ghost (only
+    // meaningful when baselineIdr is set).
+    fillEnd: number
+  }
+  const slots: Slot[] = []
   let cursor = START_ANGLE
   if (presentTotal > 0) {
     for (const seg of segments) {
-      const isArc = seg.valueIdr > 0
-      const width = isArc
-        ? (seg.valueIdr / presentTotal) * arcBudget
-        : EMPTY_SLOT_DEG
-      slots.push({ seg, isArc, start: cursor, end: cursor + width })
+      const slot = slotIdr(seg)
+      const isArc = slot > 0
+      const width = isArc ? (slot / presentTotal) * arcBudget : EMPTY_SLOT_DEG
+      const fillFraction = slot > 0 ? Math.max(0, Math.min(1, seg.valueIdr / slot)) : 0
+      const fillEnd = cursor + width * fillFraction
+      slots.push({ seg, isArc, start: cursor, end: cursor + width, fillEnd })
       cursor += width + GAP_DEG
     }
   } else {
@@ -85,7 +107,7 @@ export function CompensationRing({ segments, photoUrl, employeeId, size = 300 }:
     const slotWidth = 360 / segments.length
     segments.forEach((seg, i) => {
       const start = START_ANGLE + i * slotWidth
-      slots.push({ seg, isArc: false, start, end: start + slotWidth - GAP_DEG })
+      slots.push({ seg, isArc: false, start, end: start + slotWidth - GAP_DEG, fillEnd: start })
     })
   }
 
@@ -116,27 +138,45 @@ export function CompensationRing({ segments, photoUrl, employeeId, size = 300 }:
           opacity={0.5}
         />
 
-        {slots.map(slot => (
-          <g key={slot.seg.key}>
-            {slot.isArc && (
-              <path
-                d={arcPath(CENTER, CENTER, RADIUS, slot.start, slot.end)}
-                stroke={slot.seg.color}
-                strokeWidth={STROKE}
-                strokeLinecap="round"
-                fill="none"
-              />
-            )}
-            <ArcIcon
-              angleDeg={slot.isArc
-                ? slot.start + ICON_INSET_DEG
-                : (slot.start + slot.end) / 2}
-              color={slot.isArc ? 'var(--color-bg)' : 'var(--color-text-tertiary)'}
-            >
-              {slot.seg.icon}
-            </ArcIcon>
-          </g>
-        ))}
+        {slots.map(slot => {
+          const hasGhost = slot.isArc && slot.seg.baselineIdr !== undefined && slot.fillEnd < slot.end - 0.1
+          const hasFill = slot.isArc && slot.fillEnd > slot.start + 0.1
+          // Icon sits over the foreground fill when there is one, otherwise
+          // centered over the ghost so it's still visible on an empty slot.
+          const iconAngle = hasFill
+            ? (slot.start + slot.fillEnd) / 2
+            : (slot.start + slot.end) / 2
+          const iconOnFill = hasFill
+          return (
+            <g key={slot.seg.key}>
+              {hasGhost && (
+                <path
+                  d={arcPath(CENTER, CENTER, RADIUS, slot.start, slot.end)}
+                  stroke={slot.seg.color}
+                  strokeWidth={STROKE}
+                  strokeLinecap="round"
+                  fill="none"
+                  opacity={0.2}
+                />
+              )}
+              {hasFill && (
+                <path
+                  d={arcPath(CENTER, CENTER, RADIUS, slot.start, slot.fillEnd)}
+                  stroke={slot.seg.color}
+                  strokeWidth={STROKE}
+                  strokeLinecap="round"
+                  fill="none"
+                />
+              )}
+              <ArcIcon
+                angleDeg={iconAngle}
+                color={iconOnFill ? 'var(--color-bg)' : 'var(--color-text-tertiary)'}
+              >
+                {slot.seg.icon}
+              </ArcIcon>
+            </g>
+          )
+        })}
       </svg>
 
       <div
@@ -175,6 +215,17 @@ export function CoinPath() {
     <>
       <circle cx="12" cy="12" r="9" />
       <path d="M12 6v12M9 9h6M9 15h6" />
+    </>
+  )
+}
+export function GiftPath() {
+  return (
+    <>
+      <polyline points="20 12 20 22 4 22 4 12" />
+      <rect x="2" y="7" width="20" height="5" />
+      <line x1="12" y1="22" x2="12" y2="7" />
+      <path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z" />
+      <path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z" />
     </>
   )
 }

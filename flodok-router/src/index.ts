@@ -2,7 +2,7 @@ import type { Env, OrgConfig } from "./types";
 import { verifyWebhookSignature, parseWebhookPayload } from "./webhook";
 import { processWebhook } from "./processor";
 import { fetchRecentTranscripts } from "./fireflies";
-import { loadOrgById, listActiveOrgs, claimMeeting } from "./config";
+import { loadOrgById, listActiveOrgs, claimMeeting, autoClosePeriods } from "./config";
 
 // Required secrets. Checked on every fetch so misconfiguration is loud (500 at
 // the request level) rather than silent (cron skips, webhooks fail obscurely).
@@ -114,7 +114,19 @@ export default {
     return new Response("Not Found", { status: 404 });
   },
 
-  async scheduled(_controller: ScheduledController, env: Env, _ctx: ExecutionContext): Promise<void> {
+  async scheduled(controller: ScheduledController, env: Env, _ctx: ExecutionContext): Promise<void> {
+    // Multiple cron triggers share this handler. Dispatch on the UTC cron
+    // expression to keep each job's concerns separate.
+    if (controller.cron === "0 18 * * *") {
+      try {
+        const result = await autoClosePeriods(env);
+        console.log("Cron: auto-close →", result);
+      } catch (err) {
+        console.error("Cron: auto-close failed:", err);
+      }
+      return;
+    }
+
     const orgs = await listActiveOrgs(env);
     console.log(`Cron: polling ${orgs.length} active org(s)`);
 

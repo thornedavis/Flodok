@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { Modal } from '../Modal'
 import { useLang } from '../../contexts/LanguageContext'
 import { useRole } from '../../hooks/useRole'
-import type { AchievementDefinition, AchievementUnlock, User } from '../../types/database'
+import type { AchievementDefinition, AchievementUnlock, Contract, Employee, User } from '../../types/database'
 
 const sectionHeadingStyle: React.CSSProperties = { color: 'var(--color-text-tertiary)' }
 const fieldLabelStyle: React.CSSProperties = { color: 'var(--color-text-secondary)' }
@@ -16,7 +16,17 @@ const inputStyle: React.CSSProperties = {
 
 type UnlockRow = AchievementUnlock & { definition: AchievementDefinition | null }
 
-export function AchievementsSection({ user, employeeId }: { user: User; employeeId: string }) {
+export function AchievementsSection({
+  user,
+  employeeId,
+  employee,
+  activeContract,
+}: {
+  user: User
+  employeeId: string
+  employee: Employee | null
+  activeContract: Contract | null
+}) {
   const { t, lang } = useLang()
   const { isAdmin } = useRole(user)
   const [definitions, setDefinitions] = useState<AchievementDefinition[]>([])
@@ -58,6 +68,12 @@ export function AchievementsSection({ user, employeeId }: { user: User; employee
   const unlockedIds = new Set(unlocks.map(u => u.achievement_id))
   const availableManual = definitions.filter(d => d.trigger_type === 'manual' && !unlockedIds.has(d.id))
 
+  const daysEmployed = employee?.created_at
+    ? Math.max(0, Math.floor((Date.now() - new Date(employee.created_at).getTime()) / 86400000))
+    : 0
+  const hoursPerWeek = (activeContract?.hours_per_day ?? 0) * (activeContract?.days_per_week ?? 0)
+  const lifetimeXp = Math.floor((daysEmployed / 7) * hoursPerWeek)
+
   function openModal() {
     setModalOpen(true)
     setSelectedId(availableManual[0]?.id || '')
@@ -87,6 +103,32 @@ export function AchievementsSection({ user, employeeId }: { user: User; employee
 
   return (
     <section>
+      <div
+        className="mb-6 rounded-xl border p-4"
+        style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary, var(--color-bg))' }}
+      >
+        <div className="flex items-baseline justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider" style={sectionHeadingStyle}>
+              {t.portalExperience}
+            </p>
+            <p className="mt-1 text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>
+              {t.portalExperienceXp(lifetimeXp)}
+            </p>
+          </div>
+          <span className="text-2xl">⚡</span>
+        </div>
+        {hoursPerWeek > 0 || daysEmployed > 0 ? (
+          <p className="mt-2 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+            {t.portalExperienceBreakdown(daysEmployed, Math.round(hoursPerWeek))}
+          </p>
+        ) : (
+          <p className="mt-2 text-sm" style={{ color: 'var(--color-text-tertiary)' }}>
+            {t.portalNoContractYet}
+          </p>
+        )}
+      </div>
+
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-sm font-semibold uppercase tracking-wider" style={sectionHeadingStyle}>
           {t.achievementsSection}

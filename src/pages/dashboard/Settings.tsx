@@ -23,6 +23,36 @@ const inputStyle: React.CSSProperties = {
   color: 'var(--color-text)',
 }
 
+function ordinal(n: number): string {
+  const s = ['th', 'st', 'nd', 'rd']
+  const v = n % 100
+  return n + (s[(v - 20) % 10] || s[v] || s[0])
+}
+
+function todayInWIB(): Date {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jakarta',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date())
+  const y = Number(parts.find(p => p.type === 'year')!.value)
+  const m = Number(parts.find(p => p.type === 'month')!.value)
+  const d = Number(parts.find(p => p.type === 'day')!.value)
+  return new Date(y, m - 1, d)
+}
+
+function nextCloseDate(payDay: number, today: Date): Date {
+  if (payDay === 0) {
+    const lastOfCurrent = new Date(today.getFullYear(), today.getMonth() + 1, 0)
+    if (lastOfCurrent < today) return new Date(today.getFullYear(), today.getMonth() + 2, 0)
+    return lastOfCurrent
+  }
+  const thisMonth = new Date(today.getFullYear(), today.getMonth(), payDay)
+  if (thisMonth >= today) return thisMonth
+  return new Date(today.getFullYear(), today.getMonth() + 1, payDay)
+}
+
 export function Settings({ user }: { user: User }) {
   const { t } = useLang()
   const { isAdmin } = useRole(user)
@@ -132,11 +162,39 @@ function AccountTab({ user, t }: { user: User; t: Translations }) {
     setSaving(false)
   }
 
+  function handleCancel() {
+    setName(user.name)
+    setPhone(user.phone || '')
+    setError('')
+  }
+
   return (
     <div className="space-y-10">
       <section className="space-y-5">
-        <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>{t.yourProfile}</h2>
-        <form onSubmit={handleSave} className="space-y-5">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>{t.yourProfile}</h2>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleCancel}
+              disabled={saving || !dirty}
+              className="rounded-lg border px-4 py-2 text-sm disabled:opacity-50"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
+            >
+              {t.cancel}
+            </button>
+            <button
+              type="submit"
+              form="account-edit-form"
+              disabled={saving || !dirty}
+              className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+              style={{ backgroundColor: 'var(--color-primary)' }}
+            >
+              {saving ? t.saving : t.save}
+            </button>
+          </div>
+        </div>
+        <form id="account-edit-form" onSubmit={handleSave} className="space-y-5">
           {error && (
             <div className="rounded-md px-3 py-2 text-sm" style={{ backgroundColor: 'var(--color-diff-remove)', color: 'var(--color-danger)' }}>
               {error}
@@ -183,19 +241,9 @@ function AccountTab({ user, t }: { user: User; t: Translations }) {
             <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.emailChangeHint}</p>
           </div>
 
-          <div className="flex items-center gap-3 pt-1">
-            <button
-              type="submit"
-              disabled={saving || !dirty}
-              className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-              style={{ backgroundColor: 'var(--color-primary)' }}
-            >
-              {saving ? t.saving : t.save}
-            </button>
-            {savedAt && !dirty && (
-              <span className="text-xs" style={{ color: 'var(--color-success)' }}>{t.profileSaved}</span>
-            )}
-          </div>
+          {savedAt && !dirty && (
+            <p className="pt-1 text-xs" style={{ color: 'var(--color-success)' }}>{t.profileSaved}</p>
+          )}
         </form>
       </section>
 
@@ -254,6 +302,7 @@ function PasswordResetRow({ email, t }: { email: string; t: Translations }) {
 const EMPTY_ADDRESS: AddressValue = { street: '', city: '', province: '', postal_code: '', country: 'ID' }
 
 function OrganizationTab({ user, t }: { user: User; t: Translations }) {
+  const { lang } = useLang()
   const { isAdmin } = useRole(user)
   const [org, setOrg] = useState<Organization | null>(null)
   const [orgName, setOrgName] = useState('')
@@ -261,6 +310,7 @@ function OrganizationTab({ user, t }: { user: User; t: Translations }) {
   const [logoUrl, setLogoUrl] = useState<string | null>(null)
   const [address, setAddress] = useState<AddressValue>(EMPTY_ADDRESS)
   const [creditsDivisor, setCreditsDivisor] = useState<string>('1000')
+  const [payDayOfMonth, setPayDayOfMonth] = useState<string>('1')
   const [saving, setSaving] = useState(false)
 
   useEffect(() => { loadData() }, [user.org_id])
@@ -280,6 +330,7 @@ function OrganizationTab({ user, t }: { user: User; t: Translations }) {
         country: data.address_country || 'ID',
       })
       setCreditsDivisor(String(data.credits_divisor ?? 1000))
+      setPayDayOfMonth(String(data.pay_day_of_month ?? 1))
     }
   }
 
@@ -312,12 +363,16 @@ function OrganizationTab({ user, t }: { user: User; t: Translations }) {
   const parsedDivisor = Number(creditsDivisor)
   const divisorValid = Number.isFinite(parsedDivisor) && parsedDivisor > 0 && Number.isInteger(parsedDivisor)
   const divisorDirty = !!org && divisorValid && parsedDivisor !== org.credits_divisor
+  const parsedPayDay = Number(payDayOfMonth)
+  const payDayValid = Number.isFinite(parsedPayDay) && Number.isInteger(parsedPayDay) && parsedPayDay >= 0 && parsedPayDay <= 28
+  const payDayDirty = !!org && payDayValid && parsedPayDay !== org.pay_day_of_month
   const dirty = !!org && (
     orgName.trim() !== org.name ||
     (orgPhone || null) !== (org.phone || null) ||
     addressDirty ||
-    divisorDirty
-  ) && orgName.trim().length > 0 && phoneValid && divisorValid
+    divisorDirty ||
+    payDayDirty
+  ) && orgName.trim().length > 0 && phoneValid && divisorValid && payDayValid
 
   async function handleSaveOrg(e: React.FormEvent) {
     e.preventDefault()
@@ -332,9 +387,25 @@ function OrganizationTab({ user, t }: { user: User; t: Translations }) {
       address_postal_code: address.postal_code.trim() || null,
       address_country: address.country,
       credits_divisor: parsedDivisor,
+      pay_day_of_month: parsedPayDay,
     }).eq('id', user.org_id).select().single()
     if (data) setOrg(data)
     setSaving(false)
+  }
+
+  function handleCancelOrg() {
+    if (!org) return
+    setOrgName(org.name)
+    setOrgPhone(org.phone || '')
+    setAddress({
+      street: org.address_street || '',
+      city: org.address_city || '',
+      province: org.address_province || '',
+      postal_code: org.address_postal_code || '',
+      country: org.address_country || 'ID',
+    })
+    setCreditsDivisor(String(org.credits_divisor ?? 1000))
+    setPayDayOfMonth(String(org.pay_day_of_month ?? 1))
   }
 
   if (!org) return <div style={{ color: 'var(--color-text-secondary)' }}>{t.loading}</div>
@@ -343,11 +414,35 @@ function OrganizationTab({ user, t }: { user: User; t: Translations }) {
     <div className="space-y-10">
       {/* Org details */}
       <section className="space-y-5">
-        <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>{t.organizationSection}</h2>
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>{t.organizationSection}</h2>
+          {isAdmin && (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleCancelOrg}
+                disabled={saving || !dirty}
+                className="rounded-lg border px-4 py-2 text-sm disabled:opacity-50"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
+              >
+                {t.cancel}
+              </button>
+              <button
+                type="submit"
+                form="org-edit-form"
+                disabled={saving || !dirty}
+                className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                style={{ backgroundColor: 'var(--color-primary)' }}
+              >
+                {saving ? t.saving : t.save}
+              </button>
+            </div>
+          )}
+        </div>
         {!isAdmin && (
           <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.adminOnlyHint}</p>
         )}
-        <form onSubmit={handleSaveOrg} className="space-y-5">
+        <form id="org-edit-form" onSubmit={handleSaveOrg} className="space-y-5">
           <div>
             <label className="mb-2 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.organizationLogoLabel}</label>
             <AvatarUpload
@@ -409,11 +504,37 @@ function OrganizationTab({ user, t }: { user: User; t: Translations }) {
             <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.creditsDivisorHelp}</p>
           </div>
 
-          {isAdmin && (
-            <button type="submit" disabled={saving || !dirty} className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50" style={{ backgroundColor: 'var(--color-primary)' }}>
-              {saving ? t.saving : t.save}
-            </button>
-          )}
+          <div>
+            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.payDayLabel}</label>
+            <select
+              value={payDayOfMonth}
+              onChange={e => setPayDayOfMonth(e.target.value)}
+              disabled={!isAdmin}
+              className="w-full rounded-lg border px-3 py-2 text-sm md:w-48"
+              style={isAdmin ? inputStyle : { ...inputStyle, backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}
+            >
+              {Array.from({ length: 28 }, (_, i) => i + 1).map(day => (
+                <option key={day} value={String(day)}>
+                  {lang === 'id' ? `Tanggal ${day}` : ordinal(day)}
+                </option>
+              ))}
+              <option value="0">{t.payDayOptionLast}</option>
+            </select>
+            <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.payDayHelp}</p>
+            {payDayValid && (
+              <p className="mt-1 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+                {t.payDayPreview.replace(
+                  '{date}',
+                  new Intl.DateTimeFormat(lang === 'id' ? 'id-ID' : 'en-US', {
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric',
+                  }).format(nextCloseDate(parsedPayDay, todayInWIB())),
+                )}
+              </p>
+            )}
+          </div>
+
         </form>
       </section>
 

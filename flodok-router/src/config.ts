@@ -127,6 +127,19 @@ export async function listActiveOrgs(env: Env): Promise<{ id: string; name: stri
   return res.orgs;
 }
 
+// Runs the Postgres auto-close RPC. Invoked from the daily cron. The edge
+// function delegates to the `auto_close_periods()` SQL function, which is
+// idempotent and only freezes periods for orgs whose `pay_day_of_month`
+// matches today's Asia/Jakarta date.
+export async function autoClosePeriods(env: Env): Promise<{
+  today_wib: string;
+  orgs_processed: number;
+  employees_closed: number;
+  closures: Array<{ org_id: string; period_month: string; pay_day_of_month: number }>;
+}> {
+  return callWorkerConfig(env, "/auto-close-periods", {});
+}
+
 // Atomic dedup. Returns true iff this call inserted the row (i.e. first time
 // this meeting is seen). Replaces the old `env.KV.get("processed:X")` /
 // `env.KV.put("processed:X", ...)` pattern which had a race window.

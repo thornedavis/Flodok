@@ -2,13 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useTheme } from '../hooks/useTheme'
 import { useLang } from '../contexts/LanguageContext'
+import { BreadcrumbProvider, useBreadcrumb } from '../contexts/BreadcrumbContext'
 import { useRole } from '../hooks/useRole'
 import { getAvatarGradient } from '../lib/avatar'
 import { supabase } from '../lib/supabase'
 import type { Translations } from '../lib/translations'
 import type { Organization, User } from '../types/database'
 
-type NavKey = 'navOverview' | 'navEmployees' | 'navSops' | 'navContracts' | 'navPending' | 'navSettings'
+type NavKey = 'navOverview' | 'navEmployees' | 'navSops' | 'navContracts' | 'navPerformance' | 'navPending' | 'navSettings'
 
 interface NavItemDef {
   path: string
@@ -38,6 +39,11 @@ const navItems: NavItemDef[] = [
     path: '/dashboard/contracts',
     labelKey: 'navContracts',
     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="3" width="16" height="18" rx="2" /><line x1="8" y1="8" x2="16" y2="8" /><line x1="8" y1="12" x2="16" y2="12" /><line x1="8" y1="16" x2="12" y2="16" /></svg>,
+  },
+  {
+    path: '/dashboard/performance',
+    labelKey: 'navPerformance',
+    icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>,
   },
   {
     path: '/dashboard/pending',
@@ -71,19 +77,21 @@ export function DashboardLayout({ user, onSignOut }: { user: User; onSignOut: ()
   }, [user.org_id])
 
   return (
-    <div className="flex min-h-screen" style={{ backgroundColor: 'var(--color-bg)' }}>
-      <Sidebar user={user} mobileOpen={mobileOpen} onCloseMobile={() => setMobileOpen(false)} />
+    <BreadcrumbProvider>
+      <div className="flex min-h-screen" style={{ backgroundColor: 'var(--color-bg)' }}>
+        <Sidebar user={user} mobileOpen={mobileOpen} onCloseMobile={() => setMobileOpen(false)} />
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <Header user={user} org={org} onSignOut={onSignOut} onOpenMenu={() => setMobileOpen(true)} />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <Header user={user} org={org} onSignOut={onSignOut} onOpenMenu={() => setMobileOpen(true)} />
 
-        <main className="flex-1 px-6 py-8 md:px-10">
-          <div className="mx-auto max-w-6xl">
-            <Outlet context={{ org } satisfies DashboardOutletContext} />
-          </div>
-        </main>
+          <main className="flex-1 px-6 py-8 md:px-10">
+            <div className="mx-auto max-w-6xl">
+              <Outlet context={{ org } satisfies DashboardOutletContext} />
+            </div>
+          </main>
+        </div>
       </div>
-    </div>
+    </BreadcrumbProvider>
   )
 }
 
@@ -221,7 +229,7 @@ interface Crumb {
   href?: string
 }
 
-function deriveBreadcrumbs(pathname: string, orgName: string, t: Translations): Crumb[] {
+function deriveBreadcrumbs(pathname: string, orgName: string, t: Translations, trailing: string | null): Crumb[] {
   const rootCrumb: Crumb = { label: orgName, href: '/dashboard' }
   const segments = pathname.split('/').filter(Boolean)
   if (pathname === '/dashboard' || segments.length <= 1) {
@@ -232,6 +240,7 @@ function deriveBreadcrumbs(pathname: string, orgName: string, t: Translations): 
     employees: { label: t.navEmployees, href: '/dashboard/employees' },
     sops: { label: t.navSops, href: '/dashboard/sops' },
     contracts: { label: t.navContracts, href: '/dashboard/contracts' },
+    performance: { label: t.navPerformance, href: '/dashboard/performance' },
     pending: { label: t.navPending, href: '/dashboard/pending' },
     settings: { label: t.navSettings, href: '/dashboard/settings' },
   }
@@ -240,8 +249,8 @@ function deriveBreadcrumbs(pathname: string, orgName: string, t: Translations): 
 
   // Drill-down: /dashboard/<section>/<id>/<action>
   const action = segments[3]
-  if (action === 'edit') return [rootCrumb, { label: section.label, href: section.href }, { label: t.breadcrumbEdit }]
-  if (action === 'history') return [rootCrumb, { label: section.label, href: section.href }, { label: t.breadcrumbHistory }]
+  if (action === 'edit') return [rootCrumb, { label: section.label, href: section.href }, { label: trailing ?? t.breadcrumbEdit }]
+  if (action === 'history') return [rootCrumb, { label: section.label, href: section.href }, { label: trailing ?? t.breadcrumbHistory }]
 
   return [rootCrumb, { label: section.label }]
 }
@@ -255,8 +264,8 @@ function Header({ user, org, onSignOut, onOpenMenu }: {
   const { t, lang, toggle: toggleLang } = useLang()
   const { theme, toggle: toggleTheme } = useTheme()
   const location = useLocation()
-  const crumbs = deriveBreadcrumbs(location.pathname, org?.name || 'Flodok', t)
-  const isDrilldown = crumbs.length > 1
+  const { trailing } = useBreadcrumb()
+  const crumbs = deriveBreadcrumbs(location.pathname, org?.name || 'Flodok', t, trailing)
 
   return (
     <div
@@ -283,27 +292,12 @@ function Header({ user, org, onSignOut, onOpenMenu }: {
           </svg>
         </button>
 
-        {/* Back arrow for drill-down routes */}
-        {isDrilldown && crumbs[0].href && (
-          <Link
-            to={crumbs[0].href}
-            className="shrink-0 rounded-md p-1 transition-colors hover:opacity-70"
-            style={{ color: 'var(--color-text-tertiary)' }}
-            aria-label={crumbs[0].label}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="19" y1="12" x2="5" y2="12" />
-              <polyline points="12 19 5 12 12 5" />
-            </svg>
-          </Link>
-        )}
-
         {/* Breadcrumb trail */}
-        <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-sm">
+        <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-3 text-sm">
           {crumbs.map((crumb, i) => {
             const isLast = i === crumbs.length - 1
             return (
-              <span key={i} className="flex min-w-0 items-center gap-1.5">
+              <span key={i} className="flex min-w-0 items-center gap-3">
                 {crumb.href && !isLast ? (
                   <Link
                     to={crumb.href}

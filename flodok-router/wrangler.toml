@@ -16,4 +16,7 @@ id = "f7df54fda6344607ace5b4ae932452fa"
 # preview_id = "REPLACE_WITH_PREVIEW_KV_NAMESPACE_ID"
 
 [triggers]
-crons = ["*/5 * * * *"]
+# Every 5 min: Fireflies transcript polling fan-out.
+# Daily at 18:00 UTC (01:00 WIB): compensation period auto-close. The Worker
+# dispatches on controller.cron to tell the two triggers apart.
+crons = ["*/5 * * * *", "0 18 * * *"]

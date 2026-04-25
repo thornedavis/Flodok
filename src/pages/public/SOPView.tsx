@@ -8,8 +8,10 @@ import { useTheme } from '../../hooks/useTheme'
 import { useLang } from '../../contexts/LanguageContext'
 import { primaryDept } from '../../lib/employee'
 import { formatIdr, allowanceGradientColor } from '../../lib/credits'
-import { CompensationRing, ShieldPath, WalletPath, CoinPath } from '../../components/portal/CompensationRing'
+import { renderMergeFields } from '../../lib/mergeFields'
+import { CompensationRing, ShieldPath, WalletPath, CoinPath, GiftPath } from '../../components/portal/CompensationRing'
 import { StatRow } from '../../components/portal/StatRow'
+import { InfoTooltip } from '../../components/InfoTooltip'
 import { AvatarWithBadge } from '../../components/portal/AvatarWithBadge'
 import type { Employee, Sop, SopSignature, Organization, Contract, ContractSignature, FeedEvent } from '../../types/database'
 
@@ -21,11 +23,11 @@ type PortalHomeData = {
   days_employed: number
   hours_per_week: number
   lifetime_xp: number
-  allowance_adjustments: Array<{ id: string; amount_idr: number; reason: string; created_at: string }>
-  allowance_sum: number
   credit_adjustments: Array<{ id: string; amount: number; reason: string; created_at: string; paid_out_at: string | null; payout_idr: number | null }>
   credit_net: number
   credit_frozen: boolean
+  bonus_adjustments: Array<{ id: string; amount_idr: number; reason: string; created_at: string; paid_out_at: string | null; payout_idr: number | null }>
+  bonus_sum: number
   achievements: Array<{ unlock_id: string; unlocked_at: string; reason: string | null; name: string; icon: string | null; description: string | null; is_featured: boolean }>
 }
 
@@ -332,11 +334,20 @@ export function SOPView() {
     setSigning(false)
   }
 
-  // Get document content based on content language toggle
+  // Get document content based on content language toggle. Resolves any
+  // {{merge_field}} tokens against the live employee/org/contract context so
+  // employees see actual values like "Rp 3,400,000" rather than raw tokens.
   function getDocContent(doc: { content_markdown: string; content_markdown_id?: string | null }) {
-    if (docContentLang === 'id' && doc.content_markdown_id) return doc.content_markdown_id
-    if (docContentLang === 'en') return doc.content_markdown
-    return doc.content_markdown // fallback
+    const raw = docContentLang === 'id' && doc.content_markdown_id
+      ? doc.content_markdown_id
+      : doc.content_markdown
+    return renderMergeFields(raw, {
+      employee,
+      organization: org,
+      contract: activeContract,
+      today: new Date(),
+      lang: docContentLang,
+    })
   }
 
   async function handleDownloadPdf() {
@@ -1041,21 +1052,36 @@ function HomeTab({
   const divisor = portal?.org.credits_divisor ?? 1000
   const baseWage = portal?.contract?.base_wage_idr ?? null
   const baselineAllowance = portal?.contract?.allowance_idr ?? 0
-  const effectiveAllowance = Math.max(0, baselineAllowance + (portal?.allowance_sum ?? 0))
+  const creditsNet = portal?.credit_net ?? 0
+  const creditIdr = divisor > 0 && baselineAllowance > 0
+    ? Math.round((creditsNet * baselineAllowance) / divisor)
+    : 0
+  const allowanceShrink = Math.min(baselineAllowance, Math.max(0, -creditIdr))
+  const effectiveAllowance = Math.max(0, baselineAllowance - allowanceShrink)
+  const projectedCreditsIdr = Math.max(0, creditIdr)
   const allowancePct = baselineAllowance > 0
     ? Math.round((effectiveAllowance / baselineAllowance) * 100)
     : 0
-  const creditsNet = portal?.credit_net ?? 0
-  const projectedCreditsIdr = creditsNet > 0 && divisor > 0 && baselineAllowance > 0
-    ? Math.round((creditsNet * baselineAllowance) / divisor)
-    : 0
   const hasContract = !!portal?.contract && baseWage !== null
   const allowanceColor = allowanceGradientColor(allowancePct / 100)
-  const creditsColor = portal?.credit_frozen ? 'var(--color-text-tertiary)' : '#2dd4bf'
+  const creditsColor = portal?.credit_frozen
+    ? 'var(--color-text-tertiary)'
+    : creditsNet < 0
+      ? 'var(--color-danger)'
+      : '#3b82f6'
+  const bonusSum = portal?.bonus_sum ?? 0
+  const bonusColor = '#a855f7'
   const ringSegments = [
     { key: 'base', valueIdr: baseWage ?? 0, color: 'var(--color-text-secondary)', icon: <ShieldPath /> },
-    { key: 'allowance', valueIdr: effectiveAllowance, color: allowanceColor, icon: <WalletPath /> },
+    {
+      key: 'allowance',
+      valueIdr: effectiveAllowance,
+      baselineIdr: baselineAllowance,
+      color: allowanceColor,
+      icon: <WalletPath />,
+    },
     { key: 'credits', valueIdr: projectedCreditsIdr, color: creditsColor, icon: <CoinPath /> },
+    { key: 'bonus', valueIdr: bonusSum, color: bonusColor, icon: <GiftPath /> },
   ]
 
   return (
@@ -1077,8 +1103,8 @@ function HomeTab({
         effectiveAllowance={effectiveAllowance}
         baselineAllowance={baselineAllowance}
         creditsNet={creditsNet}
+        bonusSum={bonusSum}
         divisor={divisor}
-        frozen={!!portal?.credit_frozen}
         s={s}
         lang={lang}
       />
@@ -1090,6 +1116,7 @@ function HomeTab({
           label={s.portalBaseWage}
           info={s.portalBaseWageInfo}
           value={hasContract ? formatIdr(baseWage ?? 0, lang) : '—'}
+          accent="var(--color-text-secondary)"
         />
         <StatRow
           icon={<WalletIcon />}
@@ -1097,30 +1124,7 @@ function HomeTab({
           info={s.portalAllowanceInfo}
           value={hasContract ? formatIdr(effectiveAllowance, lang) : '—'}
           accent={hasContract ? allowanceColor : undefined}
-        >
-          {portal && portal.allowance_adjustments.length > 0 ? (
-            <ul className="space-y-2">
-              {portal.allowance_adjustments.map(adj => (
-                <li key={adj.id} className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm" style={{ color: 'var(--color-text)' }}>{adj.reason}</p>
-                    <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                      {new Date(adj.created_at).toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-US', { day: 'numeric', month: 'short' })}
-                    </p>
-                  </div>
-                  <span
-                    className="shrink-0 text-xs font-semibold"
-                    style={{ color: adj.amount_idr > 0 ? 'var(--color-success, #16a34a)' : 'var(--color-danger)' }}
-                  >
-                    {adj.amount_idr > 0 ? '+' : ''}{formatIdr(adj.amount_idr, lang)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{s.portalNoAllowanceAdjustments}</p>
-          )}
-        </StatRow>
+        />
         <StatRow
           icon={<CreditsIcon />}
           label={s.portalCredits}
@@ -1156,18 +1160,33 @@ function HomeTab({
           )}
         </StatRow>
         <StatRow
-          icon={<SparkIcon />}
-          label={s.portalExperience}
-          info={s.portalExperienceInfo}
-          value={s.portalExperienceXp(portal?.lifetime_xp ?? 0)}
-          accent="var(--color-text-secondary)"
+          icon={<GiftIcon />}
+          label={s.portalBonus}
+          info={s.portalBonusInfo}
+          value={formatIdr(bonusSum, lang)}
+          accent={bonusColor}
         >
-          {portal && (portal.days_employed > 0 || portal.hours_per_week > 0) ? (
-            <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-              {s.portalExperienceBreakdown(portal.days_employed, Math.round(portal.hours_per_week))}
-            </p>
+          {portal && portal.bonus_adjustments.length > 0 ? (
+            <ul className="space-y-2">
+              {portal.bonus_adjustments.map(adj => (
+                <li key={adj.id} className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm" style={{ color: 'var(--color-text)' }}>{adj.reason}</p>
+                    <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                      {new Date(adj.created_at).toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-US', { day: 'numeric', month: 'short' })}
+                    </p>
+                  </div>
+                  <span
+                    className="shrink-0 text-xs font-semibold"
+                    style={{ color: bonusColor }}
+                  >
+                    +{formatIdr(adj.amount_idr, lang)}
+                  </span>
+                </li>
+              ))}
+            </ul>
           ) : (
-            <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{s.portalNoContractYet}</p>
+            <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>—</p>
           )}
         </StatRow>
         <StatRow
@@ -1193,6 +1212,21 @@ function HomeTab({
             </div>
           ) : (
             <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{s.portalNoAchievements}</p>
+          )}
+        </StatRow>
+        <StatRow
+          icon={<SparkIcon />}
+          label={s.portalExperience}
+          info={s.portalExperienceInfo}
+          value={s.portalExperienceXp(portal?.lifetime_xp ?? 0)}
+          accent="#eab308"
+        >
+          {portal && (portal.days_employed > 0 || portal.hours_per_week > 0) ? (
+            <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+              {s.portalExperienceBreakdown(portal.days_employed, Math.round(portal.hours_per_week))}
+            </p>
+          ) : (
+            <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{s.portalNoContractYet}</p>
           )}
         </StatRow>
       </div>
@@ -1231,8 +1265,8 @@ function WalletBalance({
   effectiveAllowance,
   baselineAllowance,
   creditsNet,
+  bonusSum,
   divisor,
-  frozen,
   s,
   lang,
 }: {
@@ -1241,8 +1275,8 @@ function WalletBalance({
   effectiveAllowance: number
   baselineAllowance: number
   creditsNet: number
+  bonusSum: number
   divisor: number
-  frozen: boolean
   s: ReturnType<typeof useLang>['t']
   lang: 'en' | 'id'
 }) {
@@ -1255,19 +1289,16 @@ function WalletBalance({
     )
   }
 
-  // Positive credits project into IDR; negatives don't reduce contracted pay.
-  const projectedCreditsIdr = creditsNet > 0 && divisor > 0 && baselineAllowance > 0
+  // Positive credits add a credits segment on top; negative credits have
+  // already been applied to effectiveAllowance by the caller.
+  const creditIdr = divisor > 0 && baselineAllowance > 0
     ? Math.round((creditsNet * baselineAllowance) / divisor)
     : 0
-  const total = baseWage + effectiveAllowance + projectedCreditsIdr
+  const projectedCreditsIdr = Math.max(0, creditIdr)
+  const total = baseWage + effectiveAllowance + projectedCreditsIdr + bonusSum
   const baseline = baseWage + baselineAllowance
   const delta = total - baseline
 
-  const amountColor = delta > 0
-    ? 'var(--color-success, #16a34a)'
-    : delta < 0
-      ? 'var(--color-danger)'
-      : 'var(--color-text)'
   const trendColor = delta > 0
     ? 'var(--color-success, #16a34a)'
     : delta < 0
@@ -1276,15 +1307,11 @@ function WalletBalance({
 
   return (
     <div className="mb-6 text-center">
-      <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+      <p className="inline-flex items-center text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
         {s.portalMonthlyPayout}
-        {projectedCreditsIdr > 0 && !frozen && (
-          <span className="ml-1.5 rounded-full px-1.5 py-0.5 text-[9px] font-medium" style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-tertiary)' }}>
-            {s.portalPayoutProjected}
-          </span>
-        )}
+        <InfoTooltip text={s.portalMonthlyPayoutInfo} />
       </p>
-      <p className="mt-1 text-4xl font-semibold tabular-nums" style={{ color: amountColor }}>
+      <p className="mt-1 text-4xl font-semibold tabular-nums" style={{ color: 'var(--color-text)' }}>
         {formatIdr(total, lang)}
       </p>
       <div
@@ -1334,6 +1361,10 @@ function WalletIcon() {
 
 function CreditsIcon() {
   return <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M9 9h6M9 15h6"/></svg>
+}
+
+function GiftIcon() {
+  return <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>
 }
 
 function SparkIcon() {

@@ -8,6 +8,7 @@ import { PhoneInput } from '../../components/PhoneInput'
 import { DepartmentsMultiSelect } from '../../components/DepartmentsMultiSelect'
 import { useLang } from '../../contexts/LanguageContext'
 import { getEmployeeDepts } from '../../lib/employee'
+import { getSopStarterTemplate } from '../../lib/templates'
 import type { Translations } from '../../lib/translations'
 import type { User, Employee, Organization } from '../../types/database'
 
@@ -689,7 +690,7 @@ function AddEmployeeForm({ orgId, countryCode, departments, onDone, onCancel }: 
       org_id: orgId,
       employee_id: emp.id,
       title: t.defaultSopTitle(name),
-      content_markdown: '',
+      content_markdown: getSopStarterTemplate(),
       status: 'draft',
     })
 

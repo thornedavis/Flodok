@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
 import { getEmployeeDepts, primaryDept } from '../../lib/employee'
+import { getSopStarterTemplate } from '../../lib/templates'
 import type { User, Sop, Employee, Tag } from '../../types/database'
 
 type SopWithEmployee = Sop & { employee: Employee | null; tagIds: string[] }
@@ -538,7 +539,7 @@ function CreateSOPModal({ orgId, employees, onClose, onCreated }: {
         org_id: orgId,
         employee_id: employeeId || null,
         title: title.trim(),
-        content_markdown: '',
+        content_markdown: getSopStarterTemplate(),
         status: 'draft' as const,
       })
       .select()

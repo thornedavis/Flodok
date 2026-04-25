@@ -456,17 +456,25 @@ function generateContractMarkdown(
     annualLeave: string
   },
 ) {
+  // Fields backed by structured data become merge field tokens — they
+  // re-resolve at view time, so updates to the employee record or contract
+  // numerics flow through automatically. Creation-time-only inputs (start
+  // date, work location, etc.) are baked into the markdown as text.
   const isPKWT = type === 'pkwt'
-  const name = fields.employeeName || '[Employee Name]'
-  const address = fields.employeeAddress || '[Employee Address]'
-  const ktp = fields.ktpNumber || '[KTP Number]'
+  const name = '{{employee_name}}'
+  const address = '{{employee_address}}'
+  const ktp = '{{employee_ktp_nik}}'
+  const dept = '{{employee_departments}}'
+  const orgName = '{{org_name}}'
+  const orgAddress = '{{org_address}}'
+  const salary = '{{base_wage_idr}}'
+  const allowance = '{{allowance_idr}}'
+  const hoursTok = '{{hours_per_day}}'
+  const daysTok = '{{days_per_week}}'
   const position = fields.position || '[Position]'
-  const dept = fields.department || '[Department]'
   const location = fields.workLocation || '[Work Location]'
   const start = fields.startDate || '[Start Date]'
   const end = fields.endDate || '[End Date]'
-  const salary = fields.baseSalary ? `Rp ${formatCurrency(fields.baseSalary)}` : '[Base Salary]'
-  const allowance = fields.allowance ? `Rp ${formatCurrency(fields.allowance)}` : '-'
   const hours = fields.hoursPerDay || '8'
   const days = fields.daysPerWeek || '6'
   const leave = fields.annualLeave || '12'
@@ -479,7 +487,7 @@ This Employment Contract (the "Agreement") is entered into on this **${start}**,
 
 **BETWEEN:**
 
-**[Company Name]**, a company organized and existing under the laws of the Republic of Indonesia, with its principal office located at [Company Address] (the "Employer");
+**${orgName}**, a company organized and existing under the laws of the Republic of Indonesia, with its principal office located at ${orgAddress} (the "Employer");
 
 **AND:**
 
@@ -538,7 +546,7 @@ The parties agree to the following terms and conditions:
 
 ## 4. WORKING HOURS
 
-4.1 The Employee shall work **${hours} hours per day**, **${days} days per week**, totaling **${Number(hours) * Number(days)} hours per week**.
+4.1 The Employee shall work **${hoursTok} hours per day**, **${daysTok} days per week**, totaling **${Number(hours) * Number(days)} hours per week**.
 
 4.2 The specific work schedule shall be determined by the Employer and communicated to the Employee.
 
