@@ -934,6 +934,9 @@ function InviteMemberModal({ user, t, existingInvites, onClose, onCreated }: {
                 <option value="manager">{t.memberRole}</option>
                 <option value="admin">{t.adminRole}</option>
               </select>
+              <p className="mt-2 text-xs leading-relaxed" style={{ color: 'var(--color-text-tertiary)' }}>
+                {role === 'admin' ? t.inviteRoleAdminDesc : t.inviteRoleMemberDesc}
+              </p>
             </div>
 
             <div className="flex justify-end gap-2">
