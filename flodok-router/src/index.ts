@@ -2,7 +2,14 @@ import type { Env, OrgConfig } from "./types";
 import { verifyWebhookSignature, parseWebhookPayload } from "./webhook";
 import { processWebhook } from "./processor";
 import { fetchRecentTranscripts } from "./fireflies";
-import { loadOrgById, listActiveOrgs, claimMeeting, autoClosePeriods } from "./config";
+import {
+  loadOrgById,
+  listActiveOrgs,
+  claimMeeting,
+  autoClosePeriods,
+  runDailyAchievements,
+  runMonthlyLeaderboard,
+} from "./config";
 
 // Required secrets. Checked on every fetch so misconfiguration is loud (500 at
 // the request level) rather than silent (cron skips, webhooks fail obscurely).
@@ -118,12 +125,33 @@ export default {
     // Multiple cron triggers share this handler. Dispatch on the UTC cron
     // expression to keep each job's concerns separate.
     if (controller.cron === "0 18 * * *") {
+      // 18:00 UTC = 01:00 WIB next day. This block runs the daily WIB jobs.
       try {
         const result = await autoClosePeriods(env);
         console.log("Cron: auto-close →", result);
       } catch (err) {
         console.error("Cron: auto-close failed:", err);
       }
+
+      try {
+        const result = await runDailyAchievements(env);
+        console.log("Cron: daily achievements →", result);
+      } catch (err) {
+        console.error("Cron: daily achievements failed:", err);
+      }
+
+      // Monthly leaderboard fires when WIB date is the 1st of the month.
+      // Cron is at 18:00 UTC, so add 7h to get WIB wall-clock and read its date.
+      const wibNow = new Date(Date.now() + 7 * 60 * 60 * 1000);
+      if (wibNow.getUTCDate() === 1) {
+        try {
+          const result = await runMonthlyLeaderboard(env);
+          console.log("Cron: monthly leaderboard →", result);
+        } catch (err) {
+          console.error("Cron: monthly leaderboard failed:", err);
+        }
+      }
+
       return;
     }
 

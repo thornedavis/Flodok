@@ -578,9 +578,9 @@ function EmployeeCard({ emp, t, onDuplicate, onDelete, onEdit }: {
           {/* Portal URL with copy */}
           <div className="mt-1 flex items-center gap-1.5">
             <span className="truncate text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-              {`${window.location.origin}/sop/${emp.slug}-${emp.access_token}`}
+              {`${window.location.origin}/portal/${emp.slug}-${emp.access_token}`}
             </span>
-            <CopyButton value={`${window.location.origin}/sop/${emp.slug}-${emp.access_token}`} />
+            <CopyButton value={`${window.location.origin}/portal/${emp.slug}-${emp.access_token}`} />
           </div>
         </div>
       </div>

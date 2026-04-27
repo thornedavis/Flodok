@@ -265,7 +265,7 @@ export function EmployeeEdit({ user }: { user: User }) {
   }
 
   const portalUrl = employee
-    ? `${window.location.origin}/sop/${employee.slug}-${employee.access_token}`
+    ? `${window.location.origin}/portal/${employee.slug}-${employee.access_token}`
     : ''
 
   const inputStyle = {

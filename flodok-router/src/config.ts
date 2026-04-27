@@ -140,6 +140,24 @@ export async function autoClosePeriods(env: Env): Promise<{
   return callWorkerConfig(env, "/auto-close-periods", {});
 }
 
+// Achievements daily run: tenure + compensation firsts for every active employee.
+// Idempotent — safe to call repeatedly.
+export async function runDailyAchievements(env: Env): Promise<
+  { employees_processed: number; unlocks_awarded: number }[]
+> {
+  return callWorkerConfig(env, "/run-daily-achievements", {});
+}
+
+// Achievements monthly leaderboard: snapshot last completed month + award
+// Podium / Number One / Reigning Champion. Pass period_start (YYYY-MM-01) to
+// rebuild a specific month; omit to default to last completed WIB month.
+export async function runMonthlyLeaderboard(
+  env: Env,
+  periodStart?: string,
+): Promise<{ snapshot_rows: number; unlocks_awarded: number }[]> {
+  return callWorkerConfig(env, "/run-monthly-leaderboard", periodStart ? { period_start: periodStart } : {});
+}
+
 // Atomic dedup. Returns true iff this call inserted the row (i.e. first time
 // this meeting is seen). Replaces the old `env.KV.get("processed:X")` /
 // `env.KV.put("processed:X", ...)` pattern which had a race window.

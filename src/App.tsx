@@ -17,7 +17,7 @@ import { ContractHistory } from './pages/dashboard/ContractHistory'
 import { Performance } from './pages/dashboard/Performance'
 import { Pending } from './pages/dashboard/Pending'
 import { Settings } from './pages/dashboard/Settings'
-import { SOPView } from './pages/public/SOPView'
+import { Portal } from './pages/public/Portal'
 
 function AppRoutes() {
   const { session, user, loading, signIn, signUp, signOut } = useAuth()
@@ -38,7 +38,7 @@ function AppRoutes() {
 
       {/* Public SOP view */}
       <Route element={<PublicLayout />}>
-        <Route path="/sop/:slugToken" element={<SOPView />} />
+        <Route path="/portal/:slugToken" element={<Portal />} />
       </Route>
 
       {/* Invite acceptance — always accessible */}

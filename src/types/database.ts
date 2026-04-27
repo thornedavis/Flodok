@@ -135,61 +135,6 @@ export type Database = {
           },
         ]
       }
-      allowance_adjustments: {
-        Row: {
-          amount_idr: number
-          awarded_by: string
-          created_at: string
-          employee_id: string
-          id: string
-          org_id: string
-          period_month: string
-          reason: string
-        }
-        Insert: {
-          amount_idr: number
-          awarded_by: string
-          created_at?: string
-          employee_id: string
-          id?: string
-          org_id: string
-          period_month?: string
-          reason: string
-        }
-        Update: {
-          amount_idr?: number
-          awarded_by?: string
-          created_at?: string
-          employee_id?: string
-          id?: string
-          org_id?: string
-          period_month?: string
-          reason?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "allowance_adjustments_awarded_by_fkey"
-            columns: ["awarded_by"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "allowance_adjustments_employee_id_fkey"
-            columns: ["employee_id"]
-            isOneToOne: false
-            referencedRelation: "employees"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "allowance_adjustments_org_id_fkey"
-            columns: ["org_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       api_keys: {
         Row: {
           created_at: string
@@ -579,12 +524,14 @@ export type Database = {
           kk_photo_url: string | null
           ktp_nik: string | null
           ktp_photo_url: string | null
+          last_notifications_seen_at: string | null
           name: string
           notes: string | null
           org_id: string
           phone: string
           photo_url: string | null
           slug: string
+          status: string
         }
         Insert: {
           access_token: string
@@ -598,12 +545,14 @@ export type Database = {
           kk_photo_url?: string | null
           ktp_nik?: string | null
           ktp_photo_url?: string | null
+          last_notifications_seen_at?: string | null
           name: string
           notes?: string | null
           org_id: string
           phone: string
           photo_url?: string | null
           slug: string
+          status?: string
         }
         Update: {
           access_token?: string
@@ -617,12 +566,14 @@ export type Database = {
           kk_photo_url?: string | null
           ktp_nik?: string | null
           ktp_photo_url?: string | null
+          last_notifications_seen_at?: string | null
           name?: string
           notes?: string | null
           org_id?: string
           phone?: string
           photo_url?: string | null
           slug?: string
+          status?: string
         }
         Relationships: [
           {
@@ -675,6 +626,57 @@ export type Database = {
           },
           {
             foreignKeyName: "feed_events_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      leaderboard_snapshots: {
+        Row: {
+          created_at: string
+          employee_id: string
+          id: string
+          org_id: string
+          period_end: string
+          period_start: string
+          period_type: string
+          rank: number
+          score: number
+        }
+        Insert: {
+          created_at?: string
+          employee_id: string
+          id?: string
+          org_id: string
+          period_end: string
+          period_start: string
+          period_type: string
+          rank: number
+          score: number
+        }
+        Update: {
+          created_at?: string
+          employee_id?: string
+          id?: string
+          org_id?: string
+          period_end?: string
+          period_start?: string
+          period_type?: string
+          rank?: number
+          score?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leaderboard_snapshots_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leaderboard_snapshots_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
@@ -887,6 +889,7 @@ export type Database = {
           pay_day_of_month: number
           phone: string | null
           review_mode: boolean
+          timezone: string
         }
         Insert: {
           address_city?: string | null
@@ -903,6 +906,7 @@ export type Database = {
           pay_day_of_month?: number
           phone?: string | null
           review_mode?: boolean
+          timezone?: string
         }
         Update: {
           address_city?: string | null
@@ -919,6 +923,7 @@ export type Database = {
           pay_day_of_month?: number
           phone?: string | null
           review_mode?: boolean
+          timezone?: string
         }
         Relationships: []
       }
@@ -1439,6 +1444,18 @@ export type Database = {
         }
         Returns: Json
       }
+      evaluate_first_event_for_employee: {
+        Args: { p_employee_id: string }
+        Returns: number
+      }
+      evaluate_leaderboard_achievements_for_period: {
+        Args: { p_period_start: string }
+        Returns: number
+      }
+      evaluate_tenure_for_employee: {
+        Args: { p_employee_id: string }
+        Returns: number
+      }
       get_user_org_id: { Args: never; Returns: string }
       get_user_role: { Args: never; Returns: string }
       handle_signup:
@@ -1468,6 +1485,36 @@ export type Database = {
       portal_leaderboard: {
         Args: { emp_slug: string; emp_token: string; period_kind?: string }
         Returns: Json
+      }
+      portal_mark_notifications_seen: {
+        Args: { emp_slug: string; emp_token: string }
+        Returns: undefined
+      }
+      portal_unread_count: {
+        Args: { emp_slug: string; emp_token: string }
+        Returns: number
+      }
+      run_daily_achievements: {
+        Args: never
+        Returns: {
+          employees_processed: number
+          unlocks_awarded: number
+        }[]
+      }
+      run_monthly_leaderboard: {
+        Args: { p_period_start?: string }
+        Returns: {
+          snapshot_rows: number
+          unlocks_awarded: number
+        }[]
+      }
+      seed_v1_achievement_definitions: {
+        Args: { p_org_id: string }
+        Returns: undefined
+      }
+      take_monthly_leaderboard_snapshot: {
+        Args: { p_period_start: string }
+        Returns: number
       }
     }
     Enums: {
@@ -1605,8 +1652,7 @@ export const Constants = {
   },
 } as const
 
-// Convenience aliases — keep one per surfaced table so call sites can
-// `import type { Employee }` rather than spelling out the Database lookup.
+// Named row-type aliases used throughout the app.
 export type Organization = Database['public']['Tables']['organizations']['Row']
 export type User = Database['public']['Tables']['users']['Row']
 export type Employee = Database['public']['Tables']['employees']['Row']
@@ -1622,8 +1668,19 @@ export type ContractVersion = Database['public']['Tables']['contract_versions'][
 export type FeedEvent = Database['public']['Tables']['feed_events']['Row']
 export type OrgInvitation = Database['public']['Tables']['org_invitations']['Row']
 export type ContractSignature = Database['public']['Tables']['contract_signatures']['Row']
-export type AllowanceAdjustment = Database['public']['Tables']['allowance_adjustments']['Row']
+// allowance_adjustments is RLS-gated and not surfaced in generated types; alias manually.
+export type AllowanceAdjustment = {
+  id: string
+  org_id: string
+  employee_id: string
+  period_month: string
+  amount_idr: number
+  reason: string
+  awarded_by: string
+  created_at: string
+}
 export type CreditAdjustment = Database['public']['Tables']['credit_adjustments']['Row']
 export type BonusAdjustment = Database['public']['Tables']['bonus_adjustments']['Row']
 export type AchievementDefinition = Database['public']['Tables']['achievement_definitions']['Row']
 export type AchievementUnlock = Database['public']['Tables']['achievement_unlocks']['Row']
+export type LeaderboardSnapshot = Database['public']['Tables']['leaderboard_snapshots']['Row']

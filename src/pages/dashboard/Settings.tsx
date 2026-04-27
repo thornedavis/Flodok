@@ -1263,12 +1263,18 @@ function AchievementsTab({ user, t }: { user: User; t: Translations }) {
                 <select
                   value={formTriggerType}
                   onChange={e => setFormTriggerType(e.target.value as 'manual' | 'auto')}
+                  disabled
                   className="w-full rounded-lg border px-3 py-2 text-sm"
-                  style={inputStyle}
+                  style={{ ...inputStyle, opacity: 0.6, cursor: 'not-allowed' }}
                 >
                   <option value="manual">{t.triggerManual}</option>
                   <option value="auto">{t.triggerAuto}</option>
                 </select>
+                <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                  {editingId
+                    ? 'Trigger type is locked once created.'
+                    : 'Custom achievements are awarded manually. Automated milestones (tenure, leaderboard, etc.) are pre-configured for every organization.'}
+                </p>
               </div>
               <div className="flex items-center gap-4">
                 <label className="flex items-center gap-2 text-sm" style={{ color: 'var(--color-text-secondary)' }}>

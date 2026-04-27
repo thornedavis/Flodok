@@ -8,6 +8,7 @@ import { useTheme } from '../../hooks/useTheme'
 import { useLang } from '../../contexts/LanguageContext'
 import { primaryDept } from '../../lib/employee'
 import { formatIdr, allowanceGradientColor } from '../../lib/credits'
+import { formatRelativeTime } from '../../lib/relativeTime'
 import { renderMergeFields } from '../../lib/mergeFields'
 import { CompensationRing, ShieldPath, WalletPath, CoinPath, GiftPath } from '../../components/portal/CompensationRing'
 import { StatRow } from '../../components/portal/StatRow'
@@ -116,7 +117,7 @@ function CheckCircle() {
 }
 
 // ─── Main Component ──────────────────────────────────────
-export function SOPView() {
+export function Portal() {
   const { slugToken } = useParams<{ slugToken: string }>()
   const { theme, toggle: toggleTheme } = useTheme()
   const { lang, setLang, t: s } = useLang()
@@ -133,6 +134,8 @@ export function SOPView() {
   const [contractSignatures, setContractSignatures] = useState<Record<string, ContractSignature>>({})
   const [feedEvents, setFeedEvents] = useState<FeedEvent[]>([])
   const [portal, setPortal] = useState<PortalHomeData | null>(null)
+  const [unreadInformational, setUnreadInformational] = useState(0)
+  const [recentInformational, setRecentInformational] = useState<FeedEvent[]>([])
 
   // UI
   const [tab, setTab] = useState<Tab>('home')
@@ -179,14 +182,24 @@ export function SOPView() {
       if (!emp) { setNotFound(true); return }
       setEmployee(emp)
 
-      const [sopsResult, contractsResult, orgResult, portalResult] = await Promise.all([
+      const [sopsResult, contractsResult, orgResult, portalResult, unreadResult, recentResult] = await Promise.all([
         supabase.from('sops').select('*').eq('employee_id', emp.id).eq('status', 'active').order('created_at'),
         supabase.from('contracts').select('*').eq('employee_id', emp.id).eq('status', 'active').order('created_at'),
         supabase.from('organizations').select('*').eq('id', emp.org_id).single(),
         supabase.rpc('portal_home', { emp_slug: slug, emp_token: token }),
+        supabase.rpc('portal_unread_count', { emp_slug: slug, emp_token: token }),
+        supabase
+          .from('feed_events')
+          .select('*')
+          .eq('employee_id', emp.id)
+          .in('event_type', ['achievement_unlocked', 'bonus_awarded'])
+          .order('created_at', { ascending: false })
+          .limit(5),
       ])
 
       if (portalResult.data) setPortal(portalResult.data as unknown as PortalHomeData)
+      if (typeof unreadResult.data === 'number') setUnreadInformational(unreadResult.data)
+      if (recentResult.data) setRecentInformational(recentResult.data)
 
       setOrg(orgResult.data)
 
@@ -257,9 +270,23 @@ export function SOPView() {
     if (employee && tab === 'activity') loadFeedEvents()
   }, [employee, tab])
 
-  // Notifications: unsigned SOPs
+  // Notifications: unsigned SOPs (actionable) + unread informational events.
+  // Actionable items persist until acted on; informational items clear when
+  // the user opens the bell dropdown.
   const unsignedSops = sops.filter(s => !sopSignatures[s.id])
-  const notificationCount = unsignedSops.length
+  const notificationCount = unsignedSops.length + unreadInformational
+
+  // Mark informational notifications as seen when the dropdown opens.
+  useEffect(() => {
+    if (!showNotifications || unreadInformational === 0 || !slugToken) return
+    const lastDash = slugToken.lastIndexOf('-')
+    if (lastDash === -1) return
+    const slug = slugToken.slice(0, lastDash)
+    const token = slugToken.slice(lastDash + 1)
+    supabase
+      .rpc('portal_mark_notifications_seen', { emp_slug: slug, emp_token: token })
+      .then(({ error }) => { if (!error) setUnreadInformational(0) })
+  }, [showNotifications, unreadInformational, slugToken])
 
   function goToNotification(sop: Sop) {
     setTab('sops')
@@ -511,35 +538,70 @@ export function SOPView() {
               </button>
               {showNotifications && (
                 <div
-                  className="absolute right-0 top-full mt-2 w-72 rounded-xl border shadow-lg"
+                  className="absolute right-0 top-full mt-2 w-80 rounded-xl border shadow-lg"
                   style={{ backgroundColor: 'var(--color-bg)', borderColor: 'var(--color-border)' }}
                 >
                   <div className="border-b px-4 py-3" style={{ borderColor: 'var(--color-border)' }}>
                     <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{s.notifications}</span>
                   </div>
-                  {unsignedSops.length === 0 ? (
+
+                  {unsignedSops.length === 0 && recentInformational.length === 0 ? (
                     <div className="px-4 py-6 text-center text-sm" style={{ color: 'var(--color-text-tertiary)' }}>
                       {s.noNotifications}
                     </div>
                   ) : (
-                    <div className="max-h-64 overflow-y-auto">
-                      {unsignedSops.map(sop => (
-                        <button
-                          key={sop.id}
-                          onClick={() => goToNotification(sop)}
-                          className="flex w-full items-start gap-3 px-4 py-3 text-left transition-colors"
-                          onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-secondary)' }}
-                          onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
-                        >
-                          <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: 'var(--color-diff-remove)' }}>
-                            <DocIcon />
+                    <div className="max-h-96 overflow-y-auto">
+                      {/* To Do — actionable, persistent */}
+                      {unsignedSops.length > 0 && (
+                        <div>
+                          <div className="px-4 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-tertiary)' }}>
+                            {s.notificationsToDo}
                           </div>
-                          <div>
-                            <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{sop.title}</p>
-                            <p className="text-xs" style={{ color: 'var(--color-warning)' }}>{s.needsSignature}</p>
+                          {unsignedSops.map(sop => (
+                            <button
+                              key={sop.id}
+                              onClick={() => goToNotification(sop)}
+                              className="flex w-full items-start gap-3 px-4 py-3 text-left transition-colors"
+                              onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-secondary)' }}
+                              onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
+                            >
+                              <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: 'var(--color-diff-remove)' }}>
+                                <DocIcon />
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{sop.title}</p>
+                                <p className="text-xs" style={{ color: 'var(--color-warning)' }}>{s.needsSignature}</p>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Recent — informational, clears on open */}
+                      {recentInformational.length > 0 && (
+                        <div>
+                          <div className="px-4 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-tertiary)' }}>
+                            {s.notificationsRecent}
                           </div>
-                        </button>
-                      ))}
+                          {recentInformational.map(ev => (
+                            <div
+                              key={ev.id}
+                              className="flex items-start gap-3 px-4 py-3"
+                            >
+                              <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: 'var(--color-warning-subtle, rgba(234, 179, 8, 0.15))' }}>
+                                <span className="text-base">{ev.event_type === 'achievement_unlocked' ? '🏆' : '💰'}</span>
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{ev.title}</p>
+                                {ev.description && (
+                                  <p className="truncate text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{ev.description}</p>
+                                )}
+                                <p className="mt-0.5 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{formatRelativeTime(ev.created_at, lang)}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
