@@ -14,6 +14,7 @@ import {
 import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
 import { getEmployeeDepts } from '../../lib/employee'
+import { formatIdr } from '../../lib/credits'
 import type { Translations } from '../../lib/translations'
 import type { FeedEvent, User } from '../../types/database'
 
@@ -115,7 +116,10 @@ export function Overview({ user }: { user: User }) {
         <SignatureCoverage coverage={data.coverage} t={t} />
       </div>
 
-      <RecognitionMoments t={t} lang={lang} />
+      <div className="grid gap-6 lg:grid-cols-2">
+        <RecognitionMoments t={t} lang={lang} />
+        <CompensationTotal orgId={user.org_id} t={t} lang={lang} />
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
@@ -928,6 +932,100 @@ function RecognitionMoments({ t, lang }: { t: Translations; lang: 'en' | 'id' })
             </li>
           ))}
         </ul>
+      )}
+    </Card>
+  )
+}
+
+// ─── Compensation Total ─────────────────────────────────
+// Sums base wage + allowance across every active employee with an active
+// contract. Shows the total alongside a horizontal split bar so the manager
+// can see fixed-cost structure at a glance.
+
+function CompensationTotal({ orgId, t, lang }: { orgId: string; t: Translations; lang: 'en' | 'id' }) {
+  const [data, setData] = useState<{ wages: number; allowances: number; headcount: number } | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      const [employeesRes, contractsRes] = await Promise.all([
+        supabase
+          .from('employees')
+          .select('id, status')
+          .eq('org_id', orgId)
+          .in('status', ['trial', 'active']),
+        supabase
+          .from('contracts')
+          .select('employee_id, base_wage_idr, allowance_idr')
+          .eq('org_id', orgId)
+          .eq('status', 'active'),
+      ])
+      if (cancelled) return
+      const activeIds = new Set((employeesRes.data ?? []).map(e => e.id))
+      const contracts = (contractsRes.data ?? []).filter(c => c.employee_id != null && activeIds.has(c.employee_id))
+      const wages = contracts.reduce((s, c) => s + (c.base_wage_idr ?? 0), 0)
+      const allowances = contracts.reduce((s, c) => s + (c.allowance_idr ?? 0), 0)
+      setData({ wages, allowances, headcount: contracts.length })
+    }
+    load()
+    return () => { cancelled = true }
+  }, [orgId])
+
+  if (!data) {
+    return (
+      <Card>
+        <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{t.compensationTotalTitle}</h3>
+        <p className="mt-3 text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{t.loading}</p>
+      </Card>
+    )
+  }
+
+  const total = data.wages + data.allowances
+  const wagesPct = total > 0 ? (data.wages / total) * 100 : 0
+  const allowancesPct = total > 0 ? (data.allowances / total) * 100 : 0
+
+  return (
+    <Card>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{t.compensationTotalTitle}</h3>
+        <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+          {t.compensationTotalHeadcount(data.headcount)}
+        </span>
+      </div>
+
+      <div className="mb-1 text-2xl font-semibold tracking-tight" style={{ color: 'var(--color-text)' }}>
+        {formatIdr(total, lang)}
+      </div>
+      <p className="mb-4 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.compensationTotalSubtitle}</p>
+
+      {total > 0 ? (
+        <>
+          <div
+            className="mb-3 flex h-2 overflow-hidden rounded-full"
+            style={{ backgroundColor: 'var(--color-border)' }}
+          >
+            <div style={{ width: `${wagesPct}%`, backgroundColor: 'var(--color-primary)' }} />
+            <div style={{ width: `${allowancesPct}%`, backgroundColor: '#10b981' }} />
+          </div>
+          <ul className="space-y-1.5 text-sm">
+            <li className="flex items-center justify-between gap-3">
+              <span className="flex items-center gap-2" style={{ color: 'var(--color-text-secondary)' }}>
+                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: 'var(--color-primary)' }} />
+                {t.compensationTotalWages}
+              </span>
+              <span style={{ color: 'var(--color-text)' }}>{formatIdr(data.wages, lang)}</span>
+            </li>
+            <li className="flex items-center justify-between gap-3">
+              <span className="flex items-center gap-2" style={{ color: 'var(--color-text-secondary)' }}>
+                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: '#10b981' }} />
+                {t.compensationTotalAllowances}
+              </span>
+              <span style={{ color: 'var(--color-text)' }}>{formatIdr(data.allowances, lang)}</span>
+            </li>
+          </ul>
+        </>
+      ) : (
+        <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{t.compensationTotalEmpty}</p>
       )}
     </Card>
   )
