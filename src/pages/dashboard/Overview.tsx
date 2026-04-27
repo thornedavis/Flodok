@@ -115,6 +115,8 @@ export function Overview({ user }: { user: User }) {
         <SignatureCoverage coverage={data.coverage} t={t} />
       </div>
 
+      <RecognitionMoments t={t} lang={lang} />
+
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <RecentActivity orgId={user.org_id} initial={data.recent} employeesById={data.employeesById} t={t} lang={lang} />
@@ -789,6 +791,136 @@ function eventVisual(eventType: string): { color: string; icon: React.ReactNode 
         ),
       }
   }
+}
+
+// ─── Recognition Moments ────────────────────────────────
+// Today's unlocks + next 7 days of forecast tenure milestones. Powered by
+// the recent_unlocks(0) and upcoming_milestones(7) RPCs added in 042.
+
+type RecentUnlock = {
+  unlock_id: string
+  unlocked_at: string
+  awarded_by: string | null
+  reason: string | null
+  employee_id: string
+  employee_name: string
+  employee_photo: string | null
+  achievement_id: string
+  achievement_name: string
+  achievement_description: string | null
+  achievement_icon: string | null
+  is_manual: boolean
+}
+
+type UpcomingMilestone = {
+  employee_id: string
+  employee_name: string
+  employee_photo: string | null
+  achievement_id: string
+  achievement_name: string
+  achievement_description: string | null
+  achievement_icon: string | null
+  milestone_at: string
+}
+
+function RecognitionMoments({ t, lang }: { t: Translations; lang: 'en' | 'id' }) {
+  const [today, setToday] = useState<RecentUnlock[]>([])
+  const [upcoming, setUpcoming] = useState<UpcomingMilestone[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    Promise.all([
+      supabase.rpc('recent_unlocks', { p_days_back: 0 }),
+      supabase.rpc('upcoming_milestones', { p_days_ahead: 30 }),
+    ]).then(([recentRes, upcomingRes]) => {
+      if (cancelled) return
+      setToday((recentRes.data as RecentUnlock[] | null) ?? [])
+      setUpcoming((upcomingRes.data as UpcomingMilestone[] | null) ?? [])
+      setLoading(false)
+    })
+    return () => { cancelled = true }
+  }, [])
+
+  const upcoming7 = upcoming.filter(u => {
+    const ms = new Date(u.milestone_at).getTime() - Date.now()
+    return ms <= 7 * 24 * 60 * 60 * 1000
+  })
+  const upcoming30 = upcoming // all 30-day forecasts
+
+  return (
+    <Card>
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{t.recognitionMomentsTitle}</h3>
+        {!loading && (
+          <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+            {t.recognitionUpcomingCount(upcoming30.length)}
+          </span>
+        )}
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        {/* Today */}
+        <div>
+          <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-tertiary)' }}>
+            {t.recognitionToday}
+          </h4>
+          {today.length === 0 ? (
+            <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{t.recognitionEmptyToday}</p>
+          ) : (
+            <ul className="space-y-2">
+              {today.map(u => (
+                <li key={u.unlock_id} className="flex items-center gap-2.5">
+                  <span className="text-base">{u.achievement_icon && u.achievement_icon.length === 1 ? u.achievement_icon : '🏆'}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>{u.employee_name}</p>
+                    <p className="truncate text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                      {u.achievement_name}
+                      {u.is_manual && u.reason ? ` · ${u.reason}` : ''}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {/* Upcoming next 7 days */}
+        <div>
+          <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-tertiary)' }}>
+            {t.recognitionUpcoming7}
+          </h4>
+          {upcoming7.length === 0 ? (
+            <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{t.recognitionEmptyUpcoming}</p>
+          ) : (
+            <ul className="space-y-2">
+              {upcoming7.map(u => (
+                <li key={`${u.employee_id}-${u.achievement_id}`} className="flex items-center gap-2.5">
+                  <span className="text-base">{u.achievement_icon && u.achievement_icon.length === 1 ? u.achievement_icon : '🏆'}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>{u.employee_name}</p>
+                    <p className="truncate text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                      {u.achievement_name} · {formatUpcomingDate(u.milestone_at, lang)}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </Card>
+  )
+}
+
+function formatUpcomingDate(iso: string, lang: string): string {
+  const date = new Date(iso)
+  const ms = date.getTime() - Date.now()
+  const days = Math.round(ms / (24 * 60 * 60 * 1000))
+  if (days === 0) return lang === 'id' ? 'hari ini' : 'today'
+  if (days === 1) return lang === 'id' ? 'besok' : 'tomorrow'
+  if (days <= 7) return lang === 'id' ? `dalam ${days} hari` : `in ${days} days`
+  return date.toLocaleDateString(lang === 'id' ? 'id-ID' : undefined, { month: 'short', day: 'numeric' })
 }
 
 function formatRelativeTime(iso: string, lang: string): string {

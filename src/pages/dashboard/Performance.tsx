@@ -415,20 +415,41 @@ function BadgeActionModal({
   const manual = definitions.filter(d => d.trigger_type === 'manual')
   const [selectedId, setSelectedId] = useState(manual[0]?.id || '')
   const [reason, setReason] = useState('')
+  const todayIso = new Date().toISOString().slice(0, 10)
+  const minBackdateIso = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  const [unlockedDate, setUnlockedDate] = useState(todayIso)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const REASON_MAX = 200
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!selectedId) { setError(t.validationPickAchievement); return }
+    const trimmed = reason.trim()
+    if (!trimmed) { setError(t.validationReasonRequired); return }
+    if (trimmed.length > REASON_MAX) { setError(t.validationReasonTooLong); return }
     setSubmitting(true)
     setError('')
-    const { error: insertError } = await supabase.from('achievement_unlocks').insert({
+    // Backdate: if user picked a non-today date, send midday on that date in
+    // local time so timezone shifts don't push it into the previous day.
+    let unlockedAt: string | undefined
+    if (unlockedDate && unlockedDate !== todayIso) {
+      unlockedAt = new Date(`${unlockedDate}T12:00:00`).toISOString()
+    }
+    const payload: {
+      employee_id: string
+      achievement_id: string
+      awarded_by: string
+      reason: string
+      unlocked_at?: string
+    } = {
       employee_id: row.employee_id,
       achievement_id: selectedId,
       awarded_by: user.id,
-      reason: reason.trim() || null,
-    })
+      reason: trimmed,
+    }
+    if (unlockedAt) payload.unlocked_at = unlockedAt
+    const { error: insertError } = await supabase.from('achievement_unlocks').insert(payload)
     setSubmitting(false)
     if (insertError) { setError(insertError.message); return }
     onDone()
@@ -452,14 +473,34 @@ function BadgeActionModal({
           </select>
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.achievementReasonLabel}</label>
+          <label className="mb-1 flex items-center justify-between text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+            <span>{t.achievementReasonLabel}</span>
+            <span className="text-xs" style={{ color: reason.length > REASON_MAX ? 'var(--color-danger)' : 'var(--color-text-tertiary)' }}>
+              {reason.length}/{REASON_MAX}
+            </span>
+          </label>
           <textarea
             value={reason}
-            onChange={e => setReason(e.target.value)}
+            onChange={e => setReason(e.target.value.slice(0, REASON_MAX + 50))}
             rows={2}
+            required
+            placeholder={t.achievementReasonPlaceholder}
             className="w-full rounded-lg border px-3 py-2 text-sm"
             style={inputStyle}
           />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.achievementUnlockDate}</label>
+          <input
+            type="date"
+            value={unlockedDate}
+            min={minBackdateIso}
+            max={todayIso}
+            onChange={e => setUnlockedDate(e.target.value || todayIso)}
+            className="w-full rounded-lg border px-3 py-2 text-sm"
+            style={inputStyle}
+          />
+          <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.achievementUnlockDateHint}</p>
         </div>
         {error && <p className="text-sm" style={{ color: 'var(--color-danger)' }}>{error}</p>}
         <div className="flex justify-end gap-2">

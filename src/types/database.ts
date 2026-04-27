@@ -1494,6 +1494,23 @@ export type Database = {
         Args: { emp_slug: string; emp_token: string }
         Returns: number
       }
+      recent_unlocks: {
+        Args: { p_days_back: number }
+        Returns: {
+          achievement_description: string
+          achievement_icon: string
+          achievement_id: string
+          achievement_name: string
+          awarded_by: string
+          employee_id: string
+          employee_name: string
+          employee_photo: string
+          is_manual: boolean
+          reason: string
+          unlock_id: string
+          unlocked_at: string
+        }[]
+      }
       run_daily_achievements: {
         Args: never
         Returns: {
@@ -1515,6 +1532,19 @@ export type Database = {
       take_monthly_leaderboard_snapshot: {
         Args: { p_period_start: string }
         Returns: number
+      }
+      upcoming_milestones: {
+        Args: { p_days_ahead: number }
+        Returns: {
+          achievement_description: string
+          achievement_icon: string
+          achievement_id: string
+          achievement_name: string
+          employee_id: string
+          employee_name: string
+          employee_photo: string
+          milestone_at: string
+        }[]
       }
     }
     Enums: {
