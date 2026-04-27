@@ -45,6 +45,7 @@ export function Performance({ user }: { user: User }) {
   const [definitions, setDefinitions] = useState<AchievementDefinition[]>([])
   const [badgesEnabled, setBadgesEnabled] = useState(true)
   const [creditsEnabled, setCreditsEnabled] = useState(true)
+  const [maxCreditPerAward, setMaxCreditPerAward] = useState<number | null>(null)
 
   // Action state
   const [creditAction, setCreditAction] = useState<{ row: RosterRow; mode: CreditAction } | null>(null)
@@ -70,11 +71,12 @@ export function Performance({ user }: { user: User }) {
   async function loadOrgFlags() {
     const { data } = await supabase
       .from('organizations')
-      .select('badges_enabled, credits_enabled')
+      .select('badges_enabled, credits_enabled, max_credit_per_award')
       .eq('id', user.org_id)
       .single()
     setBadgesEnabled(data?.badges_enabled ?? true)
     setCreditsEnabled(data?.credits_enabled ?? true)
+    setMaxCreditPerAward(data?.max_credit_per_award ?? null)
   }
 
   useEffect(() => { loadRoster(); loadDefinitions(); loadOrgFlags() }, [user.org_id])
@@ -238,6 +240,7 @@ export function Performance({ user }: { user: User }) {
         <CreditActionModal
           action={creditAction}
           divisor={roster.credits_divisor}
+          maxPerAward={maxCreditPerAward}
           user={user}
           onClose={() => setCreditAction(null)}
           onDone={() => { setCreditAction(null); loadRoster() }}
@@ -265,6 +268,7 @@ export function Performance({ user }: { user: User }) {
 function CreditActionModal({
   action,
   divisor,
+  maxPerAward,
   user,
   onClose,
   onDone,
@@ -273,6 +277,7 @@ function CreditActionModal({
 }: {
   action: { row: RosterRow; mode: CreditAction }
   divisor: number
+  maxPerAward: number | null
   user: User
   onClose: () => void
   onDone: () => void
@@ -298,6 +303,10 @@ function CreditActionModal({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!isValidAmount) { setError(t.validationAmountPositive); return }
+    if (maxPerAward != null && parsed > maxPerAward) {
+      setError(t.capExceededCredits(maxPerAward))
+      return
+    }
     if (reason.trim().length < 20) { setError(t.validationReasonMinLength); return }
     setSubmitting(true)
     setError('')
@@ -359,6 +368,7 @@ function CreditActionModal({
             type="number"
             inputMode="numeric"
             min={1}
+            max={maxPerAward ?? undefined}
             step={1}
             value={amount}
             onChange={e => setAmount(e.target.value)}
@@ -369,6 +379,7 @@ function CreditActionModal({
           <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
             {t.creditsAmountHelp(rate)}
             {mode === 'award' && isValidAmount && ` · ${formatIdr(previewIdr, lang)}`}
+            {maxPerAward != null && ` · max ${maxPerAward}`}
           </p>
           {preview && (
             <p

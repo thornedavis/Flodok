@@ -54,6 +54,60 @@ body {
   to { transform: translateX(-50%); }
 }
 
+/* Long-form legal/policy pages */
+.legal-prose {
+  color: var(--color-text-secondary);
+  line-height: 1.7;
+  font-size: 0.9375rem;
+}
+.legal-prose h2 {
+  scroll-margin-top: 6rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-top: 2.5rem;
+  margin-bottom: 0.75rem;
+  color: var(--color-text);
+}
+.legal-prose h2:first-child { margin-top: 0; }
+.legal-prose h3 {
+  scroll-margin-top: 6rem;
+  font-size: 1rem;
+  font-weight: 600;
+  margin-top: 1.75rem;
+  margin-bottom: 0.5rem;
+  color: var(--color-text);
+}
+.legal-prose p { margin: 0.85rem 0; }
+.legal-prose ul, .legal-prose ol {
+  margin: 0.85rem 0;
+  padding-left: 1.5rem;
+}
+.legal-prose ul { list-style-type: disc; }
+.legal-prose ol { list-style-type: decimal; }
+.legal-prose li { margin: 0.35rem 0; }
+.legal-prose strong { color: var(--color-text); font-weight: 600; }
+.legal-prose a {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+.legal-prose table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+  font-size: 0.875rem;
+}
+.legal-prose th, .legal-prose td {
+  border: 1px solid var(--color-border);
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  vertical-align: top;
+}
+.legal-prose th {
+  font-weight: 600;
+  background-color: var(--color-bg-secondary);
+  color: var(--color-text);
+}
+
 /* Consistent single-color focus ring for form fields — no halo, no offset,
    same clean look in light and dark themes. !important beats per-component
    utility classes like `outline-none` that otherwise suppress the ring. */

@@ -1,15 +1,9 @@
 import { Link } from 'react-router-dom'
-import { useTheme } from '../../hooks/useTheme'
 import { getAvatarGradient, getInitials } from '../../lib/avatar'
 
 export function Landing() {
-  useTheme() // ensure theme class is applied
   return (
-    <div
-      className="min-h-screen"
-      style={{ backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
-    >
-      <Nav />
+    <>
       <Hero />
       <LogoSlider />
       <Benefits />
@@ -18,68 +12,7 @@ export function Landing() {
       <Testimonials />
       <FAQ />
       <CTASection />
-      <Footer />
-    </div>
-  )
-}
-
-// ─── Navbar ─────────────────────────────────────────────
-
-function Nav() {
-  const { theme, toggle } = useTheme()
-  return (
-    <header
-      className="sticky top-0 z-40 border-b"
-      style={{
-        borderColor: 'var(--color-border)',
-        backgroundColor: 'color-mix(in srgb, var(--color-bg) 85%, transparent)',
-        backdropFilter: 'blur(10px)',
-      }}
-    >
-      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-6">
-        <Link to="/" className="text-lg font-semibold tracking-tight" style={{ color: 'var(--color-text)' }}>
-          Flodok
-        </Link>
-
-        <nav className="hidden items-center gap-7 text-sm md:flex" style={{ color: 'var(--color-text-secondary)' }}>
-          <a href="#features" className="transition-colors hover:opacity-70">Features</a>
-          <a href="#how-it-works" className="transition-colors hover:opacity-70">How it works</a>
-          <a href="#testimonials" className="transition-colors hover:opacity-70">Testimonials</a>
-          <a href="#pricing" className="transition-colors hover:opacity-70">Pricing</a>
-          <a href="#faq" className="transition-colors hover:opacity-70">FAQ</a>
-        </nav>
-
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={toggle}
-            className="hidden rounded-md p-1.5 transition-colors hover:opacity-70 sm:block"
-            style={{ color: 'var(--color-text-secondary)' }}
-            aria-label="Toggle theme"
-          >
-            {theme === 'light' ? (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" /></svg>
-            ) : (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5" /><line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" /><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" /><line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" /><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" /></svg>
-            )}
-          </button>
-          <Link
-            to="/login"
-            className="hidden rounded-md px-3 py-1.5 text-sm font-medium transition-colors hover:opacity-70 sm:inline-block"
-            style={{ color: 'var(--color-text-secondary)' }}
-          >
-            Sign in
-          </Link>
-          <Link
-            to="/signup"
-            className="rounded-md px-3 py-1.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
-            style={{ backgroundColor: 'var(--color-primary)' }}
-          >
-            Get started
-          </Link>
-        </div>
-      </div>
-    </header>
+    </>
   )
 }
 
@@ -954,113 +887,3 @@ function CTASection() {
   )
 }
 
-// ─── Footer ─────────────────────────────────────────────
-
-function Footer() {
-  return (
-    <footer
-      className="border-t px-6 py-14"
-      style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)' }}
-    >
-      <div className="mx-auto max-w-6xl">
-        <div className="grid grid-cols-2 gap-10 md:grid-cols-5">
-          <div className="col-span-2">
-            <Link to="/" className="text-lg font-semibold tracking-tight" style={{ color: 'var(--color-text)' }}>
-              Flodok
-            </Link>
-            <p className="mt-3 max-w-xs text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-              The operations OS for Indonesia's best teams. Made in Jakarta.
-            </p>
-
-            {/* Newsletter */}
-            <form
-              className="mt-5 flex max-w-sm gap-2"
-              onSubmit={(e) => e.preventDefault()}
-            >
-              <input
-                type="email"
-                placeholder="you@company.com"
-                className="flex-1 rounded-md border px-3 py-2 text-sm"
-                style={{
-                  borderColor: 'var(--color-border)',
-                  backgroundColor: 'var(--color-bg)',
-                  color: 'var(--color-text)',
-                }}
-              />
-              <button
-                type="submit"
-                className="rounded-md px-3 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90"
-                style={{ backgroundColor: 'var(--color-primary)' }}
-              >
-                Subscribe
-              </button>
-            </form>
-          </div>
-
-          <FooterCol
-            title="Product"
-            links={[
-              ['Features', '#features'],
-              ['Pricing', '#pricing'],
-              ['How it works', '#how-it-works'],
-              ['Roadmap', '#'],
-            ]}
-          />
-          <FooterCol
-            title="Company"
-            links={[
-              ['About', '#'],
-              ['Customers', '#testimonials'],
-              ['Contact', 'mailto:hello@flodok.com'],
-              ['Careers', '#'],
-            ]}
-          />
-          <FooterCol
-            title="Legal"
-            links={[
-              ['Privacy', '#'],
-              ['Terms', '#'],
-              ['Security', '#'],
-              ['DPA', '#'],
-            ]}
-          />
-        </div>
-
-        <div
-          className="mt-12 flex flex-col items-start justify-between gap-4 border-t pt-6 text-xs sm:flex-row sm:items-center"
-          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-tertiary)' }}
-        >
-          <div>© {new Date().getFullYear()} Flodok. All rights reserved.</div>
-          <div className="flex items-center gap-4">
-            <a href="#" className="transition-colors hover:opacity-70">Twitter</a>
-            <a href="#" className="transition-colors hover:opacity-70">LinkedIn</a>
-            <a href="#" className="transition-colors hover:opacity-70">Instagram</a>
-          </div>
-        </div>
-      </div>
-    </footer>
-  )
-}
-
-function FooterCol({ title, links }: { title: string; links: [string, string][] }) {
-  return (
-    <div>
-      <h4 className="mb-3 text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
-        {title}
-      </h4>
-      <ul className="space-y-2">
-        {links.map(([label, href]) => (
-          <li key={label}>
-            <a
-              href={href}
-              className="text-sm transition-colors hover:opacity-70"
-              style={{ color: 'var(--color-text-secondary)' }}
-            >
-              {label}
-            </a>
-          </li>
-        ))}
-      </ul>
-    </div>
-  )
-}

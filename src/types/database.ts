@@ -889,6 +889,8 @@ export type Database = {
           display_name: string | null
           id: string
           logo_url: string | null
+          max_bonus_idr: number | null
+          max_credit_per_award: number | null
           name: string
           pay_day_of_month: number
           phone: string | null
@@ -910,6 +912,8 @@ export type Database = {
           display_name?: string | null
           id?: string
           logo_url?: string | null
+          max_bonus_idr?: number | null
+          max_credit_per_award?: number | null
           name: string
           pay_day_of_month?: number
           phone?: string | null
@@ -931,6 +935,8 @@ export type Database = {
           display_name?: string | null
           id?: string
           logo_url?: string | null
+          max_bonus_idr?: number | null
+          max_credit_per_award?: number | null
           name?: string
           pay_day_of_month?: number
           phone?: string | null

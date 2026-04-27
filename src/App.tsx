@@ -19,6 +19,14 @@ import { Pending } from './pages/dashboard/Pending'
 import { Settings } from './pages/dashboard/Settings'
 import { Portal } from './pages/public/Portal'
 import { Landing } from './pages/public/Landing'
+import { PublicSiteLayout } from './components/PublicSiteLayout'
+import { Pricing } from './pages/public/Pricing'
+import { About } from './pages/public/About'
+import { Contact } from './pages/public/Contact'
+import { Security } from './pages/public/Security'
+import { Terms } from './pages/public/Terms'
+import { Privacy } from './pages/public/Privacy'
+import { Dpa } from './pages/public/Dpa'
 
 function AppRoutes() {
   const { session, user, loading, signIn, signUp, signOut } = useAuth()
@@ -42,13 +50,24 @@ function AppRoutes() {
         <Route path="/portal/:slugToken" element={<Portal />} />
       </Route>
 
+      {/* Marketing & legal pages — always accessible (signed in or out) */}
+      <Route element={<PublicSiteLayout />}>
+        <Route path="/pricing" element={<Pricing />} />
+        <Route path="/about" element={<About />} />
+        <Route path="/contact" element={<Contact />} />
+        <Route path="/security" element={<Security />} />
+        <Route path="/terms" element={<Terms />} />
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="/dpa" element={<Dpa />} />
+      </Route>
+
       {/* Invite acceptance — always accessible */}
       <Route path="/invite/:token" element={<AcceptInvite onSignUp={signUp} />} />
 
       {/* Auth routes */}
       {!session ? (
         <>
-          <Route element={<PublicLayout />}>
+          <Route element={<PublicSiteLayout />}>
             <Route path="/" element={<Landing />} />
           </Route>
           <Route path="/login" element={<Login onSignIn={signIn} />} />

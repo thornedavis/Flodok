@@ -5,6 +5,7 @@ import { useLang } from '../../contexts/LanguageContext'
 import { useRole } from '../../hooks/useRole'
 import { getAvatarGradient } from '../../lib/avatar'
 import { displayBadgeIcon } from '../../lib/badgeIcon'
+import { formatIdr } from '../../lib/credits'
 import { AvatarUpload } from '../../components/AvatarUpload'
 import { PhoneInput } from '../../components/PhoneInput'
 import { AddressFields, type AddressValue } from '../../components/AddressFields'
@@ -1089,21 +1090,26 @@ function CreditsTab({ user, t }: { user: User; t: Translations }) {
   const [enabled, setEnabled] = useState(true)
   const [creditsDivisor, setCreditsDivisor] = useState<string>('1000')
   const [savedDivisor, setSavedDivisor] = useState<number>(1000)
+  const [maxPerAward, setMaxPerAward] = useState<string>('')
+  const [savedMaxPerAward, setSavedMaxPerAward] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [savingDivisor, setSavingDivisor] = useState(false)
+  const [savingMax, setSavingMax] = useState(false)
 
   useEffect(() => { load() }, [user.org_id])
 
   async function load() {
     const { data } = await supabase
       .from('organizations')
-      .select('credits_enabled, credits_divisor')
+      .select('credits_enabled, credits_divisor, max_credit_per_award')
       .eq('id', user.org_id)
       .single()
     if (data) {
       setEnabled(data.credits_enabled ?? true)
       setSavedDivisor(data.credits_divisor ?? 1000)
       setCreditsDivisor(String(data.credits_divisor ?? 1000))
+      setSavedMaxPerAward(data.max_credit_per_award ?? null)
+      setMaxPerAward(data.max_credit_per_award != null ? String(data.max_credit_per_award) : '')
     }
     setLoading(false)
   }
@@ -1131,6 +1137,24 @@ function CreditsTab({ user, t }: { user: User; t: Translations }) {
     if (!error) setSavedDivisor(parsedDivisor)
     else alert(error.message)
     setSavingDivisor(false)
+  }
+
+  // Max per award: blank string → null (no cap). Otherwise must be a positive int.
+  const trimmedMax = maxPerAward.trim()
+  const parsedMax = trimmedMax === '' ? null : Number(trimmedMax)
+  const maxValid = trimmedMax === '' || (Number.isFinite(parsedMax) && Number.isInteger(parsedMax) && (parsedMax as number) > 0)
+  const maxDirty = maxValid && parsedMax !== savedMaxPerAward
+
+  async function saveMax() {
+    if (!maxDirty) return
+    setSavingMax(true)
+    const { error } = await supabase
+      .from('organizations')
+      .update({ max_credit_per_award: parsedMax })
+      .eq('id', user.org_id)
+    if (!error) setSavedMaxPerAward(parsedMax)
+    else alert(error.message)
+    setSavingMax(false)
   }
 
   if (loading) return <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{t.loading}</p>
@@ -1164,6 +1188,27 @@ function CreditsTab({ user, t }: { user: User; t: Translations }) {
         </div>
         <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.creditsDivisorHelp}</p>
       </div>
+
+      <div style={{ opacity: enabled ? 1 : 0.5 }}>
+        <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.maxCreditPerAwardLabel}</label>
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            inputMode="numeric"
+            min={1}
+            step={1}
+            value={maxPerAward}
+            onChange={e => setMaxPerAward(e.target.value)}
+            onBlur={saveMax}
+            disabled={!enabled}
+            placeholder={t.noCapPlaceholder}
+            className="rounded-lg border px-3 py-2 text-sm md:w-48"
+            style={inputStyle}
+          />
+          {savingMax && <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>…</span>}
+        </div>
+        <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.maxCreditPerAwardHelp}</p>
+      </div>
     </div>
   )
 }
@@ -1171,18 +1216,26 @@ function CreditsTab({ user, t }: { user: User; t: Translations }) {
 // ─── Bonuses tab ────────────────────────────────────────
 
 function BonusesTab({ user, t }: { user: User; t: Translations }) {
+  const { lang } = useLang()
   const [enabled, setEnabled] = useState(true)
+  const [maxBonus, setMaxBonus] = useState<string>('')
+  const [savedMaxBonus, setSavedMaxBonus] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
+  const [savingMax, setSavingMax] = useState(false)
 
   useEffect(() => { load() }, [user.org_id])
 
   async function load() {
     const { data } = await supabase
       .from('organizations')
-      .select('bonuses_enabled')
+      .select('bonuses_enabled, max_bonus_idr')
       .eq('id', user.org_id)
       .single()
-    if (data) setEnabled(data.bonuses_enabled ?? true)
+    if (data) {
+      setEnabled(data.bonuses_enabled ?? true)
+      setSavedMaxBonus(data.max_bonus_idr ?? null)
+      setMaxBonus(data.max_bonus_idr != null ? String(data.max_bonus_idr) : '')
+    }
     setLoading(false)
   }
 
@@ -1195,6 +1248,23 @@ function BonusesTab({ user, t }: { user: User; t: Translations }) {
     }
   }
 
+  const trimmedMax = maxBonus.trim()
+  const parsedMax = trimmedMax === '' ? null : Number(trimmedMax)
+  const maxValid = trimmedMax === '' || (Number.isFinite(parsedMax) && Number.isInteger(parsedMax) && (parsedMax as number) > 0)
+  const maxDirty = maxValid && parsedMax !== savedMaxBonus
+
+  async function saveMax() {
+    if (!maxDirty) return
+    setSavingMax(true)
+    const { error } = await supabase
+      .from('organizations')
+      .update({ max_bonus_idr: parsedMax })
+      .eq('id', user.org_id)
+    if (!error) setSavedMaxBonus(parsedMax)
+    else alert(error.message)
+    setSavingMax(false)
+  }
+
   if (loading) return <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{t.loading}</p>
 
   return (
@@ -1205,6 +1275,32 @@ function BonusesTab({ user, t }: { user: User; t: Translations }) {
           <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.bonusesEnabledHelp}</p>
         </div>
         <Toggle checked={enabled} onChange={toggleEnabled} />
+      </div>
+
+      <div style={{ opacity: enabled ? 1 : 0.5 }}>
+        <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.maxBonusIdrLabel}</label>
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            inputMode="numeric"
+            min={1}
+            step={1000}
+            value={maxBonus}
+            onChange={e => setMaxBonus(e.target.value)}
+            onBlur={saveMax}
+            disabled={!enabled}
+            placeholder={t.noCapPlaceholder}
+            className="rounded-lg border px-3 py-2 text-sm md:w-56"
+            style={inputStyle}
+          />
+          {savingMax && <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>…</span>}
+          {parsedMax != null && maxValid && (
+            <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+              ≈ {formatIdr(parsedMax, lang)}
+            </span>
+          )}
+        </div>
+        <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.maxBonusIdrHelp}</p>
       </div>
     </div>
   )

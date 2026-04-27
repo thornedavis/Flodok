@@ -82,6 +82,8 @@ export function CompensationOverview({
   const [creditNet, setCreditNet] = useState(0)
   const [creditFrozen, setCreditFrozen] = useState(false)
   const [bonusSum, setBonusSum] = useState(0)
+  const [maxBonusIdr, setMaxBonusIdr] = useState<number | null>(null)
+  const [maxCreditPerAward, setMaxCreditPerAward] = useState<number | null>(null)
 
   const [creditAction, setCreditAction] = useState<'award' | 'deduct' | null>(null)
   const [bonusModalOpen, setBonusModalOpen] = useState(false)
@@ -91,7 +93,7 @@ export function CompensationOverview({
   useEffect(() => {
     let cancelled = false
     async function load() {
-      const [creditRes, bonusRes] = await Promise.all([
+      const [creditRes, bonusRes, orgRes] = await Promise.all([
         supabase
           .from('credit_adjustments')
           .select('amount, paid_out_at')
@@ -102,6 +104,11 @@ export function CompensationOverview({
           .select('amount_idr')
           .eq('employee_id', employeeId)
           .eq('period_month', period),
+        supabase
+          .from('organizations')
+          .select('max_bonus_idr, max_credit_per_award')
+          .eq('id', user.org_id)
+          .single(),
       ])
       if (cancelled) return
       const cRows = creditRes.data || []
@@ -111,6 +118,8 @@ export function CompensationOverview({
       setCreditNet(cNet)
       setCreditFrozen(frozen)
       setBonusSum(bSum)
+      setMaxBonusIdr(orgRes.data?.max_bonus_idr ?? null)
+      setMaxCreditPerAward(orgRes.data?.max_credit_per_award ?? null)
     }
     load()
     return () => { cancelled = true }
@@ -296,6 +305,7 @@ export function CompensationOverview({
           allowanceIdr={baselineAllowance}
           divisor={divisor}
           creditNet={creditNet}
+          maxPerAward={maxCreditPerAward}
           onClose={() => setCreditAction(null)}
           onDone={() => { setCreditAction(null); onChange?.() }}
         />
@@ -306,6 +316,7 @@ export function CompensationOverview({
           user={user}
           employeeId={employeeId}
           period={period}
+          maxBonusIdr={maxBonusIdr}
           onClose={() => setBonusModalOpen(false)}
           onDone={() => { setBonusModalOpen(false); onChange?.() }}
         />
@@ -323,6 +334,7 @@ function CreditActionModal({
   allowanceIdr,
   divisor,
   creditNet,
+  maxPerAward,
   onClose,
   onDone,
 }: {
@@ -332,6 +344,7 @@ function CreditActionModal({
   allowanceIdr: number
   divisor: number
   creditNet: number
+  maxPerAward: number | null
   onClose: () => void
   onDone: () => void
 }) {
@@ -366,6 +379,10 @@ function CreditActionModal({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!isValidAmount) { setError(t.validationAmountPositive); return }
+    if (maxPerAward != null && parsed > maxPerAward) {
+      setError(t.capExceededCredits(maxPerAward))
+      return
+    }
     if (reason.trim().length < 20) { setError(t.validationReasonMinLength); return }
     setSubmitting(true)
     setError('')
@@ -471,16 +488,18 @@ function BonusAwardModal({
   user,
   employeeId,
   period,
+  maxBonusIdr,
   onClose,
   onDone,
 }: {
   user: User
   employeeId: string
   period: string
+  maxBonusIdr: number | null
   onClose: () => void
   onDone: () => void
 }) {
-  const { t } = useLang()
+  const { t, lang } = useLang()
   const [amount, setAmount] = useState('')
   const [reason, setReason] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -490,6 +509,10 @@ function BonusAwardModal({
     e.preventDefault()
     const parsed = Number(amount)
     if (!Number.isFinite(parsed) || parsed <= 0) { setError(t.validationAmountPositive); return }
+    if (maxBonusIdr != null && parsed > maxBonusIdr) {
+      setError(t.capExceededBonus(formatIdr(maxBonusIdr, lang)))
+      return
+    }
     if (reason.trim().length < 20) { setError(t.validationReasonMinLength); return }
     setSubmitting(true)
     setError('')
