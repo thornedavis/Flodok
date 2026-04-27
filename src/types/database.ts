@@ -883,6 +883,7 @@ export type Database = {
           created_at: string
           credits_divisor: number
           default_country_code: string
+          display_name: string | null
           id: string
           logo_url: string | null
           name: string
@@ -900,6 +901,7 @@ export type Database = {
           created_at?: string
           credits_divisor?: number
           default_country_code?: string
+          display_name?: string | null
           id?: string
           logo_url?: string | null
           name: string
@@ -917,6 +919,7 @@ export type Database = {
           created_at?: string
           credits_divisor?: number
           default_country_code?: string
+          display_name?: string | null
           id?: string
           logo_url?: string | null
           name?: string

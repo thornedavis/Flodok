@@ -519,7 +519,7 @@ export function Portal() {
               />
             )}
             <span className="truncate text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>
-              {org?.name || 'Flodok'}
+              {org?.display_name || org?.name || 'Flodok'}
             </span>
           </div>
 

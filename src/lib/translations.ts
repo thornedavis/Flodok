@@ -473,6 +473,10 @@ export const translations = {
 
     // Avatar / logo upload
     organizationLogoLabel: 'Organization logo',
+    organizationLegalName: 'Legal name',
+    organizationLegalNameHelp: 'Used on contracts and signed documents.',
+    organizationDisplayName: 'Display name',
+    organizationDisplayNameHelp: 'Shown in the employee portal and dashboard. Falls back to legal name if blank.',
     organizationPhoneLabel: 'Organization phone',
     organizationAddressLabel: 'Organization address',
     addressStreetLabel: 'Street',
@@ -1211,6 +1215,10 @@ export const translations = {
 
     // Avatar / logo upload
     organizationLogoLabel: 'Logo organisasi',
+    organizationLegalName: 'Nama hukum',
+    organizationLegalNameHelp: 'Digunakan pada kontrak dan dokumen yang ditandatangani.',
+    organizationDisplayName: 'Nama tampilan',
+    organizationDisplayNameHelp: 'Ditampilkan di portal karyawan dan dasbor. Kembali ke nama hukum jika kosong.',
     organizationPhoneLabel: 'Telepon organisasi',
     organizationAddressLabel: 'Alamat organisasi',
     addressStreetLabel: 'Jalan',

@@ -265,7 +265,7 @@ function Header({ user, org, onSignOut, onOpenMenu }: {
   const { theme, toggle: toggleTheme } = useTheme()
   const location = useLocation()
   const { trailing } = useBreadcrumb()
-  const crumbs = deriveBreadcrumbs(location.pathname, org?.name || 'Flodok', t, trailing)
+  const crumbs = deriveBreadcrumbs(location.pathname, org?.display_name || org?.name || 'Flodok', t, trailing)
 
   return (
     <div

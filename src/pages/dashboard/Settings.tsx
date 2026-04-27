@@ -313,6 +313,7 @@ function OrganizationTab({ user, t }: { user: User; t: Translations }) {
   const [creditsDivisor, setCreditsDivisor] = useState<string>('1000')
   const [payDayOfMonth, setPayDayOfMonth] = useState<string>('1')
   const [timezone, setTimezone] = useState<string>('Asia/Jakarta')
+  const [displayName, setDisplayName] = useState<string>('')
   const [saving, setSaving] = useState(false)
 
   useEffect(() => { loadData() }, [user.org_id])
@@ -334,6 +335,7 @@ function OrganizationTab({ user, t }: { user: User; t: Translations }) {
       setCreditsDivisor(String(data.credits_divisor ?? 1000))
       setPayDayOfMonth(String(data.pay_day_of_month ?? 1))
       setTimezone(data.timezone || 'Asia/Jakarta')
+      setDisplayName(data.display_name || '')
     }
   }
 
@@ -370,8 +372,10 @@ function OrganizationTab({ user, t }: { user: User; t: Translations }) {
   const payDayValid = Number.isFinite(parsedPayDay) && Number.isInteger(parsedPayDay) && parsedPayDay >= 0 && parsedPayDay <= 28
   const payDayDirty = !!org && payDayValid && parsedPayDay !== org.pay_day_of_month
   const timezoneDirty = !!org && timezone !== (org.timezone || 'Asia/Jakarta')
+  const displayNameDirty = !!org && (displayName.trim() || null) !== (org.display_name || null)
   const dirty = !!org && (
     orgName.trim() !== org.name ||
+    displayNameDirty ||
     (orgPhone || null) !== (org.phone || null) ||
     addressDirty ||
     divisorDirty ||
@@ -394,6 +398,7 @@ function OrganizationTab({ user, t }: { user: User; t: Translations }) {
       credits_divisor: parsedDivisor,
       pay_day_of_month: parsedPayDay,
       timezone,
+      display_name: displayName.trim() || null,
     }).eq('id', user.org_id).select().single()
     if (data) setOrg(data)
     setSaving(false)
@@ -413,6 +418,7 @@ function OrganizationTab({ user, t }: { user: User; t: Translations }) {
     setCreditsDivisor(String(org.credits_divisor ?? 1000))
     setPayDayOfMonth(String(org.pay_day_of_month ?? 1))
     setTimezone(org.timezone || 'Asia/Jakarta')
+    setDisplayName(org.display_name || '')
   }
 
   if (!org) return <div style={{ color: 'var(--color-text-secondary)' }}>{t.loading}</div>
@@ -462,17 +468,33 @@ function OrganizationTab({ user, t }: { user: User; t: Translations }) {
             />
           </div>
 
-          <div>
-            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.organizationName}</label>
-            <input
-              type="text"
-              value={orgName}
-              onChange={e => setOrgName(e.target.value)}
-              required
-              readOnly={!isAdmin}
-              className="w-full rounded-lg border px-3 py-2 text-sm"
-              style={isAdmin ? inputStyle : { ...inputStyle, backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}
-            />
+          <div className="grid gap-5 md:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.organizationLegalName}</label>
+              <input
+                type="text"
+                value={orgName}
+                onChange={e => setOrgName(e.target.value)}
+                required
+                readOnly={!isAdmin}
+                className="w-full rounded-lg border px-3 py-2 text-sm"
+                style={isAdmin ? inputStyle : { ...inputStyle, backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}
+              />
+              <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.organizationLegalNameHelp}</p>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.organizationDisplayName}</label>
+              <input
+                type="text"
+                value={displayName}
+                onChange={e => setDisplayName(e.target.value)}
+                placeholder={orgName}
+                readOnly={!isAdmin}
+                className="w-full rounded-lg border px-3 py-2 text-sm"
+                style={isAdmin ? inputStyle : { ...inputStyle, backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}
+              />
+              <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.organizationDisplayNameHelp}</p>
+            </div>
           </div>
 
           <div>
