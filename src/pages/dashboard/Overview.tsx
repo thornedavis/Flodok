@@ -824,10 +824,12 @@ type UpcomingMilestone = {
   milestone_at: string
 }
 
+type RecognitionTab = 'today' | '7d' | '30d'
+
 function RecognitionMoments({ t, lang }: { t: Translations; lang: 'en' | 'id' }) {
   const [today, setToday] = useState<RecentUnlock[]>([])
   const [upcoming, setUpcoming] = useState<UpcomingMilestone[]>([])
-  const [loading, setLoading] = useState(true)
+  const [tab, setTab] = useState<RecognitionTab>('today')
 
   useEffect(() => {
     let cancelled = false
@@ -838,7 +840,6 @@ function RecognitionMoments({ t, lang }: { t: Translations; lang: 'en' | 'id' })
       if (cancelled) return
       setToday((recentRes.data as RecentUnlock[] | null) ?? [])
       setUpcoming((upcomingRes.data as UpcomingMilestone[] | null) ?? [])
-      setLoading(false)
     })
     return () => { cancelled = true }
   }, [])
@@ -847,69 +848,87 @@ function RecognitionMoments({ t, lang }: { t: Translations; lang: 'en' | 'id' })
     const ms = new Date(u.milestone_at).getTime() - Date.now()
     return ms <= 7 * 24 * 60 * 60 * 1000
   })
-  const upcoming30 = upcoming // all 30-day forecasts
+
+  const tabs: { key: RecognitionTab; label: string; count: number }[] = [
+    { key: 'today', label: t.recognitionToday, count: today.length },
+    { key: '7d', label: t.recognitionUpcoming7, count: upcoming7.length },
+    { key: '30d', label: t.recognitionUpcoming30, count: upcoming.length },
+  ]
+
+  const emptyMessage =
+    tab === 'today' ? t.recognitionEmptyToday : t.recognitionEmptyUpcoming
 
   return (
     <Card>
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{t.recognitionMomentsTitle}</h3>
-        {!loading && (
-          <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-            {t.recognitionUpcomingCount(upcoming30.length)}
-          </span>
-        )}
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        {/* Today */}
-        <div>
-          <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-tertiary)' }}>
-            {t.recognitionToday}
-          </h4>
-          {today.length === 0 ? (
-            <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{t.recognitionEmptyToday}</p>
-          ) : (
-            <ul className="space-y-2">
-              {today.map(u => (
-                <li key={u.unlock_id} className="flex items-center gap-2.5">
-                  <span className="text-base">{u.achievement_icon && u.achievement_icon.length === 1 ? u.achievement_icon : '🏆'}</span>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>{u.employee_name}</p>
-                    <p className="truncate text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                      {u.achievement_name}
-                      {u.is_manual && u.reason ? ` · ${u.reason}` : ''}
-                    </p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        {/* Upcoming next 7 days */}
-        <div>
-          <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-tertiary)' }}>
-            {t.recognitionUpcoming7}
-          </h4>
-          {upcoming7.length === 0 ? (
-            <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{t.recognitionEmptyUpcoming}</p>
-          ) : (
-            <ul className="space-y-2">
-              {upcoming7.map(u => (
-                <li key={`${u.employee_id}-${u.achievement_id}`} className="flex items-center gap-2.5">
-                  <span className="text-base">{u.achievement_icon && u.achievement_icon.length === 1 ? u.achievement_icon : '🏆'}</span>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>{u.employee_name}</p>
-                    <p className="truncate text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                      {u.achievement_name} · {formatUpcomingDate(u.milestone_at, lang)}
-                    </p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
+        <div className="flex flex-wrap gap-1">
+          {tabs.map(p => {
+            const active = tab === p.key
+            return (
+              <button
+                key={p.key}
+                type="button"
+                onClick={() => setTab(p.key)}
+                className="rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors"
+                style={{
+                  borderColor: active ? 'var(--color-text)' : 'var(--color-border)',
+                  backgroundColor: active ? 'var(--color-bg-tertiary)' : 'transparent',
+                  color: active ? 'var(--color-text)' : 'var(--color-text-secondary)',
+                }}
+              >
+                {p.label}
+                {p.count > 0 && <span className="ml-1 opacity-70">{p.count}</span>}
+              </button>
+            )
+          })}
         </div>
       </div>
+
+      {tab === 'today' && today.length === 0 ? (
+        <p className="py-3 text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{emptyMessage}</p>
+      ) : tab === '7d' && upcoming7.length === 0 ? (
+        <p className="py-3 text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{emptyMessage}</p>
+      ) : tab === '30d' && upcoming.length === 0 ? (
+        <p className="py-3 text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{emptyMessage}</p>
+      ) : (
+        <ul className="max-h-56 space-y-2 overflow-y-auto pr-1">
+          {tab === 'today' && today.map(u => (
+            <li key={u.unlock_id} className="flex items-center gap-2.5">
+              <span className="text-base">{u.achievement_icon && u.achievement_icon.length === 1 ? u.achievement_icon : '🏆'}</span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>{u.employee_name}</p>
+                <p className="truncate text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                  {u.achievement_name}
+                  {u.is_manual && u.reason ? ` · ${u.reason}` : ''}
+                </p>
+              </div>
+            </li>
+          ))}
+          {tab === '7d' && upcoming7.map(u => (
+            <li key={`${u.employee_id}-${u.achievement_id}`} className="flex items-center gap-2.5">
+              <span className="text-base">{u.achievement_icon && u.achievement_icon.length === 1 ? u.achievement_icon : '🏆'}</span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>{u.employee_name}</p>
+                <p className="truncate text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                  {u.achievement_name} · {formatUpcomingDate(u.milestone_at, lang)}
+                </p>
+              </div>
+            </li>
+          ))}
+          {tab === '30d' && upcoming.map(u => (
+            <li key={`${u.employee_id}-${u.achievement_id}`} className="flex items-center gap-2.5">
+              <span className="text-base">{u.achievement_icon && u.achievement_icon.length === 1 ? u.achievement_icon : '🏆'}</span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>{u.employee_name}</p>
+                <p className="truncate text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                  {u.achievement_name} · {formatUpcomingDate(u.milestone_at, lang)}
+                </p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
     </Card>
   )
 }
