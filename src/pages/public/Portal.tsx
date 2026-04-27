@@ -15,6 +15,7 @@ import { CompensationRing, ShieldPath, WalletPath, CoinPath, GiftPath } from '..
 import { StatRow } from '../../components/portal/StatRow'
 import { InfoTooltip } from '../../components/InfoTooltip'
 import { AvatarWithBadge } from '../../components/portal/AvatarWithBadge'
+import { MonthStrip } from '../../components/portal/MonthStrip'
 import type { Employee, Sop, SopSignature, Organization, Contract, ContractSignature, FeedEvent } from '../../types/database'
 
 type AchievementSummary = {
@@ -32,6 +33,7 @@ type PortalHomeData = {
   org: { id: string; name: string; logo_url: string | null; credits_divisor: number }
   contract: { base_wage_idr: number | null; allowance_idr: number | null; hours_per_day: number | null; days_per_week: number | null } | null
   period_month: string
+  is_current_period?: boolean
   days_employed: number
   hours_per_week: number
   lifetime_xp: number
@@ -41,6 +43,25 @@ type PortalHomeData = {
   bonus_adjustments: Array<{ id: string; amount_idr: number; reason: string; created_at: string; paid_out_at: string | null; payout_idr: number | null }>
   bonus_sum: number
   achievements: AchievementSummary[]
+}
+
+// Returns the first day of the current month in Asia/Jakarta TZ as YYYY-MM-01.
+// Mirrors the SQL `current_period_month()` so client and server agree on which
+// month is "current" regardless of the user's local timezone.
+function currentJakartaMonth(): string {
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jakarta',
+    year: 'numeric',
+    month: '2-digit',
+  })
+  const parts = fmt.formatToParts(new Date())
+  const year = parts.find(p => p.type === 'year')?.value ?? '1970'
+  const month = parts.find(p => p.type === 'month')?.value ?? '01'
+  return `${year}-${month}-01`
+}
+
+function monthFromIsoDate(iso: string): string {
+  return iso.slice(0, 7) + '-01'
 }
 
 type Tab = 'home' | 'sops' | 'contracts' | 'leaderboard' | 'badges'
@@ -182,6 +203,12 @@ export function Portal() {
   const [showNotifications, setShowNotifications] = useState(false)
   const [showDocMenu, setShowDocMenu] = useState(false)
   const [docContentLang, setDocContentLang] = useState<'en' | 'id'>('id')
+  // Month-snapshot navigation: when the user picks a past month from the
+  // strip at the top of the home tab, re-fetch portal_home with that period
+  // so credits/bonuses/achievements reflect that month. Defaults to current.
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => currentJakartaMonth())
+  const currentMonth = currentJakartaMonth()
+  const isCurrentMonth = selectedMonth === currentMonth
 
   const signSectionRef = useRef<HTMLDivElement>(null)
   const notifRef = useRef<HTMLDivElement>(null)
@@ -219,11 +246,10 @@ export function Portal() {
       if (!emp) { setNotFound(true); return }
       setEmployee(emp)
 
-      const [sopsResult, contractsResult, orgResult, portalResult, unreadResult, recentResult] = await Promise.all([
+      const [sopsResult, contractsResult, orgResult, unreadResult, recentResult] = await Promise.all([
         supabase.from('sops').select('*').eq('employee_id', emp.id).eq('status', 'active').order('created_at'),
         supabase.from('contracts').select('*').eq('employee_id', emp.id).eq('status', 'active').order('created_at'),
         supabase.from('organizations').select('*').eq('id', emp.org_id).single(),
-        supabase.rpc('portal_home', { emp_slug: slug, emp_token: token }),
         supabase.rpc('portal_unread_count', { emp_slug: slug, emp_token: token }),
         supabase
           .from('feed_events')
@@ -234,7 +260,6 @@ export function Portal() {
           .limit(5),
       ])
 
-      if (portalResult.data) setPortal(portalResult.data as unknown as PortalHomeData)
       if (typeof unreadResult.data === 'number') setUnreadInformational(unreadResult.data)
       if (recentResult.data) setRecentInformational(recentResult.data)
 
@@ -291,14 +316,34 @@ export function Portal() {
     load()
   }, [slugToken])
 
+  // portal_home is re-fetched whenever the user picks a different month from
+  // the strip. Current month uses the legacy 2-arg call (target_month null);
+  // past months pass the YYYY-MM-01 string and the RPC scopes credits,
+  // bonuses, and achievements to that period.
+  useEffect(() => {
+    if (!slugToken) return
+    const lastDash = slugToken.lastIndexOf('-')
+    if (lastDash === -1) return
+    const slug = slugToken.slice(0, lastDash)
+    const token = slugToken.slice(lastDash + 1)
+    const args = isCurrentMonth
+      ? { emp_slug: slug, emp_token: token }
+      : { emp_slug: slug, emp_token: token, target_month: selectedMonth }
+    supabase.rpc('portal_home', args).then(({ data }) => {
+      if (data) setPortal(data as unknown as PortalHomeData)
+    })
+  }, [slugToken, selectedMonth, isCurrentMonth])
+
   async function loadFeedEvents() {
     if (!employee) return
+    // Bumped to 200 so the month strip has enough history to filter past
+    // months client-side without a follow-up query each time the user swipes.
     const { data } = await supabase
       .from('feed_events')
       .select('*')
       .eq('employee_id', employee.id)
       .order('created_at', { ascending: false })
-      .limit(50)
+      .limit(200)
     if (data) setFeedEvents(data)
   }
 
@@ -665,6 +710,10 @@ export function Portal() {
               badgesEnabled={org?.badges_enabled !== false}
               creditsEnabled={org?.credits_enabled !== false}
               bonusesEnabled={org?.bonuses_enabled !== false}
+              selectedMonth={selectedMonth}
+              currentMonth={currentMonth}
+              isCurrentMonth={isCurrentMonth}
+              onSelectMonth={setSelectedMonth}
               onOpenSop={sop => {
                 setTab('sops')
                 setActiveSop(sop)
@@ -1166,6 +1215,10 @@ function HomeTab({
   badgesEnabled,
   creditsEnabled,
   bonusesEnabled,
+  selectedMonth,
+  currentMonth,
+  isCurrentMonth,
+  onSelectMonth,
   onOpenSop,
   onSelectAchievement,
 }: {
@@ -1178,9 +1231,20 @@ function HomeTab({
   badgesEnabled: boolean
   creditsEnabled: boolean
   bonusesEnabled: boolean
+  selectedMonth: string
+  currentMonth: string
+  isCurrentMonth: boolean
+  onSelectMonth: (month: string) => void
   onOpenSop: (sop: Sop) => void
   onSelectAchievement: (achievement: AchievementSummary) => void
 }) {
+  const earliestMonth = monthFromIsoDate(employee.created_at)
+  // Past months: pending SOPs and the activity feed are filtered to that
+  // month so the page reads as a snapshot of what happened then.
+  const visibleUnsignedSops = isCurrentMonth ? unsignedSops : []
+  const visibleFeedEvents = isCurrentMonth
+    ? feedEvents
+    : feedEvents.filter(ev => monthFromIsoDate(ev.created_at) === selectedMonth)
   const divisor = portal?.org.credits_divisor ?? 1000
   const baseWage = portal?.contract?.base_wage_idr ?? null
   const baselineAllowance = portal?.contract?.allowance_idr ?? 0
@@ -1218,6 +1282,17 @@ function HomeTab({
 
   return (
     <div className="pt-6">
+      {/* Month strip: swipe between past months for a snapshot view. The
+          current month sits at the right edge; the user's hire month bounds
+          the left edge. */}
+      <MonthStrip
+        selectedMonth={selectedMonth}
+        earliestMonth={earliestMonth}
+        currentMonth={currentMonth}
+        onSelect={onSelectMonth}
+        lang={lang}
+      />
+
       {/* Hero: ring */}
       <div className="mb-6 flex flex-col items-center">
         <CompensationRing
@@ -1372,11 +1447,11 @@ function HomeTab({
       </div>
 
       {/* Pending actions */}
-      {unsignedSops.length > 0 && (
+      {visibleUnsignedSops.length > 0 && (
         <div>
           <h2 className="mb-2 text-sm font-semibold" style={{ color: 'var(--color-text-secondary)' }}>{s.pendingActions}</h2>
           <div className="space-y-2">
-            {unsignedSops.map(sop => (
+            {visibleUnsignedSops.map(sop => (
               <button
                 key={sop.id}
                 onClick={() => onOpenSop(sop)}
@@ -1398,7 +1473,7 @@ function HomeTab({
 
       {/* Activity feed — moved here from a dedicated tab so the home page
           provides a complete picture of what's happening with the employee. */}
-      <ActivityFeed events={feedEvents} lang={lang} s={s} />
+      <ActivityFeed events={visibleFeedEvents} lang={lang} s={s} />
     </div>
   )
 }
