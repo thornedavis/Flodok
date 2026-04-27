@@ -72,6 +72,7 @@ interface DashboardData {
   coverage: CoverageBreakdown | null
   employeesById: Record<string, EmployeeLite>
   employees: EmployeeLite[]
+  badgesEnabled: boolean
 }
 
 const DEPT_COLORS = [
@@ -117,10 +118,14 @@ export function Overview({ user }: { user: User }) {
         <SignatureCoverage coverage={data.coverage} t={t} />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <RecognitionMoments t={t} lang={lang} />
+      {data.badgesEnabled ? (
+        <div className="grid gap-6 lg:grid-cols-2">
+          <RecognitionMoments t={t} lang={lang} />
+          <CompensationTotal orgId={user.org_id} t={t} lang={lang} />
+        </div>
+      ) : (
         <CompensationTotal orgId={user.org_id} t={t} lang={lang} />
-      </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
@@ -143,7 +148,7 @@ async function loadDashboard(orgId: string): Promise<DashboardData> {
   const windowStartMs = now - windowDays * 86400000
   const windowStartIso = new Date(windowStartMs).toISOString()
 
-  const [empResult, sopResult, contractResult, pendingResult, feedWindowResult, recentResult, sigResult, csigResult] = await Promise.all([
+  const [empResult, sopResult, contractResult, pendingResult, feedWindowResult, recentResult, sigResult, csigResult, orgResult] = await Promise.all([
     supabase.from('employees').select('id, name, photo_url, department, departments, date_of_birth, created_at').eq('org_id', orgId),
     supabase.from('sops').select('id, status, current_version, employee_id').eq('org_id', orgId),
     supabase.from('contracts').select('id, status, current_version, employee_id').eq('org_id', orgId),
@@ -152,6 +157,7 @@ async function loadDashboard(orgId: string): Promise<DashboardData> {
     supabase.from('feed_events').select('*').eq('org_id', orgId).order('created_at', { ascending: false }).limit(10),
     supabase.from('sop_signatures').select('sop_id, version_number'),
     supabase.from('contract_signatures').select('contract_id, version_number'),
+    supabase.from('organizations').select('badges_enabled').eq('id', orgId).single(),
   ])
 
   const employees = (empResult.data || []) as EmployeeLite[]
@@ -242,6 +248,7 @@ async function loadDashboard(orgId: string): Promise<DashboardData> {
     coverage,
     employeesById,
     employees,
+    badgesEnabled: orgResult.data?.badges_enabled ?? true,
   }
 }
 

@@ -43,6 +43,7 @@ export function Performance({ user }: { user: User }) {
   const [tab, setTab] = useState<Tab>('credits')
   const [search, setSearch] = useState('')
   const [definitions, setDefinitions] = useState<AchievementDefinition[]>([])
+  const [badgesEnabled, setBadgesEnabled] = useState(true)
 
   // Action state
   const [creditAction, setCreditAction] = useState<{ row: RosterRow; mode: CreditAction } | null>(null)
@@ -65,7 +66,21 @@ export function Performance({ user }: { user: User }) {
     setDefinitions(data || [])
   }
 
-  useEffect(() => { loadRoster(); loadDefinitions() }, [user.org_id])
+  async function loadOrgFlags() {
+    const { data } = await supabase
+      .from('organizations')
+      .select('badges_enabled')
+      .eq('id', user.org_id)
+      .single()
+    setBadgesEnabled(data?.badges_enabled ?? true)
+  }
+
+  useEffect(() => { loadRoster(); loadDefinitions(); loadOrgFlags() }, [user.org_id])
+
+  // If the org disables badges while the achievements tab is active, snap back to credits.
+  useEffect(() => {
+    if (!badgesEnabled && tab === 'achievements') setTab('credits')
+  }, [badgesEnabled, tab])
 
   const filtered = useMemo(() => {
     if (!roster) return []
@@ -92,10 +107,11 @@ export function Performance({ user }: { user: User }) {
         <p className="mt-0.5 text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{t.performanceSubtitle}</p>
       </header>
 
-      {/* Tab toggle — mobile-friendly pill group */}
+      {/* Tab toggle — mobile-friendly pill group. Hide the achievements tab
+          entirely when the org has badges disabled. */}
       <div className="sticky top-0 z-10 -mx-4 mb-3 bg-opacity-90 px-4 pb-2 pt-2 backdrop-blur" style={{ backgroundColor: 'var(--color-bg)' }}>
         <div className="mb-3 flex rounded-lg p-0.5" style={{ backgroundColor: 'var(--color-bg-tertiary)' }}>
-          {(['credits', 'achievements'] as Tab[]).map(k => (
+          {(badgesEnabled ? ['credits', 'achievements'] as Tab[] : ['credits'] as Tab[]).map(k => (
             <button
               key={k}
               type="button"

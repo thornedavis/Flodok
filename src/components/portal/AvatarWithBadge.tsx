@@ -13,14 +13,16 @@ export function AvatarWithBadge({
   name,
   size = 40,
   badges,
+  enabled = true,
 }: {
   employeeId: string
   photoUrl: string | null
   name?: string
   size?: number
   badges?: TopAchievement[]
+  enabled?: boolean
 }) {
-  const top = badges?.[0]
+  const top = enabled ? badges?.[0] : null
   return (
     <div className="relative shrink-0" style={{ width: size, height: size }}>
       <div

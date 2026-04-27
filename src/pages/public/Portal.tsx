@@ -662,6 +662,7 @@ export function Portal() {
               lang={lang}
               unsignedSops={unsignedSops}
               feedEvents={feedEvents}
+              badgesEnabled={org?.badges_enabled !== false}
               onOpenSop={sop => {
                 setTab('sops')
                 setActiveSop(sop)
@@ -1001,10 +1002,11 @@ export function Portal() {
             <LeaderboardTab
               slugToken={slugToken!}
               s={s}
+              badgesEnabled={org?.badges_enabled !== false}
             />
           )}
 
-          {tab === 'badges' && employee && (
+          {tab === 'badges' && employee && org?.badges_enabled !== false && (
             <BadgesTab
               slugToken={slugToken!}
               lang={lang}
@@ -1023,7 +1025,9 @@ export function Portal() {
             { key: 'home' as Tab, label: s.home, icon: <HomeIcon /> },
             { key: 'sops' as Tab, label: s.sops, icon: <DocIcon />, badge: notificationCount },
             { key: 'contracts' as Tab, label: s.contracts, icon: <ContractIcon /> },
-            { key: 'badges' as Tab, label: s.portalBadgesTabLabel, icon: <BadgeIcon /> },
+            ...(org?.badges_enabled !== false
+              ? [{ key: 'badges' as Tab, label: s.portalBadgesTabLabel, icon: <BadgeIcon /> }]
+              : []),
             { key: 'leaderboard' as Tab, label: s.leaderboard, icon: <TrophyIcon /> },
           ]).map(item => (
             <button
@@ -1154,6 +1158,7 @@ function HomeTab({
   lang,
   unsignedSops,
   feedEvents,
+  badgesEnabled,
   onOpenSop,
   onSelectAchievement,
 }: {
@@ -1163,6 +1168,7 @@ function HomeTab({
   lang: 'en' | 'id'
   unsignedSops: Sop[]
   feedEvents: FeedEvent[]
+  badgesEnabled: boolean
   onOpenSop: (sop: Sop) => void
   onSelectAchievement: (achievement: AchievementSummary) => void
 }) {
@@ -1306,33 +1312,35 @@ function HomeTab({
             <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>—</p>
           )}
         </StatRow>
-        <StatRow
-          icon={<TrophyIcon />}
-          label={s.portalAchievements}
-          info={s.portalAchievementsInfo}
-          value={portal?.achievements.length ?? 0}
-          accent="var(--color-warning)"
-        >
-          {portal && portal.achievements.length > 0 ? (
-            <div className="flex flex-wrap gap-2">
-              {portal.achievements.map(a => (
-                <button
-                  key={a.unlock_id}
-                  type="button"
-                  onClick={() => onSelectAchievement(a)}
-                  className="flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-transform hover:scale-105"
-                  style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary, var(--color-bg))' }}
-                  title={a.description || a.reason || undefined}
-                >
-                  <span className="text-lg">{displayBadgeIcon(a.icon, '🏅')}</span>
-                  <span style={{ color: 'var(--color-text)' }}>{a.name}</span>
-                </button>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{s.portalNoAchievements}</p>
-          )}
-        </StatRow>
+        {badgesEnabled && (
+          <StatRow
+            icon={<TrophyIcon />}
+            label={s.portalAchievements}
+            info={s.portalAchievementsInfo}
+            value={portal?.achievements.length ?? 0}
+            accent="var(--color-warning)"
+          >
+            {portal && portal.achievements.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {portal.achievements.map(a => (
+                  <button
+                    key={a.unlock_id}
+                    type="button"
+                    onClick={() => onSelectAchievement(a)}
+                    className="flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-transform hover:scale-105"
+                    style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary, var(--color-bg))' }}
+                    title={a.description || a.reason || undefined}
+                  >
+                    <span className="text-lg">{displayBadgeIcon(a.icon, '🏅')}</span>
+                    <span style={{ color: 'var(--color-text)' }}>{a.name}</span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{s.portalNoAchievements}</p>
+            )}
+          </StatRow>
+        )}
         <StatRow
           icon={<SparkIcon />}
           label={s.portalExperience}
@@ -1704,9 +1712,11 @@ function BadgesTab({
 function LeaderboardTab({
   slugToken,
   s,
+  badgesEnabled,
 }: {
   slugToken: string
   s: ReturnType<typeof useLang>['t']
+  badgesEnabled: boolean
 }) {
   const [period, setPeriod] = useState<'month' | 'quarter' | 'all-time'>('month')
   const [data, setData] = useState<LeaderboardData | null>(null)
@@ -1802,6 +1812,7 @@ function LeaderboardTab({
                   name={row.name}
                   size={36}
                   badges={row.top_achievements}
+                  enabled={badgesEnabled}
                 />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>
@@ -1814,8 +1825,8 @@ function LeaderboardTab({
                   </p>
                   <p className="truncate text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
                     {dept}
-                    {dept && row.achievements_count > 0 && ' · '}
-                    {row.achievements_count > 0 && s.leaderboardAchievementsCount(row.achievements_count)}
+                    {badgesEnabled && dept && row.achievements_count > 0 && ' · '}
+                    {badgesEnabled && row.achievements_count > 0 && s.leaderboardAchievementsCount(row.achievements_count)}
                   </p>
                 </div>
                 <span

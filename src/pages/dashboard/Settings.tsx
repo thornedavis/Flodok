@@ -1108,6 +1108,7 @@ function AchievementsTab({ user, t }: { user: User; t: Translations }) {
     is_active: boolean
   }
   const [defs, setDefs] = useState<Def[]>([])
+  const [orgBadgesEnabled, setOrgBadgesEnabled] = useState<boolean>(true)
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -1124,14 +1125,46 @@ function AchievementsTab({ user, t }: { user: User; t: Translations }) {
 
   async function loadData() {
     setLoading(true)
-    const { data } = await supabase
-      .from('achievement_definitions')
-      .select('id, name, description, icon, trigger_type, is_featured, is_active')
-      .eq('org_id', user.org_id)
-      .order('is_featured', { ascending: false })
-      .order('name')
-    setDefs((data || []) as Def[])
+    const [defsRes, orgRes] = await Promise.all([
+      supabase
+        .from('achievement_definitions')
+        .select('id, name, description, icon, trigger_type, is_featured, is_active')
+        .eq('org_id', user.org_id)
+        .order('is_featured', { ascending: false })
+        .order('name'),
+      supabase
+        .from('organizations')
+        .select('badges_enabled')
+        .eq('id', user.org_id)
+        .single(),
+    ])
+    setDefs((defsRes.data || []) as Def[])
+    setOrgBadgesEnabled(orgRes.data?.badges_enabled ?? true)
     setLoading(false)
+  }
+
+  async function toggleOrgBadgesEnabled(next: boolean) {
+    setOrgBadgesEnabled(next)
+    const { error: updateError } = await supabase
+      .from('organizations')
+      .update({ badges_enabled: next })
+      .eq('id', user.org_id)
+    if (updateError) {
+      setOrgBadgesEnabled(!next)
+      alert(updateError.message)
+    }
+  }
+
+  async function toggleDefActive(def: Def, next: boolean) {
+    setDefs(prev => prev.map(d => (d.id === def.id ? { ...d, is_active: next } : d)))
+    const { error: updateError } = await supabase
+      .from('achievement_definitions')
+      .update({ is_active: next })
+      .eq('id', def.id)
+    if (updateError) {
+      setDefs(prev => prev.map(d => (d.id === def.id ? { ...d, is_active: !next } : d)))
+      alert(updateError.message)
+    }
   }
 
   function resetForm() {
@@ -1187,20 +1220,24 @@ function AchievementsTab({ user, t }: { user: User; t: Translations }) {
     await loadData()
   }
 
-  async function handleDelete(def: Def) {
-    if (!confirm(t.deleteAchievementConfirm(def.name))) return
-    await supabase.from('achievement_definitions').delete().eq('id', def.id)
-    await loadData()
-  }
-
   return (
     <div className="space-y-5">
+      {/* Org-level master switch */}
+      <div className="flex items-start justify-between gap-4 rounded-xl border p-4" style={{ borderColor: 'var(--color-border)' }}>
+        <div className="min-w-0">
+          <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{t.badgesEnabledLabel}</p>
+          <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.badgesEnabledHelp}</p>
+        </div>
+        <Toggle checked={orgBadgesEnabled} onChange={toggleOrgBadgesEnabled} />
+      </div>
+
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>{t.achievementDefsTitle}</h2>
         <button
           type="button"
           onClick={openNew}
-          className="rounded-lg px-3 py-1.5 text-sm font-medium text-white"
+          disabled={!orgBadgesEnabled}
+          className="rounded-lg px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
           style={{ backgroundColor: 'var(--color-primary)' }}
         >
           {t.newAchievement}
@@ -1212,7 +1249,7 @@ function AchievementsTab({ user, t }: { user: User; t: Translations }) {
       ) : defs.length === 0 ? (
         <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{t.noAchievementsYet}</p>
       ) : (
-        <ul className="space-y-2">
+        <ul className="space-y-2" style={{ opacity: orgBadgesEnabled ? 1 : 0.5 }}>
           {defs.map(def => (
             <li
               key={def.id}
@@ -1232,28 +1269,31 @@ function AchievementsTab({ user, t }: { user: User; t: Translations }) {
                     <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-tertiary)' }}>
                       {def.trigger_type === 'manual' ? 'manual' : 'auto'}
                     </span>
+                    {!def.is_active && (
+                      <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: 'var(--color-diff-remove)', color: 'var(--color-danger)' }}>
+                        {t.badgeDisabledLabel}
+                      </span>
+                    )}
                   </p>
                   {def.description && (
                     <p className="truncate text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{def.description}</p>
                   )}
                 </div>
               </div>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-3">
+                <Toggle
+                  checked={def.is_active}
+                  onChange={next => toggleDefActive(def, next)}
+                  disabled={!orgBadgesEnabled}
+                />
                 <button
                   type="button"
                   onClick={() => openEdit(def)}
-                  className="rounded-lg px-2 py-1 text-xs"
+                  disabled={!orgBadgesEnabled}
+                  className="rounded-lg px-2 py-1 text-xs disabled:opacity-50"
                   style={{ color: 'var(--color-text-secondary)' }}
                 >
                   {t.edit}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDelete(def)}
-                  className="rounded-lg px-2 py-1 text-xs"
-                  style={{ color: 'var(--color-danger)' }}
-                >
-                  {t.delete}
                 </button>
               </div>
             </li>
@@ -1392,5 +1432,28 @@ function BillingTab({ t }: { t: Translations }) {
         </p>
       </div>
     </section>
+  )
+}
+
+// Small shared switch used inside the Badges tab. Renders a pill-style
+// toggle that calls onChange(next) when clicked.
+function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (next: boolean) => void; disabled?: boolean }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+      style={{
+        backgroundColor: checked ? 'var(--color-primary)' : 'var(--color-bg-tertiary)',
+      }}
+    >
+      <span
+        className="inline-block h-4 w-4 rounded-full bg-white shadow transition-transform"
+        style={{ transform: checked ? 'translateX(18px)' : 'translateX(2px)' }}
+      />
+    </button>
   )
 }

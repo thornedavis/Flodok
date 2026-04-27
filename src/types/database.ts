@@ -880,6 +880,7 @@ export type Database = {
           address_postal_code: string | null
           address_province: string | null
           address_street: string | null
+          badges_enabled: boolean
           created_at: string
           credits_divisor: number
           default_country_code: string
@@ -898,6 +899,7 @@ export type Database = {
           address_postal_code?: string | null
           address_province?: string | null
           address_street?: string | null
+          badges_enabled?: boolean
           created_at?: string
           credits_divisor?: number
           default_country_code?: string
@@ -916,6 +918,7 @@ export type Database = {
           address_postal_code?: string | null
           address_province?: string | null
           address_street?: string | null
+          badges_enabled?: boolean
           created_at?: string
           credits_divisor?: number
           default_country_code?: string
