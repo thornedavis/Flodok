@@ -1501,6 +1501,7 @@ export type Database = {
           achievement_icon: string
           achievement_id: string
           achievement_name: string
+          announced_at: string
           awarded_by: string
           employee_id: string
           employee_name: string

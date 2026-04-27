@@ -800,6 +800,7 @@ function eventVisual(eventType: string): { color: string; icon: React.ReactNode 
 type RecentUnlock = {
   unlock_id: string
   unlocked_at: string
+  announced_at: string
   awarded_by: string | null
   reason: string | null
   employee_id: string
