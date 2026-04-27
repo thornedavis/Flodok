@@ -1317,14 +1317,14 @@ function AchievementsTab({ user, t }: { user: User; t: Translations }) {
                       <div className="min-w-0">
                         <p className="flex items-center gap-2 text-sm font-medium" style={{ color: 'var(--color-text)' }}>
                           {def.name}
-                          {def.is_featured && (
-                            <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-tertiary)' }}>
-                              ★
-                            </span>
-                          )}
                           <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-tertiary)' }}>
                             {def.trigger_type === 'manual' ? 'manual' : 'auto'}
                           </span>
+                          {def.is_featured && (
+                            <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-tertiary)' }}>
+                              {t.badgeFeaturedPill}
+                            </span>
+                          )}
                           {!def.is_active && (
                             <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: 'var(--color-diff-remove)', color: 'var(--color-danger)' }}>
                               {t.badgeDisabledLabel}
