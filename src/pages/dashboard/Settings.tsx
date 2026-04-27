@@ -5,7 +5,7 @@ import { useLang } from '../../contexts/LanguageContext'
 import { useRole } from '../../hooks/useRole'
 import { getAvatarGradient } from '../../lib/avatar'
 import { displayBadgeIcon } from '../../lib/badgeIcon'
-import { formatIdr } from '../../lib/credits'
+import { formatIdrDigits } from '../../lib/credits'
 import { AvatarUpload } from '../../components/AvatarUpload'
 import { PhoneInput } from '../../components/PhoneInput'
 import { AddressFields, type AddressValue } from '../../components/AddressFields'
@@ -1216,7 +1216,6 @@ function CreditsTab({ user, t }: { user: User; t: Translations }) {
 // ─── Bonuses tab ────────────────────────────────────────
 
 function BonusesTab({ user, t }: { user: User; t: Translations }) {
-  const { lang } = useLang()
   const [enabled, setEnabled] = useState(true)
   const [maxBonus, setMaxBonus] = useState<string>('')
   const [savedMaxBonus, setSavedMaxBonus] = useState<number | null>(null)
@@ -1280,25 +1279,21 @@ function BonusesTab({ user, t }: { user: User; t: Translations }) {
       <div style={{ opacity: enabled ? 1 : 0.5 }}>
         <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.maxBonusIdrLabel}</label>
         <div className="flex items-center gap-2">
-          <input
-            type="number"
-            inputMode="numeric"
-            min={1}
-            step={1000}
-            value={maxBonus}
-            onChange={e => setMaxBonus(e.target.value)}
-            onBlur={saveMax}
-            disabled={!enabled}
-            placeholder={t.noCapPlaceholder}
-            className="rounded-lg border px-3 py-2 text-sm md:w-56"
-            style={inputStyle}
-          />
+          <div className="relative md:w-56">
+            <input
+              type="text"
+              inputMode="numeric"
+              value={formatIdrDigits(maxBonus)}
+              onChange={e => setMaxBonus(e.target.value.replace(/\D/g, ''))}
+              onBlur={saveMax}
+              disabled={!enabled}
+              placeholder={t.noCapPlaceholder}
+              className="w-full rounded-lg border px-3 py-2 pr-12 text-sm"
+              style={inputStyle}
+            />
+            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.idr}</span>
+          </div>
           {savingMax && <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>…</span>}
-          {parsedMax != null && maxValid && (
-            <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-              ≈ {formatIdr(parsedMax, lang)}
-            </span>
-          )}
         </div>
         <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.maxBonusIdrHelp}</p>
       </div>
