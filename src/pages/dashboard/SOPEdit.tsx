@@ -367,6 +367,20 @@ export function SOPEdit({ user }: { user: User }) {
               <polyline points="6 9 12 15 18 9" />
             </svg>
           </div>
+          <Link
+            to={`/dashboard/sops/${sop.id}/history`}
+            className="rounded-lg border px-4 py-2 text-sm"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
+          >
+            {t.historyLinkLabel}
+          </Link>
+          <button
+            onClick={() => navigate('/dashboard/sops')}
+            className="rounded-lg border px-4 py-2 text-sm"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
+          >
+            {t.cancel}
+          </button>
           <button
             onClick={handleSave}
             disabled={saving || !hasChanges}
@@ -381,20 +395,6 @@ export function SOPEdit({ user }: { user: User }) {
                 {translating ? t.savingTranslating : t.saving}
               </>
             ) : (enChanged !== idChanged) ? t.saveAndTranslate : t.save}
-          </button>
-          <Link
-            to={`/dashboard/sops/${sop.id}/history`}
-            className="rounded-lg border px-4 py-2 text-sm"
-            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
-          >
-            {t.historyLinkLabel}
-          </Link>
-          <button
-            onClick={() => navigate('/dashboard/sops')}
-            className="rounded-lg border px-4 py-2 text-sm"
-            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
-          >
-            {t.cancel}
           </button>
         </div>
       </div>

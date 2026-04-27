@@ -390,14 +390,14 @@ export function ContractEdit({ user }: { user: User }) {
               <polyline points="6 9 12 15 18 9" />
             </svg>
           </div>
+          <Link to={`/dashboard/contracts/${contract.id}/history`} className="rounded-lg border px-4 py-2 text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>{t.historyLinkLabel}</Link>
+          <button onClick={() => navigate('/dashboard/contracts')} className="rounded-lg border px-4 py-2 text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>{t.cancel}</button>
           <button onClick={handleSave} disabled={saving || !hasChanges}
             className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50" style={{ backgroundColor: 'var(--color-primary)' }}>
             {saving ? (
               <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>{translating ? t.savingTranslating : t.saving}</>
             ) : (enChanged !== idChanged) ? t.saveAndTranslate : t.save}
           </button>
-          <Link to={`/dashboard/contracts/${contract.id}/history`} className="rounded-lg border px-4 py-2 text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>{t.historyLinkLabel}</Link>
-          <button onClick={() => navigate('/dashboard/contracts')} className="rounded-lg border px-4 py-2 text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>{t.cancel}</button>
         </div>
       </div>
 

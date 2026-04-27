@@ -280,6 +280,13 @@ export function EmployeeEdit({ user }: { user: User }) {
     color: 'var(--color-text)',
   } as React.CSSProperties
 
+  const statusColors: Record<typeof status, string> = {
+    trial: 'var(--color-warning)',
+    active: 'var(--color-success)',
+    suspended: 'var(--color-text-tertiary)',
+    terminated: 'var(--color-danger)',
+  }
+
   if (!employee || !employeeId) {
     return <div style={{ color: 'var(--color-text-secondary)' }}>{t.loading}</div>
   }
@@ -339,6 +346,28 @@ export function EmployeeEdit({ user }: { user: User }) {
           </a>
         </div>
         <div className="flex items-center gap-2">
+          {isFormTab && (
+            <div className="relative" title={t.employeeStatusHelp}>
+              <span
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 inline-block h-2 w-2 rounded-full"
+                style={{ backgroundColor: statusColors[status] }}
+              />
+              <select
+                value={status}
+                onChange={e => setStatus(e.target.value as typeof status)}
+                className="appearance-none rounded-lg border py-2 pl-7 pr-8 text-sm font-medium"
+                style={{ ...inputStyle, color: statusColors[status] }}
+              >
+                <option value="trial">{t.employeeStatusTrial}</option>
+                <option value="active">{t.employeeStatusActive}</option>
+                <option value="suspended">{t.employeeStatusSuspended}</option>
+                <option value="terminated">{t.employeeStatusTerminated}</option>
+              </select>
+              <svg className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-text-tertiary)' }}>
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </div>
+          )}
           <button
             type="button"
             onClick={handleDuplicate}
@@ -469,21 +498,6 @@ export function EmployeeEdit({ user }: { user: User }) {
                   <div>
                     <label className="mb-1 block text-sm font-medium" style={fieldLabelStyle}>{t.departmentsLabel}</label>
                     <DepartmentsMultiSelect value={empDepartments} onChange={setEmpDepartments} availableDepartments={orgDepartments} />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium" style={fieldLabelStyle}>{t.employeeStatusLabel}</label>
-                    <select
-                      value={status}
-                      onChange={e => setStatus(e.target.value as typeof status)}
-                      className="w-full rounded-lg border px-3 py-2 text-sm"
-                      style={inputStyle}
-                    >
-                      <option value="trial">{t.employeeStatusTrial}</option>
-                      <option value="active">{t.employeeStatusActive}</option>
-                      <option value="suspended">{t.employeeStatusSuspended}</option>
-                      <option value="terminated">{t.employeeStatusTerminated}</option>
-                    </select>
-                    <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.employeeStatusHelp}</p>
                   </div>
                 </div>
               </section>
