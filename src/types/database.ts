@@ -1478,6 +1478,10 @@ export type Database = {
             }
             Returns: string
           }
+      portal_badges: {
+        Args: { emp_slug: string; emp_token: string }
+        Returns: Json
+      }
       portal_home: {
         Args: { emp_slug: string; emp_token: string }
         Returns: Json
@@ -1699,7 +1703,6 @@ export type ContractVersion = Database['public']['Tables']['contract_versions'][
 export type FeedEvent = Database['public']['Tables']['feed_events']['Row']
 export type OrgInvitation = Database['public']['Tables']['org_invitations']['Row']
 export type ContractSignature = Database['public']['Tables']['contract_signatures']['Row']
-// allowance_adjustments is RLS-gated and not surfaced in generated types; alias manually.
 export type AllowanceAdjustment = {
   id: string
   org_id: string

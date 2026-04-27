@@ -42,7 +42,21 @@ type PortalHomeData = {
   achievements: AchievementSummary[]
 }
 
-type Tab = 'home' | 'sops' | 'contracts' | 'activity' | 'leaderboard'
+type Tab = 'home' | 'sops' | 'contracts' | 'activity' | 'leaderboard' | 'badges'
+
+type BadgeData = {
+  definition_id: string
+  name: string
+  description: string | null
+  icon: string | null
+  is_featured: boolean
+  trigger_type: string
+  unlocked: boolean
+  unlock_count: number
+  unlock_id: string | null
+  unlocked_at: string | null
+  reason: string | null
+}
 
 type LeaderboardData = {
   period_kind: 'month' | 'quarter' | 'all-time'
@@ -116,6 +130,10 @@ function ActivityIcon() {
 
 function TrophyIcon() {
   return <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
+}
+
+function BadgeIcon() {
+  return <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 15a6 6 0 1 0 0-12 6 6 0 0 0 0 12Z"/><path d="m15.477 12.89 1.515 8.526a.5.5 0 0 1-.81.47l-3.58-2.687a1 1 0 0 0-1.197 0l-3.586 2.686a.5.5 0 0 1-.81-.469l1.514-8.526"/></svg>
 }
 
 function MoreIcon() {
@@ -1058,6 +1076,15 @@ export function Portal() {
             />
           )}
 
+          {tab === 'badges' && employee && (
+            <BadgesTab
+              slugToken={slugToken!}
+              lang={lang}
+              s={s}
+              onSelectAchievement={setSelectedAchievement}
+            />
+          )}
+
         </div>
       </div>
 
@@ -1068,6 +1095,7 @@ export function Portal() {
             { key: 'home' as Tab, label: s.home, icon: <HomeIcon /> },
             { key: 'sops' as Tab, label: s.sops, icon: <DocIcon />, badge: notificationCount },
             { key: 'contracts' as Tab, label: s.contracts, icon: <ContractIcon /> },
+            { key: 'badges' as Tab, label: s.portalBadgesTabLabel, icon: <BadgeIcon /> },
             { key: 'leaderboard' as Tab, label: s.leaderboard, icon: <TrophyIcon /> },
             { key: 'activity' as Tab, label: s.activity, icon: <ActivityIcon /> },
           ]).map(item => (
@@ -1534,6 +1562,107 @@ function SparkIcon() {
 }
 
 // ─── Leaderboard Tab ─────────────────────────────────────
+
+// ─── Badges Tab ───────────────────────────────────────────
+// Shows every active badge definition for the org with the employee's
+// unlock status. Locked badges render greyed out so the employee sees
+// what's still earnable (motivation lever).
+
+function BadgesTab({
+  slugToken,
+  lang,
+  s,
+  onSelectAchievement,
+}: {
+  slugToken: string
+  lang: 'en' | 'id'
+  s: ReturnType<typeof useLang>['t']
+  onSelectAchievement: (achievement: AchievementSummary) => void
+}) {
+  const [badges, setBadges] = useState<BadgeData[] | null>(null)
+
+  useEffect(() => {
+    async function load() {
+      const lastDash = slugToken.lastIndexOf('-')
+      if (lastDash === -1) return
+      const slug = slugToken.slice(0, lastDash)
+      const token = slugToken.slice(lastDash + 1)
+      const { data } = await supabase.rpc('portal_badges', { emp_slug: slug, emp_token: token })
+      setBadges((data as unknown as BadgeData[] | null) ?? [])
+    }
+    load()
+  }, [slugToken])
+
+  if (!badges) {
+    return <div className="py-8 text-center text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{s.loading}</div>
+  }
+
+  const earned = badges.filter(b => b.unlocked).length
+  const total = badges.length
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>{s.portalBadgesTabLabel}</h2>
+        <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{s.portalBadgesProgress(earned, total)}</p>
+      </div>
+
+      {total === 0 ? (
+        <p className="py-8 text-center text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{s.portalNoAchievements}</p>
+      ) : (
+        <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
+          {badges.map(b => {
+            const showIcon = b.icon && b.icon.length === 1 ? b.icon : '🏆'
+            const clickable = b.unlocked && b.unlock_id && b.unlocked_at
+            return (
+              <button
+                key={b.definition_id}
+                type="button"
+                disabled={!clickable}
+                onClick={() => {
+                  if (!clickable) return
+                  onSelectAchievement({
+                    unlock_id: b.unlock_id!,
+                    unlocked_at: b.unlocked_at!,
+                    reason: b.reason,
+                    name: b.name,
+                    icon: b.icon,
+                    description: b.description,
+                    is_featured: b.is_featured,
+                  })
+                }}
+                className="relative flex aspect-square flex-col items-center justify-center gap-1 rounded-2xl border p-2 text-center transition-transform"
+                style={{
+                  borderColor: 'var(--color-border)',
+                  backgroundColor: b.unlocked ? 'var(--color-bg-secondary, var(--color-bg))' : 'transparent',
+                  opacity: b.unlocked ? 1 : 0.45,
+                  filter: b.unlocked ? 'none' : 'grayscale(0.8)',
+                  cursor: clickable ? 'pointer' : 'default',
+                }}
+                title={b.description || (b.unlocked ? undefined : s.portalBadgeLocked)}
+              >
+                <span className="text-3xl leading-none">{showIcon}</span>
+                <span className="line-clamp-2 text-xs font-medium leading-tight" style={{ color: 'var(--color-text)' }}>
+                  {b.name}
+                </span>
+                {b.unlocked && b.unlock_count > 1 && (
+                  <span
+                    className="absolute right-1 top-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
+                    style={{ backgroundColor: 'var(--color-primary)', color: 'white' }}
+                  >
+                    {s.portalBadgeRepeats(b.unlock_count)}
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      )}
+      {/* Suppress unused warning until Indonesian-specific formatting is needed here. */}
+      <span className="hidden">{lang}</span>
+    </div>
+  )
+}
 
 function LeaderboardTab({
   slugToken,
