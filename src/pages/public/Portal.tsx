@@ -121,10 +121,11 @@ function DocIcon() {
 }
 
 function ContractIcon() {
-  // Lucide "file-signature" — file with a signature wave below. Reads as
-  // "signed agreement"; distinct from DocIcon (lined doc, used for SOPs)
-  // and BadgeIcon (sealed credential).
-  return <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 19.5v.5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8.5L20 7.5"/><path d="M16 2v4a2 2 0 0 0 2 2h4"/><path d="M9 18a2 2 0 0 1-2 2"/><path d="M3 19a8 8 0 0 1 6.5-3"/></svg>
+  // File shape mirroring DocIcon (so it stays in the "document" family) but
+  // with a wavy signature line inside instead of horizontal text lines.
+  // Reads as "signed document" → contract. Same outline as SOPs icon for
+  // visual continuity, distinct content for separation.
+  return <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M7 16q2-3 4 0t4 0"/></svg>
 }
 
 function ActivityIcon() {
