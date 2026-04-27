@@ -1,5 +1,4 @@
 import { getAvatarGradient } from '../../lib/avatar'
-import { displayBadgeIcon } from '../../lib/badgeIcon'
 
 type TopAchievement = {
   name: string
@@ -32,18 +31,23 @@ export function AvatarWithBadge({
       </div>
       {top && (
         <div
-          className="absolute flex items-center justify-center rounded-full border text-[10px]"
+          className="absolute"
           style={{
             right: -2,
             top: -2,
             width: Math.max(14, size * 0.38),
             height: Math.max(14, size * 0.38),
-            backgroundColor: 'var(--color-bg)',
-            borderColor: 'var(--color-border)',
+            color: 'var(--color-warning)',
           }}
-          title={badges && badges.length > 1 ? `${badges.map(b => b.name).join(' · ')}` : top.name}
+          title={badges && badges.length > 1 ? badges.map(b => b.name).join(' · ') : top.name}
         >
-          {displayBadgeIcon(top.icon, '🏅')}
+          {/* Filled badge-check shape — matches the Badges tab nav icon
+              but solid instead of outlined so it stays legible at the
+              small avatar-overlay size. */}
+          <svg width="100%" height="100%" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+            <path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z" />
+            <path d="m9 12 2 2 4-4" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
         </div>
       )}
     </div>
