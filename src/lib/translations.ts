@@ -721,6 +721,11 @@ export const translations = {
     payDayHelp: 'The day of each month that payroll finalizes. Credits and bonuses for the prior period are locked in on this date.',
     payDayOptionLast: 'Last day of month',
     payDayPreview: 'Next payroll closes on {date}.',
+    timezoneLabel: 'Time zone',
+    timezoneHelp: 'Used to decide when "today" rolls over for the manager dashboard and the daily achievement evaluation.',
+    timezoneWib: 'WIB — Jakarta · Sumatra, Java, W & C Kalimantan (UTC+7)',
+    timezoneWita: 'WITA — Makassar · Bali, Sulawesi, NTB/NTT, S/E/N Kalimantan (UTC+8)',
+    timezoneWit: 'WIT — Jayapura · Maluku, Papua (UTC+9)',
     // Achievement definitions CRUD (internal name kept; user sees "Badge")
     achievementDefsTitle: 'Badge definitions',
     newAchievement: 'New badge',
@@ -1453,6 +1458,11 @@ export const translations = {
     payDayHelp: 'Tanggal setiap bulan saat penggajian difinalisasi. Credits dan bonus untuk periode sebelumnya dikunci pada tanggal ini.',
     payDayOptionLast: 'Hari terakhir bulan',
     payDayPreview: 'Penggajian berikutnya ditutup pada {date}.',
+    timezoneLabel: 'Zona waktu',
+    timezoneHelp: 'Menentukan kapan "hari ini" berganti untuk dasbor pengelola dan evaluasi lencana harian.',
+    timezoneWib: 'WIB — Jakarta · Sumatra, Jawa, Kalimantan Barat & Tengah (UTC+7)',
+    timezoneWita: 'WITA — Makassar · Bali, Sulawesi, NTB/NTT, Kalimantan Selatan/Timur/Utara (UTC+8)',
+    timezoneWit: 'WIT — Jayapura · Maluku, Papua (UTC+9)',
     // Achievement definitions CRUD
     achievementDefsTitle: 'Daftar lencana',
     newAchievement: 'Lencana baru',

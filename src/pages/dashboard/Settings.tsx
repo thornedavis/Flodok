@@ -312,6 +312,7 @@ function OrganizationTab({ user, t }: { user: User; t: Translations }) {
   const [address, setAddress] = useState<AddressValue>(EMPTY_ADDRESS)
   const [creditsDivisor, setCreditsDivisor] = useState<string>('1000')
   const [payDayOfMonth, setPayDayOfMonth] = useState<string>('1')
+  const [timezone, setTimezone] = useState<string>('Asia/Jakarta')
   const [saving, setSaving] = useState(false)
 
   useEffect(() => { loadData() }, [user.org_id])
@@ -332,6 +333,7 @@ function OrganizationTab({ user, t }: { user: User; t: Translations }) {
       })
       setCreditsDivisor(String(data.credits_divisor ?? 1000))
       setPayDayOfMonth(String(data.pay_day_of_month ?? 1))
+      setTimezone(data.timezone || 'Asia/Jakarta')
     }
   }
 
@@ -367,12 +369,14 @@ function OrganizationTab({ user, t }: { user: User; t: Translations }) {
   const parsedPayDay = Number(payDayOfMonth)
   const payDayValid = Number.isFinite(parsedPayDay) && Number.isInteger(parsedPayDay) && parsedPayDay >= 0 && parsedPayDay <= 28
   const payDayDirty = !!org && payDayValid && parsedPayDay !== org.pay_day_of_month
+  const timezoneDirty = !!org && timezone !== (org.timezone || 'Asia/Jakarta')
   const dirty = !!org && (
     orgName.trim() !== org.name ||
     (orgPhone || null) !== (org.phone || null) ||
     addressDirty ||
     divisorDirty ||
-    payDayDirty
+    payDayDirty ||
+    timezoneDirty
   ) && orgName.trim().length > 0 && phoneValid && divisorValid && payDayValid
 
   async function handleSaveOrg(e: React.FormEvent) {
@@ -389,6 +393,7 @@ function OrganizationTab({ user, t }: { user: User; t: Translations }) {
       address_country: address.country,
       credits_divisor: parsedDivisor,
       pay_day_of_month: parsedPayDay,
+      timezone,
     }).eq('id', user.org_id).select().single()
     if (data) setOrg(data)
     setSaving(false)
@@ -407,6 +412,7 @@ function OrganizationTab({ user, t }: { user: User; t: Translations }) {
     })
     setCreditsDivisor(String(org.credits_divisor ?? 1000))
     setPayDayOfMonth(String(org.pay_day_of_month ?? 1))
+    setTimezone(org.timezone || 'Asia/Jakarta')
   }
 
   if (!org) return <div style={{ color: 'var(--color-text-secondary)' }}>{t.loading}</div>
@@ -534,6 +540,22 @@ function OrganizationTab({ user, t }: { user: User; t: Translations }) {
                 )}
               </p>
             )}
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.timezoneLabel}</label>
+            <select
+              value={timezone}
+              onChange={e => setTimezone(e.target.value)}
+              disabled={!isAdmin}
+              className="w-full rounded-lg border px-3 py-2 text-sm md:w-96"
+              style={isAdmin ? inputStyle : { ...inputStyle, backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}
+            >
+              <option value="Asia/Jakarta">{t.timezoneWib}</option>
+              <option value="Asia/Makassar">{t.timezoneWita}</option>
+              <option value="Asia/Jayapura">{t.timezoneWit}</option>
+            </select>
+            <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.timezoneHelp}</p>
           </div>
 
         </form>
