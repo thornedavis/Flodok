@@ -1220,20 +1220,25 @@ function HomeTab({
 
       {/* Stat rows */}
       <div className="mb-6 space-y-2">
-        <StatRow
-          icon={<ShieldIcon />}
-          label={s.portalBaseWage}
-          info={s.portalBaseWageInfo}
-          value={hasContract ? formatIdr(baseWage ?? 0, lang) : '—'}
-          accent="var(--color-text-secondary)"
-        />
-        <StatRow
-          icon={<WalletIcon />}
-          label={s.portalAllowance}
-          info={s.portalAllowanceInfo}
-          value={hasContract ? formatIdr(effectiveAllowance, lang) : '—'}
-          accent={hasContract ? allowanceColor : undefined}
-        />
+        {/* Wage + allowance pair side by side — they're the two fixed
+            components of monthly comp and reading them as one row makes the
+            pay structure clearer at a glance. */}
+        <div className="grid grid-cols-2 gap-2">
+          <StatRow
+            icon={<ShieldIcon />}
+            label={s.portalBaseWage}
+            info={s.portalBaseWageInfo}
+            value={hasContract ? formatIdr(baseWage ?? 0, lang) : '—'}
+            accent="var(--color-text-secondary)"
+          />
+          <StatRow
+            icon={<WalletIcon />}
+            label={s.portalAllowance}
+            info={s.portalAllowanceInfo}
+            value={hasContract ? formatIdr(effectiveAllowance, lang) : '—'}
+            accent={hasContract ? allowanceColor : undefined}
+          />
+        </div>
         <StatRow
           icon={<CreditsIcon />}
           label={s.portalCredits}
@@ -1389,8 +1394,8 @@ function ActivityFeed({
 }) {
   if (events.length === 0) {
     return (
-      <div>
-        <h2 className="mb-2 text-sm font-semibold" style={{ color: 'var(--color-text-secondary)' }}>{s.portalActivityTitle}</h2>
+      <div className="mt-2 border-t pt-5" style={{ borderColor: 'var(--color-border)' }}>
+        <h2 className="mb-3 text-base font-semibold" style={{ color: 'var(--color-text)' }}>{s.portalActivityTitle}</h2>
         <div className="rounded-xl border p-6 text-center" style={{ borderColor: 'var(--color-border)' }}>
           <div className="mx-auto flex h-10 w-10 items-center justify-center" style={{ color: 'var(--color-text-tertiary)' }}><ActivityIcon /></div>
           <p className="mt-2 text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{s.noActivity}</p>
@@ -1433,8 +1438,8 @@ function ActivityFeed({
   }
 
   return (
-    <div>
-      <h2 className="mb-2 text-sm font-semibold" style={{ color: 'var(--color-text-secondary)' }}>{s.portalActivityTitle}</h2>
+    <div className="mt-2 border-t pt-5" style={{ borderColor: 'var(--color-border)' }}>
+      <h2 className="mb-3 text-base font-semibold" style={{ color: 'var(--color-text)' }}>{s.portalActivityTitle}</h2>
       <div className="space-y-0">
         {events.map((event, i) => {
           const isLast = i === events.length - 1
