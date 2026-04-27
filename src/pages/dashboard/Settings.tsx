@@ -1104,8 +1104,42 @@ function AchievementsTab({ user, t }: { user: User; t: Translations }) {
     description: string | null
     icon: string | null
     trigger_type: 'manual' | 'auto'
+    trigger_rule: Record<string, unknown> | null
     is_featured: boolean
     is_active: boolean
+  }
+  type Group = 'tenure' | 'compensation' | 'leaderboard' | 'manual'
+
+  // Group + within-group sort. Tenure: day → week → month → year (chronological).
+  // Leaderboard: Podium → Number One → Reigning Champion (broadest rank first).
+  // Manual + Compensation: stable by name.
+  function classify(def: Def): { group: Group; sortKey: number } {
+    if (def.trigger_type === 'manual') return { group: 'manual', sortKey: 0 }
+    const rule = def.trigger_rule || {}
+    const ruleType = rule.type as string | undefined
+    if (ruleType === 'tenure_calendar') {
+      const unit = (rule.unit as string) || 'day'
+      const amount = (rule.amount as number) || 0
+      const unitRank = unit === 'day' ? 0 : unit === 'month' ? 1 : 2
+      return { group: 'tenure', sortKey: unitRank * 1000 + amount }
+    }
+    if (ruleType === 'first_event') return { group: 'compensation', sortKey: 0 }
+    if (ruleType === 'leaderboard_rank') {
+      const maxRank = (rule.max_rank as number) || 0
+      const consecutive = (rule.consecutive_periods as number) || 1
+      // Lower max_rank (#1) is "harder" → comes after Podium (max_rank 3).
+      // Within same max_rank, more consecutive periods = harder → comes later.
+      return { group: 'leaderboard', sortKey: -maxRank * 100 + consecutive }
+    }
+    return { group: 'manual', sortKey: 999 }
+  }
+
+  const GROUP_ORDER: Group[] = ['tenure', 'compensation', 'leaderboard', 'manual']
+  const GROUP_LABEL: Record<Group, string> = {
+    tenure: t.badgeGroupTenure,
+    compensation: t.badgeGroupCompensation,
+    leaderboard: t.badgeGroupLeaderboard,
+    manual: t.badgeGroupManual,
   }
   const [defs, setDefs] = useState<Def[]>([])
   const [orgBadgesEnabled, setOrgBadgesEnabled] = useState<boolean>(true)
@@ -1128,10 +1162,8 @@ function AchievementsTab({ user, t }: { user: User; t: Translations }) {
     const [defsRes, orgRes] = await Promise.all([
       supabase
         .from('achievement_definitions')
-        .select('id, name, description, icon, trigger_type, is_featured, is_active')
-        .eq('org_id', user.org_id)
-        .order('is_featured', { ascending: false })
-        .order('name'),
+        .select('id, name, description, icon, trigger_type, trigger_rule, is_featured, is_active')
+        .eq('org_id', user.org_id),
       supabase
         .from('organizations')
         .select('badges_enabled')
@@ -1142,6 +1174,24 @@ function AchievementsTab({ user, t }: { user: User; t: Translations }) {
     setOrgBadgesEnabled(orgRes.data?.badges_enabled ?? true)
     setLoading(false)
   }
+
+  // Build grouped + sorted view of definitions
+  const grouped = (() => {
+    const buckets: Record<Group, Def[]> = { tenure: [], compensation: [], leaderboard: [], manual: [] }
+    const sortKeys = new Map<string, number>()
+    for (const def of defs) {
+      const { group, sortKey } = classify(def)
+      buckets[group].push(def)
+      sortKeys.set(def.id, sortKey)
+    }
+    for (const group of GROUP_ORDER) {
+      buckets[group].sort((a, b) => {
+        const diff = (sortKeys.get(a.id) ?? 0) - (sortKeys.get(b.id) ?? 0)
+        return diff !== 0 ? diff : a.name.localeCompare(b.name)
+      })
+    }
+    return buckets
+  })()
 
   async function toggleOrgBadgesEnabled(next: boolean) {
     setOrgBadgesEnabled(next)
@@ -1249,56 +1299,65 @@ function AchievementsTab({ user, t }: { user: User; t: Translations }) {
       ) : defs.length === 0 ? (
         <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{t.noAchievementsYet}</p>
       ) : (
-        <ul className="space-y-2" style={{ opacity: orgBadgesEnabled ? 1 : 0.5 }}>
-          {defs.map(def => (
-            <li
-              key={def.id}
-              className="flex items-center justify-between gap-3 rounded-xl border px-4 py-3"
-              style={{ borderColor: 'var(--color-border)', opacity: def.is_active ? 1 : 0.5 }}
-            >
-              <div className="flex min-w-0 items-center gap-3">
-                <span className="text-2xl">{displayBadgeIcon(def.icon, '🏅')}</span>
-                <div className="min-w-0">
-                  <p className="flex items-center gap-2 text-sm font-medium" style={{ color: 'var(--color-text)' }}>
-                    {def.name}
-                    {def.is_featured && (
-                      <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-tertiary)' }}>
-                        ★
-                      </span>
-                    )}
-                    <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-tertiary)' }}>
-                      {def.trigger_type === 'manual' ? 'manual' : 'auto'}
-                    </span>
-                    {!def.is_active && (
-                      <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: 'var(--color-diff-remove)', color: 'var(--color-danger)' }}>
-                        {t.badgeDisabledLabel}
-                      </span>
-                    )}
-                  </p>
-                  {def.description && (
-                    <p className="truncate text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{def.description}</p>
-                  )}
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <Toggle
-                  checked={def.is_active}
-                  onChange={next => toggleDefActive(def, next)}
-                  disabled={!orgBadgesEnabled}
-                />
-                <button
-                  type="button"
-                  onClick={() => openEdit(def)}
-                  disabled={!orgBadgesEnabled}
-                  className="rounded-lg px-2 py-1 text-xs disabled:opacity-50"
-                  style={{ color: 'var(--color-text-secondary)' }}
-                >
-                  {t.edit}
-                </button>
-              </div>
-            </li>
+        <div className="space-y-6" style={{ opacity: orgBadgesEnabled ? 1 : 0.5 }}>
+          {GROUP_ORDER.filter(g => grouped[g].length > 0).map(group => (
+            <section key={group}>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-tertiary)' }}>
+                {GROUP_LABEL[group]}
+              </h3>
+              <ul className="space-y-2">
+                {grouped[group].map(def => (
+                  <li
+                    key={def.id}
+                    className="flex items-center justify-between gap-3 rounded-xl border px-4 py-3"
+                    style={{ borderColor: 'var(--color-border)', opacity: def.is_active ? 1 : 0.5 }}
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span className="text-2xl">{displayBadgeIcon(def.icon, '🏅')}</span>
+                      <div className="min-w-0">
+                        <p className="flex items-center gap-2 text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+                          {def.name}
+                          {def.is_featured && (
+                            <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-tertiary)' }}>
+                              ★
+                            </span>
+                          )}
+                          <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-tertiary)' }}>
+                            {def.trigger_type === 'manual' ? 'manual' : 'auto'}
+                          </span>
+                          {!def.is_active && (
+                            <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: 'var(--color-diff-remove)', color: 'var(--color-danger)' }}>
+                              {t.badgeDisabledLabel}
+                            </span>
+                          )}
+                        </p>
+                        {def.description && (
+                          <p className="truncate text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{def.description}</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Toggle
+                        checked={def.is_active}
+                        onChange={next => toggleDefActive(def, next)}
+                        disabled={!orgBadgesEnabled}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => openEdit(def)}
+                        disabled={!orgBadgesEnabled}
+                        className="rounded-lg px-2 py-1 text-xs disabled:opacity-50"
+                        style={{ color: 'var(--color-text-secondary)' }}
+                      >
+                        {t.edit}
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
           ))}
-        </ul>
+        </div>
       )}
 
       {showForm && (
