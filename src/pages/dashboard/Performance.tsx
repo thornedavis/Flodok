@@ -5,6 +5,7 @@ import { useRole } from '../../hooks/useRole'
 import { Modal } from '../../components/Modal'
 import { getAvatarGradient } from '../../lib/avatar'
 import { creditToIdr, formatIdr } from '../../lib/credits'
+import { displayBadgeIcon } from '../../lib/badgeIcon'
 import type { User, AchievementDefinition } from '../../types/database'
 
 type RosterRow = {
@@ -164,7 +165,7 @@ export function Performance({ user }: { user: User }) {
                   {tab === 'achievements' && row.top_achievements.length > 0 && (
                     <div className="mt-1 flex flex-wrap gap-1">
                       {row.top_achievements.map((b, i) => (
-                        <span key={i} className="text-base" title={b.name}>{b.icon || '🏅'}</span>
+                        <span key={i} className="text-base" title={b.name}>{displayBadgeIcon(b.icon, '🏅')}</span>
                       ))}
                     </div>
                   )}
@@ -468,7 +469,7 @@ function BadgeActionModal({
             autoFocus
           >
             {manual.map(d => (
-              <option key={d.id} value={d.id}>{d.icon ? `${d.icon} ` : ''}{d.name}</option>
+              <option key={d.id} value={d.id}>{d.name}</option>
             ))}
           </select>
         </div>

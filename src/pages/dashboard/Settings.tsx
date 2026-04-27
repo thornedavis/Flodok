@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
 import { useRole } from '../../hooks/useRole'
 import { getAvatarGradient } from '../../lib/avatar'
+import { displayBadgeIcon } from '../../lib/badgeIcon'
 import { AvatarUpload } from '../../components/AvatarUpload'
 import { PhoneInput } from '../../components/PhoneInput'
 import { AddressFields, type AddressValue } from '../../components/AddressFields'
@@ -1173,7 +1174,7 @@ function AchievementsTab({ user, t }: { user: User; t: Translations }) {
               style={{ borderColor: 'var(--color-border)', opacity: def.is_active ? 1 : 0.5 }}
             >
               <div className="flex min-w-0 items-center gap-3">
-                <span className="text-2xl">{def.icon || '🏅'}</span>
+                <span className="text-2xl">{displayBadgeIcon(def.icon, '🏅')}</span>
                 <div className="min-w-0">
                   <p className="flex items-center gap-2 text-sm font-medium" style={{ color: 'var(--color-text)' }}>
                     {def.name}

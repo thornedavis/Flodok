@@ -9,6 +9,7 @@ import { useLang } from '../../contexts/LanguageContext'
 import { primaryDept } from '../../lib/employee'
 import { formatIdr, allowanceGradientColor } from '../../lib/credits'
 import { formatRelativeTime } from '../../lib/relativeTime'
+import { displayBadgeIcon } from '../../lib/badgeIcon'
 import { renderMergeFields } from '../../lib/mergeFields'
 import { CompensationRing, ShieldPath, WalletPath, CoinPath, GiftPath } from '../../components/portal/CompensationRing'
 import { StatRow } from '../../components/portal/StatRow'
@@ -1104,7 +1105,7 @@ function AchievementDetailModal({
             className="mb-4 flex h-20 w-20 items-center justify-center rounded-full text-4xl"
             style={{ backgroundColor: 'var(--color-warning-subtle, rgba(234, 179, 8, 0.15))' }}
           >
-            {achievement.icon && achievement.icon.length === 1 ? achievement.icon : '🏆'}
+            {displayBadgeIcon(achievement.icon, '🏆')}
           </div>
           <h3 className="mb-1 text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
             {achievement.name}
@@ -1323,7 +1324,7 @@ function HomeTab({
                   style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary, var(--color-bg))' }}
                   title={a.description || a.reason || undefined}
                 >
-                  <span className="text-lg">{a.icon || '🏅'}</span>
+                  <span className="text-lg">{displayBadgeIcon(a.icon, '🏅')}</span>
                   <span style={{ color: 'var(--color-text)' }}>{a.name}</span>
                 </button>
               ))}
@@ -1648,7 +1649,7 @@ function BadgesTab({
       ) : (
         <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
           {badges.map(b => {
-            const showIcon = b.icon && b.icon.length === 1 ? b.icon : '🏆'
+            const showIcon = displayBadgeIcon(b.icon, '🏆')
             const clickable = b.unlocked && b.unlock_id && b.unlocked_at
             return (
               <button

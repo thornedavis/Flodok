@@ -5,6 +5,7 @@ import { Modal } from '../Modal'
 import { useLang } from '../../contexts/LanguageContext'
 import { useRole } from '../../hooks/useRole'
 import type { AchievementDefinition, AchievementUnlock, Contract, Employee, User } from '../../types/database'
+import { displayBadgeIcon } from '../../lib/badgeIcon'
 
 const sectionHeadingStyle: React.CSSProperties = { color: 'var(--color-text-tertiary)' }
 const fieldLabelStyle: React.CSSProperties = { color: 'var(--color-text-secondary)' }
@@ -169,7 +170,7 @@ export function AchievementsSection({
               style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary, var(--color-bg))' }}
               title={row.definition?.description || row.reason || undefined}
             >
-              <span className="text-lg">{row.definition?.icon || '🏅'}</span>
+              <span className="text-lg">{displayBadgeIcon(row.definition?.icon, '🏅')}</span>
               <span style={{ color: 'var(--color-text)' }}>{row.definition?.name || '—'}</span>
               <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
                 {t.unlockedOn} {new Date(row.unlocked_at).toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-US')}

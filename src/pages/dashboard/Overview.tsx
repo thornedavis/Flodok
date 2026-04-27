@@ -15,6 +15,7 @@ import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
 import { getEmployeeDepts } from '../../lib/employee'
 import { formatIdr } from '../../lib/credits'
+import { displayBadgeIcon } from '../../lib/badgeIcon'
 import type { Translations } from '../../lib/translations'
 import type { FeedEvent, User } from '../../types/database'
 
@@ -899,7 +900,7 @@ function RecognitionMoments({ t, lang }: { t: Translations; lang: 'en' | 'id' })
         <ul className="max-h-56 space-y-2 overflow-y-auto pr-1">
           {tab === 'today' && today.map(u => (
             <li key={u.unlock_id} className="flex items-center gap-2.5">
-              <span className="shrink-0 text-base">{u.achievement_icon && u.achievement_icon.length === 1 ? u.achievement_icon : '🏆'}</span>
+              <span className="shrink-0 text-base">{displayBadgeIcon(u.achievement_icon, '🏆')}</span>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>{u.employee_name}</p>
                 <p className="truncate text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
@@ -914,7 +915,7 @@ function RecognitionMoments({ t, lang }: { t: Translations; lang: 'en' | 'id' })
           ))}
           {tab === '7d' && upcoming7.map(u => (
             <li key={`${u.employee_id}-${u.achievement_id}`} className="flex items-center gap-2.5">
-              <span className="shrink-0 text-base">{u.achievement_icon && u.achievement_icon.length === 1 ? u.achievement_icon : '🏆'}</span>
+              <span className="shrink-0 text-base">{displayBadgeIcon(u.achievement_icon, '🏆')}</span>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>{u.employee_name}</p>
                 <p className="truncate text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{u.achievement_name}</p>
@@ -926,7 +927,7 @@ function RecognitionMoments({ t, lang }: { t: Translations; lang: 'en' | 'id' })
           ))}
           {tab === '30d' && upcoming.map(u => (
             <li key={`${u.employee_id}-${u.achievement_id}`} className="flex items-center gap-2.5">
-              <span className="shrink-0 text-base">{u.achievement_icon && u.achievement_icon.length === 1 ? u.achievement_icon : '🏆'}</span>
+              <span className="shrink-0 text-base">{displayBadgeIcon(u.achievement_icon, '🏆')}</span>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>{u.employee_name}</p>
                 <p className="truncate text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{u.achievement_name}</p>

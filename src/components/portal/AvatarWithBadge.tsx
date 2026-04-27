@@ -1,4 +1,5 @@
 import { getAvatarGradient } from '../../lib/avatar'
+import { displayBadgeIcon } from '../../lib/badgeIcon'
 
 type TopAchievement = {
   name: string
@@ -42,7 +43,7 @@ export function AvatarWithBadge({
           }}
           title={badges && badges.length > 1 ? `${badges.map(b => b.name).join(' · ')}` : top.name}
         >
-          {top.icon || '🏅'}
+          {displayBadgeIcon(top.icon, '🏅')}
         </div>
       )}
     </div>
