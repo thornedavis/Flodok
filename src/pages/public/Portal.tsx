@@ -1218,12 +1218,12 @@ function HomeTab({
         lang={lang}
       />
 
-      {/* Stat rows */}
-      <div className="mb-6 space-y-2">
-        {/* Wage + allowance pair side by side — they're the two fixed
-            components of monthly comp and reading them as one row makes the
-            pay structure clearer at a glance. */}
-        <div className="grid grid-cols-2 gap-2">
+      {/* Stat rows — three pair-groups separated by faint dividers.
+          Each pair groups conceptually-related metrics (fixed comp,
+          variable comp, recognition) into a 2-column row. */}
+      <div className="mb-6 space-y-3">
+        {/* Fixed compensation */}
+        <div className="grid grid-cols-2 items-start gap-2">
           <StatRow
             icon={<ShieldIcon />}
             label={s.portalBaseWage}
@@ -1239,6 +1239,9 @@ function HomeTab({
             accent={hasContract ? allowanceColor : undefined}
           />
         </div>
+
+        {/* Variable compensation */}
+        <div className="grid grid-cols-2 items-start gap-2 border-t pt-3" style={{ borderColor: 'var(--color-border)' }}>
         <StatRow
           icon={<CreditsIcon />}
           label={s.portalCredits}
@@ -1303,6 +1306,10 @@ function HomeTab({
             <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>—</p>
           )}
         </StatRow>
+        </div>
+
+        {/* Recognition */}
+        <div className="grid grid-cols-2 items-start gap-2 border-t pt-3" style={{ borderColor: 'var(--color-border)' }}>
         <StatRow
           icon={<TrophyIcon />}
           label={s.portalAchievements}
@@ -1345,6 +1352,7 @@ function HomeTab({
             <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{s.portalNoContractYet}</p>
           )}
         </StatRow>
+        </div>
       </div>
 
       {/* Pending actions */}
