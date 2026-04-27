@@ -899,35 +899,30 @@ function RecognitionMoments({ t, lang }: { t: Translations; lang: 'en' | 'id' })
         <ul className="max-h-56 space-y-2 overflow-y-auto pr-1">
           {tab === 'today' && today.map(u => (
             <li key={u.unlock_id} className="flex items-center gap-2.5">
-              <span className="text-base">{u.achievement_icon && u.achievement_icon.length === 1 ? u.achievement_icon : '🏆'}</span>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>{u.employee_name}</p>
-                <p className="truncate text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                  {u.achievement_name}
-                  {u.is_manual && u.reason ? ` · ${u.reason}` : ''}
-                </p>
-              </div>
+              <span className="shrink-0 text-base">{u.achievement_icon && u.achievement_icon.length === 1 ? u.achievement_icon : '🏆'}</span>
+              <p className="min-w-0 flex-1 truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>{u.employee_name}</p>
+              <p className="shrink-0 truncate text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }} title={u.is_manual && u.reason ? u.reason : undefined}>
+                {u.achievement_name}
+              </p>
             </li>
           ))}
           {tab === '7d' && upcoming7.map(u => (
             <li key={`${u.employee_id}-${u.achievement_id}`} className="flex items-center gap-2.5">
-              <span className="text-base">{u.achievement_icon && u.achievement_icon.length === 1 ? u.achievement_icon : '🏆'}</span>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>{u.employee_name}</p>
-                <p className="truncate text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                  {u.achievement_name} · {formatUpcomingDate(u.milestone_at, lang)}
-                </p>
+              <span className="shrink-0 text-base">{u.achievement_icon && u.achievement_icon.length === 1 ? u.achievement_icon : '🏆'}</span>
+              <p className="min-w-0 flex-1 truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>{u.employee_name}</p>
+              <div className="shrink-0 text-right">
+                <p className="truncate text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{u.achievement_name}</p>
+                <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{formatUpcomingDate(u.milestone_at, lang)}</p>
               </div>
             </li>
           ))}
           {tab === '30d' && upcoming.map(u => (
             <li key={`${u.employee_id}-${u.achievement_id}`} className="flex items-center gap-2.5">
-              <span className="text-base">{u.achievement_icon && u.achievement_icon.length === 1 ? u.achievement_icon : '🏆'}</span>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>{u.employee_name}</p>
-                <p className="truncate text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                  {u.achievement_name} · {formatUpcomingDate(u.milestone_at, lang)}
-                </p>
+              <span className="shrink-0 text-base">{u.achievement_icon && u.achievement_icon.length === 1 ? u.achievement_icon : '🏆'}</span>
+              <p className="min-w-0 flex-1 truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>{u.employee_name}</p>
+              <div className="shrink-0 text-right">
+                <p className="truncate text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{u.achievement_name}</p>
+                <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{formatUpcomingDate(u.milestone_at, lang)}</p>
               </div>
             </li>
           ))}
