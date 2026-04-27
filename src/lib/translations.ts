@@ -609,6 +609,12 @@ export const translations = {
     documentTooLarge: 'File must be under 5 MB.',
     departmentsLabel: 'Departments',
     createDepartment: 'Create department',
+    employeeStatusLabel: 'Employment status',
+    employeeStatusHelp: 'Achievements only evaluate for employees marked as Trial or Active.',
+    employeeStatusTrial: 'Trial',
+    employeeStatusActive: 'Active',
+    employeeStatusSuspended: 'Suspended',
+    employeeStatusTerminated: 'Terminated',
 
     // Performance workbench page
     performanceTitle: 'Performance',
@@ -1382,6 +1388,12 @@ export const translations = {
     documentTooLarge: 'File harus di bawah 5 MB.',
     departmentsLabel: 'Departemen',
     createDepartment: 'Buat departemen',
+    employeeStatusLabel: 'Status kerja',
+    employeeStatusHelp: 'Lencana hanya dievaluasi untuk karyawan dengan status Masa Percobaan atau Aktif.',
+    employeeStatusTrial: 'Masa percobaan',
+    employeeStatusActive: 'Aktif',
+    employeeStatusSuspended: 'Diskors',
+    employeeStatusTerminated: 'Diberhentikan',
 
     // Performance workbench page
     performanceTitle: 'Kinerja',

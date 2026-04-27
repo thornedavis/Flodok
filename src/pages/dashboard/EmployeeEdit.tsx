@@ -38,6 +38,7 @@ export function EmployeeEdit({ user }: { user: User }) {
   const [address, setAddress] = useState('')
   const [dateOfBirth, setDateOfBirth] = useState('')
   const [photoUrl, setPhotoUrl] = useState<string | null>(null)
+  const [status, setStatus] = useState<'trial' | 'active' | 'suspended' | 'terminated'>('trial')
   const [ktpPhotoUrl, setKtpPhotoUrl] = useState<string | null>(null)
   const [kkPhotoUrl, setKkPhotoUrl] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
@@ -82,6 +83,10 @@ export function EmployeeEdit({ user }: { user: User }) {
         setAddress(empResult.data.address || '')
         setDateOfBirth(empResult.data.date_of_birth || '')
         setPhotoUrl(empResult.data.photo_url)
+        const loadedStatus = empResult.data.status as 'trial' | 'active' | 'suspended' | 'terminated' | 'archived' | null
+        // Treat 'archived' as 'terminated' in the editor for now — archived
+        // is a DB-level "hide from lists" state, not exposed in the picker.
+        setStatus(loadedStatus && loadedStatus !== 'archived' ? loadedStatus : (loadedStatus === 'archived' ? 'terminated' : 'trial'))
         setKtpPhotoUrl(empResult.data.ktp_photo_url)
         setKkPhotoUrl(empResult.data.kk_photo_url)
       }
@@ -179,6 +184,7 @@ export function EmployeeEdit({ user }: { user: User }) {
         photo_url: photoUrl,
         ktp_photo_url: ktpPhotoUrl,
         kk_photo_url: kkPhotoUrl,
+        status,
       })
       .eq('id', employeeId)
 
@@ -298,6 +304,7 @@ export function EmployeeEdit({ user }: { user: User }) {
     address !== (employee.address || '') ||
     dateOfBirth !== (employee.date_of_birth || '') ||
     notes !== (employee.notes || '') ||
+    status !== (employee.status || 'trial') ||
     !deptsEqual
 
   const tabs: { key: Tab; label: string }[] = [
@@ -462,6 +469,21 @@ export function EmployeeEdit({ user }: { user: User }) {
                   <div>
                     <label className="mb-1 block text-sm font-medium" style={fieldLabelStyle}>{t.departmentsLabel}</label>
                     <DepartmentsMultiSelect value={empDepartments} onChange={setEmpDepartments} availableDepartments={orgDepartments} />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium" style={fieldLabelStyle}>{t.employeeStatusLabel}</label>
+                    <select
+                      value={status}
+                      onChange={e => setStatus(e.target.value as typeof status)}
+                      className="w-full rounded-lg border px-3 py-2 text-sm"
+                      style={inputStyle}
+                    >
+                      <option value="trial">{t.employeeStatusTrial}</option>
+                      <option value="active">{t.employeeStatusActive}</option>
+                      <option value="suspended">{t.employeeStatusSuspended}</option>
+                      <option value="terminated">{t.employeeStatusTerminated}</option>
+                    </select>
+                    <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.employeeStatusHelp}</p>
                   </div>
                 </div>
               </section>
