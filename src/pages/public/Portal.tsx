@@ -42,7 +42,7 @@ type PortalHomeData = {
   achievements: AchievementSummary[]
 }
 
-type Tab = 'home' | 'sops' | 'contracts' | 'activity' | 'leaderboard' | 'badges'
+type Tab = 'home' | 'sops' | 'contracts' | 'leaderboard' | 'badges'
 
 type BadgeData = {
   definition_id: string
@@ -294,10 +294,11 @@ export function Portal() {
     if (data) setFeedEvents(data)
   }
 
-  // Load feed when switching to activity tab or when employee loads
+  // Load feed eagerly once the employee is resolved — the activity feed
+  // now lives at the bottom of the home tab rather than its own tab.
   useEffect(() => {
-    if (employee && tab === 'activity') loadFeedEvents()
-  }, [employee, tab])
+    if (employee) loadFeedEvents()
+  }, [employee])
 
   // Notifications: unsigned SOPs (actionable) + unread informational events.
   // Actionable items persist until acted on; informational items clear when
@@ -352,8 +353,8 @@ export function Portal() {
       description: `Version ${activeSop.current_version}`,
       metadata: { sop_id: activeSop.id, version: activeSop.current_version, signature_font: selectedFont },
     })
-    // Refresh feed if on activity tab
-    if (tab === 'activity') loadFeedEvents()
+    // Refresh feed so the new signature shows up at the bottom of home.
+    loadFeedEvents()
 
     setSigning(false)
   }
@@ -385,7 +386,7 @@ export function Portal() {
       description: `Version ${activeContract.current_version}`,
       metadata: { contract_id: activeContract.id, version: activeContract.current_version, signature_font: selectedFont },
     })
-    if (tab === 'activity') loadFeedEvents()
+    loadFeedEvents()
 
     setSigning(false)
   }
@@ -652,6 +653,7 @@ export function Portal() {
               s={s}
               lang={lang}
               unsignedSops={unsignedSops}
+              feedEvents={feedEvents}
               onOpenSop={sop => {
                 setTab('sops')
                 setActiveSop(sop)
@@ -985,88 +987,6 @@ export function Portal() {
             </>
           )}
 
-          {/* ─── Activity Tab Content ─── */}
-          {tab === 'activity' && (
-            <>
-              {feedEvents.length === 0 ? (
-                <div className="rounded-xl border p-6 text-center" style={{ borderColor: 'var(--color-border)' }}>
-                  <div className="mx-auto flex h-10 w-10 items-center justify-center" style={{ color: 'var(--color-text-tertiary)' }}><ActivityIcon /></div>
-                  <p className="mt-2 text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{s.noActivity}</p>
-                </div>
-              ) : (
-                <div className="space-y-0">
-                  {feedEvents.map((event, i) => {
-                    const eventLabels: Record<string, string> = {
-                      sop_signed: s.eventSopSigned,
-                      sop_updated: s.eventSopUpdated,
-                      sop_assigned: s.eventSopAssigned,
-                      contract_assigned: s.eventContractAssigned,
-                      contract_updated: s.eventContractUpdated,
-                      contract_signed: s.eventContractSigned,
-                      bonus_awarded: s.eventRewardGiven,
-                      welcome: s.eventWelcome,
-                    }
-                    const eventIcons: Record<string, React.ReactNode> = {
-                      sop_signed: <CheckCircle />,
-                      sop_updated: <DocIcon />,
-                      sop_assigned: <DocIcon />,
-                      contract_assigned: <ContractIcon />,
-                      contract_updated: <ContractIcon />,
-                      contract_signed: <CheckCircle />,
-                      bonus_awarded: <TrophyIcon />,
-                      welcome: <HomeIcon />,
-                    }
-                    const eventColors: Record<string, string> = {
-                      sop_signed: 'var(--color-success)',
-                      sop_updated: 'var(--color-primary)',
-                      sop_assigned: 'var(--color-primary)',
-                      contract_assigned: 'var(--color-primary)',
-                      contract_updated: 'var(--color-primary)',
-                      bonus_awarded: 'var(--color-warning)',
-                      welcome: 'var(--color-success)',
-                    }
-                    const isLast = i === feedEvents.length - 1
-                    const date = new Date(event.created_at)
-                    const timeStr = date.toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' })
-
-                    return (
-                      <div key={event.id} className="flex gap-3">
-                        {/* Timeline line + dot */}
-                        <div className="flex flex-col items-center">
-                          <div
-                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
-                            style={{ backgroundColor: 'var(--color-bg-secondary)', color: eventColors[event.event_type] || 'var(--color-text-tertiary)' }}
-                          >
-                            {eventIcons[event.event_type] || <ActivityIcon />}
-                          </div>
-                          {!isLast && <div className="w-px flex-1 min-h-4" style={{ backgroundColor: 'var(--color-border)' }} />}
-                        </div>
-                        {/* Content */}
-                        <div className="pb-5 pt-1 min-w-0">
-                          <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
-                            {eventLabels[event.event_type] || event.event_type}
-                          </p>
-                          <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>{event.title}</p>
-                          {event.description && (
-                            <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{event.description}</p>
-                          )}
-                          {event.event_type === 'sop_signed' && (event.metadata as Record<string, string>)?.signature_font && (
-                            <p
-                              className="mt-1 text-lg"
-                              style={{ fontFamily: `'${(event.metadata as Record<string, string>).signature_font}', cursive`, color: 'var(--color-text-secondary)' }}
-                            >
-                              {event.title}
-                            </p>
-                          )}
-                          <p className="mt-0.5 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{timeStr}</p>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </>
-          )}
 
           {/* ─── Leaderboard Tab Content ─── */}
           {tab === 'leaderboard' && employee && (
@@ -1097,7 +1017,6 @@ export function Portal() {
             { key: 'contracts' as Tab, label: s.contracts, icon: <ContractIcon /> },
             { key: 'badges' as Tab, label: s.portalBadgesTabLabel, icon: <BadgeIcon /> },
             { key: 'leaderboard' as Tab, label: s.leaderboard, icon: <TrophyIcon /> },
-            { key: 'activity' as Tab, label: s.activity, icon: <ActivityIcon /> },
           ]).map(item => (
             <button
               key={item.key}
@@ -1226,6 +1145,7 @@ function HomeTab({
   s,
   lang,
   unsignedSops,
+  feedEvents,
   onOpenSop,
   onSelectAchievement,
 }: {
@@ -1234,6 +1154,7 @@ function HomeTab({
   s: ReturnType<typeof useLang>['t']
   lang: 'en' | 'id'
   unsignedSops: Sop[]
+  feedEvents: FeedEvent[]
   onOpenSop: (sop: Sop) => void
   onSelectAchievement: (achievement: AchievementSummary) => void
 }) {
@@ -1445,6 +1366,114 @@ function HomeTab({
           </div>
         </div>
       )}
+
+      {/* Activity feed — moved here from a dedicated tab so the home page
+          provides a complete picture of what's happening with the employee. */}
+      <ActivityFeed events={feedEvents} lang={lang} s={s} />
+    </div>
+  )
+}
+
+// ─── Activity Feed ───────────────────────────────────────
+// Vertical timeline of feed_events for the employee. Lives at the bottom of
+// the home tab now that activity is no longer its own surface.
+
+function ActivityFeed({
+  events,
+  lang,
+  s,
+}: {
+  events: FeedEvent[]
+  lang: 'en' | 'id'
+  s: ReturnType<typeof useLang>['t']
+}) {
+  if (events.length === 0) {
+    return (
+      <div>
+        <h2 className="mb-2 text-sm font-semibold" style={{ color: 'var(--color-text-secondary)' }}>{s.portalActivityTitle}</h2>
+        <div className="rounded-xl border p-6 text-center" style={{ borderColor: 'var(--color-border)' }}>
+          <div className="mx-auto flex h-10 w-10 items-center justify-center" style={{ color: 'var(--color-text-tertiary)' }}><ActivityIcon /></div>
+          <p className="mt-2 text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{s.noActivity}</p>
+        </div>
+      </div>
+    )
+  }
+
+  const eventLabels: Record<string, string> = {
+    sop_signed: s.eventSopSigned,
+    sop_updated: s.eventSopUpdated,
+    sop_assigned: s.eventSopAssigned,
+    contract_assigned: s.eventContractAssigned,
+    contract_updated: s.eventContractUpdated,
+    contract_signed: s.eventContractSigned,
+    bonus_awarded: s.eventRewardGiven,
+    achievement_unlocked: s.eventBadgeEarned,
+    welcome: s.eventWelcome,
+  }
+  const eventIcons: Record<string, React.ReactNode> = {
+    sop_signed: <CheckCircle />,
+    sop_updated: <DocIcon />,
+    sop_assigned: <DocIcon />,
+    contract_assigned: <ContractIcon />,
+    contract_updated: <ContractIcon />,
+    contract_signed: <CheckCircle />,
+    bonus_awarded: <TrophyIcon />,
+    achievement_unlocked: <BadgeIcon />,
+    welcome: <HomeIcon />,
+  }
+  const eventColors: Record<string, string> = {
+    sop_signed: 'var(--color-success)',
+    sop_updated: 'var(--color-primary)',
+    sop_assigned: 'var(--color-primary)',
+    contract_assigned: 'var(--color-primary)',
+    contract_updated: 'var(--color-primary)',
+    bonus_awarded: 'var(--color-warning)',
+    achievement_unlocked: 'var(--color-warning)',
+    welcome: 'var(--color-success)',
+  }
+
+  return (
+    <div>
+      <h2 className="mb-2 text-sm font-semibold" style={{ color: 'var(--color-text-secondary)' }}>{s.portalActivityTitle}</h2>
+      <div className="space-y-0">
+        {events.map((event, i) => {
+          const isLast = i === events.length - 1
+          const date = new Date(event.created_at)
+          const timeStr = date.toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' })
+
+          return (
+            <div key={event.id} className="flex gap-3">
+              <div className="flex flex-col items-center">
+                <div
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
+                  style={{ backgroundColor: 'var(--color-bg-secondary)', color: eventColors[event.event_type] || 'var(--color-text-tertiary)' }}
+                >
+                  {eventIcons[event.event_type] || <ActivityIcon />}
+                </div>
+                {!isLast && <div className="w-px flex-1 min-h-4" style={{ backgroundColor: 'var(--color-border)' }} />}
+              </div>
+              <div className="pb-5 pt-1 min-w-0">
+                <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+                  {eventLabels[event.event_type] || event.event_type}
+                </p>
+                <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>{event.title}</p>
+                {event.description && (
+                  <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{event.description}</p>
+                )}
+                {event.event_type === 'sop_signed' && (event.metadata as Record<string, string>)?.signature_font && (
+                  <p
+                    className="mt-1 text-lg"
+                    style={{ fontFamily: `'${(event.metadata as Record<string, string>).signature_font}', cursive`, color: 'var(--color-text-secondary)' }}
+                  >
+                    {event.title}
+                  </p>
+                )}
+                <p className="mt-0.5 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{timeStr}</p>
+              </div>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
