@@ -55,7 +55,7 @@ export function SOPEdit({ user }: { user: User }) {
         setTitle(sopResult.data.title)
         setContent(sopResult.data.content_markdown)
         setContentId(sopResult.data.content_markdown_id)
-        setStatus(sopResult.data.status)
+        setStatus(sopResult.data.status as typeof status)
         setEmployeeId(sopResult.data.employee_id)
 
         if (sopResult.data.employee_id) {

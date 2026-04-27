@@ -99,7 +99,7 @@ export const MergeFieldExtension = Node.create<MergeFieldOptions>({
 
   // ─── Markdown round-trip ──────────────────────────────────────────────────
 
-  markdownName: 'mergeField',
+  markdownTokenName: 'mergeField',
 
   markdownTokenizer: {
     name: 'mergeField',

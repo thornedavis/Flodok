@@ -79,7 +79,7 @@ export function ContractEdit({ user }: { user: User }) {
         setTitle(contractResult.data.title)
         setContent(contractResult.data.content_markdown)
         setContentId(contractResult.data.content_markdown_id)
-        setStatus(contractResult.data.status)
+        setStatus(contractResult.data.status as typeof status)
         setEmployeeId(contractResult.data.employee_id)
         setBaseWageIdr(contractResult.data.base_wage_idr?.toString() ?? '')
         setAllowanceIdr(contractResult.data.allowance_idr?.toString() ?? '')

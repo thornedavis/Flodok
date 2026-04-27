@@ -135,6 +135,61 @@ export type Database = {
           },
         ]
       }
+      allowance_adjustments: {
+        Row: {
+          amount_idr: number
+          awarded_by: string
+          created_at: string
+          employee_id: string
+          id: string
+          org_id: string
+          period_month: string
+          reason: string
+        }
+        Insert: {
+          amount_idr: number
+          awarded_by: string
+          created_at?: string
+          employee_id: string
+          id?: string
+          org_id: string
+          period_month?: string
+          reason: string
+        }
+        Update: {
+          amount_idr?: number
+          awarded_by?: string
+          created_at?: string
+          employee_id?: string
+          id?: string
+          org_id?: string
+          period_month?: string
+          reason?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "allowance_adjustments_awarded_by_fkey"
+            columns: ["awarded_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "allowance_adjustments_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "allowance_adjustments_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       api_keys: {
         Row: {
           created_at: string
