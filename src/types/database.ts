@@ -881,8 +881,10 @@ export type Database = {
           address_province: string | null
           address_street: string | null
           badges_enabled: boolean
+          bonuses_enabled: boolean
           created_at: string
           credits_divisor: number
+          credits_enabled: boolean
           default_country_code: string
           display_name: string | null
           id: string
@@ -900,8 +902,10 @@ export type Database = {
           address_province?: string | null
           address_street?: string | null
           badges_enabled?: boolean
+          bonuses_enabled?: boolean
           created_at?: string
           credits_divisor?: number
+          credits_enabled?: boolean
           default_country_code?: string
           display_name?: string | null
           id?: string
@@ -919,8 +923,10 @@ export type Database = {
           address_province?: string | null
           address_street?: string | null
           badges_enabled?: boolean
+          bonuses_enabled?: boolean
           created_at?: string
           credits_divisor?: number
+          credits_enabled?: boolean
           default_country_code?: string
           display_name?: string | null
           id?: string

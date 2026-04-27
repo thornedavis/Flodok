@@ -663,6 +663,8 @@ export function Portal() {
               unsignedSops={unsignedSops}
               feedEvents={feedEvents}
               badgesEnabled={org?.badges_enabled !== false}
+              creditsEnabled={org?.credits_enabled !== false}
+              bonusesEnabled={org?.bonuses_enabled !== false}
               onOpenSop={sop => {
                 setTab('sops')
                 setActiveSop(sop)
@@ -1028,7 +1030,10 @@ export function Portal() {
             ...(org?.badges_enabled !== false
               ? [{ key: 'badges' as Tab, label: s.portalBadgesTabLabel, icon: <BadgeIcon /> }]
               : []),
-            { key: 'leaderboard' as Tab, label: s.leaderboard, icon: <TrophyIcon /> },
+            // Leaderboard is credits-based — hide when credits are disabled.
+            ...(org?.credits_enabled !== false
+              ? [{ key: 'leaderboard' as Tab, label: s.leaderboard, icon: <TrophyIcon /> }]
+              : []),
           ]).map(item => (
             <button
               key={item.key}
@@ -1159,6 +1164,8 @@ function HomeTab({
   unsignedSops,
   feedEvents,
   badgesEnabled,
+  creditsEnabled,
+  bonusesEnabled,
   onOpenSop,
   onSelectAchievement,
 }: {
@@ -1169,6 +1176,8 @@ function HomeTab({
   unsignedSops: Sop[]
   feedEvents: FeedEvent[]
   badgesEnabled: boolean
+  creditsEnabled: boolean
+  bonusesEnabled: boolean
   onOpenSop: (sop: Sop) => void
   onSelectAchievement: (achievement: AchievementSummary) => void
 }) {
@@ -1248,70 +1257,74 @@ function HomeTab({
           value={hasContract ? formatIdr(effectiveAllowance, lang) : '—'}
           accent={hasContract ? allowanceColor : undefined}
         />
-        <StatRow
-          icon={<CreditsIcon />}
-          label={s.portalCredits}
-          info={s.portalCreditsInfo}
-          value={creditsNet}
-          accent={creditsColor}
-        >
-          {portal && portal.credit_adjustments.length > 0 ? (
-            <ul className="space-y-2">
-              {portal.credit_adjustments.map(adj => (
-                <li key={adj.id} className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm" style={{ color: 'var(--color-text)' }}>{adj.reason}</p>
-                    <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                      {new Date(adj.created_at).toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-US', { day: 'numeric', month: 'short' })}
-                      {adj.paid_out_at && adj.payout_idr != null && <> · {formatIdr(adj.payout_idr, lang)}</>}
-                    </p>
-                  </div>
-                  <span
-                    className="shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold"
-                    style={{
-                      backgroundColor: adj.amount > 0 ? 'var(--color-success-bg, #dcfce7)' : 'var(--color-diff-remove)',
-                      color: adj.amount > 0 ? 'var(--color-success, #16a34a)' : 'var(--color-danger)',
-                    }}
-                  >
-                    {adj.amount > 0 ? '+' : ''}{adj.amount}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{s.portalNoCreditsActivity}</p>
-          )}
-        </StatRow>
-        <StatRow
-          icon={<GiftIcon />}
-          label={s.portalBonus}
-          info={s.portalBonusInfo}
-          value={formatIdr(bonusSum, lang)}
-          accent={bonusColor}
-        >
-          {portal && portal.bonus_adjustments.length > 0 ? (
-            <ul className="space-y-2">
-              {portal.bonus_adjustments.map(adj => (
-                <li key={adj.id} className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm" style={{ color: 'var(--color-text)' }}>{adj.reason}</p>
-                    <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                      {new Date(adj.created_at).toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-US', { day: 'numeric', month: 'short' })}
-                    </p>
-                  </div>
-                  <span
-                    className="shrink-0 text-xs font-semibold"
-                    style={{ color: bonusColor }}
-                  >
-                    +{formatIdr(adj.amount_idr, lang)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>—</p>
-          )}
-        </StatRow>
+        {creditsEnabled && (
+          <StatRow
+            icon={<CreditsIcon />}
+            label={s.portalCredits}
+            info={s.portalCreditsInfo}
+            value={creditsNet}
+            accent={creditsColor}
+          >
+            {portal && portal.credit_adjustments.length > 0 ? (
+              <ul className="space-y-2">
+                {portal.credit_adjustments.map(adj => (
+                  <li key={adj.id} className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm" style={{ color: 'var(--color-text)' }}>{adj.reason}</p>
+                      <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                        {new Date(adj.created_at).toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-US', { day: 'numeric', month: 'short' })}
+                        {adj.paid_out_at && adj.payout_idr != null && <> · {formatIdr(adj.payout_idr, lang)}</>}
+                      </p>
+                    </div>
+                    <span
+                      className="shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold"
+                      style={{
+                        backgroundColor: adj.amount > 0 ? 'var(--color-success-bg, #dcfce7)' : 'var(--color-diff-remove)',
+                        color: adj.amount > 0 ? 'var(--color-success, #16a34a)' : 'var(--color-danger)',
+                      }}
+                    >
+                      {adj.amount > 0 ? '+' : ''}{adj.amount}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{s.portalNoCreditsActivity}</p>
+            )}
+          </StatRow>
+        )}
+        {bonusesEnabled && (
+          <StatRow
+            icon={<GiftIcon />}
+            label={s.portalBonus}
+            info={s.portalBonusInfo}
+            value={formatIdr(bonusSum, lang)}
+            accent={bonusColor}
+          >
+            {portal && portal.bonus_adjustments.length > 0 ? (
+              <ul className="space-y-2">
+                {portal.bonus_adjustments.map(adj => (
+                  <li key={adj.id} className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm" style={{ color: 'var(--color-text)' }}>{adj.reason}</p>
+                      <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                        {new Date(adj.created_at).toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-US', { day: 'numeric', month: 'short' })}
+                      </p>
+                    </div>
+                    <span
+                      className="shrink-0 text-xs font-semibold"
+                      style={{ color: bonusColor }}
+                    >
+                      +{formatIdr(adj.amount_idr, lang)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>—</p>
+            )}
+          </StatRow>
+        )}
         {badgesEnabled && (
           <StatRow
             icon={<TrophyIcon />}

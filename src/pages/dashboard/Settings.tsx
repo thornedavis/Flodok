@@ -16,7 +16,7 @@ import { ConnectFirefliesDialog } from '../../components/integrations/ConnectFir
 import { ConnectAsanaDialog } from '../../components/integrations/ConnectAsanaDialog'
 import { listIntegrations, deleteIntegration, type IntegrationRow } from '../../lib/integrations'
 
-type Tab = 'account' | 'organization' | 'team' | 'integrations' | 'achievements' | 'billing'
+type Tab = 'account' | 'organization' | 'team' | 'integrations' | 'credits' | 'bonuses' | 'achievements' | 'billing'
 
 const inputStyle: React.CSSProperties = {
   borderColor: 'var(--color-border)',
@@ -64,6 +64,8 @@ export function Settings({ user }: { user: User }) {
   if (rawTab === 'organization' || rawTab === 'team' || rawTab === 'billing') tab = rawTab
   else if (rawTab === 'integrations' && isAdmin) tab = 'integrations'
   else if (rawTab === 'achievements' && isAdmin) tab = 'achievements'
+  else if (rawTab === 'credits' && isAdmin) tab = 'credits'
+  else if (rawTab === 'bonuses' && isAdmin) tab = 'bonuses'
 
   function setTab(next: Tab) {
     setParams({ tab: next }, { replace: true })
@@ -81,6 +83,12 @@ export function Settings({ user }: { user: User }) {
           <TabButton active={tab === 'integrations'} onClick={() => setTab('integrations')}>{t.settingsIntegrationsTab}</TabButton>
         )}
         {isAdmin && (
+          <TabButton active={tab === 'credits'} onClick={() => setTab('credits')}>{t.settingsCreditsTab}</TabButton>
+        )}
+        {isAdmin && (
+          <TabButton active={tab === 'bonuses'} onClick={() => setTab('bonuses')}>{t.settingsBonusesTab}</TabButton>
+        )}
+        {isAdmin && (
           <TabButton active={tab === 'achievements'} onClick={() => setTab('achievements')}>{t.achievementDefsTitle}</TabButton>
         )}
         <TabButton active={tab === 'billing'} onClick={() => setTab('billing')}>{t.settingsBillingTab}</TabButton>
@@ -90,6 +98,8 @@ export function Settings({ user }: { user: User }) {
       {tab === 'organization' && <OrganizationTab user={user} t={t} />}
       {tab === 'team' && <TeamMembersSection user={user} t={t} />}
       {tab === 'integrations' && isAdmin && <IntegrationsTab user={user} t={t} />}
+      {tab === 'credits' && isAdmin && <CreditsTab user={user} t={t} />}
+      {tab === 'bonuses' && isAdmin && <BonusesTab user={user} t={t} />}
       {tab === 'achievements' && isAdmin && <AchievementsTab user={user} t={t} />}
       {tab === 'billing' && <BillingTab t={t} />}
     </div>
@@ -312,7 +322,6 @@ function OrganizationTab({ user, t }: { user: User; t: Translations }) {
   const [orgPhone, setOrgPhone] = useState('')
   const [logoUrl, setLogoUrl] = useState<string | null>(null)
   const [address, setAddress] = useState<AddressValue>(EMPTY_ADDRESS)
-  const [creditsDivisor, setCreditsDivisor] = useState<string>('1000')
   const [payDayOfMonth, setPayDayOfMonth] = useState<string>('1')
   const [timezone, setTimezone] = useState<string>('Asia/Jakarta')
   const [displayName, setDisplayName] = useState<string>('')
@@ -334,7 +343,6 @@ function OrganizationTab({ user, t }: { user: User; t: Translations }) {
         postal_code: data.address_postal_code || '',
         country: data.address_country || 'ID',
       })
-      setCreditsDivisor(String(data.credits_divisor ?? 1000))
       setPayDayOfMonth(String(data.pay_day_of_month ?? 1))
       setTimezone(data.timezone || 'Asia/Jakarta')
       setDisplayName(data.display_name || '')
@@ -367,9 +375,6 @@ function OrganizationTab({ user, t }: { user: User; t: Translations }) {
     address.postal_code !== (org.address_postal_code || '') ||
     address.country !== (org.address_country || 'ID')
   )
-  const parsedDivisor = Number(creditsDivisor)
-  const divisorValid = Number.isFinite(parsedDivisor) && parsedDivisor > 0 && Number.isInteger(parsedDivisor)
-  const divisorDirty = !!org && divisorValid && parsedDivisor !== org.credits_divisor
   const parsedPayDay = Number(payDayOfMonth)
   const payDayValid = Number.isFinite(parsedPayDay) && Number.isInteger(parsedPayDay) && parsedPayDay >= 0 && parsedPayDay <= 28
   const payDayDirty = !!org && payDayValid && parsedPayDay !== org.pay_day_of_month
@@ -380,10 +385,9 @@ function OrganizationTab({ user, t }: { user: User; t: Translations }) {
     displayNameDirty ||
     (orgPhone || null) !== (org.phone || null) ||
     addressDirty ||
-    divisorDirty ||
     payDayDirty ||
     timezoneDirty
-  ) && orgName.trim().length > 0 && phoneValid && divisorValid && payDayValid
+  ) && orgName.trim().length > 0 && phoneValid && payDayValid
 
   async function handleSaveOrg(e: React.FormEvent) {
     e.preventDefault()
@@ -397,7 +401,6 @@ function OrganizationTab({ user, t }: { user: User; t: Translations }) {
       address_province: address.province.trim() || null,
       address_postal_code: address.postal_code.trim() || null,
       address_country: address.country,
-      credits_divisor: parsedDivisor,
       pay_day_of_month: parsedPayDay,
       timezone,
       display_name: displayName.trim() || null,
@@ -417,7 +420,6 @@ function OrganizationTab({ user, t }: { user: User; t: Translations }) {
       postal_code: org.address_postal_code || '',
       country: org.address_country || 'ID',
     })
-    setCreditsDivisor(String(org.credits_divisor ?? 1000))
     setPayDayOfMonth(String(org.pay_day_of_month ?? 1))
     setTimezone(org.timezone || 'Asia/Jakarta')
     setDisplayName(org.display_name || '')
@@ -517,22 +519,6 @@ function OrganizationTab({ user, t }: { user: User; t: Translations }) {
           <div>
             <label className="mb-2 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.organizationAddressLabel}</label>
             <AddressFields value={address} onChange={setAddress} disabled={!isAdmin} />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.creditsDivisorLabel}</label>
-            <input
-              type="number"
-              inputMode="numeric"
-              min={1}
-              step={1}
-              value={creditsDivisor}
-              onChange={e => setCreditsDivisor(e.target.value)}
-              readOnly={!isAdmin}
-              className="w-full rounded-lg border px-3 py-2 text-sm md:w-48"
-              style={isAdmin ? inputStyle : { ...inputStyle, backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}
-            />
-            <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.creditsDivisorHelp}</p>
           </div>
 
           <div>
@@ -1094,6 +1080,136 @@ function IntegrationsTab({ user, t }: { user: User; t: Translations }) {
     </div>
   )
 }
+
+// ─── Credits tab ────────────────────────────────────────
+// Master switch for the Credits feature + the credits_divisor config that
+// used to live on the Organization tab.
+
+function CreditsTab({ user, t }: { user: User; t: Translations }) {
+  const [enabled, setEnabled] = useState(true)
+  const [creditsDivisor, setCreditsDivisor] = useState<string>('1000')
+  const [savedDivisor, setSavedDivisor] = useState<number>(1000)
+  const [loading, setLoading] = useState(true)
+  const [savingDivisor, setSavingDivisor] = useState(false)
+
+  useEffect(() => { load() }, [user.org_id])
+
+  async function load() {
+    const { data } = await supabase
+      .from('organizations')
+      .select('credits_enabled, credits_divisor')
+      .eq('id', user.org_id)
+      .single()
+    if (data) {
+      setEnabled(data.credits_enabled ?? true)
+      setSavedDivisor(data.credits_divisor ?? 1000)
+      setCreditsDivisor(String(data.credits_divisor ?? 1000))
+    }
+    setLoading(false)
+  }
+
+  async function toggleEnabled(next: boolean) {
+    setEnabled(next)
+    const { error } = await supabase.from('organizations').update({ credits_enabled: next }).eq('id', user.org_id)
+    if (error) {
+      setEnabled(!next)
+      alert(error.message)
+    }
+  }
+
+  const parsedDivisor = Number(creditsDivisor)
+  const divisorValid = Number.isFinite(parsedDivisor) && parsedDivisor > 0 && Number.isInteger(parsedDivisor)
+  const divisorDirty = divisorValid && parsedDivisor !== savedDivisor
+
+  async function saveDivisor() {
+    if (!divisorDirty) return
+    setSavingDivisor(true)
+    const { error } = await supabase
+      .from('organizations')
+      .update({ credits_divisor: parsedDivisor })
+      .eq('id', user.org_id)
+    if (!error) setSavedDivisor(parsedDivisor)
+    else alert(error.message)
+    setSavingDivisor(false)
+  }
+
+  if (loading) return <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{t.loading}</p>
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-start justify-between gap-4 rounded-xl border p-4" style={{ borderColor: 'var(--color-border)' }}>
+        <div className="min-w-0">
+          <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{t.creditsEnabledLabel}</p>
+          <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.creditsEnabledHelp}</p>
+        </div>
+        <Toggle checked={enabled} onChange={toggleEnabled} />
+      </div>
+
+      <div style={{ opacity: enabled ? 1 : 0.5 }}>
+        <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.creditsDivisorLabel}</label>
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            inputMode="numeric"
+            min={1}
+            step={1}
+            value={creditsDivisor}
+            onChange={e => setCreditsDivisor(e.target.value)}
+            onBlur={saveDivisor}
+            disabled={!enabled}
+            className="rounded-lg border px-3 py-2 text-sm md:w-48"
+            style={inputStyle}
+          />
+          {savingDivisor && <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>…</span>}
+        </div>
+        <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.creditsDivisorHelp}</p>
+      </div>
+    </div>
+  )
+}
+
+// ─── Bonuses tab ────────────────────────────────────────
+
+function BonusesTab({ user, t }: { user: User; t: Translations }) {
+  const [enabled, setEnabled] = useState(true)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => { load() }, [user.org_id])
+
+  async function load() {
+    const { data } = await supabase
+      .from('organizations')
+      .select('bonuses_enabled')
+      .eq('id', user.org_id)
+      .single()
+    if (data) setEnabled(data.bonuses_enabled ?? true)
+    setLoading(false)
+  }
+
+  async function toggleEnabled(next: boolean) {
+    setEnabled(next)
+    const { error } = await supabase.from('organizations').update({ bonuses_enabled: next }).eq('id', user.org_id)
+    if (error) {
+      setEnabled(!next)
+      alert(error.message)
+    }
+  }
+
+  if (loading) return <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{t.loading}</p>
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-start justify-between gap-4 rounded-xl border p-4" style={{ borderColor: 'var(--color-border)' }}>
+        <div className="min-w-0">
+          <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{t.bonusesEnabledLabel}</p>
+          <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.bonusesEnabledHelp}</p>
+        </div>
+        <Toggle checked={enabled} onChange={toggleEnabled} />
+      </div>
+    </div>
+  )
+}
+
 
 // ─── Achievements tab ───────────────────────────────────
 

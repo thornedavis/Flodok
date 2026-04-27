@@ -18,6 +18,7 @@ import { Performance } from './pages/dashboard/Performance'
 import { Pending } from './pages/dashboard/Pending'
 import { Settings } from './pages/dashboard/Settings'
 import { Portal } from './pages/public/Portal'
+import { Landing } from './pages/public/Landing'
 
 function AppRoutes() {
   const { session, user, loading, signIn, signUp, signOut } = useAuth()
@@ -47,9 +48,12 @@ function AppRoutes() {
       {/* Auth routes */}
       {!session ? (
         <>
+          <Route element={<PublicLayout />}>
+            <Route path="/" element={<Landing />} />
+          </Route>
           <Route path="/login" element={<Login onSignIn={signIn} />} />
           <Route path="/signup" element={<Signup onSignUp={signUp} />} />
-          <Route path="*" element={<Navigate to="/login" replace />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </>
       ) : !user ? (
         <Route path="*" element={

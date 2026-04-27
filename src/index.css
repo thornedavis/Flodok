@@ -48,6 +48,12 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Landing page logo marquee */
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
 /* Consistent single-color focus ring for form fields — no halo, no offset,
    same clean look in light and dark themes. !important beats per-component
    utility classes like `outline-none` that otherwise suppress the ring. */
