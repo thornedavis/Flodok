@@ -1268,13 +1268,17 @@ function BonusesTab({ user, t }: { user: User; t: Translations }) {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-start justify-between gap-4 rounded-xl border p-4" style={{ borderColor: 'var(--color-border)' }}>
-        <div className="min-w-0">
-          <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{t.bonusesEnabledLabel}</p>
-          <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.bonusesEnabledHelp}</p>
-        </div>
+      <InfoBanner
+        storageKey="flodok.banner.bonuses.dismissed"
+        title={t.bannerBonusesTitle}
+        body={t.bannerBonusesBody}
+      />
+
+      <div className="flex items-center justify-between gap-4">
+        <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{t.bonusesEnabledLabel}</p>
         <Toggle checked={enabled} onChange={toggleEnabled} />
       </div>
+      <p className="-mt-3 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.bonusesEnabledHelp}</p>
 
       <div style={{ opacity: enabled ? 1 : 0.5 }}>
         <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.maxBonusIdrLabel}</label>
@@ -1479,14 +1483,18 @@ function AchievementsTab({ user, t }: { user: User; t: Translations }) {
 
   return (
     <div className="space-y-5">
+      <InfoBanner
+        storageKey="flodok.banner.badges.dismissed"
+        title={t.bannerBadgesTitle}
+        body={t.bannerBadgesBody}
+      />
+
       {/* Org-level master switch */}
-      <div className="flex items-start justify-between gap-4 rounded-xl border p-4" style={{ borderColor: 'var(--color-border)' }}>
-        <div className="min-w-0">
-          <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{t.badgesEnabledLabel}</p>
-          <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.badgesEnabledHelp}</p>
-        </div>
+      <div className="flex items-center justify-between gap-4">
+        <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{t.badgesEnabledLabel}</p>
         <Toggle checked={orgBadgesEnabled} onChange={toggleOrgBadgesEnabled} />
       </div>
+      <p className="-mt-3 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.badgesEnabledHelp}</p>
 
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>{t.achievementDefsTitle}</h2>
@@ -1721,5 +1729,62 @@ function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (
         style={{ transform: checked ? 'translateX(18px)' : 'translateX(2px)' }}
       />
     </button>
+  )
+}
+
+// Dismissable explainer banner used at the top of feature-config tabs.
+// Persists dismissal in localStorage so it doesn't reappear on every visit.
+function InfoBanner({
+  storageKey,
+  title,
+  body,
+}: {
+  storageKey: string
+  title: string
+  body: string
+}) {
+  const [dismissed, setDismissed] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false
+    try {
+      return window.localStorage.getItem(storageKey) === '1'
+    } catch {
+      return false
+    }
+  })
+
+  if (dismissed) return null
+
+  function handleDismiss() {
+    try {
+      window.localStorage.setItem(storageKey, '1')
+    } catch { /* localStorage unavailable — silent */ }
+    setDismissed(true)
+  }
+
+  return (
+    <div
+      className="relative rounded-xl border p-4 pr-10"
+      style={{
+        borderColor: 'var(--color-border)',
+        backgroundColor: 'var(--color-bg-secondary, var(--color-bg-tertiary))',
+      }}
+    >
+      <button
+        type="button"
+        onClick={handleDismiss}
+        aria-label="Dismiss"
+        className="absolute right-2 top-2 rounded p-1 transition-colors hover:bg-[var(--color-bg-tertiary)]"
+        style={{ color: 'var(--color-text-tertiary)' }}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+          <line x1="6" y1="6" x2="18" y2="18"/>
+          <line x1="6" y1="18" x2="18" y2="6"/>
+        </svg>
+      </button>
+      <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{title}</p>
+      <p className="mt-1.5 text-xs leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>
+        {body}
+      </p>
+    </div>
   )
 }
