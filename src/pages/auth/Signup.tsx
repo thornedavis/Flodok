@@ -1,8 +1,18 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useLang } from '../../contexts/LanguageContext'
+import { AuthLayout, AuthSteps, PasswordField } from '../../components/AuthLayout'
 
-export function Signup({ onSignUp }: { onSignUp: (email: string, password: string, name: string, orgName: string) => Promise<{ error: unknown }> }) {
+export function Signup({
+  onSignUp,
+}: {
+  onSignUp: (
+    email: string,
+    password: string,
+    name: string,
+    orgName: string,
+  ) => Promise<{ error: unknown }>
+}) {
   const { t } = useLang()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -25,120 +35,191 @@ export function Signup({ onSignUp }: { onSignUp: (email: string, password: strin
     setLoading(false)
   }
 
-  if (success) {
-    return (
-      <div className="flex min-h-screen items-center justify-center px-4" style={{ backgroundColor: 'var(--color-bg)' }}>
-        <div className="w-full max-w-sm text-center">
-          <h1 className="mb-4 text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.checkYourEmail}</h1>
-          <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-            {t.confirmationSentTo} <strong>{email}</strong>. {t.clickToActivate}
-          </p>
-          <Link to="/login" className="mt-6 inline-block text-sm font-medium" style={{ color: 'var(--color-primary)' }}>
-            {t.backToSignIn}
-          </Link>
-        </div>
-      </div>
-    )
-  }
-
-  const inputStyle = {
+  const inputStyle: React.CSSProperties = {
     borderColor: 'var(--color-border)',
     backgroundColor: 'var(--color-bg)',
     color: 'var(--color-text)',
-    '--tw-ring-color': 'var(--color-primary)',
-  } as React.CSSProperties
+  }
+
+  const steps = ['Sign up your account', 'Verify your email', 'Set up your team']
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4" style={{ backgroundColor: 'var(--color-bg)' }}>
-      <div className="w-full max-w-sm">
-        <h1 className="mb-2 text-center text-2xl font-semibold tracking-tight" style={{ color: 'var(--color-text)' }}>
-          {t.createAccountTitle}
-        </h1>
-        <p className="mb-8 text-center text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-          {t.setupOrgTagline}
-        </p>
+    <AuthLayout
+      panelEyebrow="Get started"
+      panelTitle="Get Started with Us."
+      panelSubtitle="Complete these easy steps and you'll be up and running in five minutes."
+      panelAccent={<AuthSteps steps={steps} active={success ? 1 : 0} />}
+    >
+      {success ? (
+        <div>
+          <div
+            className="mb-5 inline-flex h-11 w-11 items-center justify-center rounded-full"
+            style={{
+              backgroundColor: 'var(--color-diff-add)',
+              color: 'var(--color-success)',
+            }}
+          >
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+              <polyline points="22,6 12,13 2,6" />
+            </svg>
+          </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {error && (
-            <div className="rounded-md px-3 py-2 text-sm" style={{ backgroundColor: 'var(--color-diff-remove)', color: 'var(--color-danger)' }}>
-              {error}
+          <h2
+            className="text-2xl font-semibold tracking-tight"
+            style={{ color: 'var(--color-text)' }}
+          >
+            {t.checkYourEmail}
+          </h2>
+          <p
+            className="mt-2 text-sm leading-relaxed"
+            style={{ color: 'var(--color-text-secondary)' }}
+          >
+            {t.confirmationSentTo} <strong style={{ color: 'var(--color-text)' }}>{email}</strong>.
+            {' '}
+            {t.clickToActivate}
+          </p>
+
+          <Link
+            to="/login"
+            className="mt-8 inline-block text-sm font-semibold"
+            style={{ color: 'var(--color-primary)' }}
+          >
+            {t.backToSignIn} →
+          </Link>
+        </div>
+      ) : (
+        <>
+          <div className="mb-8">
+            <h2
+              className="text-2xl font-semibold tracking-tight"
+              style={{ color: 'var(--color-text)' }}
+            >
+              {t.createAccountTitle}
+            </h2>
+            <p
+              className="mt-1.5 text-sm"
+              style={{ color: 'var(--color-text-secondary)' }}
+            >
+              {t.setupOrgTagline}
+            </p>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {error && (
+              <div
+                className="rounded-md px-3 py-2 text-sm"
+                style={{
+                  backgroundColor: 'var(--color-diff-remove)',
+                  color: 'var(--color-danger)',
+                }}
+              >
+                {error}
+              </div>
+            )}
+
+            <div>
+              <label
+                className="mb-1.5 block text-sm font-medium"
+                style={{ color: 'var(--color-text-secondary)' }}
+              >
+                {t.yourNameLabel}
+              </label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+                autoComplete="name"
+                className="w-full rounded-lg border px-3 py-2 text-sm"
+                style={inputStyle}
+              />
             </div>
-          )}
 
-          <div>
-            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
-              {t.yourNameLabel}
-            </label>
-            <input
-              type="text"
-              value={name}
-              onChange={e => setName(e.target.value)}
-              required
-              className="w-full rounded-lg border px-3 py-2 text-sm"
-              style={inputStyle}
-            />
-          </div>
+            <div>
+              <label
+                className="mb-1.5 block text-sm font-medium"
+                style={{ color: 'var(--color-text-secondary)' }}
+              >
+                {t.organizationName}
+              </label>
+              <input
+                type="text"
+                value={orgName}
+                onChange={(e) => setOrgName(e.target.value)}
+                required
+                autoComplete="organization"
+                className="w-full rounded-lg border px-3 py-2 text-sm"
+                style={inputStyle}
+              />
+            </div>
 
-          <div>
-            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
-              {t.organizationName}
-            </label>
-            <input
-              type="text"
-              value={orgName}
-              onChange={e => setOrgName(e.target.value)}
-              required
-              className="w-full rounded-lg border px-3 py-2 text-sm"
-              style={inputStyle}
-            />
-          </div>
+            <div>
+              <label
+                className="mb-1.5 block text-sm font-medium"
+                style={{ color: 'var(--color-text-secondary)' }}
+              >
+                {t.emailLabel}
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                autoComplete="email"
+                className="w-full rounded-lg border px-3 py-2 text-sm"
+                style={inputStyle}
+              />
+            </div>
 
-          <div>
-            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
-              {t.emailLabel}
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              required
-              className="w-full rounded-lg border px-3 py-2 text-sm"
-              style={inputStyle}
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
-              {t.passwordLabel}
-            </label>
-            <input
-              type="password"
+            <PasswordField
               value={password}
-              onChange={e => setPassword(e.target.value)}
+              onChange={setPassword}
               required
               minLength={6}
-              className="w-full rounded-lg border px-3 py-2 text-sm"
-              style={inputStyle}
+              label={t.passwordLabel}
+              showLabel="Show password"
+              hideLabel="Hide password"
+              autoComplete="new-password"
             />
-          </div>
+            <p className="-mt-2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+              Must be at least 6 characters.
+            </p>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors disabled:opacity-50"
-            style={{ backgroundColor: 'var(--color-primary)' }}
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full rounded-lg px-4 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+              style={{ backgroundColor: 'var(--color-primary)' }}
+            >
+              {loading ? t.creatingAccount : t.createAccount}
+            </button>
+          </form>
+
+          <p
+            className="mt-8 text-center text-sm"
+            style={{ color: 'var(--color-text-secondary)' }}
           >
-            {loading ? t.creatingAccount : t.createAccount}
-          </button>
-        </form>
-
-        <p className="mt-6 text-center text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-          {t.alreadyHaveAccount}{' '}
-          <Link to="/login" className="font-medium" style={{ color: 'var(--color-primary)' }}>
-            {t.signIn}
-          </Link>
-        </p>
-      </div>
-    </div>
+            {t.alreadyHaveAccount}{' '}
+            <Link
+              to="/login"
+              className="font-semibold"
+              style={{ color: 'var(--color-primary)' }}
+            >
+              {t.signIn}
+            </Link>
+          </p>
+        </>
+      )}
+    </AuthLayout>
   )
 }
