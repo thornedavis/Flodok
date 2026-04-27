@@ -16,7 +16,7 @@ import { ConnectFirefliesDialog } from '../../components/integrations/ConnectFir
 import { ConnectAsanaDialog } from '../../components/integrations/ConnectAsanaDialog'
 import { listIntegrations, deleteIntegration, type IntegrationRow } from '../../lib/integrations'
 
-type Tab = 'account' | 'organization' | 'integrations' | 'achievements' | 'billing'
+type Tab = 'account' | 'organization' | 'team' | 'integrations' | 'achievements' | 'billing'
 
 const inputStyle: React.CSSProperties = {
   borderColor: 'var(--color-border)',
@@ -61,7 +61,7 @@ export function Settings({ user }: { user: User }) {
   const rawTab = params.get('tab')
 
   let tab: Tab = 'account'
-  if (rawTab === 'organization' || rawTab === 'billing') tab = rawTab
+  if (rawTab === 'organization' || rawTab === 'team' || rawTab === 'billing') tab = rawTab
   else if (rawTab === 'integrations' && isAdmin) tab = 'integrations'
   else if (rawTab === 'achievements' && isAdmin) tab = 'achievements'
 
@@ -76,6 +76,7 @@ export function Settings({ user }: { user: User }) {
       <div className="mb-6 flex gap-1 border-b" style={{ borderColor: 'var(--color-border)' }}>
         <TabButton active={tab === 'account'} onClick={() => setTab('account')}>{t.settingsAccountTab}</TabButton>
         <TabButton active={tab === 'organization'} onClick={() => setTab('organization')}>{t.settingsOrganizationTab}</TabButton>
+        <TabButton active={tab === 'team'} onClick={() => setTab('team')}>{t.settingsTeamTab}</TabButton>
         {isAdmin && (
           <TabButton active={tab === 'integrations'} onClick={() => setTab('integrations')}>{t.settingsIntegrationsTab}</TabButton>
         )}
@@ -87,6 +88,7 @@ export function Settings({ user }: { user: User }) {
 
       {tab === 'account' && <AccountTab user={user} t={t} />}
       {tab === 'organization' && <OrganizationTab user={user} t={t} />}
+      {tab === 'team' && <TeamMembersSection user={user} t={t} />}
       {tab === 'integrations' && isAdmin && <IntegrationsTab user={user} t={t} />}
       {tab === 'achievements' && isAdmin && <AchievementsTab user={user} t={t} />}
       {tab === 'billing' && <BillingTab t={t} />}
@@ -582,9 +584,6 @@ function OrganizationTab({ user, t }: { user: User; t: Translations }) {
 
         </form>
       </section>
-
-      {/* Team members */}
-      <TeamMembersSection user={user} t={t} />
     </div>
   )
 }

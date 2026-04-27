@@ -353,6 +353,7 @@ export const translations = {
     // Settings — tabs
     settingsAccountTab: 'Account',
     settingsOrganizationTab: 'Organization',
+    settingsTeamTab: 'Team',
     settingsBillingTab: 'Billing',
     yourProfile: 'Your profile',
     securitySection: 'Security',
@@ -1095,6 +1096,7 @@ export const translations = {
     // Settings — tabs
     settingsAccountTab: 'Akun',
     settingsOrganizationTab: 'Organisasi',
+    settingsTeamTab: 'Tim',
     settingsBillingTab: 'Penagihan',
     yourProfile: 'Profil Anda',
     securitySection: 'Keamanan',
