@@ -1,4 +1,4 @@
-import type { User } from '../types/database'
+import type { User } from '../types/aliases'
 
 export type Role = 'owner' | 'admin' | 'manager'
 

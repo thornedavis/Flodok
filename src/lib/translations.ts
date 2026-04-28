@@ -61,6 +61,7 @@ export const translations = {
     navPerformance: 'Performance',
     navPending: 'Pending',
     navSettings: 'Settings',
+    helpCenter: 'Help Center',
     signOut: 'Sign out',
 
     // Manager app — Overview page
@@ -842,6 +843,7 @@ export const translations = {
     navPerformance: 'Kinerja',
     navPending: 'Tertunda',
     navSettings: 'Pengaturan',
+    helpCenter: 'Pusat Bantuan',
     signOut: 'Keluar',
 
     // Manager app — Overview page

@@ -6,7 +6,7 @@ import { Modal } from '../../components/Modal'
 import { getAvatarGradient } from '../../lib/avatar'
 import { creditToIdr, formatIdr } from '../../lib/credits'
 import { BadgeGlyph } from '../../components/BadgeGlyph'
-import type { User, AchievementDefinition } from '../../types/database'
+import type { User, AchievementDefinition } from '../../types/aliases'
 
 type RosterRow = {
   employee_id: string

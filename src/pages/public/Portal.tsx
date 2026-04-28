@@ -16,7 +16,7 @@ import { StatRow } from '../../components/portal/StatRow'
 import { InfoTooltip } from '../../components/InfoTooltip'
 import { AvatarWithBadge } from '../../components/portal/AvatarWithBadge'
 import { MonthStrip } from '../../components/portal/MonthStrip'
-import type { Employee, Sop, SopSignature, Organization, Contract, ContractSignature, FeedEvent } from '../../types/database'
+import type { Employee, Sop, SopSignature, Organization, Contract, ContractSignature, FeedEvent } from '../../types/aliases'
 
 type AchievementSummary = {
   unlock_id: string

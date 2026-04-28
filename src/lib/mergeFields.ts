@@ -13,7 +13,7 @@
 // the document still renders cleanly and the gap is visible.
 
 import { formatIdr } from './credits'
-import type { Employee, Organization, Contract } from '../types/database'
+import type { Employee, Organization, Contract } from '../types/aliases'
 
 export type Lang = 'en' | 'id'
 

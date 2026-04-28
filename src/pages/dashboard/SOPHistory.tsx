@@ -14,7 +14,7 @@ import { diffLines } from 'diff'
 import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
 import { renderMergeFields, type MergeContext } from '../../lib/mergeFields'
-import type { Sop, SopVersion, Employee, Organization } from '../../types/database'
+import type { Sop, SopVersion, Employee, Organization } from '../../types/aliases'
 
 type VersionLang = 'en' | 'id'
 type ViewMode = 'rendered' | 'template'

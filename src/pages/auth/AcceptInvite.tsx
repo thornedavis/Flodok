@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
-import type { Organization, OrgInvitation } from '../../types/database'
+import type { Organization, OrgInvitation } from '../../types/aliases'
 
 type InviteState =
   | { status: 'loading' }

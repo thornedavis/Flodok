@@ -17,7 +17,7 @@ import { getEmployeeDepts } from '../../lib/employee'
 import { formatIdr } from '../../lib/credits'
 import { BadgeGlyph } from '../../components/BadgeGlyph'
 import type { Translations } from '../../lib/translations'
-import type { FeedEvent, User } from '../../types/database'
+import type { FeedEvent, User } from '../../types/aliases'
 
 // ─── Types ──────────────────────────────────────────────
 

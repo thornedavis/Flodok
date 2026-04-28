@@ -8,7 +8,7 @@ import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning'
 import { formatIdrDigits } from '../../lib/credits'
 import { InfoTooltip } from '../../components/InfoTooltip'
 import { writeSnapshot } from '../../lib/snapshotApi'
-import type { User, Contract, Tag, Employee, Organization } from '../../types/database'
+import type { User, Contract, Tag, Employee, Organization } from '../../types/aliases'
 
 const GENERATE_SYSTEM_PROMPT = `You are an expert employment contract writer for workplace documentation.
 

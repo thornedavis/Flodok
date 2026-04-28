@@ -6,7 +6,7 @@ import { useLang } from '../../contexts/LanguageContext'
 import { primaryDept, deptsJoined } from '../../lib/employee'
 import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning'
 import { writeSnapshot } from '../../lib/snapshotApi'
-import type { User, Sop, Tag, Employee, Organization } from '../../types/database'
+import type { User, Sop, Tag, Employee, Organization } from '../../types/aliases'
 
 export function SOPEdit({ user }: { user: User }) {
   const { t } = useLang()

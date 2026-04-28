@@ -7,7 +7,7 @@ import { useRole } from '../hooks/useRole'
 import { getAvatarGradient } from '../lib/avatar'
 import { supabase } from '../lib/supabase'
 import type { Translations } from '../lib/translations'
-import type { Organization, User } from '../types/database'
+import type { Organization, User } from '../types/aliases'
 
 type NavKey = 'navOverview' | 'navEmployees' | 'navSops' | 'navContracts' | 'navPerformance' | 'navPending' | 'navSettings'
 
@@ -111,6 +111,22 @@ function Sidebar({ user, mobileOpen, onCloseMobile }: {
   const { isAdmin } = useRole(user)
   const location = useLocation()
   const navigate = useNavigate()
+  const [userCount, setUserCount] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (!isAdmin) return
+    let cancelled = false
+    supabase
+      .from('users')
+      .select('id', { count: 'exact', head: true })
+      .eq('org_id', user.org_id)
+      .then(({ count }) => {
+        if (!cancelled) setUserCount(count ?? 0)
+      })
+    return () => { cancelled = true }
+  }, [isAdmin, user.org_id])
+
+  const showInviteCard = isAdmin && userCount !== null && userCount <= 2
 
   return (
     <>
@@ -172,12 +188,37 @@ function Sidebar({ user, mobileOpen, onCloseMobile }: {
           </ul>
         </nav>
 
-        {/* Invite card — admins only */}
-        {isAdmin && (
-          <div className="px-4 pb-4">
+        {/* Help link */}
+        <div className="border-t px-3 pt-3" style={{ borderColor: 'var(--color-border)' }}>
+          <Link
+            to="/help"
+            className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors"
+            style={{ color: 'var(--color-text-secondary)' }}
+            onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
+            onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
+          >
+            <span style={{ color: 'var(--color-text-tertiary)' }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+            </span>
+            {t.helpCenter}
+          </Link>
+        </div>
+
+        {/* Invite card — admins only, hidden once the team has 3+ members */}
+        {showInviteCard && (
+          <div className="px-4 pt-3">
             <InviteCard t={t} onInvite={() => navigate('/dashboard/settings?tab=organization')} />
           </div>
         )}
+
+        {/* Version footer */}
+        <p className="px-6 pb-3 pt-3 text-[10px]" style={{ color: 'var(--color-text-tertiary)' }}>
+          v{__APP_VERSION__}
+        </p>
       </aside>
     </>
   )

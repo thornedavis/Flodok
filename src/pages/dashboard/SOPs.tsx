@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
 import { getEmployeeDepts, primaryDept } from '../../lib/employee'
 import { getSopStarterTemplate } from '../../lib/templates'
-import type { User, Sop, Employee, Tag } from '../../types/database'
+import type { User, Sop, Employee, Tag } from '../../types/aliases'
 
 type SopWithEmployee = Sop & { employee: Employee | null; tagIds: string[] }
 

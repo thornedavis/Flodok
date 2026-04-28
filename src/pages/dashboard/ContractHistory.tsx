@@ -17,7 +17,7 @@ import { useLang } from '../../contexts/LanguageContext'
 import { renderMergeFields, type MergeContext } from '../../lib/mergeFields'
 import { formatIdr } from '../../lib/credits'
 import { VersionRail, VersionPane } from './SOPHistory'
-import type { Contract, ContractVersion, Employee, Organization } from '../../types/database'
+import type { Contract, ContractVersion, Employee, Organization } from '../../types/aliases'
 
 type VersionLang = 'en' | 'id'
 type ViewMode = 'rendered' | 'template'

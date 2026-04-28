@@ -10,7 +10,7 @@ import { useLang } from '../../contexts/LanguageContext'
 import { getEmployeeDepts } from '../../lib/employee'
 import { getSopStarterTemplate } from '../../lib/templates'
 import type { Translations } from '../../lib/translations'
-import type { User, Employee, Organization } from '../../types/database'
+import type { User, Employee, Organization } from '../../types/aliases'
 
 export function Employees({ user }: { user: User }) {
   const { t } = useLang()

@@ -5,7 +5,7 @@ import { Avatar } from '../../components/Avatar'
 import { DiffPanel } from '../../components/DiffPanel'
 import { useLang } from '../../contexts/LanguageContext'
 import { writeSnapshot } from '../../lib/snapshotApi'
-import type { User, PendingUpdate, Employee, Sop } from '../../types/database'
+import type { User, PendingUpdate, Employee, Sop } from '../../types/aliases'
 
 type Change = { section?: string; summary?: string; content_markdown?: string; change_type?: string }
 type ProposedChanges = { changes?: Change[] }

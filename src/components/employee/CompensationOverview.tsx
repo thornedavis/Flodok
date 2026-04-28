@@ -8,7 +8,7 @@ import { InfoTooltip } from '../InfoTooltip'
 import { currentPeriodMonth, formatIdr, allowanceGradientColor, creditToIdr } from '../../lib/credits'
 import { CompensationRing, ShieldPath, WalletPath, CoinPath, GiftPath } from '../portal/CompensationRing'
 import { StatRow } from '../portal/StatRow'
-import type { Contract, User } from '../../types/database'
+import type { Contract, User } from '../../types/aliases'
 
 function ShieldIcon() {
   return <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>

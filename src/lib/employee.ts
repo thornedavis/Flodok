@@ -1,4 +1,4 @@
-import type { Employee } from '../types/database'
+import type { Employee } from '../types/aliases'
 
 type EmpDeptShape = Pick<Employee, 'department' | 'departments'>
 

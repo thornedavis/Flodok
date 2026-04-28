@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { Modal } from '../Modal'
 import { useLang } from '../../contexts/LanguageContext'
 import { useRole } from '../../hooks/useRole'
-import type { AchievementDefinition, AchievementUnlock, Contract, Employee, User } from '../../types/database'
+import type { AchievementDefinition, AchievementUnlock, Contract, Employee, User } from '../../types/aliases'
 import { displayBadgeIcon } from '../../lib/badgeIcon'
 
 const sectionHeadingStyle: React.CSSProperties = { color: 'var(--color-text-tertiary)' }

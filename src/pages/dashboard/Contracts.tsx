@@ -5,7 +5,7 @@ import { useLang } from '../../contexts/LanguageContext'
 import { getEmployeeDepts, primaryDept, deptsJoined } from '../../lib/employee'
 import { formatIdrDigits as formatCurrency } from '../../lib/credits'
 import { InfoTooltip } from '../../components/InfoTooltip'
-import type { User, Contract, Employee, Tag } from '../../types/database'
+import type { User, Contract, Employee, Tag } from '../../types/aliases'
 
 type ContractWithEmployee = Contract & { employee: Employee | null; tagIds: string[] }
 

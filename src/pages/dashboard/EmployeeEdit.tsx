@@ -12,7 +12,7 @@ import { useBreadcrumbTrailing } from '../../contexts/BreadcrumbContext'
 import { AchievementsSection } from '../../components/employee/AchievementsSection'
 import { CompensationOverview } from '../../components/employee/CompensationOverview'
 import { EmployeeActivityLog } from '../../components/employee/EmployeeActivityLog'
-import type { User, Employee, Organization, Contract } from '../../types/database'
+import type { User, Employee, Organization, Contract } from '../../types/aliases'
 
 const MAX_AVATAR_SIZE = 2 * 1024 * 1024 // 2 MB
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp']
