@@ -1,3 +1,4 @@
+Initialising login role...
 export type Json =
   | string
   | number
@@ -1339,6 +1340,7 @@ export type Database = {
           created_at: string
           email: string
           id: string
+          is_platform_admin: boolean
           name: string
           org_id: string
           phone: string | null
@@ -1349,6 +1351,7 @@ export type Database = {
           created_at?: string
           email: string
           id: string
+          is_platform_admin?: boolean
           name: string
           org_id: string
           phone?: string | null
@@ -1359,6 +1362,7 @@ export type Database = {
           created_at?: string
           email?: string
           id?: string
+          is_platform_admin?: boolean
           name?: string
           org_id?: string
           phone?: string | null
@@ -1500,10 +1504,12 @@ export type Database = {
         Args: { emp_slug: string; emp_token: string }
         Returns: Json
       }
-      portal_home: {
-        Args: { emp_slug: string; emp_token: string }
-        Returns: Json
-      }
+      portal_home:
+        | { Args: { emp_slug: string; emp_token: string }; Returns: Json }
+        | {
+            Args: { emp_slug: string; emp_token: string; target_month: string }
+            Returns: Json
+          }
       portal_leaderboard: {
         Args: { emp_slug: string; emp_token: string; period_kind?: string }
         Returns: Json
@@ -1704,35 +1710,5 @@ export const Constants = {
     Enums: {},
   },
 } as const
-
-// Named row-type aliases used throughout the app.
-export type Organization = Database['public']['Tables']['organizations']['Row']
-export type User = Database['public']['Tables']['users']['Row']
-export type Employee = Database['public']['Tables']['employees']['Row']
-export type SopCategory = Database['public']['Tables']['sop_categories']['Row']
-export type Sop = Database['public']['Tables']['sops']['Row']
-export type SopVersion = Database['public']['Tables']['sop_versions']['Row']
-export type SopSignature = Database['public']['Tables']['sop_signatures']['Row']
-export type PendingUpdate = Database['public']['Tables']['pending_updates']['Row']
-export type ApiKey = Database['public']['Tables']['api_keys']['Row']
-export type Tag = Database['public']['Tables']['tags']['Row']
-export type Contract = Database['public']['Tables']['contracts']['Row']
-export type ContractVersion = Database['public']['Tables']['contract_versions']['Row']
-export type FeedEvent = Database['public']['Tables']['feed_events']['Row']
-export type OrgInvitation = Database['public']['Tables']['org_invitations']['Row']
-export type ContractSignature = Database['public']['Tables']['contract_signatures']['Row']
-export type AllowanceAdjustment = {
-  id: string
-  org_id: string
-  employee_id: string
-  period_month: string
-  amount_idr: number
-  reason: string
-  awarded_by: string
-  created_at: string
-}
-export type CreditAdjustment = Database['public']['Tables']['credit_adjustments']['Row']
-export type BonusAdjustment = Database['public']['Tables']['bonus_adjustments']['Row']
-export type AchievementDefinition = Database['public']['Tables']['achievement_definitions']['Row']
-export type AchievementUnlock = Database['public']['Tables']['achievement_unlocks']['Row']
-export type LeaderboardSnapshot = Database['public']['Tables']['leaderboard_snapshots']['Row']
+A new version of Supabase CLI is available: v2.95.4 (currently installed v2.75.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli

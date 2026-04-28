@@ -15,7 +15,7 @@ import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
 import { getEmployeeDepts } from '../../lib/employee'
 import { formatIdr } from '../../lib/credits'
-import { displayBadgeIcon } from '../../lib/badgeIcon'
+import { BadgeGlyph } from '../../components/BadgeGlyph'
 import type { Translations } from '../../lib/translations'
 import type { FeedEvent, User } from '../../types/database'
 
@@ -629,7 +629,8 @@ function RecentActivity({ orgId, initial, employeesById, t, lang }: {
               const isLast = i === events.length - 1
               const emp = evt.employee_id ? employeesById[evt.employee_id] : null
               const visual = eventVisual(evt.event_type)
-              const meta = (evt.metadata || {}) as { signature_font?: string; version?: number }
+              const meta = (evt.metadata || {}) as { signature_font?: string; version?: number; icon?: string | null }
+              const isBadgeEvent = evt.event_type === 'achievement_unlocked'
 
               return (
                 <li key={evt.id} className="flex gap-3">
@@ -642,7 +643,11 @@ function RecentActivity({ orgId, initial, employeesById, t, lang }: {
                         color: visual.color,
                       }}
                     >
-                      {visual.icon}
+                      {isBadgeEvent ? (
+                        <BadgeGlyph icon={meta.icon ?? null} size={18} />
+                      ) : (
+                        visual.icon
+                      )}
                     </div>
                     {!isLast && (
                       <div className="min-h-4 w-px flex-1" style={{ backgroundColor: 'var(--color-border)' }} />
@@ -724,6 +729,7 @@ function eventLabel(eventType: string, t: Translations): string {
     case 'contract_signed': return t.eventContractSigned
     case 'reward_given': return t.eventRewardGiven
     case 'welcome': return t.eventWelcome
+    case 'achievement_unlocked': return t.eventBadgeEarned
     default: return eventType
   }
 }
@@ -792,6 +798,11 @@ function eventVisual(eventType: string): { color: string; icon: React.ReactNode 
             <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
           </svg>
         ),
+      }
+    case 'achievement_unlocked':
+      return {
+        color: '#f59e0b',
+        icon: null,
       }
     default:
       return {
@@ -907,7 +918,7 @@ function RecognitionMoments({ t, lang }: { t: Translations; lang: 'en' | 'id' })
         <ul className="max-h-56 space-y-2 overflow-y-auto pr-1">
           {tab === 'today' && today.map(u => (
             <li key={u.unlock_id} className="flex items-center gap-2.5">
-              <span className="shrink-0 text-base">{displayBadgeIcon(u.achievement_icon, '🏆')}</span>
+              <BadgeGlyph icon={u.achievement_icon} size={18} className="shrink-0" />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>{u.employee_name}</p>
                 <p className="truncate text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
@@ -922,7 +933,7 @@ function RecognitionMoments({ t, lang }: { t: Translations; lang: 'en' | 'id' })
           ))}
           {tab === '7d' && upcoming7.map(u => (
             <li key={`${u.employee_id}-${u.achievement_id}`} className="flex items-center gap-2.5">
-              <span className="shrink-0 text-base">{displayBadgeIcon(u.achievement_icon, '🏆')}</span>
+              <BadgeGlyph icon={u.achievement_icon} size={18} className="shrink-0" />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>{u.employee_name}</p>
                 <p className="truncate text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{u.achievement_name}</p>
@@ -934,7 +945,7 @@ function RecognitionMoments({ t, lang }: { t: Translations; lang: 'en' | 'id' })
           ))}
           {tab === '30d' && upcoming.map(u => (
             <li key={`${u.employee_id}-${u.achievement_id}`} className="flex items-center gap-2.5">
-              <span className="shrink-0 text-base">{displayBadgeIcon(u.achievement_icon, '🏆')}</span>
+              <BadgeGlyph icon={u.achievement_icon} size={18} className="shrink-0" />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>{u.employee_name}</p>
                 <p className="truncate text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{u.achievement_name}</p>

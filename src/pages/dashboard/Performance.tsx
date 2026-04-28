@@ -5,7 +5,7 @@ import { useRole } from '../../hooks/useRole'
 import { Modal } from '../../components/Modal'
 import { getAvatarGradient } from '../../lib/avatar'
 import { creditToIdr, formatIdr } from '../../lib/credits'
-import { displayBadgeIcon } from '../../lib/badgeIcon'
+import { BadgeGlyph } from '../../components/BadgeGlyph'
 import type { User, AchievementDefinition } from '../../types/database'
 
 type RosterRow = {
@@ -191,7 +191,7 @@ export function Performance({ user }: { user: User }) {
                   {tab === 'achievements' && row.top_achievements.length > 0 && (
                     <div className="mt-1 flex flex-wrap gap-1">
                       {row.top_achievements.map((b, i) => (
-                        <span key={i} className="text-base" title={b.name}>{displayBadgeIcon(b.icon, '🏅')}</span>
+                        <span key={i} title={b.name}><BadgeGlyph icon={b.icon} size={18} /></span>
                       ))}
                     </div>
                   )}

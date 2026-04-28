@@ -9,7 +9,7 @@ import { useLang } from '../../contexts/LanguageContext'
 import { primaryDept } from '../../lib/employee'
 import { formatIdr, allowanceGradientColor } from '../../lib/credits'
 import { formatRelativeTime } from '../../lib/relativeTime'
-import { displayBadgeIcon } from '../../lib/badgeIcon'
+import { BadgeGlyph } from '../../components/BadgeGlyph'
 import { renderMergeFields } from '../../lib/mergeFields'
 import { CompensationRing, ShieldPath, WalletPath, CoinPath, GiftPath } from '../../components/portal/CompensationRing'
 import { StatRow } from '../../components/portal/StatRow'
@@ -73,12 +73,36 @@ type BadgeData = {
   icon: string | null
   is_featured: boolean
   trigger_type: string
+  trigger_rule: Record<string, unknown> | null
   unlocked: boolean
   unlock_count: number
   unlock_id: string | null
   unlocked_at: string | null
   reason: string | null
 }
+
+type BadgeGroup = 'tenure' | 'compensation' | 'leaderboard' | 'manual'
+
+function classifyBadge(b: BadgeData): { group: BadgeGroup; sortKey: number } {
+  if (b.trigger_type === 'manual') return { group: 'manual', sortKey: 0 }
+  const rule = b.trigger_rule || {}
+  const ruleType = rule.type as string | undefined
+  if (ruleType === 'tenure_calendar') {
+    const unit = (rule.unit as string) || 'day'
+    const amount = (rule.amount as number) || 0
+    const unitRank = unit === 'day' ? 0 : unit === 'month' ? 1 : 2
+    return { group: 'tenure', sortKey: unitRank * 1000 + amount }
+  }
+  if (ruleType === 'first_event') return { group: 'compensation', sortKey: 0 }
+  if (ruleType === 'leaderboard_rank') {
+    const maxRank = (rule.max_rank as number) || 0
+    const consecutive = (rule.consecutive_periods as number) || 1
+    return { group: 'leaderboard', sortKey: -maxRank * 100 + consecutive }
+  }
+  return { group: 'manual', sortKey: 999 }
+}
+
+const BADGE_GROUP_ORDER: BadgeGroup[] = ['tenure', 'compensation', 'leaderboard', 'manual']
 
 type LeaderboardData = {
   period_kind: 'month' | 'quarter' | 'all-time'
@@ -1160,10 +1184,10 @@ function AchievementDetailModal({
       >
         <div className="flex flex-col items-center text-center">
           <div
-            className="mb-4 flex h-20 w-20 items-center justify-center rounded-full text-4xl"
+            className="mb-4 flex h-20 w-20 items-center justify-center rounded-full"
             style={{ backgroundColor: 'var(--color-warning-subtle, rgba(234, 179, 8, 0.15))' }}
           >
-            {displayBadgeIcon(achievement.icon, '🏆')}
+            <BadgeGlyph icon={achievement.icon} size={56} />
           </div>
           <h3 className="mb-1 text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
             {achievement.name}
@@ -1419,7 +1443,7 @@ function HomeTab({
                     style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary, var(--color-bg))' }}
                     title={a.description || a.reason || undefined}
                   >
-                    <span className="text-lg">{displayBadgeIcon(a.icon, '🏅')}</span>
+                    <BadgeGlyph icon={a.icon} size={20} />
                     <span style={{ color: 'var(--color-text)' }}>{a.name}</span>
                   </button>
                 ))}
@@ -1733,6 +1757,29 @@ function BadgesTab({
   const earned = badges.filter(b => b.unlocked).length
   const total = badges.length
 
+  const grouped = new Map<BadgeGroup, BadgeData[]>()
+  for (const b of badges) {
+    const { group } = classifyBadge(b)
+    if (!grouped.has(group)) grouped.set(group, [])
+    grouped.get(group)!.push(b)
+  }
+  for (const list of grouped.values()) {
+    list.sort((a, b) => {
+      const sa = classifyBadge(a).sortKey
+      const sb = classifyBadge(b).sortKey
+      if (sa !== sb) return sa - sb
+      if (a.is_featured !== b.is_featured) return a.is_featured ? -1 : 1
+      return a.name.localeCompare(b.name)
+    })
+  }
+
+  const groupLabels: Record<BadgeGroup, string> = {
+    tenure: s.badgeGroupTenure,
+    compensation: s.badgeGroupCompensation,
+    leaderboard: s.badgeGroupLeaderboard,
+    manual: s.portalBadgeGroupRecognition,
+  }
+
   return (
     <div className="space-y-4">
       <div>
@@ -1743,57 +1790,90 @@ function BadgesTab({
       {total === 0 ? (
         <p className="py-8 text-center text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{s.portalNoAchievements}</p>
       ) : (
-        <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
-          {badges.map(b => {
-            const showIcon = displayBadgeIcon(b.icon, '🏆')
-            const clickable = b.unlocked && b.unlock_id && b.unlocked_at
-            return (
-              <button
-                key={b.definition_id}
-                type="button"
-                disabled={!clickable}
-                onClick={() => {
-                  if (!clickable) return
-                  onSelectAchievement({
-                    unlock_id: b.unlock_id!,
-                    unlocked_at: b.unlocked_at!,
-                    reason: b.reason,
-                    name: b.name,
-                    icon: b.icon,
-                    description: b.description,
-                    is_featured: b.is_featured,
-                  })
-                }}
-                className="relative flex aspect-square flex-col items-center justify-center gap-1 rounded-2xl border p-2 text-center transition-transform"
-                style={{
-                  borderColor: 'var(--color-border)',
-                  backgroundColor: b.unlocked ? 'var(--color-bg-secondary, var(--color-bg))' : 'transparent',
-                  opacity: b.unlocked ? 1 : 0.45,
-                  filter: b.unlocked ? 'none' : 'grayscale(0.8)',
-                  cursor: clickable ? 'pointer' : 'default',
-                }}
-                title={b.description || (b.unlocked ? undefined : s.portalBadgeLocked)}
-              >
-                <span className="text-3xl leading-none">{showIcon}</span>
-                <span className="line-clamp-2 text-xs font-medium leading-tight" style={{ color: 'var(--color-text)' }}>
-                  {b.name}
-                </span>
-                {b.unlocked && b.unlock_count > 1 && (
-                  <span
-                    className="absolute right-1 top-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
-                    style={{ backgroundColor: 'var(--color-primary)', color: 'white' }}
-                  >
-                    {s.portalBadgeRepeats(b.unlock_count)}
-                  </span>
-                )}
-              </button>
-            )
-          })}
+        <div className="space-y-6">
+          {BADGE_GROUP_ORDER.filter(g => (grouped.get(g)?.length ?? 0) > 0).map(group => (
+            <section key={group}>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-tertiary)' }}>
+                {groupLabels[group]}
+              </h3>
+              <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
+                {grouped.get(group)!.map(b => (
+                  <BadgeTile
+                    key={b.definition_id}
+                    badge={b}
+                    s={s}
+                    onSelectAchievement={onSelectAchievement}
+                  />
+                ))}
+              </div>
+            </section>
+          ))}
         </div>
       )}
       {/* Suppress unused warning until Indonesian-specific formatting is needed here. */}
       <span className="hidden">{lang}</span>
     </div>
+  )
+}
+
+function BadgeTile({
+  badge: b,
+  s,
+  onSelectAchievement,
+}: {
+  badge: BadgeData
+  s: ReturnType<typeof useLang>['t']
+  onSelectAchievement: (a: AchievementSummary) => void
+}) {
+  const clickable = b.unlocked && b.unlock_id && b.unlocked_at
+  return (
+    <button
+      type="button"
+      disabled={!clickable}
+      onClick={() => {
+        if (!clickable) return
+        onSelectAchievement({
+          unlock_id: b.unlock_id!,
+          unlocked_at: b.unlocked_at!,
+          reason: b.reason,
+          name: b.name,
+          icon: b.icon,
+          description: b.description,
+          is_featured: b.is_featured,
+        })
+      }}
+      className="relative flex aspect-square flex-col items-center justify-center gap-2 rounded-2xl border p-2 text-center transition-transform"
+      style={{
+        borderColor: 'var(--color-border)',
+        backgroundColor: b.unlocked ? 'var(--color-bg-secondary, var(--color-bg))' : 'transparent',
+        cursor: clickable ? 'pointer' : 'default',
+      }}
+      title={b.description || (b.unlocked ? undefined : s.portalBadgeLocked)}
+    >
+      <div
+        style={{
+          filter: b.unlocked ? 'none' : 'grayscale(1) brightness(0.85)',
+          opacity: b.unlocked ? 1 : 0.4,
+          lineHeight: 0,
+        }}
+      >
+        <BadgeGlyph icon={b.icon} size={56} />
+      </div>
+      <span
+        className="line-clamp-2 text-xs font-medium leading-tight"
+        style={{ color: b.unlocked ? 'var(--color-text)' : 'var(--color-text-tertiary)' }}
+      >
+        {b.name}
+      </span>
+      {b.unlocked && b.unlock_count > 1 && (
+        <span
+          className="absolute right-1 top-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
+          style={{ backgroundColor: 'var(--color-primary)', color: 'white' }}
+        >
+          {s.portalBadgeRepeats(b.unlock_count)}
+        </span>
+      )}
+    </button>
   )
 }
 

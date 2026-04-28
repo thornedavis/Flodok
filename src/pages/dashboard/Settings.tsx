@@ -4,7 +4,8 @@ import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
 import { useRole } from '../../hooks/useRole'
 import { getAvatarGradient } from '../../lib/avatar'
-import { displayBadgeIcon } from '../../lib/badgeIcon'
+import { BadgeGlyph } from '../../components/BadgeGlyph'
+import { BadgePicker } from '../../components/BadgePicker'
 import { formatIdrDigits } from '../../lib/credits'
 import { AvatarUpload } from '../../components/AvatarUpload'
 import { PhoneInput } from '../../components/PhoneInput'
@@ -1161,13 +1162,19 @@ function CreditsTab({ user, t }: { user: User; t: Translations }) {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-start justify-between gap-4 rounded-xl border p-4" style={{ borderColor: 'var(--color-border)' }}>
-        <div className="min-w-0">
-          <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{t.creditsEnabledLabel}</p>
-          <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.creditsEnabledHelp}</p>
-        </div>
+      <InfoBanner
+        storageKey="flodok.banner.credits.dismissed"
+        title={t.bannerCreditsTitle}
+        body={t.bannerCreditsBody}
+        icon={creditsIcon}
+        accent="#3b82f6"
+      />
+
+      <div className="flex items-center justify-between gap-4">
+        <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{t.creditsEnabledLabel}</p>
         <Toggle checked={enabled} onChange={toggleEnabled} />
       </div>
+      <p className="-mt-3 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.creditsEnabledHelp}</p>
 
       <div style={{ opacity: enabled ? 1 : 0.5 }}>
         <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.creditsDivisorLabel}</label>
@@ -1272,6 +1279,8 @@ function BonusesTab({ user, t }: { user: User; t: Translations }) {
         storageKey="flodok.banner.bonuses.dismissed"
         title={t.bannerBonusesTitle}
         body={t.bannerBonusesBody}
+        icon={bonusesIcon}
+        accent="#10b981"
       />
 
       <div className="flex items-center justify-between gap-4">
@@ -1462,18 +1471,21 @@ function AchievementsTab({ user, t }: { user: User; t: Translations }) {
     if (!name) { setError(t.titleRequired); return }
     setSaving(true)
     setError('')
-    const payload = {
+    const basePayload = {
       name,
       description: formDescription.trim() || null,
       icon: formIcon.trim() || null,
       trigger_type: formTriggerType,
-      trigger_rule: formTriggerType === 'auto' ? {} : null,
       is_featured: formFeatured,
       is_active: formActive,
     }
     const { error: dbError } = editingId
-      ? await supabase.from('achievement_definitions').update(payload).eq('id', editingId)
-      : await supabase.from('achievement_definitions').insert({ org_id: user.org_id, ...payload })
+      ? await supabase.from('achievement_definitions').update(basePayload).eq('id', editingId)
+      : await supabase.from('achievement_definitions').insert({
+          org_id: user.org_id,
+          ...basePayload,
+          trigger_rule: formTriggerType === 'auto' ? {} : null,
+        })
     setSaving(false)
     if (dbError) { setError(dbError.message); return }
     setShowForm(false)
@@ -1487,6 +1499,8 @@ function AchievementsTab({ user, t }: { user: User; t: Translations }) {
         storageKey="flodok.banner.badges.dismissed"
         title={t.bannerBadgesTitle}
         body={t.bannerBadgesBody}
+        icon={badgesIcon}
+        accent="#f59e0b"
       />
 
       {/* Org-level master switch */}
@@ -1528,7 +1542,7 @@ function AchievementsTab({ user, t }: { user: User; t: Translations }) {
                     style={{ borderColor: 'var(--color-border)', opacity: def.is_active ? 1 : 0.5 }}
                   >
                     <div className="flex min-w-0 items-center gap-3">
-                      <span className="text-2xl">{displayBadgeIcon(def.icon, '🏅')}</span>
+                      <BadgeGlyph icon={def.icon} size={26} />
                       <div className="min-w-0">
                         <p className="flex items-center gap-2 text-sm font-medium" style={{ color: 'var(--color-text)' }}>
                           {def.name}
@@ -1575,7 +1589,9 @@ function AchievementsTab({ user, t }: { user: User; t: Translations }) {
         </div>
       )}
 
-      {showForm && (
+      {showForm && (() => {
+        const coreLocked = editingId !== null && formTriggerType === 'auto' && !user.is_platform_admin
+        return (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }} onClick={() => setShowForm(false)}>
           <div
             className="w-full max-w-md rounded-xl border p-5 shadow-lg"
@@ -1585,6 +1601,11 @@ function AchievementsTab({ user, t }: { user: User; t: Translations }) {
             <h3 className="mb-4 text-base font-semibold" style={{ color: 'var(--color-text)' }}>
               {editingId ? t.edit : t.newAchievement}
             </h3>
+            {coreLocked && (
+              <p className="mb-3 rounded-lg border px-3 py-2 text-xs" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-tertiary)', backgroundColor: 'var(--color-bg-secondary)' }}>
+                {t.autoBadgeLockedHint}
+              </p>
+            )}
             <form onSubmit={handleSubmit} className="space-y-3">
               <div>
                 <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.achievementName}</label>
@@ -1593,21 +1614,15 @@ function AchievementsTab({ user, t }: { user: User; t: Translations }) {
                   value={formName}
                   onChange={e => setFormName(e.target.value)}
                   required
-                  autoFocus
-                  className="w-full rounded-lg border px-3 py-2 text-sm"
+                  autoFocus={!coreLocked}
+                  disabled={coreLocked}
+                  className="w-full rounded-lg border px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
                   style={inputStyle}
                 />
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.achievementIcon}</label>
-                <input
-                  type="text"
-                  value={formIcon}
-                  onChange={e => setFormIcon(e.target.value)}
-                  maxLength={4}
-                  className="w-full rounded-lg border px-3 py-2 text-center text-2xl md:w-24"
-                  style={inputStyle}
-                />
+                <BadgePicker value={formIcon} onChange={setFormIcon} disabled={coreLocked} />
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.achievementDescription}</label>
@@ -1615,7 +1630,8 @@ function AchievementsTab({ user, t }: { user: User; t: Translations }) {
                   value={formDescription}
                   onChange={e => setFormDescription(e.target.value)}
                   rows={2}
-                  className="w-full rounded-lg border px-3 py-2 text-sm"
+                  disabled={coreLocked}
+                  className="w-full rounded-lg border px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
                   style={inputStyle}
                 />
               </div>
@@ -1669,7 +1685,8 @@ function AchievementsTab({ user, t }: { user: User; t: Translations }) {
             </form>
           </div>
         </div>
-      )}
+        )
+      })()}
     </div>
   )
 }
@@ -1738,10 +1755,14 @@ function InfoBanner({
   storageKey,
   title,
   body,
+  icon,
+  accent = '#6366f1',
 }: {
   storageKey: string
   title: string
   body: string
+  icon?: React.ReactNode
+  accent?: string
 }) {
   const [dismissed, setDismissed] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false
@@ -1763,10 +1784,10 @@ function InfoBanner({
 
   return (
     <div
-      className="relative rounded-xl border p-4 pr-10"
+      className="relative flex gap-3 rounded-xl border p-4 pr-10"
       style={{
-        borderColor: 'var(--color-border)',
-        backgroundColor: 'var(--color-bg-secondary, var(--color-bg-tertiary))',
+        borderColor: `${accent}33`,
+        backgroundColor: `${accent}10`,
       }}
     >
       <button
@@ -1781,10 +1802,47 @@ function InfoBanner({
           <line x1="6" y1="18" x2="18" y2="6"/>
         </svg>
       </button>
-      <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{title}</p>
-      <p className="mt-1.5 text-xs leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>
-        {body}
-      </p>
+      {icon && (
+        <div
+          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg"
+          style={{ backgroundColor: `${accent}26`, color: accent }}
+          aria-hidden
+        >
+          {icon}
+        </div>
+      )}
+      <div className="min-w-0">
+        <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{title}</p>
+        <p className="mt-1.5 text-xs leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>
+          {body}
+        </p>
+      </div>
     </div>
   )
 }
+
+// Icons for the Credits / Bonuses / Badges callouts.
+const creditsIcon = (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <ellipse cx="12" cy="6" rx="8" ry="3"/>
+    <path d="M4 6v6c0 1.66 3.58 3 8 3s8-1.34 8-3V6"/>
+    <path d="M4 12v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6"/>
+  </svg>
+)
+
+const bonusesIcon = (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="20 12 20 22 4 22 4 12"/>
+    <rect x="2" y="7" width="20" height="5"/>
+    <line x1="12" y1="22" x2="12" y2="7"/>
+    <path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/>
+    <path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/>
+  </svg>
+)
+
+const badgesIcon = (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"/>
+    <path d="m9 12 2 2 4-4"/>
+  </svg>
+)
