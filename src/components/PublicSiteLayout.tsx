@@ -149,6 +149,7 @@ function SiteFooter() {
               ['About', '/about'],
               ['Customers', '/#testimonials'],
               ['Contact', '/contact'],
+              ['Help Center', '/help'],
             ]}
           />
           <FooterCol

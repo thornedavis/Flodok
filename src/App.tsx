@@ -27,6 +27,11 @@ import { Security } from './pages/public/Security'
 import { Terms } from './pages/public/Terms'
 import { Privacy } from './pages/public/Privacy'
 import { Dpa } from './pages/public/Dpa'
+import { HelpCenterLayout } from './components/HelpCenterLayout'
+import { DocsIndex } from './pages/help/DocsIndex'
+import { Doc } from './pages/help/Doc'
+import { HelpContact } from './pages/help/HelpContact'
+import { HelpFAQ } from './pages/help/FAQ'
 
 function AppRoutes() {
   const { session, user, loading, signIn, signUp, signOut } = useAuth()
@@ -59,6 +64,15 @@ function AppRoutes() {
         <Route path="/terms" element={<Terms />} />
         <Route path="/privacy" element={<Privacy />} />
         <Route path="/dpa" element={<Dpa />} />
+      </Route>
+
+      {/* Help Center — always accessible (signed in or out) */}
+      <Route element={<HelpCenterLayout />}>
+        <Route path="/help" element={<DocsIndex />} />
+        <Route path="/help/docs" element={<DocsIndex />} />
+        <Route path="/help/docs/:slug" element={<Doc />} />
+        <Route path="/help/contact" element={<HelpContact />} />
+        <Route path="/help/faq" element={<HelpFAQ />} />
       </Route>
 
       {/* Invite acceptance — always accessible */}
