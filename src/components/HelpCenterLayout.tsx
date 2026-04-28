@@ -33,14 +33,18 @@ export function HelpCenterLayout() {
 
   return (
     <div
-      className="min-h-screen"
+      className="flex min-h-screen"
       style={{ backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
     >
-      <HelpHeader />
-      <div className="mx-auto grid max-w-7xl grid-cols-1 gap-6 px-6 py-8 lg:grid-cols-[260px_minmax(0,1fr)]">
-        <HelpSidebar />
-        <main className="min-w-0">
-          <Outlet />
+      <HelpSidebar />
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <HelpHeader />
+
+        <main className="flex-1 px-6 py-8 md:px-10">
+          <div className="mx-auto max-w-6xl">
+            <Outlet />
+          </div>
         </main>
       </div>
     </div>
@@ -55,25 +59,15 @@ function HelpHeader() {
 
   return (
     <header
-      className="sticky top-0 z-40 border-b"
+      className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b px-4 md:px-10"
       style={{
         borderColor: 'var(--color-border)',
-        backgroundColor: 'color-mix(in srgb, var(--color-bg) 88%, transparent)',
-        backdropFilter: 'blur(10px)',
+        backgroundColor: 'color-mix(in srgb, var(--color-bg) 90%, transparent)',
+        backdropFilter: 'blur(8px)',
       }}
     >
-      <div className="mx-auto flex h-14 max-w-7xl items-center gap-4 px-6">
-        {/* Brand */}
-        <Link
-          to="/"
-          className="flex items-center gap-2 text-lg font-semibold tracking-tight"
-          style={{ color: 'var(--color-text)' }}
-        >
-          Flodok
-        </Link>
-
         {/* Breadcrumb */}
-        <nav className="hidden min-w-0 items-center gap-2 text-sm md:flex">
+        <nav className="flex min-w-0 items-center gap-2 text-sm">
           {crumbs.map((crumb, i) => {
             const isLast = i === crumbs.length - 1
             return (
@@ -154,7 +148,6 @@ function HelpHeader() {
             Get started
           </Link>
         </div>
-      </div>
     </header>
   )
 }
@@ -293,30 +286,49 @@ function HelpSidebar() {
   const isDocs = location.pathname.startsWith('/help/docs') || location.pathname === '/help'
 
   return (
-    <aside className="lg:sticky lg:top-20 lg:self-start">
-      <ul className="space-y-1">
-        {/* Contact support — pinned top */}
-        <li>
-          <SidebarLink
-            to="/help/contact"
-            active={isContact}
-            icon={
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
-                <polyline points="22,6 12,13 2,6" />
-              </svg>
-            }
-            label="Contact support"
-          />
-        </li>
-      </ul>
+    <aside
+      className="hidden w-64 shrink-0 flex-col border-r md:sticky md:top-0 md:flex md:h-screen"
+      style={{
+        borderColor: 'var(--color-border)',
+        backgroundColor: 'var(--color-bg-secondary)',
+      }}
+    >
+      {/* Brand */}
+      <div className="flex h-14 items-center px-5">
+        <Link
+          to="/"
+          className="text-lg font-semibold tracking-tight"
+          style={{ color: 'var(--color-text)' }}
+        >
+          Flodok
+        </Link>
+      </div>
 
-      <p
-        className="mt-6 mb-2 px-3 text-xs font-semibold uppercase tracking-wider"
-        style={{ color: 'var(--color-text-tertiary)' }}
-      >
-        Help
-      </p>
+      {/* Scrollable nav */}
+      <nav className="flex-1 overflow-y-auto px-3 py-4">
+        <ul className="space-y-1">
+          {/* Contact support — pinned top */}
+          <li>
+            <SidebarLink
+              to="/help/contact"
+              active={isContact}
+              icon={
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                  <polyline points="22,6 12,13 2,6" />
+                </svg>
+              }
+              label="Contact support"
+            />
+          </li>
+        </ul>
+
+        <p
+          className="mt-6 mb-2 px-3 text-xs font-semibold uppercase tracking-wider"
+          style={{ color: 'var(--color-text-tertiary)' }}
+        >
+          Help
+        </p>
 
       <ul className="space-y-1">
         {/* Documentation expandable */}
@@ -439,6 +451,7 @@ function HelpSidebar() {
           />
         </li>
       </ul>
+      </nav>
     </aside>
   )
 }
