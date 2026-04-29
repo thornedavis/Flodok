@@ -6,6 +6,8 @@ import { generateSlug, generateAccessToken } from '../../lib/slug'
 import { getAvatarGradient } from '../../lib/avatar'
 import { PhoneInput } from '../../components/PhoneInput'
 import { DepartmentsMultiSelect } from '../../components/DepartmentsMultiSelect'
+import { MultiSelectDropdown, FilterSearchInput } from '../../components/FilterControls'
+import { Modal } from '../../components/Modal'
 import { useLang } from '../../contexts/LanguageContext'
 import { getEmployeeDepts } from '../../lib/employee'
 import { getSopStarterTemplate } from '../../lib/templates'
@@ -23,6 +25,7 @@ export function Employees({ user }: { user: User }) {
   const [activeDepartments, setActiveDepartments] = useState<Set<string>>(new Set())
   const [empPageSize, setEmpPageSize] = useState(12)
   const [empCurrentPage, setEmpCurrentPage] = useState(1)
+  const [manageOpen, setManageOpen] = useState(false)
 
 
   useEffect(() => {
@@ -102,15 +105,6 @@ export function Employees({ user }: { user: User }) {
     return employees.filter(e => getEmployeeDepts(e).includes(dept)).length
   }
 
-  function toggleDepartment(dept: string) {
-    setActiveDepartments(prev => {
-      const next = new Set(prev)
-      if (next.has(dept)) next.delete(dept)
-      else next.add(dept)
-      return next
-    })
-  }
-
   async function handleRenameDepartment(oldName: string) {
     const newName = prompt(t.renameDepartmentPrompt(oldName), oldName)
     if (!newName || newName.trim() === oldName) return
@@ -175,27 +169,71 @@ export function Employees({ user }: { user: User }) {
 
   if (loading) return <div style={{ color: 'var(--color-text-secondary)' }}>{t.loading}</div>
 
+  const departmentOptions = departments.map(d => ({ id: d, label: d, count: getDepartmentCount(d) }))
+  const hasActiveFilters = activeDepartments.size > 0 || searchQuery.length > 0
+
   return (
     <div>
-      <div className="grid gap-8 lg:grid-cols-[1fr_280px]" style={{ alignItems: 'start' }}>
-        {/* Main content — employee cards */}
-        <div>
-          <div className="mb-6 flex items-center justify-between">
-            <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.employeesTitle}</h1>
-            <div className="flex items-center gap-3">
-              <span className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-                {t.employeeCount(filtered.length)}
-              </span>
-              <button
-                onClick={() => setShowAdd(true)}
-                className="rounded-lg px-4 py-2 text-sm font-medium text-white"
-                style={{ backgroundColor: 'var(--color-primary)' }}
-              >
-                {t.addEmployee}
-              </button>
-            </div>
-          </div>
+      <div className="mb-6 flex items-center justify-between">
+        <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.employeesTitle}</h1>
+        <div className="flex items-center gap-3">
+          <span className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+            {t.employeeCount(filtered.length)}
+          </span>
+          <button
+            onClick={() => setShowAdd(true)}
+            className="rounded-lg px-4 py-2 text-sm font-medium text-white"
+            style={{ backgroundColor: 'var(--color-primary)' }}
+          >
+            {t.addEmployee}
+          </button>
+        </div>
+      </div>
 
+      {/* Filter bar */}
+      <div className="mb-5 flex flex-wrap items-center gap-2">
+        {departments.length > 0 && (
+          <MultiSelectDropdown
+            label={t.departments}
+            value={[...activeDepartments]}
+            onChange={next => setActiveDepartments(new Set(next))}
+            options={departmentOptions}
+            searchPlaceholder={t.selectDepartment}
+          />
+        )}
+        {departments.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setManageOpen(true)}
+            className="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium transition-colors"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
+            onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
+            onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
+          >
+            {t.manageDepartments}
+          </button>
+        )}
+        {hasActiveFilters && (
+          <button
+            type="button"
+            onClick={() => { setActiveDepartments(new Set()); setSearchQuery('') }}
+            className="text-xs font-medium"
+            style={{ color: 'var(--color-primary)' }}
+          >
+            {t.clearAllFilters}
+          </button>
+        )}
+        <div className="ml-auto w-full sm:w-64">
+          <FilterSearchInput
+            value={searchQuery}
+            onChange={setSearchQuery}
+            placeholder={t.searchEmployeesPlaceholder}
+          />
+        </div>
+      </div>
+
+      <div>
+        <div>
           {filtered.length === 0 ? (
             <p className="py-12 text-center text-sm" style={{ color: 'var(--color-text-secondary)' }}>
               {employees.length === 0
@@ -262,144 +300,45 @@ export function Employees({ user }: { user: User }) {
           )}
         </div>
 
-        {/* Right sidebar — filters */}
-        <aside className="sticky top-20 space-y-6 lg:border-l lg:pl-6" style={{ borderColor: 'var(--color-border)' }}>
-          {/* Search */}
-          <div>
-            <div className="relative">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="absolute left-3 top-1/2 -translate-y-1/2"
-                style={{ color: 'var(--color-text-tertiary)' }}
-              >
-                <circle cx="11" cy="11" r="8" />
-                <line x1="21" y1="21" x2="16.65" y2="16.65" />
-              </svg>
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                placeholder={t.searchEmployeesPlaceholder}
-                className="w-full rounded-lg border py-2 pl-9 pr-3 text-sm outline-none transition-colors focus:border-[var(--color-border-strong)]"
-                style={{
-                  borderColor: 'var(--color-border)',
-                  backgroundColor: 'var(--color-bg)',
-                  color: 'var(--color-text)',
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Departments */}
-          {departments.length > 0 && (
-            <div>
-              <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>
-                {t.departments}
-              </h3>
-              <p className="mb-3 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                {t.filterByTeamHint}
-              </p>
-              <div className="space-y-1">
-                {departments.map(dept => {
-                  const isActive = activeDepartments.has(dept)
-                  return (
-                    <div key={dept} className="group flex items-center">
-                      <button
-                        onClick={() => toggleDepartment(dept)}
-                        className="flex flex-1 items-center justify-between rounded-lg px-3 py-2 text-sm transition-all"
-                        style={{
-                          backgroundColor: isActive ? 'color-mix(in srgb, var(--color-primary) 10%, transparent)' : 'transparent',
-                          color: isActive ? 'var(--color-primary)' : 'var(--color-text)',
-                          borderLeft: isActive ? '2px solid var(--color-primary)' : '2px solid transparent',
-                        }}
-                        onMouseOver={e => { if (!isActive) e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
-                        onMouseOut={e => { if (!isActive) e.currentTarget.style.backgroundColor = 'transparent' }}
-                      >
-                        <span>{dept}</span>
-                        <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                          {getDepartmentCount(dept)}
-                        </span>
-                      </button>
-                      {/* Manage buttons */}
-                      <div className="flex shrink-0 gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-                        <button
-                          onClick={() => handleRenameDepartment(dept)}
-                          className="rounded p-1 transition-colors"
-                          style={{ color: 'var(--color-text-tertiary)' }}
-                          onMouseOver={e => { e.currentTarget.style.color = 'var(--color-text)' }}
-                          onMouseOut={e => { e.currentTarget.style.color = 'var(--color-text-tertiary)' }}
-                          title={t.renameDepartment}
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                          </svg>
-                        </button>
-                        <button
-                          onClick={() => handleDeleteDepartment(dept)}
-                          className="rounded p-1 transition-colors"
-                          style={{ color: 'var(--color-text-tertiary)' }}
-                          onMouseOver={e => { e.currentTarget.style.color = 'var(--color-danger)' }}
-                          onMouseOut={e => { e.currentTarget.style.color = 'var(--color-text-tertiary)' }}
-                          title={t.removeDepartment}
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <line x1="18" y1="6" x2="6" y2="18" />
-                            <line x1="6" y1="6" x2="18" y2="18" />
-                          </svg>
-                        </button>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Quick stats */}
-          <div>
-            <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>
-              {t.summary}
-            </h3>
-            <div className="mt-3 space-y-2">
-              <div className="flex items-center justify-between text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-                <span>{t.totalEmployees}</span>
-                <span style={{ color: 'var(--color-text)' }}>{employees.length}</span>
-              </div>
-              <div className="flex items-center justify-between text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-                <span>{t.departments}</span>
-                <span style={{ color: 'var(--color-text)' }}>{departments.length}</span>
-              </div>
-              <div className="flex items-center justify-between text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-                <span>{t.noDepartment}</span>
-                <span style={{ color: 'var(--color-text)' }}>{employees.filter(e => getEmployeeDepts(e).length === 0).length}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Clear filters */}
-          {(activeDepartments.size > 0 || searchQuery) && (
-            <button
-              onClick={() => {
-                setActiveDepartments(new Set())
-                setSearchQuery('')
-              }}
-              className="text-xs font-medium"
-              style={{ color: 'var(--color-primary)' }}
-            >
-              {t.clearAllFilters}
-            </button>
-          )}
-        </aside>
       </div>
+
+      {/* Manage departments modal */}
+      <Modal open={manageOpen} onClose={() => setManageOpen(false)} title={t.manageDepartments}>
+        {departments.length === 0 ? (
+          <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{t.noDepartmentsYet}</p>
+        ) : (
+          <div className="space-y-1">
+            {departments.map(dept => (
+              <div
+                key={dept}
+                className="flex items-center justify-between rounded-md border px-3 py-2 text-sm"
+                style={{ borderColor: 'var(--color-border)' }}
+              >
+                <span style={{ color: 'var(--color-text)' }}>{dept}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{getDepartmentCount(dept)}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleRenameDepartment(dept)}
+                    className="text-xs"
+                    style={{ color: 'var(--color-text-secondary)' }}
+                  >
+                    {t.renameDepartment}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteDepartment(dept)}
+                    className="text-xs"
+                    style={{ color: 'var(--color-danger)' }}
+                  >
+                    {t.delete}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Modal>
 
       {showAdd && (
         <AddEmployeeForm

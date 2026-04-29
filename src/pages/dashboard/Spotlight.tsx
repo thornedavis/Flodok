@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
 import { formatRelativeTime } from '../../lib/relativeTime'
+import { FilterPill } from '../../components/FilterControls'
 import type { Lang, Translations } from '../../lib/translations'
 import type { User, SpotlightPost, SpotlightStatus, SpotlightPriority } from '../../types/aliases'
 
@@ -145,13 +146,13 @@ export function Spotlight({ user }: { user: User }) {
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-2">
           {([
-            ['all', t.spotlightFilterAll],
-            ['draft', t.spotlightFilterDraft],
-            ['scheduled', t.spotlightFilterScheduled],
-            ['published', t.spotlightFilterPublished],
-            ['archived', t.spotlightFilterArchived],
-          ] as Array<[StatusFilter, string]>).map(([key, label]) => (
-            <FilterPill key={key} active={filter === key} onClick={() => setFilter(key)}>
+            ['all', t.spotlightFilterAll, posts.length],
+            ['draft', t.spotlightFilterDraft, posts.filter(p => p.status === 'draft').length],
+            ['scheduled', t.spotlightFilterScheduled, posts.filter(p => p.status === 'scheduled').length],
+            ['published', t.spotlightFilterPublished, posts.filter(p => p.status === 'published').length],
+            ['archived', t.spotlightFilterArchived, posts.filter(p => p.status === 'archived').length],
+          ] as Array<[StatusFilter, string, number]>).map(([key, label, count]) => (
+            <FilterPill key={key} active={filter === key} onClick={() => setFilter(key)} count={count}>
               {label}
             </FilterPill>
           ))}
@@ -430,26 +431,6 @@ function RepublishCountPill({ count, t }: { count: number; t: Translations }) {
     <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={{ backgroundColor: bg, color: fg }}>
       {t.spotlightRepublishedCount(count)}
     </span>
-  )
-}
-
-function FilterPill({ active, onClick, children }: {
-  active: boolean
-  onClick: () => void
-  children: React.ReactNode
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className="rounded-full border px-3 py-1 text-xs font-medium transition-colors"
-      style={{
-        borderColor: active ? 'var(--color-primary)' : 'var(--color-border)',
-        color: active ? 'var(--color-primary)' : 'var(--color-text-secondary)',
-        backgroundColor: active ? 'color-mix(in srgb, var(--color-primary) 8%, transparent)' : 'transparent',
-      }}
-    >
-      {children}
-    </button>
   )
 }
 

@@ -5,6 +5,7 @@ import { useLang } from '../../contexts/LanguageContext'
 import { getEmployeeDepts, primaryDept, deptsJoined } from '../../lib/employee'
 import { formatIdrDigits as formatCurrency } from '../../lib/credits'
 import { InfoTooltip } from '../../components/InfoTooltip'
+import { FilterPill, MultiSelectDropdown, FilterSearchInput } from '../../components/FilterControls'
 import type { User, Contract, Employee, Tag } from '../../types/aliases'
 
 type ContractWithEmployee = Contract & { employee: Employee | null; tagIds: string[] }
@@ -54,7 +55,6 @@ export function Contracts({ user }: { user: User }) {
   }, [user.org_id])
 
   const departments = [...new Set(contracts.flatMap(c => c.employee ? getEmployeeDepts(c.employee) : []))].sort()
-  const statuses = ['active', 'draft', 'archived'] as const
 
   function getDepartmentCount(dept: string) {
     return contracts.filter(c => c.employee && getEmployeeDepts(c.employee).includes(dept)).length
@@ -64,26 +64,10 @@ export function Contracts({ user }: { user: User }) {
     return contracts.filter(c => c.status === status).length
   }
 
-  function toggleDepartment(dept: string) {
-    setActiveDepartments(prev => {
-      const next = new Set(prev)
-      if (next.has(dept)) next.delete(dept); else next.add(dept)
-      return next
-    })
-  }
-
   function toggleStatus(status: string) {
     setActiveStatuses(prev => {
       const next = new Set(prev)
       if (next.has(status)) next.delete(status); else next.add(status)
-      return next
-    })
-  }
-
-  function toggleTag(tagId: string) {
-    setActiveTags(prev => {
-      const next = new Set(prev)
-      if (next.has(tagId)) next.delete(tagId); else next.add(tagId)
       return next
     })
   }
@@ -147,25 +131,81 @@ export function Contracts({ user }: { user: User }) {
     archived: t.statusArchived,
   }
 
-  return (
-    <div className="grid gap-8 lg:grid-cols-[1fr_280px]" style={{ alignItems: 'start' }}>
-      <div>
-        <div className="mb-6 flex items-center justify-between">
-          <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.contractsTitle}</h1>
-          <div className="flex items-center gap-3">
-            <span className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-              {t.contractCount(filtered.length)}
-            </span>
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="rounded-lg px-4 py-2 text-sm font-medium text-white"
-              style={{ backgroundColor: 'var(--color-primary)' }}
-            >
-              {t.createContract}
-            </button>
-          </div>
-        </div>
+  const departmentOptions = departments.map(d => ({ id: d, label: d, count: getDepartmentCount(d) }))
+  const tagOptions = allTags.map(tg => ({ id: tg.id, label: tg.name, count: getTagCount(tg.id) }))
+  const hasActiveFilters = activeDepartments.size + activeStatuses.size + activeTags.size > 0 || searchQuery.length > 0
 
+  return (
+    <div>
+      <div className="mb-6 flex items-center justify-between">
+        <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.contractsTitle}</h1>
+        <div className="flex items-center gap-3">
+          <span className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+            {t.contractCount(filtered.length)}
+          </span>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="rounded-lg px-4 py-2 text-sm font-medium text-white"
+            style={{ backgroundColor: 'var(--color-primary)' }}
+          >
+            {t.createContract}
+          </button>
+        </div>
+      </div>
+
+      {/* Filter bar */}
+      <div className="mb-5 flex flex-wrap items-center gap-2">
+        {(['active', 'draft', 'archived'] as const).map(status => (
+          <FilterPill
+            key={status}
+            active={activeStatuses.has(status)}
+            onClick={() => toggleStatus(status)}
+            count={getStatusCount(status)}
+          >
+            {statusLabels[status]}
+          </FilterPill>
+        ))}
+        {departments.length > 0 && (
+          <MultiSelectDropdown
+            label={t.departments}
+            value={[...activeDepartments]}
+            onChange={next => setActiveDepartments(new Set(next))}
+            options={departmentOptions}
+          />
+        )}
+        {allTags.length > 0 && (
+          <MultiSelectDropdown
+            label={t.tagsLabel}
+            value={[...activeTags]}
+            onChange={next => setActiveTags(new Set(next))}
+            options={tagOptions}
+          />
+        )}
+        {hasActiveFilters && (
+          <button
+            type="button"
+            onClick={() => {
+              setActiveDepartments(new Set())
+              setActiveStatuses(new Set())
+              setActiveTags(new Set())
+              setSearchQuery('')
+            }}
+            className="text-xs font-medium"
+            style={{ color: 'var(--color-primary)' }}
+          >
+            {t.clearAllFilters}
+          </button>
+        )}
+        <div className="ml-auto w-full sm:w-64">
+          <FilterSearchInput
+            value={searchQuery}
+            onChange={setSearchQuery}
+            placeholder={t.searchContractsPlaceholder}
+          />
+        </div>
+      </div>
+
+      <div>
         {filtered.length === 0 ? (
           <p className="py-12 text-center text-sm" style={{ color: 'var(--color-text-secondary)' }}>
             {contracts.length === 0
@@ -303,125 +343,6 @@ export function Contracts({ user }: { user: User }) {
           </div>
         )}
       </div>
-
-      {/* Sidebar */}
-      <aside className="sticky top-20 space-y-6 lg:border-l lg:pl-6" style={{ borderColor: 'var(--color-border)' }}>
-        <div>
-          <div className="relative">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--color-text-tertiary)' }}>
-              <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder={t.searchContractsPlaceholder}
-              className="w-full rounded-lg border py-2 pl-9 pr-3 text-sm outline-none transition-colors focus:border-[var(--color-border-strong)]"
-              style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
-            />
-          </div>
-        </div>
-
-        {departments.length > 0 && (
-          <div>
-            <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>{t.departments}</h3>
-            <p className="mb-3 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.filterByTeam}</p>
-            <div className="space-y-1">
-              {departments.map(dept => {
-                const isActive = activeDepartments.has(dept)
-                return (
-                  <button
-                    key={dept}
-                    onClick={() => toggleDepartment(dept)}
-                    className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm transition-all"
-                    style={{
-                      backgroundColor: isActive ? 'color-mix(in srgb, var(--color-primary) 10%, transparent)' : 'transparent',
-                      color: isActive ? 'var(--color-primary)' : 'var(--color-text)',
-                      borderLeft: isActive ? '2px solid var(--color-primary)' : '2px solid transparent',
-                    }}
-                    onMouseOver={e => { if (!isActive) e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
-                    onMouseOut={e => { if (!isActive) e.currentTarget.style.backgroundColor = 'transparent' }}
-                  >
-                    <span>{dept}</span>
-                    <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{getDepartmentCount(dept)}</span>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        )}
-
-        <div>
-          <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>{t.statusLabel}</h3>
-          <p className="mb-3 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.filterByContractStatus}</p>
-          <div className="space-y-1">
-            {statuses.map(status => {
-              const isActive = activeStatuses.has(status)
-              const count = getStatusCount(status)
-              return (
-                <button
-                  key={status}
-                  onClick={() => toggleStatus(status)}
-                  className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm transition-all"
-                  style={{
-                    backgroundColor: isActive ? 'color-mix(in srgb, var(--color-primary) 10%, transparent)' : 'transparent',
-                    color: isActive ? 'var(--color-primary)' : 'var(--color-text)',
-                    borderLeft: isActive ? '2px solid var(--color-primary)' : '2px solid transparent',
-                  }}
-                  onMouseOver={e => { if (!isActive) e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
-                  onMouseOut={e => { if (!isActive) e.currentTarget.style.backgroundColor = 'transparent' }}
-                >
-                  <span className="flex items-center gap-2">
-                    <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: statusColors[status] }} />
-                    {statusLabels[status]}
-                  </span>
-                  <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{count}</span>
-                </button>
-              )
-            })}
-          </div>
-        </div>
-
-        {allTags.length > 0 && (
-          <div>
-            <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>{t.tagsLabel}</h3>
-            <p className="mb-3 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.filterByTag}</p>
-            <div className="space-y-1">
-              {allTags.map(tag => {
-                const isActive = activeTags.has(tag.id)
-                const count = getTagCount(tag.id)
-                return (
-                  <button
-                    key={tag.id}
-                    onClick={() => toggleTag(tag.id)}
-                    className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm transition-all"
-                    style={{
-                      backgroundColor: isActive ? 'color-mix(in srgb, var(--color-primary) 10%, transparent)' : 'transparent',
-                      color: isActive ? 'var(--color-primary)' : 'var(--color-text)',
-                      borderLeft: isActive ? '2px solid var(--color-primary)' : '2px solid transparent',
-                    }}
-                    onMouseOver={e => { if (!isActive) e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
-                    onMouseOut={e => { if (!isActive) e.currentTarget.style.backgroundColor = 'transparent' }}
-                  >
-                    <span>{tag.name}</span>
-                    <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{count}</span>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        )}
-
-        {(activeDepartments.size > 0 || activeStatuses.size > 0 || activeTags.size > 0 || searchQuery) && (
-          <button
-            onClick={() => { setActiveDepartments(new Set()); setActiveStatuses(new Set()); setActiveTags(new Set()); setSearchQuery('') }}
-            className="text-xs font-medium"
-            style={{ color: 'var(--color-primary)' }}
-          >
-            {t.clearAllFilters}
-          </button>
-        )}
-      </aside>
 
       {showCreateModal && (
         <CreateContractModal
