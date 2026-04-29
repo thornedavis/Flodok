@@ -1362,7 +1362,6 @@ export type Database = {
           link_label: string | null
           link_url: string | null
           org_id: string
-          pinned: boolean
           posted_as_kind: string
           last_republished_at: string | null
           republish_count: number
@@ -1391,7 +1390,6 @@ export type Database = {
           link_label?: string | null
           link_url?: string | null
           org_id: string
-          pinned?: boolean
           posted_as_kind?: string
           priority?: string
           published_at?: string | null
@@ -1419,7 +1417,6 @@ export type Database = {
           link_label?: string | null
           link_url?: string | null
           org_id?: string
-          pinned?: boolean
           posted_as_kind?: string
           priority?: string
           published_at?: string | null
@@ -1686,7 +1683,6 @@ export type Database = {
           image_url: string | null
           link_label: string | null
           link_url: string | null
-          pinned: boolean
           priority: string
           published_at: string | null
           republish_count: number

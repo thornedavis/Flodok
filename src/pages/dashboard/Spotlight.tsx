@@ -210,9 +210,6 @@ function PostRow({
           <div className="mb-1 flex flex-wrap items-center gap-2">
             <PriorityPill priority={post.priority as SpotlightPriority} t={t} />
             <StatusPill status={post.status as SpotlightStatus} t={t} />
-            {post.pinned && (
-              <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>📌</span>
-            )}
             {post.republish_count > 0 && (
               <RepublishCountPill count={post.republish_count} t={t} />
             )}

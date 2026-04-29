@@ -28,7 +28,6 @@ export type SpotlightFeedPost = {
   requires_acknowledgement: boolean
   effective_from: string | null
   effective_until: string | null
-  pinned: boolean
   published_at: string | null
   republish_count: number
   first_seen_at: string | null
@@ -121,7 +120,6 @@ function PostCard({ post, t, onAcknowledge }: {
     >
       <div className="mb-2 flex items-start gap-2">
         <PriorityPill priority={post.priority} t={t} />
-        {post.pinned && <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>📌</span>}
         {post.republish_count > 0 && <ReminderPill count={post.republish_count} t={t} />}
         <div className="ml-auto text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
           {author && `${t.spotlightPostedBy} ${author}`}

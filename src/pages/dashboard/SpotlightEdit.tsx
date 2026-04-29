@@ -26,7 +26,6 @@ type FormState = {
   target_departments: string[]
   target_employee_ids: string[]
   effective_from: string  // datetime-local format ("YYYY-MM-DDTHH:MM"), "" if unset
-  pinned: boolean
   status: SpotlightStatus
   image_url: string
 }
@@ -43,7 +42,6 @@ const DEFAULT_FORM: FormState = {
   target_departments: [],
   target_employee_ids: [],
   effective_from: '',
-  pinned: false,
   status: 'draft',
   image_url: '',
 }
@@ -273,12 +271,6 @@ export function SpotlightEdit({ user }: { user: User }) {
         </div>
 
         <CheckboxField
-          label={t.spotlightFieldPinned}
-          checked={form.pinned}
-          onChange={v => update('pinned', v)}
-        />
-
-        <CheckboxField
           label={t.spotlightFieldRequiresAck}
           hint={t.spotlightFieldRequiresAckHelp}
           checked={form.requires_acknowledgement}
@@ -410,7 +402,6 @@ function rowToForm(p: SpotlightPost): FormState {
     target_departments: p.target_departments ?? [],
     target_employee_ids: p.target_employee_ids ?? [],
     effective_from: isoToLocalInput(p.effective_from),
-    pinned: p.pinned,
     status: p.status as SpotlightStatus,
     image_url: p.image_url ?? '',
   }
@@ -430,7 +421,6 @@ function formToRow(f: FormState, targetStatus: SpotlightStatus) {
     target_employee_ids: f.visibility_scope === 'specific_employees' ? f.target_employee_ids : [],
     effective_from: localInputToIso(f.effective_from),
     effective_until: null,
-    pinned: f.pinned,
     status: targetStatus,
     image_url: f.image_url.trim() || null,
   }
