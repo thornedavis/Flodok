@@ -1305,6 +1305,138 @@ export type Database = {
           },
         ]
       }
+      spotlight_post_views: {
+        Row: {
+          acknowledged_at: string | null
+          created_at: string
+          dismissed_at: string | null
+          employee_id: string
+          first_seen_at: string | null
+          id: string
+          post_id: string
+        }
+        Insert: {
+          acknowledged_at?: string | null
+          created_at?: string
+          dismissed_at?: string | null
+          employee_id: string
+          first_seen_at?: string | null
+          id?: string
+          post_id: string
+        }
+        Update: {
+          acknowledged_at?: string | null
+          created_at?: string
+          dismissed_at?: string | null
+          employee_id?: string
+          first_seen_at?: string | null
+          id?: string
+          post_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "spotlight_post_views_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "spotlight_post_views_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "spotlight_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      spotlight_posts: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          display_mode: string
+          effective_from: string | null
+          effective_until: string | null
+          id: string
+          org_id: string
+          pinned: boolean
+          posted_as: string | null
+          priority: string
+          published_at: string | null
+          requires_acknowledgement: boolean
+          status: string
+          target_departments: string[]
+          target_employee_ids: string[]
+          title: string
+          updated_at: string
+          visibility_scope: string
+          what_happened: string
+          what_to_do_instead: string
+          who_applies_note: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          display_mode?: string
+          effective_from?: string | null
+          effective_until?: string | null
+          id?: string
+          org_id: string
+          pinned?: boolean
+          posted_as?: string | null
+          priority?: string
+          published_at?: string | null
+          requires_acknowledgement?: boolean
+          status?: string
+          target_departments?: string[]
+          target_employee_ids?: string[]
+          title: string
+          updated_at?: string
+          visibility_scope?: string
+          what_happened: string
+          what_to_do_instead: string
+          who_applies_note?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          display_mode?: string
+          effective_from?: string | null
+          effective_until?: string | null
+          id?: string
+          org_id?: string
+          pinned?: boolean
+          posted_as?: string | null
+          priority?: string
+          published_at?: string | null
+          requires_acknowledgement?: boolean
+          status?: string
+          target_departments?: string[]
+          target_employee_ids?: string[]
+          title?: string
+          updated_at?: string
+          visibility_scope?: string
+          what_happened?: string
+          what_to_do_instead?: string
+          who_applies_note?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "spotlight_posts_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "spotlight_posts_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tags: {
         Row: {
           created_at: string
@@ -1515,6 +1647,40 @@ export type Database = {
       }
       portal_mark_notifications_seen: {
         Args: { emp_slug: string; emp_token: string }
+        Returns: undefined
+      }
+      portal_spotlight_acknowledge: {
+        Args: { emp_slug: string; emp_token: string; p_post_id: string }
+        Returns: undefined
+      }
+      portal_spotlight_dismiss: {
+        Args: { emp_slug: string; emp_token: string; p_post_id: string }
+        Returns: undefined
+      }
+      portal_spotlight_posts: {
+        Args: { emp_slug: string; emp_token: string }
+        Returns: {
+          acknowledged_at: string | null
+          author_name: string
+          dismissed_at: string | null
+          display_mode: string
+          effective_from: string | null
+          effective_until: string | null
+          first_seen_at: string | null
+          id: string
+          pinned: boolean
+          posted_as: string | null
+          priority: string
+          published_at: string | null
+          requires_acknowledgement: boolean
+          title: string
+          what_happened: string
+          what_to_do_instead: string
+          who_applies_note: string | null
+        }[]
+      }
+      portal_spotlight_seen: {
+        Args: { emp_slug: string; emp_token: string; p_post_id: string }
         Returns: undefined
       }
       portal_unread_count: {

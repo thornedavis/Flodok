@@ -9,7 +9,7 @@ import { supabase } from '../lib/supabase'
 import type { Translations } from '../lib/translations'
 import type { Organization, User } from '../types/aliases'
 
-type NavKey = 'navOverview' | 'navEmployees' | 'navSops' | 'navContracts' | 'navPerformance' | 'navPending' | 'navSettings'
+type NavKey = 'navOverview' | 'navEmployees' | 'navSops' | 'navContracts' | 'navPerformance' | 'navSpotlight' | 'navPending' | 'navSettings'
 
 interface NavItemDef {
   path: string
@@ -44,6 +44,11 @@ const navItems: NavItemDef[] = [
     path: '/dashboard/performance',
     labelKey: 'navPerformance',
     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>,
+  },
+  {
+    path: '/dashboard/spotlight',
+    labelKey: 'navSpotlight',
+    icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>,
   },
   {
     path: '/dashboard/pending',
@@ -282,6 +287,7 @@ function deriveBreadcrumbs(pathname: string, orgName: string, t: Translations, t
     sops: { label: t.navSops, href: '/dashboard/sops' },
     contracts: { label: t.navContracts, href: '/dashboard/contracts' },
     performance: { label: t.navPerformance, href: '/dashboard/performance' },
+    spotlight: { label: t.navSpotlight, href: '/dashboard/spotlight' },
     pending: { label: t.navPending, href: '/dashboard/pending' },
     settings: { label: t.navSettings, href: '/dashboard/settings' },
   }

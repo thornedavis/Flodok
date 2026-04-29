@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
+import { useSpotlight, SpotlightTab, SpotlightBanner, SpotlightModal } from '../../components/SpotlightPortal'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import html2pdf from 'html2pdf.js'
@@ -75,7 +76,7 @@ function monthFromIsoDate(iso: string): string {
   return iso.slice(0, 7) + '-01'
 }
 
-type Tab = 'home' | 'sops' | 'contracts' | 'leaderboard' | 'badges'
+type Tab = 'home' | 'sops' | 'contracts' | 'spotlight' | 'leaderboard' | 'badges'
 
 type BadgeData = {
   definition_id: string
@@ -150,6 +151,10 @@ if (!document.head.querySelector(`link[href="${fontLink.href}"]`)) {
 // ─── Icons (inline SVGs) ─────────────────────────────────
 function HomeIcon() {
   return <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+}
+
+function SpotlightIcon() {
+  return <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>
 }
 
 function BellIcon({ count }: { count: number }) {
@@ -245,6 +250,16 @@ export function Portal() {
   const currentMonth = currentJakartaMonth()
   const isCurrentMonth = selectedMonth === currentMonth
 
+  // Parse slug + access token once. Used by token-authed Spotlight RPCs.
+  const { slug, token } = useMemo(() => {
+    if (!slugToken) return { slug: null, token: null }
+    const lastDash = slugToken.lastIndexOf('-')
+    if (lastDash === -1) return { slug: null, token: null }
+    return { slug: slugToken.slice(0, lastDash), token: slugToken.slice(lastDash + 1) }
+  }, [slugToken])
+
+  const spotlight = useSpotlight(slug, token)
+
   const signSectionRef = useRef<HTMLDivElement>(null)
   const notifRef = useRef<HTMLDivElement>(null)
   const docMenuRef = useRef<HTMLDivElement>(null)
@@ -288,7 +303,7 @@ export function Portal() {
           .from('feed_events')
           .select('*')
           .eq('employee_id', emp.id)
-          .in('event_type', ['achievement_unlocked', 'bonus_awarded'])
+          .in('event_type', ['achievement_unlocked', 'bonus_awarded', 'spotlight_published'])
           .order('created_at', { ascending: false })
           .limit(5),
       ])
@@ -752,6 +767,16 @@ export function Portal() {
       <div className="flex-1 px-4 pb-24">
         <div className="mx-auto max-w-lg">
 
+          {/* ─── Spotlight banner (shown only on Home) ─── */}
+          {tab === 'home' && (
+            <SpotlightBanner
+              posts={spotlight.posts}
+              t={s}
+              onDismiss={spotlight.dismiss}
+              onOpen={() => setTab('spotlight')}
+            />
+          )}
+
           {/* ─── Home Tab ─── */}
           {tab === 'home' && (
             <HomeTab
@@ -1102,6 +1127,15 @@ export function Portal() {
           )}
 
 
+          {/* ─── Spotlight Tab Content ─── */}
+          {tab === 'spotlight' && (
+            <SpotlightTab
+              posts={spotlight.posts}
+              t={s}
+              onAcknowledge={spotlight.acknowledge}
+            />
+          )}
+
           {/* ─── Leaderboard Tab Content ─── */}
           {tab === 'leaderboard' && employee && (
             <LeaderboardTab
@@ -1130,6 +1164,7 @@ export function Portal() {
             { key: 'home' as Tab, label: s.home, icon: <HomeIcon /> },
             { key: 'sops' as Tab, label: s.sops, icon: <DocIcon />, badge: notificationCount },
             { key: 'contracts' as Tab, label: s.contracts, icon: <ContractIcon /> },
+            { key: 'spotlight' as Tab, label: s.spotlightTabLabel, icon: <SpotlightIcon /> },
             ...(org?.badges_enabled !== false
               ? [{ key: 'badges' as Tab, label: s.portalBadgesTabLabel, icon: <BadgeIcon /> }]
               : []),
@@ -1178,6 +1213,16 @@ export function Portal() {
           onClose={() => setSelectedAchievement(null)}
         />
       )}
+
+      {/* Spotlight modal interceptor — fires for posts with display_mode = 'modal'
+          that the employee hasn't acknowledged or dismissed yet. */}
+      <SpotlightModal
+        posts={spotlight.posts}
+        t={s}
+        onSeen={spotlight.markSeen}
+        onAcknowledge={spotlight.acknowledge}
+        onDismiss={spotlight.dismiss}
+      />
     </div>
   )
 }

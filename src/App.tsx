@@ -15,6 +15,8 @@ import { Contracts } from './pages/dashboard/Contracts'
 import { ContractEdit } from './pages/dashboard/ContractEdit'
 import { ContractHistory } from './pages/dashboard/ContractHistory'
 import { Performance } from './pages/dashboard/Performance'
+import { Spotlight } from './pages/dashboard/Spotlight'
+import { SpotlightEdit } from './pages/dashboard/SpotlightEdit'
 import { Pending } from './pages/dashboard/Pending'
 import { Settings } from './pages/dashboard/Settings'
 import { Portal } from './pages/public/Portal'
@@ -109,6 +111,9 @@ function AppRoutes() {
             <Route path="/dashboard/contracts/:id/edit" element={<ContractEdit user={user} />} />
             <Route path="/dashboard/contracts/:id/history" element={<ContractHistory />} />
             <Route path="/dashboard/performance" element={<Performance user={user} />} />
+            <Route path="/dashboard/spotlight" element={<Spotlight user={user} />} />
+            <Route path="/dashboard/spotlight/new" element={<SpotlightEdit user={user} />} />
+            <Route path="/dashboard/spotlight/:id/edit" element={<SpotlightEdit user={user} />} />
             <Route path="/dashboard/pending" element={<Pending user={user} />} />
             <Route path="/dashboard/settings" element={<Settings user={user} />} />
           </Route>
