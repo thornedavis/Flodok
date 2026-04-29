@@ -184,8 +184,8 @@ export function Spotlight({ user }: { user: User }) {
             {label}
           </FilterPill>
         ))}
-        <div className="ml-auto flex items-center gap-2">
-          <div className="w-44 sm:w-64">
+        <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
+          <div className="flex-1 sm:w-64 sm:flex-none">
             <FilterSearchInput
               value={searchQuery}
               onChange={setSearchQuery}
