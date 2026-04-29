@@ -499,14 +499,12 @@ function ImageField({ value, onChange, t }: {
 }) {
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
+  const [dragActive, setDragActive] = useState(false)
 
   const ALLOWED = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
   const MAX_BYTES = 5 * 1024 * 1024
 
-  async function handleSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    e.target.value = ''
-    if (!file) return
+  async function uploadFile(file: File) {
     if (!ALLOWED.includes(file.type)) { setError(t.spotlightImageInvalidType); return }
     if (file.size > MAX_BYTES) { setError(t.spotlightImageTooLarge); return }
 
@@ -525,6 +523,29 @@ function ImageField({ value, onChange, t }: {
     setUploading(false)
   }
 
+  async function handleSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (file) await uploadFile(file)
+  }
+
+  function handleDragOver(e: React.DragEvent) {
+    e.preventDefault()
+    if (!dragActive) setDragActive(true)
+  }
+
+  function handleDragLeave(e: React.DragEvent) {
+    e.preventDefault()
+    setDragActive(false)
+  }
+
+  async function handleDrop(e: React.DragEvent) {
+    e.preventDefault()
+    setDragActive(false)
+    const file = e.dataTransfer.files?.[0]
+    if (file) await uploadFile(file)
+  }
+
   async function handleRemove() {
     if (!value) return
     setUploading(true)
@@ -536,17 +557,32 @@ function ImageField({ value, onChange, t }: {
     setUploading(false)
   }
 
+  // Visual treatment when a file is being dragged over either the empty
+  // dropzone or the existing-image preview. Both surfaces accept drops.
+  const dragStyles = dragActive
+    ? {
+        borderColor: 'var(--color-primary)',
+        backgroundColor: 'color-mix(in srgb, var(--color-primary) 8%, transparent)',
+      }
+    : undefined
+
   return (
     <div>
       {value ? (
-        <div className="space-y-2">
+        <div
+          className="space-y-2 rounded-lg border-2 border-dashed p-1 transition-colors"
+          style={{ borderColor: dragActive ? 'var(--color-primary)' : 'transparent', ...dragStyles }}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
           <img
             src={value}
             alt=""
-            className="max-h-72 w-full rounded-lg border object-cover"
+            className="max-h-72 w-full rounded-md border object-cover"
             style={{ borderColor: 'var(--color-border)' }}
           />
-          <div className="flex gap-2">
+          <div className="flex gap-2 px-1">
             <label
               className={`cursor-pointer rounded-md border px-3 py-1.5 text-xs ${uploading ? 'pointer-events-none opacity-50' : ''}`}
               style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
@@ -567,15 +603,22 @@ function ImageField({ value, onChange, t }: {
         </div>
       ) : (
         <label
-          className={`flex cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed py-6 text-center text-sm ${uploading ? 'pointer-events-none opacity-50' : ''}`}
-          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-tertiary)' }}
+          className={`flex cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed py-6 text-center text-sm transition-colors ${uploading ? 'pointer-events-none opacity-50' : ''}`}
+          style={{
+            borderColor: dragActive ? 'var(--color-primary)' : 'var(--color-border)',
+            color: dragActive ? 'var(--color-primary)' : 'var(--color-text-tertiary)',
+            ...dragStyles,
+          }}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
         >
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <rect x="3" y="3" width="18" height="18" rx="2" />
             <circle cx="8.5" cy="8.5" r="1.5" />
             <polyline points="21 15 16 10 5 21" />
           </svg>
-          <span>{uploading ? t.uploading : t.spotlightImageUploadCta}</span>
+          <span>{uploading ? t.uploading : dragActive ? t.spotlightImageDropCta : t.spotlightImageUploadCta}</span>
           <input type="file" accept="image/*" onChange={handleSelect} disabled={uploading} className="hidden" />
         </label>
       )}
