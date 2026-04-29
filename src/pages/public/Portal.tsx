@@ -385,6 +385,7 @@ export function Portal() {
   // now lives at the bottom of the home tab rather than its own tab.
   useEffect(() => {
     if (!employee) return
+    const employeeId = employee.id
 
     let cancelled = false
 
@@ -392,7 +393,7 @@ export function Portal() {
       const { data } = await supabase
         .from('feed_events')
         .select('*')
-        .eq('employee_id', employee.id)
+        .eq('employee_id', employeeId)
         .order('created_at', { ascending: false })
         .limit(200)
       if (!cancelled && data) setFeedEvents(data)
