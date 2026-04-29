@@ -2,8 +2,9 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
+import { formatRelativeTime } from '../../lib/relativeTime'
+import type { Lang, Translations } from '../../lib/translations'
 import type { User, SpotlightPost, SpotlightStatus, SpotlightPriority } from '../../types/aliases'
-import type { Translations } from '../../lib/translations'
 
 type StatusFilter = 'all' | SpotlightStatus
 
@@ -13,7 +14,7 @@ type PostWithStats = SpotlightPost & {
 }
 
 export function Spotlight({ user }: { user: User }) {
-  const { t } = useLang()
+  const { t, lang } = useLang()
   const navigate = useNavigate()
   const [posts, setPosts] = useState<PostWithStats[]>([])
   const [loading, setLoading] = useState(true)
@@ -153,6 +154,7 @@ export function Spotlight({ user }: { user: User }) {
               key={p.id}
               post={p}
               t={t}
+              lang={lang}
               onEdit={() => navigate(`/dashboard/spotlight/${p.id}/edit`)}
               onPublish={() => handlePublish(p)}
               onArchive={() => handleArchive(p)}
@@ -168,10 +170,11 @@ export function Spotlight({ user }: { user: User }) {
 }
 
 function PostRow({
-  post, t, onEdit, onPublish, onArchive, onUnarchive, onRepublish, onDelete,
+  post, t, lang, onEdit, onPublish, onArchive, onUnarchive, onRepublish, onDelete,
 }: {
   post: PostWithStats
   t: Translations
+  lang: Lang
   onEdit: () => void
   onPublish: () => void
   onArchive: () => void
@@ -220,6 +223,9 @@ function PostRow({
           <p className="mt-1 line-clamp-2 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
             {post.what_happened}
           </p>
+          <p className="mt-2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+            {datelineLabel(post, t, lang)}
+          </p>
         </div>
         <div className="flex shrink-0 items-start gap-2">
           {post.status === 'published' && post.requires_acknowledgement && (
@@ -227,10 +233,67 @@ function PostRow({
               {t.spotlightAcknowledgements(post.ack_count, post.view_count || post.ack_count)}
             </span>
           )}
+          {post.status === 'published' && (
+            <IconButton
+              ariaLabel={t.spotlightRepublish}
+              onClick={onRepublish}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="17 1 21 5 17 9" />
+                <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+                <polyline points="7 23 3 19 7 15" />
+                <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+              </svg>
+            </IconButton>
+          )}
           <RowMenu items={items} ariaLabel={t.spotlightRowMenuAria} />
         </div>
       </div>
     </div>
+  )
+}
+
+function datelineLabel(post: PostWithStats, t: Translations, lang: Lang): string {
+  if (post.status === 'published' && post.published_at) {
+    return `${t.spotlightDatelinePublished} ${formatRelativeTime(post.published_at, lang)}`
+  }
+  if (post.status === 'scheduled' && post.effective_from) {
+    return `${t.spotlightDatelineScheduled} ${formatRelativeTime(post.effective_from, lang)}`
+  }
+  if (post.status === 'archived') {
+    return `${t.spotlightDatelineArchived} ${formatRelativeTime(post.updated_at, lang)}`
+  }
+  return `${t.spotlightDatelineCreated} ${formatRelativeTime(post.created_at, lang)}`
+}
+
+function IconButton({ children, onClick, ariaLabel }: {
+  children: React.ReactNode
+  onClick: () => void
+  ariaLabel: string
+}) {
+  return (
+    <button
+      type="button"
+      onClick={e => { e.stopPropagation(); onClick() }}
+      aria-label={ariaLabel}
+      title={ariaLabel}
+      className="flex h-8 w-8 items-center justify-center rounded-md border transition-colors"
+      style={{
+        borderColor: 'var(--color-border)',
+        color: 'var(--color-text-tertiary)',
+        backgroundColor: 'transparent',
+      }}
+      onMouseOver={e => {
+        e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)'
+        e.currentTarget.style.color = 'var(--color-text)'
+      }}
+      onMouseOut={e => {
+        e.currentTarget.style.backgroundColor = 'transparent'
+        e.currentTarget.style.color = 'var(--color-text-tertiary)'
+      }}
+    >
+      {children}
+    </button>
   )
 }
 
