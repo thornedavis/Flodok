@@ -118,6 +118,10 @@ function PostCard({ post, t, onAcknowledge }: {
       className="rounded-xl border p-4"
       style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)' }}
     >
+      {post.image_url && (
+        <Thumbnail src={post.image_url} ariaExpand={t.spotlightImageExpand} className="mb-3" />
+      )}
+
       <div className="mb-3 flex items-start gap-2">
         <PriorityPill priority={post.priority} t={t} />
         {post.republish_count > 0 && <ReminderPill count={post.republish_count} t={t} />}
@@ -125,14 +129,6 @@ function PostCard({ post, t, onAcknowledge }: {
           {author && `${t.spotlightPostedBy} ${author}`}
         </div>
       </div>
-
-      {post.image_url && (
-        <img
-          src={post.image_url}
-          alt=""
-          className="mx-auto mb-3 block max-h-96 w-auto max-w-full rounded-lg"
-        />
-      )}
 
       <h3 className="mb-2 text-base font-semibold" style={{ color: 'var(--color-text)' }}>{post.title}</h3>
 
@@ -310,6 +306,10 @@ export function SpotlightModal({
         className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-xl border p-5 shadow-xl"
         style={{ backgroundColor: 'var(--color-bg)', borderColor: 'var(--color-border)' }}
       >
+        {current.image_url && (
+          <Thumbnail src={current.image_url} ariaExpand={t.spotlightImageExpand} className="mb-3" />
+        )}
+
         <div className="mb-3 flex items-center gap-2">
           <PriorityPill priority={current.priority} t={t} />
           {current.republish_count > 0 && <ReminderPill count={current.republish_count} t={t} />}
@@ -319,14 +319,6 @@ export function SpotlightModal({
             </span>
           )}
         </div>
-
-        {current.image_url && (
-          <img
-            src={current.image_url}
-            alt=""
-            className="mx-auto mb-3 block max-h-72 w-auto max-w-full rounded-lg"
-          />
-        )}
 
         <h3 className="mb-3 text-lg font-semibold" style={{ color: 'var(--color-text)' }}>{current.title}</h3>
 
@@ -366,6 +358,92 @@ function PriorityPill({ priority, t }: { priority: SpotlightPriority; t: Transla
     <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={{ backgroundColor: c.bg, color: c.fg }}>
       {labels[priority]}
     </span>
+  )
+}
+
+// Square thumbnail with click-to-expand lightbox. The square crop keeps
+// the feed's visual rhythm steady regardless of the source aspect ratio;
+// the lightbox preserves the full original photo for when detail matters
+// (which is most of the time for "look at this" workplace shots).
+function Thumbnail({ src, ariaExpand, className = '' }: {
+  src: string
+  ariaExpand: string
+  className?: string
+}) {
+  const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('keydown', onKey)
+    // Lock body scroll while the lightbox is open.
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.body.style.overflow = prev
+    }
+  }, [open])
+
+  return (
+    <>
+      <div className={`relative ${className}`}>
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-label={ariaExpand}
+          className="block w-full overflow-hidden rounded-lg"
+        >
+          <img
+            src={src}
+            alt=""
+            className="aspect-square w-full object-cover"
+          />
+        </button>
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-label={ariaExpand}
+          title={ariaExpand}
+          className="absolute bottom-2 right-2 flex h-7 w-7 items-center justify-center rounded-md text-white"
+          style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="15 3 21 3 21 9" />
+            <polyline points="9 21 3 21 3 15" />
+            <line x1="21" y1="3" x2="14" y2="10" />
+            <line x1="3" y1="21" x2="10" y2="14" />
+          </svg>
+        </button>
+      </div>
+
+      {open && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center p-4"
+          style={{ backgroundColor: 'rgba(0,0,0,0.85)' }}
+          onClick={() => setOpen(false)}
+        >
+          <img
+            src={src}
+            alt=""
+            className="max-h-full max-w-full rounded-lg object-contain"
+            onClick={e => e.stopPropagation()}
+          />
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            aria-label="Close"
+            className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full text-white"
+            style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+      )}
+    </>
   )
 }
 
