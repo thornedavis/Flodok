@@ -154,24 +154,23 @@ export function Employees({ user }: { user: User }) {
 
   return (
     <div>
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.employeesTitle}</h1>
-        <div className="flex shrink-0 items-center gap-3">
-          <div className="w-44 sm:w-64">
-            <FilterSearchInput
-              value={searchQuery}
-              onChange={setSearchQuery}
-              placeholder={t.searchEmployeesPlaceholder}
-            />
-          </div>
-          <button
-            onClick={() => setShowAdd(true)}
-            className="rounded-lg px-4 py-2 text-sm font-medium text-white"
-            style={{ backgroundColor: 'var(--color-primary)' }}
-          >
-            {t.addEmployee}
-          </button>
-        </div>
+        <button
+          onClick={() => setShowAdd(true)}
+          className="shrink-0 rounded-lg px-4 py-2 text-sm font-medium text-white"
+          style={{ backgroundColor: 'var(--color-primary)' }}
+        >
+          {t.addEmployee}
+        </button>
+      </div>
+
+      <div className="mb-3 w-full sm:max-w-sm">
+        <FilterSearchInput
+          value={searchQuery}
+          onChange={setSearchQuery}
+          placeholder={t.searchEmployeesPlaceholder}
+        />
       </div>
 
       {/* Filter bar */}

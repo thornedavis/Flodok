@@ -161,24 +161,23 @@ export function Contracts({ user }: { user: User }) {
 
   return (
     <div>
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.contractsTitle}</h1>
-        <div className="flex shrink-0 items-center gap-3">
-          <div className="w-44 sm:w-64">
-            <FilterSearchInput
-              value={searchQuery}
-              onChange={setSearchQuery}
-              placeholder={t.searchContractsPlaceholder}
-            />
-          </div>
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="rounded-lg px-4 py-2 text-sm font-medium text-white"
-            style={{ backgroundColor: 'var(--color-primary)' }}
-          >
-            {t.createContract}
-          </button>
-        </div>
+        <button
+          onClick={() => setShowCreateModal(true)}
+          className="shrink-0 rounded-lg px-4 py-2 text-sm font-medium text-white"
+          style={{ backgroundColor: 'var(--color-primary)' }}
+        >
+          {t.createContract}
+        </button>
+      </div>
+
+      <div className="mb-3 w-full sm:max-w-sm">
+        <FilterSearchInput
+          value={searchQuery}
+          onChange={setSearchQuery}
+          placeholder={t.searchContractsPlaceholder}
+        />
       </div>
 
       {/* Filter bar */}
