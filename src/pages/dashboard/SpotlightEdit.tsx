@@ -272,19 +272,18 @@ export function SpotlightEdit({ user }: { user: User }) {
           </Field>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <CheckboxField
-            label={t.spotlightFieldRequiresAck}
-            hint={t.spotlightFieldRequiresAckHelp}
-            checked={form.requires_acknowledgement}
-            onChange={v => update('requires_acknowledgement', v)}
-          />
-          <CheckboxField
-            label={t.spotlightFieldPinned}
-            checked={form.pinned}
-            onChange={v => update('pinned', v)}
-          />
-        </div>
+        <CheckboxField
+          label={t.spotlightFieldPinned}
+          checked={form.pinned}
+          onChange={v => update('pinned', v)}
+        />
+
+        <CheckboxField
+          label={t.spotlightFieldRequiresAck}
+          hint={t.spotlightFieldRequiresAckHelp}
+          checked={form.requires_acknowledgement}
+          onChange={v => update('requires_acknowledgement', v)}
+        />
 
         <Field label={t.spotlightFieldVisibility}>
           <div className="space-y-2">
