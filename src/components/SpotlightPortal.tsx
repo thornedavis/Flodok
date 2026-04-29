@@ -22,6 +22,9 @@ export type SpotlightFeedPost = {
   what_happened: string
   what_to_do_instead: string
   who_applies_note: string | null
+  image_url: string | null
+  link_url: string | null
+  link_label: string | null
   priority: SpotlightPriority
   display_mode: SpotlightDisplayMode
   requires_acknowledgement: boolean
@@ -128,9 +131,19 @@ function PostCard({ post, t, onAcknowledge }: {
       </div>
       <h3 className="mb-2 text-base font-semibold" style={{ color: 'var(--color-text)' }}>{post.title}</h3>
 
+      {post.image_url && (
+        <img
+          src={post.image_url}
+          alt=""
+          className="mb-3 max-h-80 w-full rounded-lg object-cover"
+        />
+      )}
+
       <Section label={t.spotlightWhatHappenedLabel} body={post.what_happened} />
       <Section label={t.spotlightWhatToDoLabel} body={post.what_to_do_instead} />
       {post.who_applies_note && <Section label={t.spotlightWhoAppliesLabel} body={post.who_applies_note} />}
+
+      {post.link_url && <LinkButton url={post.link_url} label={post.link_label} t={t} />}
 
       {post.requires_acknowledgement && !acknowledged && (
         <button
@@ -147,6 +160,24 @@ function PostCard({ post, t, onAcknowledge }: {
         </p>
       )}
     </div>
+  )
+}
+
+function LinkButton({ url, label, t }: { url: string; label: string | null; t: Translations }) {
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="mt-3 inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors"
+      style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+    >
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+      </svg>
+      {label || t.spotlightOpenLink}
+    </a>
   )
 }
 
@@ -278,9 +309,19 @@ export function SpotlightModal({
         </div>
         <h3 className="mb-3 text-lg font-semibold" style={{ color: 'var(--color-text)' }}>{current.title}</h3>
 
+        {current.image_url && (
+          <img
+            src={current.image_url}
+            alt=""
+            className="mb-3 max-h-72 w-full rounded-lg object-cover"
+          />
+        )}
+
         <Section label={t.spotlightWhatHappenedLabel} body={current.what_happened} />
         <Section label={t.spotlightWhatToDoLabel} body={current.what_to_do_instead} />
         {current.who_applies_note && <Section label={t.spotlightWhoAppliesLabel} body={current.who_applies_note} />}
+
+        {current.link_url && <LinkButton url={current.link_url} label={current.link_label} t={t} />}
 
         <div className="mt-5 flex justify-end">
           <button

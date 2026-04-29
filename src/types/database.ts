@@ -1358,6 +1358,9 @@ export type Database = {
           effective_from: string | null
           effective_until: string | null
           id: string
+          image_url: string | null
+          link_label: string | null
+          link_url: string | null
           org_id: string
           pinned: boolean
           posted_as_kind: string
@@ -1383,7 +1386,10 @@ export type Database = {
           effective_from?: string | null
           effective_until?: string | null
           id?: string
+          image_url?: string | null
           last_republished_at?: string | null
+          link_label?: string | null
+          link_url?: string | null
           org_id: string
           pinned?: boolean
           posted_as_kind?: string
@@ -1408,7 +1414,10 @@ export type Database = {
           effective_from?: string | null
           effective_until?: string | null
           id?: string
+          image_url?: string | null
           last_republished_at?: string | null
+          link_label?: string | null
+          link_url?: string | null
           org_id?: string
           pinned?: boolean
           posted_as_kind?: string
@@ -1674,6 +1683,9 @@ export type Database = {
           effective_until: string | null
           first_seen_at: string | null
           id: string
+          image_url: string | null
+          link_label: string | null
+          link_url: string | null
           pinned: boolean
           priority: string
           published_at: string | null

@@ -7,6 +7,7 @@ import { useLang } from '../../contexts/LanguageContext'
 import { getEmployeeDepts } from '../../lib/employee'
 import { useOutletContext } from 'react-router-dom'
 import type { DashboardOutletContext } from '../../components/Layout'
+import type { Translations } from '../../lib/translations'
 import type {
   User, Employee, SpotlightPost,
   SpotlightPriority, SpotlightDisplayMode, SpotlightVisibilityScope, SpotlightStatus,
@@ -27,6 +28,9 @@ type FormState = {
   effective_from: string  // datetime-local format ("YYYY-MM-DDTHH:MM"), "" if unset
   pinned: boolean
   status: SpotlightStatus
+  image_url: string
+  link_url: string
+  link_label: string
 }
 
 const DEFAULT_FORM: FormState = {
@@ -43,6 +47,9 @@ const DEFAULT_FORM: FormState = {
   effective_from: '',
   pinned: false,
   status: 'draft',
+  image_url: '',
+  link_url: '',
+  link_label: '',
 }
 
 export function SpotlightEdit({ user }: { user: User }) {
@@ -307,6 +314,38 @@ export function SpotlightEdit({ user }: { user: User }) {
           </div>
         </Field>
 
+        <Field label={t.spotlightFieldImage} hint={t.spotlightFieldImageHelp}>
+          <ImageField
+            value={form.image_url}
+            onChange={v => update('image_url', v)}
+            t={t}
+          />
+        </Field>
+
+        <div className="grid gap-4 sm:grid-cols-[2fr_1fr]">
+          <Field label={t.spotlightFieldLinkUrl}>
+            <input
+              type="url"
+              inputMode="url"
+              value={form.link_url}
+              onChange={e => update('link_url', e.target.value)}
+              placeholder="https://…"
+              className="w-full rounded-lg border px-3 py-2 text-sm"
+              style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+            />
+          </Field>
+          <Field label={t.spotlightFieldLinkLabel}>
+            <input
+              type="text"
+              value={form.link_label}
+              onChange={e => update('link_label', e.target.value)}
+              placeholder={t.spotlightFieldLinkLabelPlaceholder}
+              className="w-full rounded-lg border px-3 py-2 text-sm"
+              style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+            />
+          </Field>
+        </div>
+
         <Field label={t.spotlightFieldPublishAt} hint={t.spotlightFieldPublishAtHelp}>
           <DateTimePicker
             value={form.effective_from}
@@ -401,6 +440,9 @@ function rowToForm(p: SpotlightPost): FormState {
     effective_from: isoToLocalInput(p.effective_from),
     pinned: p.pinned,
     status: p.status as SpotlightStatus,
+    image_url: p.image_url ?? '',
+    link_url: p.link_url ?? '',
+    link_label: p.link_label ?? '',
   }
 }
 
@@ -420,6 +462,9 @@ function formToRow(f: FormState, targetStatus: SpotlightStatus) {
     effective_until: null,
     pinned: f.pinned,
     status: targetStatus,
+    image_url: f.image_url.trim() || null,
+    link_url: f.link_url.trim() || null,
+    link_label: f.link_label.trim() || null,
   }
 }
 
@@ -483,6 +528,101 @@ function Radio({ checked, onChange, label }: { checked: boolean; onChange: () =>
       <input type="radio" checked={checked} onChange={onChange} />
       {label}
     </label>
+  )
+}
+
+// Wide-image upload for Spotlight posts. Stores in the `spotlight` bucket
+// keyed by a generated id so multiple uploads from the same form session
+// don't collide. Returns the public URL via onChange.
+function ImageField({ value, onChange, t }: {
+  value: string
+  onChange: (next: string) => void
+  t: Translations
+}) {
+  const [uploading, setUploading] = useState(false)
+  const [error, setError] = useState('')
+
+  const ALLOWED = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+  const MAX_BYTES = 5 * 1024 * 1024
+
+  async function handleSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (!ALLOWED.includes(file.type)) { setError(t.spotlightImageInvalidType); return }
+    if (file.size > MAX_BYTES) { setError(t.spotlightImageTooLarge); return }
+
+    setError('')
+    setUploading(true)
+
+    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase()
+    // Random key per upload — avoids collisions and lets us keep the old
+    // file around if the user uploads-then-cancels (cleanup is opportunistic).
+    const path = `posts/${crypto.randomUUID()}.${ext}`
+    const { error: uploadError } = await supabase.storage.from('spotlight').upload(path, file, { upsert: false })
+    if (uploadError) { setError(uploadError.message); setUploading(false); return }
+
+    const { data: { publicUrl } } = supabase.storage.from('spotlight').getPublicUrl(path)
+    onChange(publicUrl)
+    setUploading(false)
+  }
+
+  async function handleRemove() {
+    if (!value) return
+    setUploading(true)
+    setError('')
+    // Best-effort delete — ignore failures so the form never gets stuck.
+    const match = value.match(/\/spotlight\/([^?]+)/)
+    if (match) await supabase.storage.from('spotlight').remove([match[1]])
+    onChange('')
+    setUploading(false)
+  }
+
+  return (
+    <div>
+      {value ? (
+        <div className="space-y-2">
+          <img
+            src={value}
+            alt=""
+            className="max-h-72 w-full rounded-lg border object-cover"
+            style={{ borderColor: 'var(--color-border)' }}
+          />
+          <div className="flex gap-2">
+            <label
+              className={`cursor-pointer rounded-md border px-3 py-1.5 text-xs ${uploading ? 'pointer-events-none opacity-50' : ''}`}
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
+            >
+              {uploading ? t.uploading : t.change}
+              <input type="file" accept="image/*" onChange={handleSelect} disabled={uploading} className="hidden" />
+            </label>
+            <button
+              type="button"
+              onClick={handleRemove}
+              disabled={uploading}
+              className="rounded-md px-3 py-1.5 text-xs"
+              style={{ color: 'var(--color-danger)' }}
+            >
+              {t.remove}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <label
+          className={`flex cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed py-6 text-center text-sm ${uploading ? 'pointer-events-none opacity-50' : ''}`}
+          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-tertiary)' }}
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <circle cx="8.5" cy="8.5" r="1.5" />
+            <polyline points="21 15 16 10 5 21" />
+          </svg>
+          <span>{uploading ? t.uploading : t.spotlightImageUploadCta}</span>
+          <input type="file" accept="image/*" onChange={handleSelect} disabled={uploading} className="hidden" />
+        </label>
+      )}
+      {error && <p className="mt-1 text-xs" style={{ color: 'var(--color-danger)' }}>{error}</p>}
+    </div>
   )
 }
 
