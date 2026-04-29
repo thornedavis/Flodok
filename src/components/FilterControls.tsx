@@ -251,6 +251,276 @@ export function MultiSelectDropdown({
   )
 }
 
+// ─── FilterPanel ────────────────────────────────────────
+//
+// Consolidates secondary filter dimensions (departments, tags, sort, etc.)
+// into a single "Filter" button. The trigger shows an active-count badge
+// when any sections are non-default. Sections are collapsible; default
+// expanded so the user sees everything on first open.
+
+export type FilterPanelSection =
+  | {
+      type: 'multiselect'
+      key: string
+      label: string
+      icon?: ReactNode
+      value: string[]
+      options: MultiSelectOption[]
+      onChange: (next: string[]) => void
+      footerAction?: { label: string; onClick: () => void }
+    }
+  | {
+      type: 'select'
+      key: string
+      label: string
+      icon?: ReactNode
+      value: string
+      options: { id: string; label: string }[]
+      onChange: (next: string) => void
+    }
+
+export function FilterPanel({
+  sections, onReset, triggerLabel,
+}: {
+  sections: FilterPanelSection[]
+  onReset?: () => void
+  triggerLabel: string
+}) {
+  const [open, setOpen] = useState(false)
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+  const containerRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const [placement, setPlacement] = useState<'below' | 'above'>('below')
+
+  // Active-count: total of selected options across multiselect sections.
+  // Single-select sections aren't counted because there's always one
+  // "default" option active and including them would be misleading.
+  const activeCount = sections.reduce((n, s) => {
+    if (s.type === 'multiselect') return n + s.value.length
+    return n
+  }, 0)
+  const active = activeCount > 0
+
+  useLayoutEffect(() => {
+    if (!open) return
+    const rect = triggerRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const estHeight = 360
+    const spaceBelow = window.innerHeight - rect.bottom
+    setPlacement(spaceBelow < estHeight && rect.top > spaceBelow ? 'above' : 'below')
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+    function handleClick(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    function handleKey(e: KeyboardEvent) { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', handleClick)
+    document.addEventListener('keydown', handleKey)
+    return () => {
+      document.removeEventListener('mousedown', handleClick)
+      document.removeEventListener('keydown', handleKey)
+    }
+  }, [open])
+
+  function toggleCollapsed(key: string) {
+    setCollapsed(prev => ({ ...prev, [key]: !prev[key] }))
+  }
+
+  return (
+    <div ref={containerRef} className="relative" style={{ position: 'relative' }}>
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors"
+        style={{
+          borderColor: active ? 'var(--color-primary)' : 'var(--color-border)',
+          color: active ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+          backgroundColor: active ? 'color-mix(in srgb, var(--color-primary) 8%, transparent)' : 'transparent',
+        }}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+        </svg>
+        <span>{triggerLabel}</span>
+        {active && (
+          <span
+            className="rounded-full px-1.5 text-[10px] font-semibold tabular-nums"
+            style={{ backgroundColor: 'color-mix(in srgb, var(--color-primary) 16%, transparent)', color: 'var(--color-primary)' }}
+          >
+            {activeCount}
+          </span>
+        )}
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+
+      {open && (
+        <div
+          role="dialog"
+          className={`absolute right-0 z-40 w-[280px] overflow-hidden rounded-lg border shadow-lg ${
+            placement === 'below' ? 'top-full mt-1' : 'bottom-full mb-1'
+          }`}
+          style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-elevated, var(--color-bg))' }}
+        >
+          <div className="max-h-[60vh] overflow-y-auto">
+            {sections.map((section, idx) => {
+              const isCollapsed = collapsed[section.key]
+              return (
+                <div key={section.key} className={idx > 0 ? 'border-t' : ''} style={{ borderColor: 'var(--color-border)' }}>
+                  <button
+                    type="button"
+                    onClick={() => toggleCollapsed(section.key)}
+                    className="flex w-full items-center justify-between px-3 py-2.5 text-left text-sm font-semibold"
+                    style={{ color: 'var(--color-text)' }}
+                  >
+                    <span className="flex items-center gap-2">
+                      {section.icon && <span style={{ color: 'var(--color-text-tertiary)' }}>{section.icon}</span>}
+                      {section.label}
+                    </span>
+                    <svg
+                      width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                      style={{ color: 'var(--color-text-tertiary)', transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}
+                    >
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                  </button>
+                  {!isCollapsed && (
+                    <div className="px-2 pb-2">
+                      {section.type === 'multiselect'
+                        ? <SectionMultiSelect section={section} />
+                        : <SectionSelect section={section} />}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+
+          {onReset && active && (
+            <div className="border-t p-1.5" style={{ borderColor: 'var(--color-border)' }}>
+              <button
+                type="button"
+                onClick={() => { onReset(); setOpen(false) }}
+                className="w-full rounded-md px-2 py-1.5 text-center text-xs font-medium"
+                style={{ color: 'var(--color-text-secondary)' }}
+                onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
+                onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
+              >
+                Reset filters
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SectionMultiSelect({ section }: {
+  section: Extract<FilterPanelSection, { type: 'multiselect' }>
+}) {
+  const selected = new Set(section.value)
+  function toggle(id: string) {
+    section.onChange(selected.has(id) ? section.value.filter(v => v !== id) : [...section.value, id])
+  }
+  if (section.options.length === 0) {
+    return <p className="px-2 py-1.5 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>No options</p>
+  }
+  return (
+    <>
+      {section.options.map(opt => {
+        const checked = selected.has(opt.id)
+        return (
+          <button
+            key={opt.id}
+            type="button"
+            onClick={() => toggle(opt.id)}
+            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm"
+            style={{ color: 'var(--color-text)' }}
+            onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
+            onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
+          >
+            <span
+              className="flex h-4 w-4 shrink-0 items-center justify-center rounded border"
+              style={{
+                borderColor: checked ? 'var(--color-primary)' : 'var(--color-border)',
+                backgroundColor: checked ? 'var(--color-primary)' : 'transparent',
+              }}
+            >
+              {checked && (
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              )}
+            </span>
+            <span className="flex-1 truncate">{opt.label}</span>
+            {opt.count !== undefined && (
+              <span className="text-xs tabular-nums" style={{ color: 'var(--color-text-tertiary)' }}>{opt.count}</span>
+            )}
+          </button>
+        )
+      })}
+      {section.footerAction && (
+        <button
+          type="button"
+          onClick={section.footerAction.onClick}
+          className="mt-1 flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs"
+          style={{ color: 'var(--color-text-secondary)' }}
+          onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
+          onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+          </svg>
+          {section.footerAction.label}
+        </button>
+      )}
+    </>
+  )
+}
+
+function SectionSelect({ section }: {
+  section: Extract<FilterPanelSection, { type: 'select' }>
+}) {
+  return (
+    <>
+      {section.options.map(opt => {
+        const checked = section.value === opt.id
+        return (
+          <button
+            key={opt.id}
+            type="button"
+            onClick={() => section.onChange(opt.id)}
+            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm"
+            style={{ color: 'var(--color-text)' }}
+            onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
+            onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
+          >
+            <span
+              className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border"
+              style={{
+                borderColor: checked ? 'var(--color-primary)' : 'var(--color-border)',
+              }}
+            >
+              {checked && (
+                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: 'var(--color-primary)' }} />
+              )}
+            </span>
+            <span className="flex-1">{opt.label}</span>
+          </button>
+        )
+      })}
+    </>
+  )
+}
+
 // ─── FilterSearchInput ──────────────────────────────────
 
 export function FilterSearchInput({ value, onChange, placeholder, className = '' }: {

@@ -629,6 +629,7 @@ export const translations = {
     sortLastEdited: 'Last edited',
     sortRecentlyAdded: 'Recently added',
     sortRecentlyUpdated: 'Recently updated',
+    filterButtonLabel: 'Filter',
 
     // Performance workbench page
     performanceTitle: 'Performance',
@@ -1516,6 +1517,7 @@ export const translations = {
     sortLastEdited: 'Terakhir diedit',
     sortRecentlyAdded: 'Baru ditambahkan',
     sortRecentlyUpdated: 'Baru diperbarui',
+    filterButtonLabel: 'Filter',
 
     // Performance workbench page
     performanceTitle: 'Kinerja',

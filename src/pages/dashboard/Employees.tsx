@@ -6,7 +6,8 @@ import { generateSlug, generateAccessToken } from '../../lib/slug'
 import { getAvatarGradient } from '../../lib/avatar'
 import { PhoneInput } from '../../components/PhoneInput'
 import { DepartmentsMultiSelect } from '../../components/DepartmentsMultiSelect'
-import { FilterPill, MultiSelectDropdown, FilterSearchInput } from '../../components/FilterControls'
+import { FilterPill, FilterPanel, FilterSearchInput } from '../../components/FilterControls'
+import type { FilterPanelSection } from '../../components/FilterControls'
 import { ManageDepartmentsModal } from '../../components/ManageDepartmentsModal'
 import { useLang } from '../../contexts/LanguageContext'
 import { getEmployeeDepts } from '../../lib/employee'
@@ -140,7 +141,29 @@ export function Employees({ user }: { user: User }) {
   if (loading) return <div style={{ color: 'var(--color-text-secondary)' }}>{t.loading}</div>
 
   const departmentOptions = departments.map(d => ({ id: d, label: d, count: getDepartmentCount(d) }))
-  const hasActiveFilters = activeDepartments.size > 0 || searchQuery.length > 0 || statusFilter !== 'all'
+
+  const filterSections: FilterPanelSection[] = [
+    ...(departments.length > 0 ? [{
+      type: 'multiselect' as const,
+      key: 'departments',
+      label: t.departments,
+      value: [...activeDepartments],
+      options: departmentOptions,
+      onChange: (next: string[]) => setActiveDepartments(new Set(next)),
+      footerAction: { label: t.manageDepartments, onClick: () => setManageOpen(true) },
+    }] : []),
+    {
+      type: 'select' as const,
+      key: 'sort',
+      label: t.sortLabel,
+      value: sortBy,
+      options: [
+        { id: 'name', label: t.sortNameAsc },
+        { id: 'recently_added', label: t.sortRecentlyAdded },
+      ],
+      onChange: (next: string) => setSortBy(next as typeof sortBy),
+    },
+  ]
 
   type StatusKey = 'all' | 'active' | 'trial' | 'suspended' | 'terminated' | 'archived'
   const statusPills: Array<{ key: StatusKey; label: string; count: number }> = [
@@ -154,7 +177,7 @@ export function Employees({ user }: { user: User }) {
 
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.employeesTitle}</h1>
         <button
           onClick={() => setShowAdd(true)}
@@ -163,14 +186,6 @@ export function Employees({ user }: { user: User }) {
         >
           {t.addEmployee}
         </button>
-      </div>
-
-      <div className="mb-3 w-full sm:max-w-sm">
-        <FilterSearchInput
-          value={searchQuery}
-          onChange={setSearchQuery}
-          placeholder={t.searchEmployeesPlaceholder}
-        />
       </div>
 
       {/* Filter bar */}
@@ -185,36 +200,20 @@ export function Employees({ user }: { user: User }) {
             {p.label}
           </FilterPill>
         ))}
-        {departments.length > 0 && (
-          <MultiSelectDropdown
-            label={t.departments}
-            value={[...activeDepartments]}
-            onChange={next => setActiveDepartments(new Set(next))}
-            options={departmentOptions}
-            searchPlaceholder={t.selectDepartment}
-            footerAction={{ label: t.manageDepartments, onClick: () => setManageOpen(true) }}
+        <div className="ml-auto flex items-center gap-2">
+          <div className="w-44 sm:w-64">
+            <FilterSearchInput
+              value={searchQuery}
+              onChange={setSearchQuery}
+              placeholder={t.searchEmployeesPlaceholder}
+            />
+          </div>
+          <FilterPanel
+            triggerLabel={t.filterButtonLabel}
+            sections={filterSections}
+            onReset={() => { setActiveDepartments(new Set()); setSortBy('name') }}
           />
-        )}
-        {hasActiveFilters && (
-          <button
-            type="button"
-            onClick={() => { setActiveDepartments(new Set()); setSearchQuery(''); setStatusFilter('all') }}
-            className="text-xs font-medium"
-            style={{ color: 'var(--color-primary)' }}
-          >
-            {t.clearAllFilters}
-          </button>
-        )}
-        <select
-          value={sortBy}
-          onChange={e => setSortBy(e.target.value as typeof sortBy)}
-          className="ml-auto rounded-md border px-2 py-1 text-xs"
-          style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
-          aria-label={t.sortLabel}
-        >
-          <option value="name">{t.sortNameAsc}</option>
-          <option value="recently_added">{t.sortRecentlyAdded}</option>
-        </select>
+        </div>
       </div>
 
       <div>

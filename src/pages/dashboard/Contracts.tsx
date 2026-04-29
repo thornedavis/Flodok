@@ -5,7 +5,8 @@ import { useLang } from '../../contexts/LanguageContext'
 import { getEmployeeDepts, primaryDept, deptsJoined } from '../../lib/employee'
 import { formatIdrDigits as formatCurrency } from '../../lib/credits'
 import { InfoTooltip } from '../../components/InfoTooltip'
-import { FilterPill, MultiSelectDropdown, FilterSearchInput } from '../../components/FilterControls'
+import { FilterPill, FilterPanel, FilterSearchInput } from '../../components/FilterControls'
+import type { FilterPanelSection } from '../../components/FilterControls'
 import { ManageDepartmentsModal } from '../../components/ManageDepartmentsModal'
 import type { User, Contract, Employee, Tag } from '../../types/aliases'
 
@@ -157,11 +158,42 @@ export function Contracts({ user }: { user: User }) {
 
   const departmentOptions = departments.map(d => ({ id: d, label: d, count: getDepartmentCount(d) }))
   const tagOptions = allTags.map(tg => ({ id: tg.id, label: tg.name, count: getTagCount(tg.id) }))
-  const hasActiveFilters = activeDepartments.size + activeStatuses.size + activeTags.size > 0 || searchQuery.length > 0
+
+  const filterSections: FilterPanelSection[] = [
+    ...(departments.length > 0 ? [{
+      type: 'multiselect' as const,
+      key: 'departments',
+      label: t.departments,
+      value: [...activeDepartments],
+      options: departmentOptions,
+      onChange: (next: string[]) => setActiveDepartments(new Set(next)),
+      footerAction: { label: t.manageDepartments, onClick: () => setManageOpen(true) },
+    }] : []),
+    ...(allTags.length > 0 ? [{
+      type: 'multiselect' as const,
+      key: 'tags',
+      label: t.tagsLabel,
+      value: [...activeTags],
+      options: tagOptions,
+      onChange: (next: string[]) => setActiveTags(new Set(next)),
+    }] : []),
+    {
+      type: 'select' as const,
+      key: 'sort',
+      label: t.sortLabel,
+      value: sortBy,
+      options: [
+        { id: 'last_edited', label: t.sortLastEdited },
+        { id: 'newest', label: t.sortNewest },
+        { id: 'oldest', label: t.sortOldest },
+      ],
+      onChange: (next: string) => setSortBy(next as typeof sortBy),
+    },
+  ]
 
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.contractsTitle}</h1>
         <button
           onClick={() => setShowCreateModal(true)}
@@ -170,14 +202,6 @@ export function Contracts({ user }: { user: User }) {
         >
           {t.createContract}
         </button>
-      </div>
-
-      <div className="mb-3 w-full sm:max-w-sm">
-        <FilterSearchInput
-          value={searchQuery}
-          onChange={setSearchQuery}
-          placeholder={t.searchContractsPlaceholder}
-        />
       </div>
 
       {/* Filter bar */}
@@ -199,49 +223,24 @@ export function Contracts({ user }: { user: User }) {
             {statusLabels[status]}
           </FilterPill>
         ))}
-        {departments.length > 0 && (
-          <MultiSelectDropdown
-            label={t.departments}
-            value={[...activeDepartments]}
-            onChange={next => setActiveDepartments(new Set(next))}
-            options={departmentOptions}
-            footerAction={{ label: t.manageDepartments, onClick: () => setManageOpen(true) }}
-          />
-        )}
-        {allTags.length > 0 && (
-          <MultiSelectDropdown
-            label={t.tagsLabel}
-            value={[...activeTags]}
-            onChange={next => setActiveTags(new Set(next))}
-            options={tagOptions}
-          />
-        )}
-        {hasActiveFilters && (
-          <button
-            type="button"
-            onClick={() => {
+        <div className="ml-auto flex items-center gap-2">
+          <div className="w-44 sm:w-64">
+            <FilterSearchInput
+              value={searchQuery}
+              onChange={setSearchQuery}
+              placeholder={t.searchContractsPlaceholder}
+            />
+          </div>
+          <FilterPanel
+            triggerLabel={t.filterButtonLabel}
+            sections={filterSections}
+            onReset={() => {
               setActiveDepartments(new Set())
-              setActiveStatuses(new Set())
               setActiveTags(new Set())
-              setSearchQuery('')
+              setSortBy('last_edited')
             }}
-            className="text-xs font-medium"
-            style={{ color: 'var(--color-primary)' }}
-          >
-            {t.clearAllFilters}
-          </button>
-        )}
-        <select
-          value={sortBy}
-          onChange={e => setSortBy(e.target.value as typeof sortBy)}
-          className="ml-auto rounded-md border px-2 py-1 text-xs"
-          style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
-          aria-label={t.sortLabel}
-        >
-          <option value="last_edited">{t.sortLastEdited}</option>
-          <option value="newest">{t.sortNewest}</option>
-          <option value="oldest">{t.sortOldest}</option>
-        </select>
+          />
+        </div>
       </div>
 
       <div>
