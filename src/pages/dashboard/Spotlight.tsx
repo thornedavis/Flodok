@@ -7,6 +7,8 @@ import type { Lang, Translations } from '../../lib/translations'
 import type { User, SpotlightPost, SpotlightStatus, SpotlightPriority } from '../../types/aliases'
 
 type StatusFilter = 'all' | SpotlightStatus
+type PriorityFilter = 'all' | SpotlightPriority
+type SortBy = 'newest' | 'oldest' | 'republished'
 
 type PostWithStats = SpotlightPost & {
   view_count: number
@@ -19,6 +21,8 @@ export function Spotlight({ user }: { user: User }) {
   const [posts, setPosts] = useState<PostWithStats[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<StatusFilter>('all')
+  const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('all')
+  const [sortBy, setSortBy] = useState<SortBy>('newest')
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -99,7 +103,16 @@ export function Spotlight({ user }: { user: User }) {
     loadData()
   }
 
-  const filtered = filter === 'all' ? posts : posts.filter(p => p.status === filter)
+  // Apply status + priority filter, then sort.
+  const filtered = posts
+    .filter(p => filter === 'all' || p.status === filter)
+    .filter(p => priorityFilter === 'all' || p.priority === priorityFilter)
+    .slice()
+    .sort((a, b) => {
+      if (sortBy === 'oldest') return a.created_at.localeCompare(b.created_at)
+      if (sortBy === 'republished') return b.republish_count - a.republish_count
+      return b.created_at.localeCompare(a.created_at)
+    })
 
   if (loading) return <div style={{ color: 'var(--color-text-secondary)' }}>{t.loading}</div>
 
@@ -119,8 +132,8 @@ export function Spotlight({ user }: { user: User }) {
         </button>
       </div>
 
-      {/* Filter tabs */}
-      <div className="mb-5 flex flex-wrap gap-2">
+      {/* Status filter (primary) */}
+      <div className="mb-3 flex flex-wrap gap-2">
         {([
           ['all', t.spotlightFilterAll],
           ['draft', t.spotlightFilterDraft],
@@ -128,19 +141,39 @@ export function Spotlight({ user }: { user: User }) {
           ['published', t.spotlightFilterPublished],
           ['archived', t.spotlightFilterArchived],
         ] as Array<[StatusFilter, string]>).map(([key, label]) => (
-          <button
-            key={key}
-            onClick={() => setFilter(key)}
-            className="rounded-full border px-3 py-1 text-xs font-medium transition-colors"
-            style={{
-              borderColor: filter === key ? 'var(--color-primary)' : 'var(--color-border)',
-              color: filter === key ? 'var(--color-primary)' : 'var(--color-text-secondary)',
-              backgroundColor: filter === key ? 'color-mix(in srgb, var(--color-primary) 8%, transparent)' : 'transparent',
-            }}
-          >
+          <FilterPill key={key} active={filter === key} onClick={() => setFilter(key)}>
             {label}
-          </button>
+          </FilterPill>
         ))}
+      </div>
+
+      {/* Priority filter + sort (secondary) */}
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap gap-2">
+          {([
+            ['all', t.spotlightFilterAllPriorities],
+            ['critical', t.spotlightPriorityCritical],
+            ['important', t.spotlightPriorityImportant],
+            ['fyi', t.spotlightPriorityFyi],
+          ] as Array<[PriorityFilter, string]>).map(([key, label]) => (
+            <FilterPill key={key} active={priorityFilter === key} onClick={() => setPriorityFilter(key)}>
+              {label}
+            </FilterPill>
+          ))}
+        </div>
+        <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+          <span>{t.spotlightSortLabel}</span>
+          <select
+            value={sortBy}
+            onChange={e => setSortBy(e.target.value as SortBy)}
+            className="rounded-md border px-2 py-1 text-xs"
+            style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+          >
+            <option value="newest">{t.spotlightSortNewest}</option>
+            <option value="oldest">{t.spotlightSortOldest}</option>
+            <option value="republished">{t.spotlightSortRepublished}</option>
+          </select>
+        </div>
       </div>
 
       {filtered.length === 0 ? (
@@ -205,45 +238,65 @@ function PostRow({
       onMouseOver={e => { e.currentTarget.style.borderColor = 'var(--color-border-strong, var(--color-border))' }}
       onMouseOut={e => { e.currentTarget.style.borderColor = 'var(--color-border)' }}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="mb-1 flex flex-wrap items-center gap-2">
-            <PriorityPill priority={post.priority as SpotlightPriority} t={t} />
-            <StatusPill status={post.status as SpotlightStatus} t={t} />
-            {post.republish_count > 0 && (
-              <RepublishCountPill count={post.republish_count} t={t} />
-            )}
+      {/* Mobile: full-width square thumbnail above content. */}
+      {post.image_url && (
+        <img
+          src={post.image_url}
+          alt=""
+          className="mb-3 aspect-square w-full rounded-lg object-cover sm:hidden"
+        />
+      )}
+
+      <div className="flex items-start gap-3">
+        {/* Desktop: small left thumbnail. */}
+        {post.image_url && (
+          <img
+            src={post.image_url}
+            alt=""
+            className="hidden h-20 w-20 shrink-0 rounded-lg object-cover sm:block"
+          />
+        )}
+
+        <div className="flex min-w-0 flex-1 items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="mb-1 flex flex-wrap items-center gap-2">
+              <PriorityPill priority={post.priority as SpotlightPriority} t={t} />
+              <StatusPill status={post.status as SpotlightStatus} t={t} />
+              {post.republish_count > 0 && (
+                <RepublishCountPill count={post.republish_count} t={t} />
+              )}
+            </div>
+            <h3 className="truncate text-base font-semibold" style={{ color: 'var(--color-text)' }}>
+              {post.title}
+            </h3>
+            <p className="mt-1 line-clamp-2 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+              {post.what_happened}
+            </p>
+            <p className="mt-2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+              {datelineLabel(post, t, lang)}
+            </p>
           </div>
-          <h3 className="truncate text-base font-semibold" style={{ color: 'var(--color-text)' }}>
-            {post.title}
-          </h3>
-          <p className="mt-1 line-clamp-2 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-            {post.what_happened}
-          </p>
-          <p className="mt-2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-            {datelineLabel(post, t, lang)}
-          </p>
-        </div>
-        <div className="flex shrink-0 items-start gap-2">
-          {post.status === 'published' && post.requires_acknowledgement && (
-            <span className="whitespace-nowrap pt-1.5 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-              {t.spotlightAcknowledgements(post.ack_count, post.view_count || post.ack_count)}
-            </span>
-          )}
-          {post.status === 'published' && (
-            <IconButton
-              ariaLabel={t.spotlightRepublish}
-              onClick={onRepublish}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="17 1 21 5 17 9" />
-                <path d="M3 11V9a4 4 0 0 1 4-4h14" />
-                <polyline points="7 23 3 19 7 15" />
-                <path d="M21 13v2a4 4 0 0 1-4 4H3" />
-              </svg>
-            </IconButton>
-          )}
-          <RowMenu items={items} ariaLabel={t.spotlightRowMenuAria} />
+          <div className="flex shrink-0 items-start gap-2">
+            {post.status === 'published' && post.requires_acknowledgement && (
+              <span className="whitespace-nowrap pt-1.5 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+                {t.spotlightAcknowledgements(post.ack_count, post.view_count || post.ack_count)}
+              </span>
+            )}
+            {post.status === 'published' && (
+              <IconButton
+                ariaLabel={t.spotlightRepublish}
+                onClick={onRepublish}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="17 1 21 5 17 9" />
+                  <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+                  <polyline points="7 23 3 19 7 15" />
+                  <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+                </svg>
+              </IconButton>
+            )}
+            <RowMenu items={items} ariaLabel={t.spotlightRowMenuAria} />
+          </div>
         </div>
       </div>
     </div>
@@ -391,6 +444,26 @@ function RepublishCountPill({ count, t }: { count: number; t: Translations }) {
     <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={{ backgroundColor: bg, color: fg }}>
       {t.spotlightRepublishedCount(count)}
     </span>
+  )
+}
+
+function FilterPill({ active, onClick, children }: {
+  active: boolean
+  onClick: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="rounded-full border px-3 py-1 text-xs font-medium transition-colors"
+      style={{
+        borderColor: active ? 'var(--color-primary)' : 'var(--color-border)',
+        color: active ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+        backgroundColor: active ? 'color-mix(in srgb, var(--color-primary) 8%, transparent)' : 'transparent',
+      }}
+    >
+      {children}
+    </button>
   )
 }
 
