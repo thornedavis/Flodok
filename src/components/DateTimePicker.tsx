@@ -6,7 +6,7 @@
 // ("YYYY-MM-DDTHH:MM") so the parent form's existing serialization works
 // unchanged. Empty string means "no value".
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
 interface Props {
   value: string                       // datetime-local string, "" if unset
@@ -15,13 +15,32 @@ interface Props {
   disabled?: boolean
 }
 
+// Estimated popover height. Used purely for the open-up-vs-down decision —
+// being slightly off only affects which direction we flip, not the layout.
+const POPOVER_HEIGHT_ESTIMATE = 380
+
 export function DateTimePicker({ value, onChange, placeholder = 'Pick a date…', disabled }: Props) {
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  // Vertical placement: below the trigger by default, above if there isn't
+  // enough room (e.g. picker is near the bottom of the viewport).
+  const [placement, setPlacement] = useState<'below' | 'above'>('below')
 
   const currentDate = useMemo(() => parseLocalInput(value), [value])
   const [viewYear, setViewYear] = useState(() => (currentDate ?? new Date()).getFullYear())
   const [viewMonth, setViewMonth] = useState(() => (currentDate ?? new Date()).getMonth())
+
+  // Decide flip direction synchronously when opening, before paint, so the
+  // popover never visibly jumps after appearing.
+  useLayoutEffect(() => {
+    if (!open) return
+    const rect = triggerRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const spaceBelow = window.innerHeight - rect.bottom
+    const spaceAbove = rect.top
+    setPlacement(spaceBelow < POPOVER_HEIGHT_ESTIMATE && spaceAbove > spaceBelow ? 'above' : 'below')
+  }, [open])
 
   // Reset the visible month when the value jumps (e.g. via Clear or external update).
   useEffect(() => {
@@ -86,6 +105,7 @@ export function DateTimePicker({ value, onChange, placeholder = 'Pick a date…'
   return (
     <div ref={containerRef} className="relative" style={{ position: 'relative' }}>
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => !disabled && setOpen(o => !o)}
         disabled={disabled}
@@ -107,7 +127,9 @@ export function DateTimePicker({ value, onChange, placeholder = 'Pick a date…'
 
       {open && !disabled && (
         <div
-          className="absolute left-0 top-full z-50 mt-1 w-[300px] rounded-xl border shadow-lg"
+          className={`absolute right-0 z-50 w-[300px] rounded-xl border shadow-lg ${
+            placement === 'below' ? 'top-full mt-1' : 'bottom-full mb-1'
+          }`}
           style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-elevated, var(--color-bg))' }}
         >
           {/* Quick presets */}
