@@ -7,7 +7,7 @@ import { getAvatarGradient } from '../../lib/avatar'
 import { PhoneInput } from '../../components/PhoneInput'
 import { DepartmentsMultiSelect } from '../../components/DepartmentsMultiSelect'
 import { FilterPill, MultiSelectDropdown, FilterSearchInput } from '../../components/FilterControls'
-import { Modal } from '../../components/Modal'
+import { ManageDepartmentsModal } from '../../components/ManageDepartmentsModal'
 import { useLang } from '../../contexts/LanguageContext'
 import { getEmployeeDepts } from '../../lib/employee'
 import { getSopStarterTemplate } from '../../lib/templates'
@@ -106,49 +106,6 @@ export function Employees({ user }: { user: User }) {
     return employees.filter(e => getEmployeeDepts(e).includes(dept)).length
   }
 
-  async function handleRenameDepartment(oldName: string) {
-    const newName = prompt(t.renameDepartmentPrompt(oldName), oldName)
-    if (!newName || newName.trim() === oldName) return
-    const trimmed = newName.trim()
-
-    const existing = departments.find(d => d.toLowerCase() === trimmed.toLowerCase() && d !== oldName)
-    const target = existing
-      ? (confirm(t.mergeDepartmentConfirm(existing, oldName)) ? existing : null)
-      : trimmed
-    if (!target) return
-
-    const affected = employees.filter(e => getEmployeeDepts(e).includes(oldName))
-    await Promise.all(affected.map(emp => {
-      // Replace oldName with target, dedupe
-      const next = [...new Set(getEmployeeDepts(emp).map(d => d === oldName ? target : d))]
-      return supabase.from('employees').update({
-        departments: next,
-        department: next[0] || null,
-      }).eq('id', emp.id)
-    }))
-    loadData()
-  }
-
-  async function handleDeleteDepartment(dept: string) {
-    const count = getDepartmentCount(dept)
-    if (!confirm(t.removeDepartmentConfirm(dept, count))) return
-
-    const affected = employees.filter(e => getEmployeeDepts(e).includes(dept))
-    await Promise.all(affected.map(emp => {
-      const next = getEmployeeDepts(emp).filter(d => d !== dept)
-      return supabase.from('employees').update({
-        departments: next,
-        department: next[0] || null,
-      }).eq('id', emp.id)
-    }))
-    setActiveDepartments(prev => {
-      const next = new Set(prev)
-      next.delete(dept)
-      return next
-    })
-    loadData()
-  }
-
   // Filter
   const filtered = employees.filter(e => {
     const empDepts = getEmployeeDepts(e)
@@ -225,19 +182,8 @@ export function Employees({ user }: { user: User }) {
             onChange={next => setActiveDepartments(new Set(next))}
             options={departmentOptions}
             searchPlaceholder={t.selectDepartment}
+            footerAction={{ label: t.manageDepartments, onClick: () => setManageOpen(true) }}
           />
-        )}
-        {departments.length > 0 && (
-          <button
-            type="button"
-            onClick={() => setManageOpen(true)}
-            className="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium transition-colors"
-            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
-            onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
-            onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
-          >
-            {t.manageDepartments}
-          </button>
         )}
         {hasActiveFilters && (
           <button
@@ -328,43 +274,13 @@ export function Employees({ user }: { user: User }) {
 
       </div>
 
-      {/* Manage departments modal */}
-      <Modal open={manageOpen} onClose={() => setManageOpen(false)} title={t.manageDepartments}>
-        {departments.length === 0 ? (
-          <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{t.noDepartmentsYet}</p>
-        ) : (
-          <div className="space-y-1">
-            {departments.map(dept => (
-              <div
-                key={dept}
-                className="flex items-center justify-between rounded-md border px-3 py-2 text-sm"
-                style={{ borderColor: 'var(--color-border)' }}
-              >
-                <span style={{ color: 'var(--color-text)' }}>{dept}</span>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{getDepartmentCount(dept)}</span>
-                  <button
-                    type="button"
-                    onClick={() => handleRenameDepartment(dept)}
-                    className="text-xs"
-                    style={{ color: 'var(--color-text-secondary)' }}
-                  >
-                    {t.renameDepartment}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteDepartment(dept)}
-                    className="text-xs"
-                    style={{ color: 'var(--color-danger)' }}
-                  >
-                    {t.delete}
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </Modal>
+      <ManageDepartmentsModal
+        open={manageOpen}
+        onClose={() => setManageOpen(false)}
+        departments={departments}
+        employees={employees}
+        onChanged={() => { setActiveDepartments(new Set()); loadData() }}
+      />
 
       {showAdd && (
         <AddEmployeeForm

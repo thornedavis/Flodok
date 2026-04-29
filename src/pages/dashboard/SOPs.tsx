@@ -5,6 +5,7 @@ import { useLang } from '../../contexts/LanguageContext'
 import { getEmployeeDepts, primaryDept } from '../../lib/employee'
 import { getSopStarterTemplate } from '../../lib/templates'
 import { FilterPill, MultiSelectDropdown, FilterSearchInput } from '../../components/FilterControls'
+import { ManageDepartmentsModal } from '../../components/ManageDepartmentsModal'
 import type { User, Sop, Employee, Tag } from '../../types/aliases'
 
 type SopWithEmployee = Sop & { employee: Employee | null; tagIds: string[] }
@@ -22,6 +23,21 @@ export function SOPs({ user }: { user: User }) {
   const [activeTags, setActiveTags] = useState<Set<string>>(new Set())
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
+  const [manageOpen, setManageOpen] = useState(false)
+
+  async function reload() {
+    const [sopResult, empResult] = await Promise.all([
+      supabase.from('sops').select('*').eq('org_id', user.org_id).order('updated_at', { ascending: false }),
+      supabase.from('employees').select('*').eq('org_id', user.org_id).order('name'),
+    ])
+    const empMap = new Map((empResult.data || []).map(e => [e.id, e]))
+    setEmployees(empResult.data || [])
+    setSOPs(prev => (sopResult.data || []).map(s => ({
+      ...s,
+      employee: s.employee_id ? empMap.get(s.employee_id) || null : null,
+      tagIds: prev.find(p => p.id === s.id)?.tagIds || [],
+    })))
+  }
 
   useEffect(() => {
     async function load() {
@@ -175,6 +191,7 @@ export function SOPs({ user }: { user: User }) {
             value={[...activeDepartments]}
             onChange={next => setActiveDepartments(new Set(next))}
             options={departmentOptions}
+            footerAction={{ label: t.manageDepartments, onClick: () => setManageOpen(true) }}
           />
         )}
         {allTags.length > 0 && (
@@ -366,6 +383,14 @@ export function SOPs({ user }: { user: User }) {
           onCreated={(sopId) => navigate(`/dashboard/sops/${sopId}/edit`)}
         />
       )}
+
+      <ManageDepartmentsModal
+        open={manageOpen}
+        onClose={() => setManageOpen(false)}
+        departments={departments}
+        employees={employees}
+        onChanged={() => { setActiveDepartments(new Set()); reload() }}
+      />
     </div>
   )
 }

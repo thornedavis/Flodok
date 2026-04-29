@@ -6,6 +6,7 @@ import { getEmployeeDepts, primaryDept, deptsJoined } from '../../lib/employee'
 import { formatIdrDigits as formatCurrency } from '../../lib/credits'
 import { InfoTooltip } from '../../components/InfoTooltip'
 import { FilterPill, MultiSelectDropdown, FilterSearchInput } from '../../components/FilterControls'
+import { ManageDepartmentsModal } from '../../components/ManageDepartmentsModal'
 import type { User, Contract, Employee, Tag } from '../../types/aliases'
 
 type ContractWithEmployee = Contract & { employee: Employee | null; tagIds: string[] }
@@ -23,6 +24,21 @@ export function Contracts({ user }: { user: User }) {
   const [activeTags, setActiveTags] = useState<Set<string>>(new Set())
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
+  const [manageOpen, setManageOpen] = useState(false)
+
+  async function reload() {
+    const [contractResult, empResult] = await Promise.all([
+      supabase.from('contracts').select('*').eq('org_id', user.org_id).order('updated_at', { ascending: false }),
+      supabase.from('employees').select('*').eq('org_id', user.org_id).order('name'),
+    ])
+    const empMap = new Map((empResult.data || []).map(e => [e.id, e]))
+    setEmployees(empResult.data || [])
+    setContracts(prev => (contractResult.data || []).map(c => ({
+      ...c,
+      employee: c.employee_id ? empMap.get(c.employee_id) || null : null,
+      tagIds: prev.find(p => p.id === c.id)?.tagIds || [],
+    })))
+  }
 
   useEffect(() => {
     async function load() {
@@ -171,6 +187,7 @@ export function Contracts({ user }: { user: User }) {
             value={[...activeDepartments]}
             onChange={next => setActiveDepartments(new Set(next))}
             options={departmentOptions}
+            footerAction={{ label: t.manageDepartments, onClick: () => setManageOpen(true) }}
           />
         )}
         {allTags.length > 0 && (
@@ -352,6 +369,14 @@ export function Contracts({ user }: { user: User }) {
           onCreated={(id) => navigate(`/dashboard/contracts/${id}/edit`)}
         />
       )}
+
+      <ManageDepartmentsModal
+        open={manageOpen}
+        onClose={() => setManageOpen(false)}
+        departments={departments}
+        employees={employees}
+        onChanged={() => { setActiveDepartments(new Set()); reload() }}
+      />
     </div>
   )
 }

@@ -63,6 +63,7 @@ export function MultiSelectDropdown({
   options,
   emptyText = 'No options',
   searchPlaceholder,
+  footerAction,
 }: {
   label: string
   value: string[]
@@ -70,6 +71,8 @@ export function MultiSelectDropdown({
   options: MultiSelectOption[]
   emptyText?: string
   searchPlaceholder?: string
+  /** Optional action button rendered at the bottom of the popover (e.g. "Manage…"). */
+  footerAction?: { label: string; onClick: () => void }
 }) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
@@ -210,18 +213,36 @@ export function MultiSelectDropdown({
             })}
           </div>
 
-          {active && (
+          {(active || footerAction) && (
             <div className="border-t p-1.5" style={{ borderColor: 'var(--color-border)' }}>
-              <button
-                type="button"
-                onClick={clear}
-                className="w-full rounded-md px-2 py-1 text-left text-xs"
-                style={{ color: 'var(--color-text-secondary)' }}
-                onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
-                onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
-              >
-                Clear selection
-              </button>
+              {active && (
+                <button
+                  type="button"
+                  onClick={clear}
+                  className="w-full rounded-md px-2 py-1 text-left text-xs"
+                  style={{ color: 'var(--color-text-secondary)' }}
+                  onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
+                  onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
+                >
+                  Clear selection
+                </button>
+              )}
+              {footerAction && (
+                <button
+                  type="button"
+                  onClick={() => { setOpen(false); footerAction.onClick() }}
+                  className="flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-xs"
+                  style={{ color: 'var(--color-text-secondary)' }}
+                  onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
+                  onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="3" />
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                  </svg>
+                  {footerAction.label}
+                </button>
+              )}
             </div>
           )}
         </div>
