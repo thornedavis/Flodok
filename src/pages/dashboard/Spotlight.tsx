@@ -7,8 +7,10 @@ import type { Lang, Translations } from '../../lib/translations'
 import type { User, SpotlightPost, SpotlightStatus, SpotlightPriority } from '../../types/aliases'
 
 type StatusFilter = 'all' | SpotlightStatus
-type PriorityFilter = 'all' | SpotlightPriority
-type SortBy = 'newest' | 'oldest' | 'republished'
+// Single "view" enum that the dropdown drives. Each option sets both the
+// priority filter and the sort order in one click. Mutually exclusive — no
+// matrix of priority × sort combinations to think about.
+type ViewMode = 'newest' | 'oldest' | 'republished' | 'critical' | 'important' | 'fyi'
 
 type PostWithStats = SpotlightPost & {
   view_count: number
@@ -21,8 +23,7 @@ export function Spotlight({ user }: { user: User }) {
   const [posts, setPosts] = useState<PostWithStats[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<StatusFilter>('all')
-  const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('all')
-  const [sortBy, setSortBy] = useState<SortBy>('newest')
+  const [view, setView] = useState<ViewMode>('newest')
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -103,10 +104,18 @@ export function Spotlight({ user }: { user: User }) {
     loadData()
   }
 
-  // Apply status + priority filter, then sort.
+  // Resolve the active view into a priority filter + sort order.
+  const priorityFilter: SpotlightPriority | null =
+    view === 'critical' ? 'critical' :
+    view === 'important' ? 'important' :
+    view === 'fyi' ? 'fyi' : null
+  const sortBy: 'newest' | 'oldest' | 'republished' =
+    view === 'oldest' ? 'oldest' :
+    view === 'republished' ? 'republished' : 'newest'
+
   const filtered = posts
     .filter(p => filter === 'all' || p.status === filter)
-    .filter(p => priorityFilter === 'all' || p.priority === priorityFilter)
+    .filter(p => priorityFilter === null || p.priority === priorityFilter)
     .slice()
     .sort((a, b) => {
       if (sortBy === 'oldest') return a.created_at.localeCompare(b.created_at)
@@ -132,48 +141,38 @@ export function Spotlight({ user }: { user: User }) {
         </button>
       </div>
 
-      {/* Status filter (primary) */}
-      <div className="mb-3 flex flex-wrap gap-2">
-        {([
-          ['all', t.spotlightFilterAll],
-          ['draft', t.spotlightFilterDraft],
-          ['scheduled', t.spotlightFilterScheduled],
-          ['published', t.spotlightFilterPublished],
-          ['archived', t.spotlightFilterArchived],
-        ] as Array<[StatusFilter, string]>).map(([key, label]) => (
-          <FilterPill key={key} active={filter === key} onClick={() => setFilter(key)}>
-            {label}
-          </FilterPill>
-        ))}
-      </div>
-
-      {/* Priority filter + sort (secondary) */}
+      {/* Status pills + view selector on one row */}
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-2">
           {([
-            ['all', t.spotlightFilterAllPriorities],
-            ['critical', t.spotlightPriorityCritical],
-            ['important', t.spotlightPriorityImportant],
-            ['fyi', t.spotlightPriorityFyi],
-          ] as Array<[PriorityFilter, string]>).map(([key, label]) => (
-            <FilterPill key={key} active={priorityFilter === key} onClick={() => setPriorityFilter(key)}>
+            ['all', t.spotlightFilterAll],
+            ['draft', t.spotlightFilterDraft],
+            ['scheduled', t.spotlightFilterScheduled],
+            ['published', t.spotlightFilterPublished],
+            ['archived', t.spotlightFilterArchived],
+          ] as Array<[StatusFilter, string]>).map(([key, label]) => (
+            <FilterPill key={key} active={filter === key} onClick={() => setFilter(key)}>
               {label}
             </FilterPill>
           ))}
         </div>
-        <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-          <span>{t.spotlightSortLabel}</span>
-          <select
-            value={sortBy}
-            onChange={e => setSortBy(e.target.value as SortBy)}
-            className="rounded-md border px-2 py-1 text-xs"
-            style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
-          >
+        <select
+          value={view}
+          onChange={e => setView(e.target.value as ViewMode)}
+          className="rounded-md border px-2 py-1 text-xs"
+          style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+        >
+          <optgroup label={t.spotlightSortLabel}>
             <option value="newest">{t.spotlightSortNewest}</option>
             <option value="oldest">{t.spotlightSortOldest}</option>
             <option value="republished">{t.spotlightSortRepublished}</option>
-          </select>
-        </div>
+          </optgroup>
+          <optgroup label={t.spotlightFieldPriority}>
+            <option value="critical">{t.spotlightPriorityCritical}</option>
+            <option value="important">{t.spotlightPriorityImportant}</option>
+            <option value="fyi">{t.spotlightPriorityFyi}</option>
+          </optgroup>
+        </select>
       </div>
 
       {filtered.length === 0 ? (
@@ -238,65 +237,52 @@ function PostRow({
       onMouseOver={e => { e.currentTarget.style.borderColor = 'var(--color-border-strong, var(--color-border))' }}
       onMouseOut={e => { e.currentTarget.style.borderColor = 'var(--color-border)' }}
     >
-      {/* Mobile: full-width square thumbnail above content. */}
-      {post.image_url && (
-        <img
-          src={post.image_url}
-          alt=""
-          className="mb-3 aspect-square w-full rounded-lg object-cover sm:hidden"
-        />
-      )}
-
-      <div className="flex items-start gap-3">
-        {/* Desktop: small left thumbnail. */}
-        {post.image_url && (
-          <img
-            src={post.image_url}
-            alt=""
-            className="hidden h-20 w-20 shrink-0 rounded-lg object-cover sm:block"
-          />
-        )}
-
-        <div className="flex min-w-0 flex-1 items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <div className="mb-1 flex flex-wrap items-center gap-2">
-              <PriorityPill priority={post.priority as SpotlightPriority} t={t} />
-              <StatusPill status={post.status as SpotlightStatus} t={t} />
-              {post.republish_count > 0 && (
-                <RepublishCountPill count={post.republish_count} t={t} />
-              )}
-            </div>
-            <h3 className="truncate text-base font-semibold" style={{ color: 'var(--color-text)' }}>
-              {post.title}
-            </h3>
-            <p className="mt-1 line-clamp-2 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-              {post.what_happened}
-            </p>
-            <p className="mt-2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-              {datelineLabel(post, t, lang)}
-            </p>
-          </div>
-          <div className="flex shrink-0 items-start gap-2">
-            {post.status === 'published' && post.requires_acknowledgement && (
-              <span className="whitespace-nowrap pt-1.5 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-                {t.spotlightAcknowledgements(post.ack_count, post.view_count || post.ack_count)}
-              </span>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          {post.image_url && (
+            <img
+              src={post.image_url}
+              alt=""
+              className="mb-3 h-20 w-20 rounded-lg object-cover"
+            />
+          )}
+          <div className="mb-1 flex flex-wrap items-center gap-2">
+            <PriorityPill priority={post.priority as SpotlightPriority} t={t} />
+            <StatusPill status={post.status as SpotlightStatus} t={t} />
+            {post.republish_count > 0 && (
+              <RepublishCountPill count={post.republish_count} t={t} />
             )}
-            {post.status === 'published' && (
-              <IconButton
-                ariaLabel={t.spotlightRepublish}
-                onClick={onRepublish}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="17 1 21 5 17 9" />
-                  <path d="M3 11V9a4 4 0 0 1 4-4h14" />
-                  <polyline points="7 23 3 19 7 15" />
-                  <path d="M21 13v2a4 4 0 0 1-4 4H3" />
-                </svg>
-              </IconButton>
-            )}
-            <RowMenu items={items} ariaLabel={t.spotlightRowMenuAria} />
           </div>
+          <h3 className="truncate text-base font-semibold" style={{ color: 'var(--color-text)' }}>
+            {post.title}
+          </h3>
+          <p className="mt-1 line-clamp-2 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+            {post.what_happened}
+          </p>
+          <p className="mt-2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+            {datelineLabel(post, t, lang)}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-start gap-2">
+          {post.status === 'published' && post.requires_acknowledgement && (
+            <span className="whitespace-nowrap pt-1.5 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+              {t.spotlightAcknowledgements(post.ack_count, post.view_count || post.ack_count)}
+            </span>
+          )}
+          {post.status === 'published' && (
+            <IconButton
+              ariaLabel={t.spotlightRepublish}
+              onClick={onRepublish}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="17 1 21 5 17 9" />
+                <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+                <polyline points="7 23 3 19 7 15" />
+                <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+              </svg>
+            </IconButton>
+          )}
+          <RowMenu items={items} ariaLabel={t.spotlightRowMenuAria} />
         </div>
       </div>
     </div>
