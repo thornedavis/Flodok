@@ -166,15 +166,24 @@ export function SOPs({ user }: { user: User }) {
 
   return (
     <div>
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.sopsTitle}</h1>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="shrink-0 rounded-lg px-4 py-2 text-sm font-medium text-white"
-          style={{ backgroundColor: 'var(--color-primary)' }}
-        >
-          {t.createSop}
-        </button>
+        <div className="flex shrink-0 items-center gap-3">
+          <div className="w-44 sm:w-64">
+            <FilterSearchInput
+              value={searchQuery}
+              onChange={setSearchQuery}
+              placeholder={t.searchSopsPlaceholder}
+            />
+          </div>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="rounded-lg px-4 py-2 text-sm font-medium text-white"
+            style={{ backgroundColor: 'var(--color-primary)' }}
+          >
+            {t.createSop}
+          </button>
+        </div>
       </div>
 
       {/* Filter bar */}
@@ -228,26 +237,17 @@ export function SOPs({ user }: { user: User }) {
             {t.clearAllFilters}
           </button>
         )}
-        <div className="ml-auto flex items-center gap-2">
-          <div className="w-44 sm:w-64">
-            <FilterSearchInput
-              value={searchQuery}
-              onChange={setSearchQuery}
-              placeholder={t.searchSopsPlaceholder}
-            />
-          </div>
-          <select
-            value={sortBy}
-            onChange={e => setSortBy(e.target.value as typeof sortBy)}
-            className="rounded-md border px-2 py-1 text-xs"
-            style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
-            aria-label={t.sortLabel}
-          >
-            <option value="last_edited">{t.sortLastEdited}</option>
-            <option value="newest">{t.sortNewest}</option>
-            <option value="oldest">{t.sortOldest}</option>
-          </select>
-        </div>
+        <select
+          value={sortBy}
+          onChange={e => setSortBy(e.target.value as typeof sortBy)}
+          className="ml-auto rounded-md border px-2 py-1 text-xs"
+          style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+          aria-label={t.sortLabel}
+        >
+          <option value="last_edited">{t.sortLastEdited}</option>
+          <option value="newest">{t.sortNewest}</option>
+          <option value="oldest">{t.sortOldest}</option>
+        </select>
       </div>
 
       <div>
