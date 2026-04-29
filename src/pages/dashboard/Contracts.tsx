@@ -182,6 +182,7 @@ export function Contracts({ user }: { user: User }) {
       key: 'sort',
       label: t.sortLabel,
       value: sortBy,
+      defaultValue: 'last_edited',
       options: [
         { id: 'last_edited', label: t.sortLastEdited },
         { id: 'newest', label: t.sortNewest },

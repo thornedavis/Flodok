@@ -275,6 +275,8 @@ export type FilterPanelSection =
       label: string
       icon?: ReactNode
       value: string
+      /** If provided, the filter is treated as active when value !== defaultValue. */
+      defaultValue?: string
       options: { id: string; label: string }[]
       onChange: (next: string) => void
     }
@@ -292,11 +294,13 @@ export function FilterPanel({
   const triggerRef = useRef<HTMLButtonElement>(null)
   const [placement, setPlacement] = useState<'below' | 'above'>('below')
 
-  // Active-count: total of selected options across multiselect sections.
-  // Single-select sections aren't counted because there's always one
-  // "default" option active and including them would be misleading.
+  // Active-count: selected options across multiselect sections, plus +1 for
+  // each select section whose value differs from its declared default. Select
+  // sections without a defaultValue aren't counted (sort defaults are
+  // ambiguous unless declared).
   const activeCount = sections.reduce((n, s) => {
     if (s.type === 'multiselect') return n + s.value.length
+    if (s.type === 'select' && s.defaultValue !== undefined && s.value !== s.defaultValue) return n + 1
     return n
   }, 0)
   const active = activeCount > 0

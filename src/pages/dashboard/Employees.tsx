@@ -157,6 +157,7 @@ export function Employees({ user }: { user: User }) {
       key: 'sort',
       label: t.sortLabel,
       value: sortBy,
+      defaultValue: 'name',
       options: [
         { id: 'name', label: t.sortNameAsc },
         { id: 'recently_added', label: t.sortRecentlyAdded },

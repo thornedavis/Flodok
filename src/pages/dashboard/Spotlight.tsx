@@ -3,15 +3,14 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
 import { formatRelativeTime } from '../../lib/relativeTime'
-import { FilterPill } from '../../components/FilterControls'
+import { FilterPill, FilterPanel, FilterSearchInput } from '../../components/FilterControls'
+import type { FilterPanelSection } from '../../components/FilterControls'
 import type { Lang, Translations } from '../../lib/translations'
 import type { User, SpotlightPost, SpotlightStatus, SpotlightPriority } from '../../types/aliases'
 
 type StatusFilter = 'all' | SpotlightStatus
-// Single "view" enum that the dropdown drives. Each option sets both the
-// priority filter and the sort order in one click. Mutually exclusive — no
-// matrix of priority × sort combinations to think about.
-type ViewMode = 'newest' | 'oldest' | 'republished' | 'critical' | 'important' | 'fyi'
+type PriorityFilter = 'all' | SpotlightPriority
+type SortBy = 'newest' | 'oldest' | 'republished'
 
 type PostWithStats = SpotlightPost & {
   view_count: number
@@ -24,7 +23,9 @@ export function Spotlight({ user }: { user: User }) {
   const [posts, setPosts] = useState<PostWithStats[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<StatusFilter>('all')
-  const [view, setView] = useState<ViewMode>('newest')
+  const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('all')
+  const [sortBy, setSortBy] = useState<SortBy>('newest')
+  const [searchQuery, setSearchQuery] = useState('')
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -105,24 +106,52 @@ export function Spotlight({ user }: { user: User }) {
     loadData()
   }
 
-  // Resolve the active view into a priority filter + sort order.
-  const priorityFilter: SpotlightPriority | null =
-    view === 'critical' ? 'critical' :
-    view === 'important' ? 'important' :
-    view === 'fyi' ? 'fyi' : null
-  const sortBy: 'newest' | 'oldest' | 'republished' =
-    view === 'oldest' ? 'oldest' :
-    view === 'republished' ? 'republished' : 'newest'
-
   const filtered = posts
     .filter(p => filter === 'all' || p.status === filter)
-    .filter(p => priorityFilter === null || p.priority === priorityFilter)
+    .filter(p => priorityFilter === 'all' || p.priority === priorityFilter)
+    .filter(p => {
+      const q = searchQuery.trim().toLowerCase()
+      if (!q) return true
+      return p.title.toLowerCase().includes(q) ||
+        p.what_happened.toLowerCase().includes(q) ||
+        p.what_to_do_instead.toLowerCase().includes(q)
+    })
     .slice()
     .sort((a, b) => {
       if (sortBy === 'oldest') return a.created_at.localeCompare(b.created_at)
       if (sortBy === 'republished') return b.republish_count - a.republish_count
       return b.created_at.localeCompare(a.created_at)
     })
+
+  const filterSections: FilterPanelSection[] = [
+    {
+      type: 'select' as const,
+      key: 'priority',
+      label: t.spotlightFieldPriority,
+      value: priorityFilter,
+      defaultValue: 'all',
+      options: [
+        { id: 'all', label: t.spotlightFilterAllPriorities },
+        { id: 'critical', label: t.spotlightPriorityCritical },
+        { id: 'important', label: t.spotlightPriorityImportant },
+        { id: 'fyi', label: t.spotlightPriorityFyi },
+      ],
+      onChange: (next: string) => setPriorityFilter(next as PriorityFilter),
+    },
+    {
+      type: 'select' as const,
+      key: 'sort',
+      label: t.sortLabel,
+      value: sortBy,
+      defaultValue: 'newest',
+      options: [
+        { id: 'newest', label: t.sortNewest },
+        { id: 'oldest', label: t.sortOldest },
+        { id: 'republished', label: t.spotlightSortRepublished },
+      ],
+      onChange: (next: string) => setSortBy(next as SortBy),
+    },
+  ]
 
   if (loading) return <div style={{ color: 'var(--color-text-secondary)' }}>{t.loading}</div>
 
@@ -142,38 +171,33 @@ export function Spotlight({ user }: { user: User }) {
         </button>
       </div>
 
-      {/* Status pills + view selector on one row */}
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap gap-2">
-          {([
-            ['all', t.spotlightFilterAll, posts.length],
-            ['draft', t.spotlightFilterDraft, posts.filter(p => p.status === 'draft').length],
-            ['scheduled', t.spotlightFilterScheduled, posts.filter(p => p.status === 'scheduled').length],
-            ['published', t.spotlightFilterPublished, posts.filter(p => p.status === 'published').length],
-            ['archived', t.spotlightFilterArchived, posts.filter(p => p.status === 'archived').length],
-          ] as Array<[StatusFilter, string, number]>).map(([key, label, count]) => (
-            <FilterPill key={key} active={filter === key} onClick={() => setFilter(key)} count={count}>
-              {label}
-            </FilterPill>
-          ))}
+      {/* Filter bar */}
+      <div className="mb-5 flex flex-wrap items-center gap-2">
+        {([
+          ['all', t.spotlightFilterAll, posts.length],
+          ['draft', t.spotlightFilterDraft, posts.filter(p => p.status === 'draft').length],
+          ['scheduled', t.spotlightFilterScheduled, posts.filter(p => p.status === 'scheduled').length],
+          ['published', t.spotlightFilterPublished, posts.filter(p => p.status === 'published').length],
+          ['archived', t.spotlightFilterArchived, posts.filter(p => p.status === 'archived').length],
+        ] as Array<[StatusFilter, string, number]>).map(([key, label, count]) => (
+          <FilterPill key={key} active={filter === key} onClick={() => setFilter(key)} count={count}>
+            {label}
+          </FilterPill>
+        ))}
+        <div className="ml-auto flex items-center gap-2">
+          <div className="w-44 sm:w-64">
+            <FilterSearchInput
+              value={searchQuery}
+              onChange={setSearchQuery}
+              placeholder={t.spotlightSearchPlaceholder}
+            />
+          </div>
+          <FilterPanel
+            triggerLabel={t.filterButtonLabel}
+            sections={filterSections}
+            onReset={() => { setPriorityFilter('all'); setSortBy('newest') }}
+          />
         </div>
-        <select
-          value={view}
-          onChange={e => setView(e.target.value as ViewMode)}
-          className="rounded-md border px-2 py-1 text-xs"
-          style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
-        >
-          <optgroup label={t.spotlightSortLabel}>
-            <option value="newest">{t.spotlightSortNewest}</option>
-            <option value="oldest">{t.spotlightSortOldest}</option>
-            <option value="republished">{t.spotlightSortRepublished}</option>
-          </optgroup>
-          <optgroup label={t.spotlightFieldPriority}>
-            <option value="critical">{t.spotlightPriorityCritical}</option>
-            <option value="important">{t.spotlightPriorityImportant}</option>
-            <option value="fyi">{t.spotlightPriorityFyi}</option>
-          </optgroup>
-        </select>
       </div>
 
       {filtered.length === 0 ? (
