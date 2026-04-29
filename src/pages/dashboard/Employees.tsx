@@ -24,6 +24,7 @@ export function Employees({ user }: { user: User }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [activeDepartments, setActiveDepartments] = useState<Set<string>>(new Set())
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'trial' | 'suspended' | 'terminated' | 'archived'>('all')
+  const [sortBy, setSortBy] = useState<'name' | 'recently_added'>('name')
   const [empPageSize, setEmpPageSize] = useState(12)
   const [empCurrentPage, setEmpCurrentPage] = useState(1)
   const [manageOpen, setManageOpen] = useState(false)
@@ -106,19 +107,25 @@ export function Employees({ user }: { user: User }) {
     return employees.filter(e => getEmployeeDepts(e).includes(dept)).length
   }
 
-  // Filter
-  const filtered = employees.filter(e => {
-    const empDepts = getEmployeeDepts(e)
-    const matchesStatus = statusFilter === 'all' || e.status === statusFilter
-    const matchesDept = activeDepartments.size === 0 || empDepts.some(d => activeDepartments.has(d))
-    const q = searchQuery.trim().toLowerCase()
-    const matchesSearch = !q ||
-      e.name.toLowerCase().includes(q) ||
-      e.phone.includes(q) ||
-      empDepts.some(d => d.toLowerCase().includes(q)) ||
-      e.email?.toLowerCase().includes(q)
-    return matchesStatus && matchesDept && matchesSearch
-  })
+  // Filter + sort
+  const filtered = employees
+    .filter(e => {
+      const empDepts = getEmployeeDepts(e)
+      const matchesStatus = statusFilter === 'all' || e.status === statusFilter
+      const matchesDept = activeDepartments.size === 0 || empDepts.some(d => activeDepartments.has(d))
+      const q = searchQuery.trim().toLowerCase()
+      const matchesSearch = !q ||
+        e.name.toLowerCase().includes(q) ||
+        e.phone.includes(q) ||
+        empDepts.some(d => d.toLowerCase().includes(q)) ||
+        e.email?.toLowerCase().includes(q)
+      return matchesStatus && matchesDept && matchesSearch
+    })
+    .slice()
+    .sort((a, b) => {
+      if (sortBy === 'recently_added') return b.created_at.localeCompare(a.created_at)
+      return a.name.localeCompare(b.name)
+    })
 
   function getStatusCount(status: 'active' | 'trial' | 'suspended' | 'terminated' | 'archived') {
     return employees.filter(e => e.status === status).length
@@ -190,12 +197,24 @@ export function Employees({ user }: { user: User }) {
             {t.clearAllFilters}
           </button>
         )}
-        <div className="ml-auto w-full sm:w-64">
-          <FilterSearchInput
-            value={searchQuery}
-            onChange={setSearchQuery}
-            placeholder={t.searchEmployeesPlaceholder}
-          />
+        <div className="ml-auto flex items-center gap-2">
+          <div className="w-44 sm:w-64">
+            <FilterSearchInput
+              value={searchQuery}
+              onChange={setSearchQuery}
+              placeholder={t.searchEmployeesPlaceholder}
+            />
+          </div>
+          <select
+            value={sortBy}
+            onChange={e => setSortBy(e.target.value as typeof sortBy)}
+            className="rounded-md border px-2 py-1 text-xs"
+            style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+            aria-label={t.sortLabel}
+          >
+            <option value="name">{t.sortNameAsc}</option>
+            <option value="recently_added">{t.sortRecentlyAdded}</option>
+          </select>
         </div>
       </div>
 

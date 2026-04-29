@@ -622,6 +622,13 @@ export const translations = {
     employeeStatusArchived: 'Archived',
     employeeStatusAll: 'All',
     filterAll: 'All',
+    sortLabel: 'Sort by',
+    sortNameAsc: 'Name (A→Z)',
+    sortNewest: 'Newest',
+    sortOldest: 'Oldest',
+    sortLastEdited: 'Last edited',
+    sortRecentlyAdded: 'Recently added',
+    sortRecentlyUpdated: 'Recently updated',
 
     // Performance workbench page
     performanceTitle: 'Performance',
@@ -1502,6 +1509,13 @@ export const translations = {
     employeeStatusArchived: 'Diarsipkan',
     employeeStatusAll: 'Semua',
     filterAll: 'Semua',
+    sortLabel: 'Urutkan',
+    sortNameAsc: 'Nama (A→Z)',
+    sortNewest: 'Terbaru',
+    sortOldest: 'Terlama',
+    sortLastEdited: 'Terakhir diedit',
+    sortRecentlyAdded: 'Baru ditambahkan',
+    sortRecentlyUpdated: 'Baru diperbarui',
 
     // Performance workbench page
     performanceTitle: 'Kinerja',

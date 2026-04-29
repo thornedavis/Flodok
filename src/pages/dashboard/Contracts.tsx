@@ -25,6 +25,7 @@ export function Contracts({ user }: { user: User }) {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
   const [manageOpen, setManageOpen] = useState(false)
+  const [sortBy, setSortBy] = useState<'last_edited' | 'newest' | 'oldest'>('last_edited')
 
   async function reload() {
     const [contractResult, empResult] = await Promise.all([
@@ -94,18 +95,25 @@ export function Contracts({ user }: { user: User }) {
 
   const tagNameMap = new Map(allTags.map(t => [t.id, t]))
 
-  const filtered = contracts.filter(c => {
-    const empDepts = c.employee ? getEmployeeDepts(c.employee) : []
-    const matchesDept = activeDepartments.size === 0 || empDepts.some(d => activeDepartments.has(d))
-    const matchesStatus = activeStatuses.size === 0 || activeStatuses.has(c.status)
-    const matchesTags = activeTags.size === 0 || c.tagIds.some(tid => activeTags.has(tid))
-    const q = searchQuery.trim().toLowerCase()
-    const matchesSearch = !q ||
-      c.title.toLowerCase().includes(q) ||
-      c.employee?.name.toLowerCase().includes(q) ||
-      empDepts.some(d => d.toLowerCase().includes(q))
-    return matchesDept && matchesStatus && matchesTags && matchesSearch
-  })
+  const filtered = contracts
+    .filter(c => {
+      const empDepts = c.employee ? getEmployeeDepts(c.employee) : []
+      const matchesDept = activeDepartments.size === 0 || empDepts.some(d => activeDepartments.has(d))
+      const matchesStatus = activeStatuses.size === 0 || activeStatuses.has(c.status)
+      const matchesTags = activeTags.size === 0 || c.tagIds.some(tid => activeTags.has(tid))
+      const q = searchQuery.trim().toLowerCase()
+      const matchesSearch = !q ||
+        c.title.toLowerCase().includes(q) ||
+        c.employee?.name.toLowerCase().includes(q) ||
+        empDepts.some(d => d.toLowerCase().includes(q))
+      return matchesDept && matchesStatus && matchesTags && matchesSearch
+    })
+    .slice()
+    .sort((a, b) => {
+      if (sortBy === 'newest') return b.created_at.localeCompare(a.created_at)
+      if (sortBy === 'oldest') return a.created_at.localeCompare(b.created_at)
+      return (b.updated_at || b.created_at).localeCompare(a.updated_at || a.created_at)
+    })
 
   async function handleDuplicate(contract: ContractWithEmployee) {
     const { data, error } = await supabase
@@ -215,12 +223,25 @@ export function Contracts({ user }: { user: User }) {
             {t.clearAllFilters}
           </button>
         )}
-        <div className="ml-auto w-full sm:w-64">
-          <FilterSearchInput
-            value={searchQuery}
-            onChange={setSearchQuery}
-            placeholder={t.searchContractsPlaceholder}
-          />
+        <div className="ml-auto flex items-center gap-2">
+          <div className="w-44 sm:w-64">
+            <FilterSearchInput
+              value={searchQuery}
+              onChange={setSearchQuery}
+              placeholder={t.searchContractsPlaceholder}
+            />
+          </div>
+          <select
+            value={sortBy}
+            onChange={e => setSortBy(e.target.value as typeof sortBy)}
+            className="rounded-md border px-2 py-1 text-xs"
+            style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+            aria-label={t.sortLabel}
+          >
+            <option value="last_edited">{t.sortLastEdited}</option>
+            <option value="newest">{t.sortNewest}</option>
+            <option value="oldest">{t.sortOldest}</option>
+          </select>
         </div>
       </div>
 
