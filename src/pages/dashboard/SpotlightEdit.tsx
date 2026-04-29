@@ -29,8 +29,6 @@ type FormState = {
   pinned: boolean
   status: SpotlightStatus
   image_url: string
-  link_url: string
-  link_label: string
 }
 
 const DEFAULT_FORM: FormState = {
@@ -48,8 +46,6 @@ const DEFAULT_FORM: FormState = {
   pinned: false,
   status: 'draft',
   image_url: '',
-  link_url: '',
-  link_label: '',
 }
 
 export function SpotlightEdit({ user }: { user: User }) {
@@ -219,13 +215,21 @@ export function SpotlightEdit({ user }: { user: User }) {
           />
         </Field>
 
-        <Field label={t.spotlightFieldWhatToDo} required>
+        <Field label={t.spotlightFieldWhatToDo} required hint={t.spotlightTextareaLinkHint}>
           <textarea
             value={form.what_to_do_instead}
             onChange={e => update('what_to_do_instead', e.target.value)}
             rows={3}
             className="w-full rounded-lg border px-3 py-2 text-sm"
             style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+          />
+        </Field>
+
+        <Field label={t.spotlightFieldImage} hint={t.spotlightFieldImageHelp}>
+          <ImageField
+            value={form.image_url}
+            onChange={v => update('image_url', v)}
+            t={t}
           />
         </Field>
 
@@ -268,12 +272,19 @@ export function SpotlightEdit({ user }: { user: User }) {
           </Field>
         </div>
 
-        <CheckboxField
-          label={t.spotlightFieldRequiresAck}
-          hint={t.spotlightFieldRequiresAckHelp}
-          checked={form.requires_acknowledgement}
-          onChange={v => update('requires_acknowledgement', v)}
-        />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <CheckboxField
+            label={t.spotlightFieldRequiresAck}
+            hint={t.spotlightFieldRequiresAckHelp}
+            checked={form.requires_acknowledgement}
+            onChange={v => update('requires_acknowledgement', v)}
+          />
+          <CheckboxField
+            label={t.spotlightFieldPinned}
+            checked={form.pinned}
+            onChange={v => update('pinned', v)}
+          />
+        </div>
 
         <Field label={t.spotlightFieldVisibility}>
           <div className="space-y-2">
@@ -314,38 +325,6 @@ export function SpotlightEdit({ user }: { user: User }) {
           </div>
         </Field>
 
-        <Field label={t.spotlightFieldImage} hint={t.spotlightFieldImageHelp}>
-          <ImageField
-            value={form.image_url}
-            onChange={v => update('image_url', v)}
-            t={t}
-          />
-        </Field>
-
-        <div className="grid gap-4 sm:grid-cols-[2fr_1fr]">
-          <Field label={t.spotlightFieldLinkUrl}>
-            <input
-              type="url"
-              inputMode="url"
-              value={form.link_url}
-              onChange={e => update('link_url', e.target.value)}
-              placeholder="https://…"
-              className="w-full rounded-lg border px-3 py-2 text-sm"
-              style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
-            />
-          </Field>
-          <Field label={t.spotlightFieldLinkLabel}>
-            <input
-              type="text"
-              value={form.link_label}
-              onChange={e => update('link_label', e.target.value)}
-              placeholder={t.spotlightFieldLinkLabelPlaceholder}
-              className="w-full rounded-lg border px-3 py-2 text-sm"
-              style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
-            />
-          </Field>
-        </div>
-
         <Field label={t.spotlightFieldPublishAt} hint={t.spotlightFieldPublishAtHelp}>
           <DateTimePicker
             value={form.effective_from}
@@ -353,12 +332,6 @@ export function SpotlightEdit({ user }: { user: User }) {
             placeholder={t.spotlightPublishAtPlaceholder}
           />
         </Field>
-
-        <CheckboxField
-          label={t.spotlightFieldPinned}
-          checked={form.pinned}
-          onChange={v => update('pinned', v)}
-        />
       </div>
 
       <div className="mt-6 flex flex-wrap gap-3">
@@ -441,8 +414,6 @@ function rowToForm(p: SpotlightPost): FormState {
     pinned: p.pinned,
     status: p.status as SpotlightStatus,
     image_url: p.image_url ?? '',
-    link_url: p.link_url ?? '',
-    link_label: p.link_label ?? '',
   }
 }
 
@@ -463,8 +434,6 @@ function formToRow(f: FormState, targetStatus: SpotlightStatus) {
     pinned: f.pinned,
     status: targetStatus,
     image_url: f.image_url.trim() || null,
-    link_url: f.link_url.trim() || null,
-    link_label: f.link_label.trim() || null,
   }
 }
 

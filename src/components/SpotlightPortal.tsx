@@ -23,8 +23,6 @@ export type SpotlightFeedPost = {
   what_to_do_instead: string
   who_applies_note: string | null
   image_url: string | null
-  link_url: string | null
-  link_label: string | null
   priority: SpotlightPriority
   display_mode: SpotlightDisplayMode
   requires_acknowledgement: boolean
@@ -143,8 +141,6 @@ function PostCard({ post, t, onAcknowledge }: {
       <Section label={t.spotlightWhatToDoLabel} body={post.what_to_do_instead} />
       {post.who_applies_note && <Section label={t.spotlightWhoAppliesLabel} body={post.who_applies_note} />}
 
-      {post.link_url && <LinkButton url={post.link_url} label={post.link_label} t={t} />}
-
       {post.requires_acknowledgement && !acknowledged && (
         <button
           onClick={() => onAcknowledge(post.id)}
@@ -163,33 +159,50 @@ function PostCard({ post, t, onAcknowledge }: {
   )
 }
 
-function LinkButton({ url, label, t }: { url: string; label: string | null; t: Translations }) {
-  return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="mt-3 inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors"
-      style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-    >
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-      </svg>
-      {label || t.spotlightOpenLink}
-    </a>
-  )
-}
-
 function Section({ label, body }: { label: string; body: string }) {
   return (
     <div className="mt-2">
       <div className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-tertiary)' }}>
         {label}
       </div>
-      <p className="mt-0.5 whitespace-pre-wrap text-sm" style={{ color: 'var(--color-text)' }}>{body}</p>
+      <p className="mt-0.5 whitespace-pre-wrap text-sm" style={{ color: 'var(--color-text)' }}>
+        {renderWithLinks(body)}
+      </p>
     </div>
   )
+}
+
+// Splits text into runs and turns http(s) URLs into anchor tags. Trailing
+// sentence punctuation (. , ; : ! ? ) ]) is excluded from the linked URL so
+// "see https://example.com." doesn't break the link with a trailing period.
+const URL_RE = /https?:\/\/[^\s]+/g
+function renderWithLinks(text: string): React.ReactNode[] {
+  const parts: React.ReactNode[] = []
+  let lastIndex = 0
+  let match: RegExpExecArray | null
+  URL_RE.lastIndex = 0
+  while ((match = URL_RE.exec(text)) !== null) {
+    if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index))
+    const raw = match[0]
+    const trailing = raw.match(/[.,;:!?)\]]+$/)?.[0] ?? ''
+    const url = trailing ? raw.slice(0, -trailing.length) : raw
+    parts.push(
+      <a
+        key={`${match.index}-${url}`}
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="underline"
+        style={{ color: 'var(--color-primary)' }}
+      >
+        {url}
+      </a>
+    )
+    if (trailing) parts.push(trailing)
+    lastIndex = match.index + raw.length
+  }
+  if (lastIndex < text.length) parts.push(text.slice(lastIndex))
+  return parts
 }
 
 // ─── Banner ─────────────────────────────────────────────
@@ -320,8 +333,6 @@ export function SpotlightModal({
         <Section label={t.spotlightWhatHappenedLabel} body={current.what_happened} />
         <Section label={t.spotlightWhatToDoLabel} body={current.what_to_do_instead} />
         {current.who_applies_note && <Section label={t.spotlightWhoAppliesLabel} body={current.who_applies_note} />}
-
-        {current.link_url && <LinkButton url={current.link_url} label={current.link_label} t={t} />}
 
         <div className="mt-5 flex justify-end">
           <button
