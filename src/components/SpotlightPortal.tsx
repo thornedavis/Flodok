@@ -18,7 +18,6 @@ import type { SpotlightPriority, SpotlightDisplayMode } from '../types/aliases'
 export type SpotlightFeedPost = {
   id: string
   title: string
-  posted_as: string | null
   author_name: string
   what_happened: string
   what_to_do_instead: string
@@ -111,7 +110,7 @@ function PostCard({ post, t, onAcknowledge }: {
   t: Translations
   onAcknowledge: (postId: string) => void
 }) {
-  const author = post.posted_as || post.author_name || ''
+  const author = post.author_name || ''
   const acknowledged = !!post.acknowledged_at
   return (
     <div
@@ -251,7 +250,7 @@ export function SpotlightModal({
 
   if (!current) return null
 
-  const author = current.posted_as || current.author_name || ''
+  const author = current.author_name || ''
   const close = () => {
     if (current.requires_acknowledgement) onAcknowledge(current.id)
     else onDismiss(current.id)

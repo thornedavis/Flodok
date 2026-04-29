@@ -1360,7 +1360,7 @@ export type Database = {
           id: string
           org_id: string
           pinned: boolean
-          posted_as: string | null
+          posted_as_kind: string
           priority: string
           published_at: string | null
           requires_acknowledgement: boolean
@@ -1383,7 +1383,7 @@ export type Database = {
           id?: string
           org_id: string
           pinned?: boolean
-          posted_as?: string | null
+          posted_as_kind?: string
           priority?: string
           published_at?: string | null
           requires_acknowledgement?: boolean
@@ -1406,7 +1406,7 @@ export type Database = {
           id?: string
           org_id?: string
           pinned?: boolean
-          posted_as?: string | null
+          posted_as_kind?: string
           priority?: string
           published_at?: string | null
           requires_acknowledgement?: boolean
@@ -1669,7 +1669,6 @@ export type Database = {
           first_seen_at: string | null
           id: string
           pinned: boolean
-          posted_as: string | null
           priority: string
           published_at: string | null
           requires_acknowledgement: boolean

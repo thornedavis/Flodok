@@ -2,27 +2,29 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { DepartmentsMultiSelect } from '../../components/DepartmentsMultiSelect'
+import { DateTimePicker } from '../../components/DateTimePicker'
 import { useLang } from '../../contexts/LanguageContext'
 import { getEmployeeDepts } from '../../lib/employee'
+import { useOutletContext } from 'react-router-dom'
+import type { DashboardOutletContext } from '../../components/Layout'
 import type {
   User, Employee, SpotlightPost,
   SpotlightPriority, SpotlightDisplayMode, SpotlightVisibilityScope, SpotlightStatus,
+  SpotlightPostedAsKind,
 } from '../../types/aliases'
 
 type FormState = {
   title: string
   what_happened: string
   what_to_do_instead: string
-  who_applies_note: string
-  posted_as: string
+  posted_as_kind: SpotlightPostedAsKind
   priority: SpotlightPriority
   display_mode: SpotlightDisplayMode
   requires_acknowledgement: boolean
   visibility_scope: SpotlightVisibilityScope
   target_departments: string[]
   target_employee_ids: string[]
-  effective_from: string  // <input type="datetime-local"> value
-  effective_until: string
+  effective_from: string  // datetime-local format ("YYYY-MM-DDTHH:MM"), "" if unset
   pinned: boolean
   status: SpotlightStatus
 }
@@ -31,8 +33,7 @@ const DEFAULT_FORM: FormState = {
   title: '',
   what_happened: '',
   what_to_do_instead: '',
-  who_applies_note: '',
-  posted_as: '',
+  posted_as_kind: 'self',
   priority: 'fyi',
   display_mode: 'bell_only',
   requires_acknowledgement: false,
@@ -40,7 +41,6 @@ const DEFAULT_FORM: FormState = {
   target_departments: [],
   target_employee_ids: [],
   effective_from: '',
-  effective_until: '',
   pinned: false,
   status: 'draft',
 }
@@ -49,6 +49,7 @@ export function SpotlightEdit({ user }: { user: User }) {
   const { t } = useLang()
   const navigate = useNavigate()
   const { id } = useParams<{ id?: string }>()
+  const { org } = useOutletContext<DashboardOutletContext>()
   const isNew = !id
 
   const [form, setForm] = useState<FormState>(DEFAULT_FORM)
@@ -169,7 +170,7 @@ export function SpotlightEdit({ user }: { user: User }) {
       </div>
 
       <div className="space-y-5 rounded-xl border p-5" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)' }}>
-        <Field label={t.spotlightFieldTitle}>
+        <Field label={t.spotlightFieldTitle} required>
           <input
             type="text"
             value={form.title}
@@ -179,7 +180,7 @@ export function SpotlightEdit({ user }: { user: User }) {
           />
         </Field>
 
-        <Field label={t.spotlightFieldWhatHappened}>
+        <Field label={t.spotlightFieldWhatHappened} required>
           <textarea
             value={form.what_happened}
             onChange={e => update('what_happened', e.target.value)}
@@ -189,7 +190,7 @@ export function SpotlightEdit({ user }: { user: User }) {
           />
         </Field>
 
-        <Field label={t.spotlightFieldWhatToDo}>
+        <Field label={t.spotlightFieldWhatToDo} required>
           <textarea
             value={form.what_to_do_instead}
             onChange={e => update('what_to_do_instead', e.target.value)}
@@ -199,25 +200,16 @@ export function SpotlightEdit({ user }: { user: User }) {
           />
         </Field>
 
-        <Field label={t.spotlightFieldWhoApplies}>
-          <input
-            type="text"
-            value={form.who_applies_note}
-            onChange={e => update('who_applies_note', e.target.value)}
+        <Field label={t.spotlightFieldPostedAs}>
+          <select
+            value={form.posted_as_kind}
+            onChange={e => update('posted_as_kind', e.target.value as SpotlightPostedAsKind)}
             className="w-full rounded-lg border px-3 py-2 text-sm"
             style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
-          />
-        </Field>
-
-        <Field label={t.spotlightFieldPostedAs} hint={t.spotlightFieldPostedAsHelp}>
-          <input
-            type="text"
-            value={form.posted_as}
-            onChange={e => update('posted_as', e.target.value)}
-            placeholder={user.name}
-            className="w-full rounded-lg border px-3 py-2 text-sm"
-            style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
-          />
+          >
+            <option value="self">{user.name}</option>
+            <option value="org">{org?.display_name || org?.name || t.spotlightPostedAsOrg}</option>
+          </select>
         </Field>
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -293,26 +285,13 @@ export function SpotlightEdit({ user }: { user: User }) {
           </div>
         </Field>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label={t.spotlightFieldEffectiveFrom}>
-            <input
-              type="datetime-local"
-              value={form.effective_from}
-              onChange={e => update('effective_from', e.target.value)}
-              className="w-full rounded-lg border px-3 py-2 text-sm"
-              style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
-            />
-          </Field>
-          <Field label={t.spotlightFieldEffectiveUntil}>
-            <input
-              type="datetime-local"
-              value={form.effective_until}
-              onChange={e => update('effective_until', e.target.value)}
-              className="w-full rounded-lg border px-3 py-2 text-sm"
-              style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
-            />
-          </Field>
-        </div>
+        <Field label={t.spotlightFieldPublishAt} hint={t.spotlightFieldPublishAtHelp}>
+          <DateTimePicker
+            value={form.effective_from}
+            onChange={v => update('effective_from', v)}
+            placeholder={t.spotlightPublishAtPlaceholder}
+          />
+        </Field>
 
         <CheckboxField
           label={t.spotlightFieldPinned}
@@ -367,8 +346,7 @@ function rowToForm(p: SpotlightPost): FormState {
     title: p.title,
     what_happened: p.what_happened,
     what_to_do_instead: p.what_to_do_instead,
-    who_applies_note: p.who_applies_note ?? '',
-    posted_as: p.posted_as ?? '',
+    posted_as_kind: (p.posted_as_kind as SpotlightPostedAsKind) ?? 'self',
     priority: p.priority as SpotlightPriority,
     display_mode: p.display_mode as SpotlightDisplayMode,
     requires_acknowledgement: p.requires_acknowledgement,
@@ -376,7 +354,6 @@ function rowToForm(p: SpotlightPost): FormState {
     target_departments: p.target_departments ?? [],
     target_employee_ids: p.target_employee_ids ?? [],
     effective_from: isoToLocalInput(p.effective_from),
-    effective_until: isoToLocalInput(p.effective_until),
     pinned: p.pinned,
     status: p.status as SpotlightStatus,
   }
@@ -387,8 +364,7 @@ function formToRow(f: FormState, targetStatus: SpotlightStatus) {
     title: f.title.trim(),
     what_happened: f.what_happened.trim(),
     what_to_do_instead: f.what_to_do_instead.trim(),
-    who_applies_note: f.who_applies_note.trim() || null,
-    posted_as: f.posted_as.trim() || null,
+    posted_as_kind: f.posted_as_kind,
     priority: f.priority,
     display_mode: f.display_mode,
     requires_acknowledgement: f.requires_acknowledgement,
@@ -396,7 +372,7 @@ function formToRow(f: FormState, targetStatus: SpotlightStatus) {
     target_departments: f.visibility_scope === 'departments' ? f.target_departments : [],
     target_employee_ids: f.visibility_scope === 'specific_employees' ? f.target_employee_ids : [],
     effective_from: localInputToIso(f.effective_from),
-    effective_until: localInputToIso(f.effective_until),
+    effective_until: null,
     pinned: f.pinned,
     status: targetStatus,
   }
@@ -416,10 +392,18 @@ function localInputToIso(value: string): string | null {
 
 // ─── Tiny UI primitives ─────────────────────────────────
 
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+function Field({ label, hint, required, children }: {
+  label: string
+  hint?: string
+  required?: boolean
+  children: React.ReactNode
+}) {
   return (
     <div>
-      <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text)' }}>{label}</label>
+      <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+        {label}
+        {required && <span className="ml-0.5" style={{ color: 'var(--color-danger)' }}>*</span>}
+      </label>
       {children}
       {hint && <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{hint}</p>}
     </div>
