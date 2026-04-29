@@ -619,6 +619,8 @@ export const translations = {
     employeeStatusActive: 'Active',
     employeeStatusSuspended: 'Suspended',
     employeeStatusTerminated: 'Terminated',
+    employeeStatusArchived: 'Archived',
+    employeeStatusAll: 'All',
 
     // Performance workbench page
     performanceTitle: 'Performance',
@@ -1496,6 +1498,8 @@ export const translations = {
     employeeStatusActive: 'Aktif',
     employeeStatusSuspended: 'Diskors',
     employeeStatusTerminated: 'Diberhentikan',
+    employeeStatusArchived: 'Diarsipkan',
+    employeeStatusAll: 'Semua',
 
     // Performance workbench page
     performanceTitle: 'Kinerja',

@@ -6,7 +6,7 @@ import { generateSlug, generateAccessToken } from '../../lib/slug'
 import { getAvatarGradient } from '../../lib/avatar'
 import { PhoneInput } from '../../components/PhoneInput'
 import { DepartmentsMultiSelect } from '../../components/DepartmentsMultiSelect'
-import { MultiSelectDropdown, FilterSearchInput } from '../../components/FilterControls'
+import { FilterPill, MultiSelectDropdown, FilterSearchInput } from '../../components/FilterControls'
 import { Modal } from '../../components/Modal'
 import { useLang } from '../../contexts/LanguageContext'
 import { getEmployeeDepts } from '../../lib/employee'
@@ -23,6 +23,7 @@ export function Employees({ user }: { user: User }) {
   const [showAdd, setShowAdd] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [activeDepartments, setActiveDepartments] = useState<Set<string>>(new Set())
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'trial' | 'suspended' | 'terminated' | 'archived'>('all')
   const [empPageSize, setEmpPageSize] = useState(12)
   const [empCurrentPage, setEmpCurrentPage] = useState(1)
   const [manageOpen, setManageOpen] = useState(false)
@@ -151,6 +152,7 @@ export function Employees({ user }: { user: User }) {
   // Filter
   const filtered = employees.filter(e => {
     const empDepts = getEmployeeDepts(e)
+    const matchesStatus = statusFilter === 'all' || e.status === statusFilter
     const matchesDept = activeDepartments.size === 0 || empDepts.some(d => activeDepartments.has(d))
     const q = searchQuery.trim().toLowerCase()
     const matchesSearch = !q ||
@@ -158,8 +160,12 @@ export function Employees({ user }: { user: User }) {
       e.phone.includes(q) ||
       empDepts.some(d => d.toLowerCase().includes(q)) ||
       e.email?.toLowerCase().includes(q)
-    return matchesDept && matchesSearch
+    return matchesStatus && matchesDept && matchesSearch
   })
+
+  function getStatusCount(status: 'active' | 'trial' | 'suspended' | 'terminated' | 'archived') {
+    return employees.filter(e => e.status === status).length
+  }
 
   const empTotalPages = Math.max(1, Math.ceil(filtered.length / empPageSize))
   const paginatedEmployees = filtered.slice((empCurrentPage - 1) * empPageSize, empCurrentPage * empPageSize)
@@ -170,7 +176,17 @@ export function Employees({ user }: { user: User }) {
   if (loading) return <div style={{ color: 'var(--color-text-secondary)' }}>{t.loading}</div>
 
   const departmentOptions = departments.map(d => ({ id: d, label: d, count: getDepartmentCount(d) }))
-  const hasActiveFilters = activeDepartments.size > 0 || searchQuery.length > 0
+  const hasActiveFilters = activeDepartments.size > 0 || searchQuery.length > 0 || statusFilter !== 'all'
+
+  type StatusKey = 'all' | 'active' | 'trial' | 'suspended' | 'terminated' | 'archived'
+  const statusPills: Array<{ key: StatusKey; label: string; count: number }> = [
+    { key: 'all',        label: t.employeeStatusAll,        count: employees.length },
+    { key: 'active',     label: t.employeeStatusActive,     count: getStatusCount('active') },
+    { key: 'trial',      label: t.employeeStatusTrial,      count: getStatusCount('trial') },
+    { key: 'suspended',  label: t.employeeStatusSuspended,  count: getStatusCount('suspended') },
+    { key: 'terminated', label: t.employeeStatusTerminated, count: getStatusCount('terminated') },
+    { key: 'archived',   label: t.employeeStatusArchived,   count: getStatusCount('archived') },
+  ]
 
   return (
     <div>
@@ -192,6 +208,16 @@ export function Employees({ user }: { user: User }) {
 
       {/* Filter bar */}
       <div className="mb-5 flex flex-wrap items-center gap-2">
+        {statusPills.map(p => (
+          <FilterPill
+            key={p.key}
+            active={statusFilter === p.key}
+            onClick={() => setStatusFilter(p.key)}
+            count={p.count}
+          >
+            {p.label}
+          </FilterPill>
+        ))}
         {departments.length > 0 && (
           <MultiSelectDropdown
             label={t.departments}
@@ -216,7 +242,7 @@ export function Employees({ user }: { user: User }) {
         {hasActiveFilters && (
           <button
             type="button"
-            onClick={() => { setActiveDepartments(new Set()); setSearchQuery('') }}
+            onClick={() => { setActiveDepartments(new Set()); setSearchQuery(''); setStatusFilter('all') }}
             className="text-xs font-medium"
             style={{ color: 'var(--color-primary)' }}
           >
