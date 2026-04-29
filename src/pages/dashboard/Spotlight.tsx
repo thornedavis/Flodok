@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
@@ -179,12 +179,30 @@ function PostRow({
   onRepublish: () => void
   onDelete: () => void
 }) {
+  // Action menu items vary by status. Edit isn't here — the card body click
+  // opens the edit page directly.
+  type MenuItem = { label: string; onClick: () => void; danger?: boolean }
+  const items: MenuItem[] = []
+  if (post.status === 'draft') items.push({ label: t.spotlightPublish, onClick: onPublish })
+  if (post.status === 'published') {
+    items.push({ label: t.spotlightRepublish, onClick: onRepublish })
+    items.push({ label: t.spotlightArchive, onClick: onArchive })
+  }
+  if (post.status === 'archived') items.push({ label: t.spotlightUnarchive, onClick: onUnarchive })
+  items.push({ label: t.delete, onClick: onDelete, danger: true })
+
   return (
     <div
-      className="rounded-xl border p-4"
+      role="button"
+      tabIndex={0}
+      onClick={onEdit}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onEdit() } }}
+      className="cursor-pointer rounded-xl border p-4 transition-colors"
       style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)' }}
+      onMouseOver={e => { e.currentTarget.style.borderColor = 'var(--color-border-strong, var(--color-border))' }}
+      onMouseOut={e => { e.currentTarget.style.borderColor = 'var(--color-border)' }}
     >
-      <div className="mb-2 flex items-start justify-between gap-3">
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="mb-1 flex flex-wrap items-center gap-2">
             <PriorityPill priority={post.priority as SpotlightPriority} t={t} />
@@ -203,30 +221,96 @@ function PostRow({
             {post.what_happened}
           </p>
         </div>
-        <div className="flex flex-col items-end gap-1 text-xs whitespace-nowrap">
+        <div className="flex shrink-0 items-start gap-2">
           {post.status === 'published' && post.requires_acknowledgement && (
-            <span style={{ color: 'var(--color-text-secondary)' }}>
+            <span className="whitespace-nowrap pt-1.5 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
               {t.spotlightAcknowledgements(post.ack_count, post.view_count || post.ack_count)}
             </span>
           )}
+          <RowMenu items={items} ariaLabel={t.spotlightRowMenuAria} />
         </div>
       </div>
-      <div className="mt-3 flex flex-wrap gap-2 text-xs">
-        <button onClick={onEdit} className="rounded-md border px-2.5 py-1" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>{t.edit}</button>
-        {post.status === 'draft' && (
-          <button onClick={onPublish} className="rounded-md px-2.5 py-1 text-white" style={{ backgroundColor: 'var(--color-primary)' }}>{t.spotlightPublish}</button>
-        )}
-        {post.status === 'published' && (
-          <>
-            <button onClick={onRepublish} className="rounded-md px-2.5 py-1 text-white" style={{ backgroundColor: 'var(--color-primary)' }}>{t.spotlightRepublish}</button>
-            <button onClick={onArchive} className="rounded-md border px-2.5 py-1" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>{t.spotlightArchive}</button>
-          </>
-        )}
-        {post.status === 'archived' && (
-          <button onClick={onUnarchive} className="rounded-md border px-2.5 py-1" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>{t.spotlightUnarchive}</button>
-        )}
-        <button onClick={onDelete} className="rounded-md border px-2.5 py-1" style={{ borderColor: 'var(--color-border)', color: 'var(--color-danger)' }}>{t.delete}</button>
-      </div>
+    </div>
+  )
+}
+
+function RowMenu({ items, ariaLabel }: {
+  items: { label: string; onClick: () => void; danger?: boolean }[]
+  ariaLabel: string
+}) {
+  const [open, setOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const [placement, setPlacement] = useState<'below' | 'above'>('below')
+
+  // Decide flip direction synchronously, before paint, so the menu doesn't
+  // visibly jump when there's no room below.
+  useLayoutEffect(() => {
+    if (!open) return
+    const rect = triggerRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const estHeight = items.length * 36 + 12
+    const spaceBelow = window.innerHeight - rect.bottom
+    setPlacement(spaceBelow < estHeight && rect.top > spaceBelow ? 'above' : 'below')
+  }, [open, items.length])
+
+  useEffect(() => {
+    if (!open) return
+    function handleClick(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    function handleKey(e: KeyboardEvent) { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', handleClick)
+    document.addEventListener('keydown', handleKey)
+    return () => {
+      document.removeEventListener('mousedown', handleClick)
+      document.removeEventListener('keydown', handleKey)
+    }
+  }, [open])
+
+  return (
+    <div ref={containerRef} className="relative" style={{ position: 'relative' }} onClick={e => e.stopPropagation()}>
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="flex h-8 w-8 items-center justify-center rounded-md transition-colors"
+        style={{ color: 'var(--color-text-tertiary)' }}
+        onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
+        onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
+        aria-label={ariaLabel}
+        aria-haspopup="menu"
+        aria-expanded={open}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+          <circle cx="12" cy="5" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="12" cy="19" r="1.6" />
+        </svg>
+      </button>
+
+      {open && (
+        <div
+          role="menu"
+          className={`absolute right-0 z-40 min-w-[160px] overflow-hidden rounded-lg border shadow-lg ${
+            placement === 'below' ? 'top-full mt-1' : 'bottom-full mb-1'
+          }`}
+          style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-elevated, var(--color-bg))' }}
+        >
+          {items.map((item, i) => (
+            <button
+              key={i}
+              role="menuitem"
+              type="button"
+              onClick={() => { setOpen(false); item.onClick() }}
+              className="block w-full px-3 py-2 text-left text-sm transition-colors"
+              style={{ color: item.danger ? 'var(--color-danger)' : 'var(--color-text)' }}
+              onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
+              onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
