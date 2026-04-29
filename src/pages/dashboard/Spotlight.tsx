@@ -84,6 +84,13 @@ export function Spotlight({ user }: { user: User }) {
     loadData()
   }
 
+  async function handleRepublish(post: PostWithStats) {
+    if (!confirm(t.spotlightRepublishConfirm)) return
+    const { error } = await supabase.rpc('republish_spotlight_post', { p_post_id: post.id })
+    if (error) { alert(error.message); return }
+    loadData()
+  }
+
   async function handleDelete(post: PostWithStats) {
     if (!confirm(t.spotlightDeleteConfirm)) return
     const { error } = await supabase.from('spotlight_posts').delete().eq('id', post.id)
@@ -150,6 +157,7 @@ export function Spotlight({ user }: { user: User }) {
               onPublish={() => handlePublish(p)}
               onArchive={() => handleArchive(p)}
               onUnarchive={() => handleUnarchive(p)}
+              onRepublish={() => handleRepublish(p)}
               onDelete={() => handleDelete(p)}
             />
           ))}
@@ -160,7 +168,7 @@ export function Spotlight({ user }: { user: User }) {
 }
 
 function PostRow({
-  post, t, onEdit, onPublish, onArchive, onUnarchive, onDelete,
+  post, t, onEdit, onPublish, onArchive, onUnarchive, onRepublish, onDelete,
 }: {
   post: PostWithStats
   t: Translations
@@ -168,6 +176,7 @@ function PostRow({
   onPublish: () => void
   onArchive: () => void
   onUnarchive: () => void
+  onRepublish: () => void
   onDelete: () => void
 }) {
   return (
@@ -182,6 +191,9 @@ function PostRow({
             <StatusPill status={post.status as SpotlightStatus} t={t} />
             {post.pinned && (
               <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>📌</span>
+            )}
+            {post.republish_count > 0 && (
+              <RepublishCountPill count={post.republish_count} t={t} />
             )}
           </div>
           <h3 className="truncate text-base font-semibold" style={{ color: 'var(--color-text)' }}>
@@ -205,7 +217,10 @@ function PostRow({
           <button onClick={onPublish} className="rounded-md px-2.5 py-1 text-white" style={{ backgroundColor: 'var(--color-primary)' }}>{t.spotlightPublish}</button>
         )}
         {post.status === 'published' && (
-          <button onClick={onArchive} className="rounded-md border px-2.5 py-1" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>{t.spotlightArchive}</button>
+          <>
+            <button onClick={onRepublish} className="rounded-md px-2.5 py-1 text-white" style={{ backgroundColor: 'var(--color-primary)' }}>{t.spotlightRepublish}</button>
+            <button onClick={onArchive} className="rounded-md border px-2.5 py-1" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>{t.spotlightArchive}</button>
+          </>
         )}
         {post.status === 'archived' && (
           <button onClick={onUnarchive} className="rounded-md border px-2.5 py-1" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>{t.spotlightUnarchive}</button>
@@ -213,6 +228,25 @@ function PostRow({
         <button onClick={onDelete} className="rounded-md border px-2.5 py-1" style={{ borderColor: 'var(--color-border)', color: 'var(--color-danger)' }}>{t.delete}</button>
       </div>
     </div>
+  )
+}
+
+function RepublishCountPill({ count, t }: { count: number; t: Translations }) {
+  // Visual escalation: yellow at 2+, red at 4+. Surfaces "this keeps not
+  // getting fixed" patterns at a glance.
+  let bg = 'color-mix(in srgb, var(--color-primary) 14%, transparent)'
+  let fg = 'var(--color-primary)'
+  if (count >= 4) {
+    bg = 'color-mix(in srgb, var(--color-danger) 14%, transparent)'
+    fg = 'var(--color-danger)'
+  } else if (count >= 2) {
+    bg = 'color-mix(in srgb, #d97706 18%, transparent)'
+    fg = '#d97706'
+  }
+  return (
+    <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={{ backgroundColor: bg, color: fg }}>
+      {t.spotlightRepublishedCount(count)}
+    </span>
   )
 }
 

@@ -29,6 +29,7 @@ export type SpotlightFeedPost = {
   effective_until: string | null
   pinned: boolean
   published_at: string | null
+  republish_count: number
   first_seen_at: string | null
   acknowledged_at: string | null
   dismissed_at: string | null
@@ -120,6 +121,7 @@ function PostCard({ post, t, onAcknowledge }: {
       <div className="mb-2 flex items-start gap-2">
         <PriorityPill priority={post.priority} t={t} />
         {post.pinned && <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>📌</span>}
+        {post.republish_count > 0 && <ReminderPill count={post.republish_count} t={t} />}
         <div className="ml-auto text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
           {author && `${t.spotlightPostedBy} ${author}`}
         </div>
@@ -267,6 +269,7 @@ export function SpotlightModal({
       >
         <div className="mb-3 flex items-center gap-2">
           <PriorityPill priority={current.priority} t={t} />
+          {current.republish_count > 0 && <ReminderPill count={current.republish_count} t={t} />}
           {author && (
             <span className="ml-auto text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
               {t.spotlightPostedBy} {author}
@@ -310,6 +313,24 @@ function PriorityPill({ priority, t }: { priority: SpotlightPriority; t: Transla
   return (
     <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={{ backgroundColor: c.bg, color: c.fg }}>
       {labels[priority]}
+    </span>
+  )
+}
+
+function ReminderPill({ count, t }: { count: number; t: Translations }) {
+  // Visual escalation mirrors the dashboard pill: amber at 2+, danger at 4+.
+  let bg = 'color-mix(in srgb, var(--color-primary) 14%, transparent)'
+  let fg = 'var(--color-primary)'
+  if (count >= 4) {
+    bg = 'color-mix(in srgb, var(--color-danger) 16%, transparent)'
+    fg = 'var(--color-danger)'
+  } else if (count >= 2) {
+    bg = 'color-mix(in srgb, #d97706 18%, transparent)'
+    fg = '#d97706'
+  }
+  return (
+    <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={{ backgroundColor: bg, color: fg }}>
+      {t.spotlightReminderBadge(count + 1)}
     </span>
   )
 }

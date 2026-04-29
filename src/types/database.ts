@@ -1361,6 +1361,8 @@ export type Database = {
           org_id: string
           pinned: boolean
           posted_as_kind: string
+          last_republished_at: string | null
+          republish_count: number
           priority: string
           published_at: string | null
           requires_acknowledgement: boolean
@@ -1381,11 +1383,13 @@ export type Database = {
           effective_from?: string | null
           effective_until?: string | null
           id?: string
+          last_republished_at?: string | null
           org_id: string
           pinned?: boolean
           posted_as_kind?: string
           priority?: string
           published_at?: string | null
+          republish_count?: number
           requires_acknowledgement?: boolean
           status?: string
           target_departments?: string[]
@@ -1404,11 +1408,13 @@ export type Database = {
           effective_from?: string | null
           effective_until?: string | null
           id?: string
+          last_republished_at?: string | null
           org_id?: string
           pinned?: boolean
           posted_as_kind?: string
           priority?: string
           published_at?: string | null
+          republish_count?: number
           requires_acknowledgement?: boolean
           status?: string
           target_departments?: string[]
@@ -1671,12 +1677,17 @@ export type Database = {
           pinned: boolean
           priority: string
           published_at: string | null
+          republish_count: number
           requires_acknowledgement: boolean
           title: string
           what_happened: string
           what_to_do_instead: string
           who_applies_note: string | null
         }[]
+      }
+      republish_spotlight_post: {
+        Args: { p_post_id: string }
+        Returns: undefined
       }
       portal_spotlight_seen: {
         Args: { emp_slug: string; emp_token: string; p_post_id: string }

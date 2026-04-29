@@ -156,10 +156,32 @@ export function SpotlightEdit({ user }: { user: User }) {
     if (newId) navigate('/dashboard/spotlight')
   }
 
+  // Editing an already-published post: save content silently (no re-fire).
+  async function handleSaveContent() {
+    const newId = await save('published')
+    if (newId) navigate('/dashboard/spotlight')
+  }
+
+  // Editing an already-published post: save content AND re-fire to the audience.
+  async function handleSaveAndRepublish() {
+    if (!confirm(t.spotlightRepublishConfirm)) return
+    const ok = await save('published')
+    if (!ok) return
+    setSaving(true)
+    const { error } = await supabase.rpc('republish_spotlight_post', { p_post_id: id! })
+    setSaving(false)
+    if (error) { alert(error.message); return }
+    navigate('/dashboard/spotlight')
+  }
+
   if (loading) return <div style={{ color: 'var(--color-text-secondary)' }}>{t.loading}</div>
 
   // datetime-local strings sort lexicographically.
   const willBeScheduled = !!form.effective_from && form.effective_from > mountedAtLocal
+  // True when editing an already-published post — switches the button bar to
+  // "Save (no republish)" + "Save & republish" so the manager picks whether
+  // to re-fire the announcement after a content edit.
+  const isEditingPublished = !isNew && form.status === 'published'
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -308,32 +330,55 @@ export function SpotlightEdit({ user }: { user: User }) {
         >
           {t.cancel}
         </button>
-        <button
-          onClick={handleSaveDraft}
-          disabled={saving}
-          className="rounded-lg border px-4 py-2 text-sm font-medium"
-          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', opacity: saving ? 0.6 : 1 }}
-        >
-          {t.spotlightSaveDraft}
-        </button>
-        {willBeScheduled && (
-          <button
-            onClick={handleSchedule}
-            disabled={saving}
-            className="rounded-lg border px-4 py-2 text-sm font-medium"
-            style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', opacity: saving ? 0.6 : 1 }}
-          >
-            {t.spotlightSchedule}
-          </button>
+        {isEditingPublished ? (
+          <>
+            <button
+              onClick={handleSaveContent}
+              disabled={saving}
+              className="rounded-lg border px-4 py-2 text-sm font-medium"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', opacity: saving ? 0.6 : 1 }}
+            >
+              {t.spotlightSaveNoRepublish}
+            </button>
+            <button
+              onClick={handleSaveAndRepublish}
+              disabled={saving}
+              className="rounded-lg px-4 py-2 text-sm font-medium text-white"
+              style={{ backgroundColor: 'var(--color-primary)', opacity: saving ? 0.6 : 1 }}
+            >
+              {t.spotlightSaveAndRepublish}
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              onClick={handleSaveDraft}
+              disabled={saving}
+              className="rounded-lg border px-4 py-2 text-sm font-medium"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', opacity: saving ? 0.6 : 1 }}
+            >
+              {t.spotlightSaveDraft}
+            </button>
+            {willBeScheduled && (
+              <button
+                onClick={handleSchedule}
+                disabled={saving}
+                className="rounded-lg border px-4 py-2 text-sm font-medium"
+                style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', opacity: saving ? 0.6 : 1 }}
+              >
+                {t.spotlightSchedule}
+              </button>
+            )}
+            <button
+              onClick={handlePublish}
+              disabled={saving}
+              className="rounded-lg px-4 py-2 text-sm font-medium text-white"
+              style={{ backgroundColor: 'var(--color-primary)', opacity: saving ? 0.6 : 1 }}
+            >
+              {t.spotlightPublish}
+            </button>
+          </>
         )}
-        <button
-          onClick={handlePublish}
-          disabled={saving}
-          className="rounded-lg px-4 py-2 text-sm font-medium text-white"
-          style={{ backgroundColor: 'var(--color-primary)', opacity: saving ? 0.6 : 1 }}
-        >
-          {t.spotlightPublish}
-        </button>
       </div>
     </div>
   )
