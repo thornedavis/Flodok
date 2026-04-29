@@ -118,22 +118,23 @@ function PostCard({ post, t, onAcknowledge }: {
       className="rounded-xl border p-4"
       style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)' }}
     >
-      <div className="mb-2 flex items-start gap-2">
+      <div className="mb-3 flex items-start gap-2">
         <PriorityPill priority={post.priority} t={t} />
         {post.republish_count > 0 && <ReminderPill count={post.republish_count} t={t} />}
         <div className="ml-auto text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
           {author && `${t.spotlightPostedBy} ${author}`}
         </div>
       </div>
-      <h3 className="mb-2 text-base font-semibold" style={{ color: 'var(--color-text)' }}>{post.title}</h3>
 
       {post.image_url && (
         <img
           src={post.image_url}
           alt=""
-          className="mb-3 max-h-80 w-full rounded-lg object-cover"
+          className="mx-auto mb-3 block max-h-96 w-auto max-w-full rounded-lg"
         />
       )}
+
+      <h3 className="mb-2 text-base font-semibold" style={{ color: 'var(--color-text)' }}>{post.title}</h3>
 
       <Section label={t.spotlightWhatHappenedLabel} body={post.what_happened} />
       <Section label={t.spotlightWhatToDoLabel} body={post.what_to_do_instead} />
@@ -318,15 +319,16 @@ export function SpotlightModal({
             </span>
           )}
         </div>
-        <h3 className="mb-3 text-lg font-semibold" style={{ color: 'var(--color-text)' }}>{current.title}</h3>
 
         {current.image_url && (
           <img
             src={current.image_url}
             alt=""
-            className="mb-3 max-h-72 w-full rounded-lg object-cover"
+            className="mx-auto mb-3 block max-h-72 w-auto max-w-full rounded-lg"
           />
         )}
+
+        <h3 className="mb-3 text-lg font-semibold" style={{ color: 'var(--color-text)' }}>{current.title}</h3>
 
         <Section label={t.spotlightWhatHappenedLabel} body={current.what_happened} />
         <Section label={t.spotlightWhatToDoLabel} body={current.what_to_do_instead} />
