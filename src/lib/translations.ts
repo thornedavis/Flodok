@@ -621,6 +621,7 @@ export const translations = {
     employeeStatusTerminated: 'Terminated',
     employeeStatusArchived: 'Archived',
     employeeStatusAll: 'All',
+    filterAll: 'All',
 
     // Performance workbench page
     performanceTitle: 'Performance',
@@ -1500,6 +1501,7 @@ export const translations = {
     employeeStatusTerminated: 'Diberhentikan',
     employeeStatusArchived: 'Diarsipkan',
     employeeStatusAll: 'Semua',
+    filterAll: 'Semua',
 
     // Performance workbench page
     performanceTitle: 'Kinerja',

@@ -158,12 +158,7 @@ export function SOPs({ user }: { user: User }) {
   return (
     <div>
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.sopsTitle}</h1>
-          <p className="mt-1 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-            {t.sopCount(filtered.length)}
-          </p>
-        </div>
+        <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.sopsTitle}</h1>
         <button
           onClick={() => setShowCreateModal(true)}
           className="shrink-0 rounded-lg px-4 py-2 text-sm font-medium text-white"
@@ -175,6 +170,13 @@ export function SOPs({ user }: { user: User }) {
 
       {/* Filter bar */}
       <div className="mb-5 flex flex-wrap items-center gap-2">
+        <FilterPill
+          active={activeStatuses.size === 0}
+          onClick={() => setActiveStatuses(new Set())}
+          count={sops.length}
+        >
+          {t.filterAll}
+        </FilterPill>
         {(['active', 'draft', 'archived'] as const).map(status => (
           <FilterPill
             key={status}
