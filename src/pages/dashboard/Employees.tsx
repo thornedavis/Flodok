@@ -147,20 +147,20 @@ export function Employees({ user }: { user: User }) {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.employeesTitle}</h1>
-        <div className="flex items-center gap-3">
-          <span className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.employeesTitle}</h1>
+          <p className="mt-1 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
             {t.employeeCount(filtered.length)}
-          </span>
-          <button
-            onClick={() => setShowAdd(true)}
-            className="rounded-lg px-4 py-2 text-sm font-medium text-white"
-            style={{ backgroundColor: 'var(--color-primary)' }}
-          >
-            {t.addEmployee}
-          </button>
+          </p>
         </div>
+        <button
+          onClick={() => setShowAdd(true)}
+          className="shrink-0 rounded-lg px-4 py-2 text-sm font-medium text-white"
+          style={{ backgroundColor: 'var(--color-primary)' }}
+        >
+          {t.addEmployee}
+        </button>
       </div>
 
       {/* Filter bar */}
