@@ -145,7 +145,7 @@ function MergeFieldView({ node, extension, selected }: NodeViewProps) {
   const lang = ctx.lang ?? 'en'
 
   const display = def
-    ? resolveMergeField(key, ctx)
+    ? (def.editorDisplay ? def.editorDisplay(ctx, lang) : resolveMergeField(key, ctx))
     : `[unknown: ${key}]`
 
   const label = def ? def.label[lang] : 'Unknown field'

@@ -18,5 +18,15 @@ _Add a short summary of what this SOP covers._
 ## Notes
 
 _Anything else worth documenting._
+
+---
+
+**Acknowledged by:**
+
+Name: **{{employee_name}}**
+
+Signature: {{employee_signature}}
+
+Date: {{employee_sign_date}}
 `
 }

@@ -5,41 +5,64 @@
 // Escape close it. Value flows in/out as a datetime-local string
 // ("YYYY-MM-DDTHH:MM") so the parent form's existing serialization works
 // unchanged. Empty string means "no value".
+//
+// In `mode="date"` the time row and presets are hidden and values are plain
+// "YYYY-MM-DD" strings (matching <input type="date">).
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+
+type Mode = 'datetime' | 'date'
 
 interface Props {
-  value: string                       // datetime-local string, "" if unset
+  value: string                       // datetime-local or date-only string, "" if unset
   onChange: (next: string) => void
   placeholder?: string
   disabled?: boolean
+  mode?: Mode
 }
 
 // Estimated popover height. Used purely for the open-up-vs-down decision —
 // being slightly off only affects which direction we flip, not the layout.
 const POPOVER_HEIGHT_ESTIMATE = 380
+const POPOVER_WIDTH = 300
 
-export function DateTimePicker({ value, onChange, placeholder = 'Pick a date…', disabled }: Props) {
+export function DateTimePicker({ value, onChange, placeholder = 'Pick a date…', disabled, mode = 'datetime' }: Props) {
+  const dateOnly = mode === 'date'
   const [open, setOpen] = useState(false)
-  const containerRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
-  // Vertical placement: below the trigger by default, above if there isn't
-  // enough room (e.g. picker is near the bottom of the viewport).
-  const [placement, setPlacement] = useState<'below' | 'above'>('below')
+  const popoverRef = useRef<HTMLDivElement>(null)
+  // Fixed-position coordinates for the portaled popover. Recomputed on open
+  // and on scroll/resize so the popover stays anchored to the trigger.
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null)
 
   const currentDate = useMemo(() => parseLocalInput(value), [value])
   const [viewYear, setViewYear] = useState(() => (currentDate ?? new Date()).getFullYear())
   const [viewMonth, setViewMonth] = useState(() => (currentDate ?? new Date()).getMonth())
 
-  // Decide flip direction synchronously when opening, before paint, so the
-  // popover never visibly jumps after appearing.
+  // Position the popover relative to the trigger, flipping above when there
+  // isn't enough room below. Runs synchronously before paint so the popover
+  // never visibly jumps after appearing, and re-runs on scroll/resize.
   useLayoutEffect(() => {
     if (!open) return
-    const rect = triggerRef.current?.getBoundingClientRect()
-    if (!rect) return
-    const spaceBelow = window.innerHeight - rect.bottom
-    const spaceAbove = rect.top
-    setPlacement(spaceBelow < POPOVER_HEIGHT_ESTIMATE && spaceAbove > spaceBelow ? 'above' : 'below')
+    function reposition() {
+      const rect = triggerRef.current?.getBoundingClientRect()
+      if (!rect) return
+      const spaceBelow = window.innerHeight - rect.bottom
+      const spaceAbove = rect.top
+      const flipUp = spaceBelow < POPOVER_HEIGHT_ESTIMATE && spaceAbove > spaceBelow
+      const top = flipUp ? rect.top - POPOVER_HEIGHT_ESTIMATE - 4 : rect.bottom + 4
+      // Right-align the popover with the trigger, but keep it within the viewport.
+      const left = Math.max(8, Math.min(window.innerWidth - POPOVER_WIDTH - 8, rect.right - POPOVER_WIDTH))
+      setCoords({ top, left })
+    }
+    reposition()
+    window.addEventListener('scroll', reposition, true)
+    window.addEventListener('resize', reposition)
+    return () => {
+      window.removeEventListener('scroll', reposition, true)
+      window.removeEventListener('resize', reposition)
+    }
   }, [open])
 
   // Reset the visible month when the value jumps (e.g. via Clear or external update).
@@ -50,11 +73,15 @@ export function DateTimePicker({ value, onChange, placeholder = 'Pick a date…'
     }
   }, [value, currentDate])
 
-  // Outside click + Escape close.
+  // Outside click + Escape close. Trigger and portaled popover are both
+  // considered "inside" since they're rendered into separate DOM subtrees.
   useEffect(() => {
     if (!open) return
     function handleClick(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false)
+      const target = e.target as Node
+      if (triggerRef.current?.contains(target)) return
+      if (popoverRef.current?.contains(target)) return
+      setOpen(false)
     }
     function handleKey(e: KeyboardEvent) { if (e.key === 'Escape') setOpen(false) }
     document.addEventListener('mousedown', handleClick)
@@ -66,6 +93,11 @@ export function DateTimePicker({ value, onChange, placeholder = 'Pick a date…'
   }, [open])
 
   function selectDay(day: Date) {
+    if (dateOnly) {
+      onChange(toDateInput(day))
+      setOpen(false)
+      return
+    }
     // Preserve the current time component if one is set; otherwise default to
     // the current local hour:minute, rounded forward to a sensible default.
     const base = currentDate ?? defaultStartTime()
@@ -102,41 +134,27 @@ export function DateTimePicker({ value, onChange, placeholder = 'Pick a date…'
     onChange(toLocalInput(d))
   }
 
-  return (
-    <div ref={containerRef} className="relative" style={{ position: 'relative' }}>
-      <button
-        ref={triggerRef}
-        type="button"
-        onClick={() => !disabled && setOpen(o => !o)}
-        disabled={disabled}
-        className="flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left text-sm"
-        style={{
-          borderColor: 'var(--color-border)',
-          backgroundColor: disabled ? 'var(--color-bg-tertiary)' : 'var(--color-bg)',
-          color: currentDate ? 'var(--color-text)' : 'var(--color-text-tertiary)',
-        }}
-      >
-        <span>{currentDate ? formatDisplay(currentDate) : placeholder}</span>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-text-tertiary)' }}>
-          <rect x="3" y="4" width="18" height="18" rx="2" />
-          <line x1="16" y1="2" x2="16" y2="6" />
-          <line x1="8" y1="2" x2="8" y2="6" />
-          <line x1="3" y1="10" x2="21" y2="10" />
-        </svg>
-      </button>
-
-      {open && !disabled && (
-        <div
-          className={`absolute right-0 z-50 w-[300px] rounded-xl border shadow-lg ${
-            placement === 'below' ? 'top-full mt-1' : 'bottom-full mb-1'
-          }`}
-          style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-elevated, var(--color-bg))' }}
-        >
+  const popover = open && !disabled && coords && (
+    <div
+      ref={popoverRef}
+      className="rounded-xl border shadow-lg"
+      style={{
+        position: 'fixed',
+        top: coords.top,
+        left: coords.left,
+        width: POPOVER_WIDTH,
+        zIndex: 1000,
+        borderColor: 'var(--color-border)',
+        backgroundColor: 'var(--color-bg-elevated, var(--color-bg))',
+      }}
+    >
           {/* Quick presets */}
-          <div className="flex gap-2 border-b p-2" style={{ borderColor: 'var(--color-border)' }}>
-            <PresetButton onClick={() => quickPick('in1h')}>In 1 hour</PresetButton>
-            <PresetButton onClick={() => quickPick('tomorrow')}>Tomorrow 9 am</PresetButton>
-          </div>
+          {!dateOnly && (
+            <div className="flex gap-2 border-b p-2" style={{ borderColor: 'var(--color-border)' }}>
+              <PresetButton onClick={() => quickPick('in1h')}>In 1 hour</PresetButton>
+              <PresetButton onClick={() => quickPick('tomorrow')}>Tomorrow 9 am</PresetButton>
+            </div>
+          )}
 
           {/* Month header */}
           <div className="flex items-center justify-between px-3 py-2">
@@ -202,24 +220,50 @@ export function DateTimePicker({ value, onChange, placeholder = 'Pick a date…'
             </div>
           </div>
 
-          {/* Time input + footer */}
-          <div className="flex items-center justify-between border-t p-2" style={{ borderColor: 'var(--color-border)' }}>
-            <TimeInput
-              date={currentDate}
-              onChange={setTime}
-            />
-            <button
-              type="button"
-              onClick={clear}
-              className="rounded-md px-2 py-1 text-xs"
-              style={{ color: 'var(--color-text-tertiary)' }}
-            >
-              Clear
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Time input + footer */}
+      <div className={`flex items-center ${dateOnly ? 'justify-end' : 'justify-between'} border-t p-2`} style={{ borderColor: 'var(--color-border)' }}>
+        {!dateOnly && (
+          <TimeInput
+            date={currentDate}
+            onChange={setTime}
+          />
+        )}
+        <button
+          type="button"
+          onClick={clear}
+          className="rounded-md px-2 py-1 text-xs"
+          style={{ color: 'var(--color-text-tertiary)' }}
+        >
+          Clear
+        </button>
+      </div>
     </div>
+  )
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => !disabled && setOpen(o => !o)}
+        disabled={disabled}
+        className="flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left text-sm"
+        style={{
+          borderColor: 'var(--color-border)',
+          backgroundColor: disabled ? 'var(--color-bg-tertiary)' : 'var(--color-bg)',
+          color: currentDate ? 'var(--color-text)' : 'var(--color-text-tertiary)',
+        }}
+      >
+        <span>{currentDate ? (dateOnly ? formatDateDisplay(currentDate) : formatDisplay(currentDate)) : placeholder}</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-text-tertiary)' }}>
+          <rect x="3" y="4" width="18" height="18" rx="2" />
+          <line x1="16" y1="2" x2="16" y2="6" />
+          <line x1="8" y1="2" x2="8" y2="6" />
+          <line x1="3" y1="10" x2="21" y2="10" />
+        </svg>
+      </button>
+      {popover && createPortal(popover, document.body)}
+    </>
   )
 }
 
@@ -350,14 +394,21 @@ function defaultStartTime(): Date {
 
 function parseLocalInput(s: string): Date | null {
   if (!s) return null
-  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/)
-  if (!m) return null
-  return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5])
+  const dt = s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/)
+  if (dt) return new Date(+dt[1], +dt[2] - 1, +dt[3], +dt[4], +dt[5])
+  const d = s.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (d) return new Date(+d[1], +d[2] - 1, +d[3])
+  return null
 }
 
 function toLocalInput(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+function toDateInput(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
 function formatDisplay(d: Date): string {
@@ -368,6 +419,11 @@ function formatDisplay(d: Date): string {
   const h12 = (h24 % 12) || 12
   const minute = String(d.getMinutes()).padStart(2, '0')
   return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}, ${h12}:${minute} ${isPm ? 'pm' : 'am'}`
+}
+
+function formatDateDisplay(d: Date): string {
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`
 }
 
 function PresetButton({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {

@@ -17,6 +17,9 @@ import { IntegrationCard } from '../../components/integrations/IntegrationCard'
 import { ConnectFirefliesDialog } from '../../components/integrations/ConnectFirefliesDialog'
 import { ConnectAsanaDialog } from '../../components/integrations/ConnectAsanaDialog'
 import { listIntegrations, deleteIntegration, type IntegrationRow } from '../../lib/integrations'
+import { SIGNATURE_FONTS, ensureSignatureFontsLoaded } from '../../lib/signatureFonts'
+
+ensureSignatureFontsLoaded()
 
 type Tab = 'account' | 'organization' | 'team' | 'integrations' | 'credits' | 'bonuses' | 'achievements' | 'billing'
 
@@ -127,8 +130,20 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
 
 function AccountTab({ user, t }: { user: User; t: Translations }) {
   const [org, setOrg] = useState<Organization | null>(null)
-  const [name, setName] = useState(user.name)
-  const [phone, setPhone] = useState(user.phone || '')
+  // Local "baseline" of what's currently persisted. Initialized from the
+  // user prop and refreshed after a successful save so the dirty check
+  // resets — without this, the prop stays stale after save and the Save
+  // button looks active forever even when the form matches the DB.
+  const [baseline, setBaseline] = useState({
+    name: user.name,
+    phone: user.phone || '',
+    title: user.title || '',
+    signatureFont: user.signature_font || SIGNATURE_FONTS[0].name,
+  })
+  const [name, setName] = useState(baseline.name)
+  const [phone, setPhone] = useState(baseline.phone)
+  const [title, setTitle] = useState(baseline.title)
+  const [signatureFont, setSignatureFont] = useState(baseline.signatureFont)
   const [photoUrl, setPhotoUrl] = useState<string | null>(user.photo_url)
   const [saving, setSaving] = useState(false)
   const [savedAt, setSavedAt] = useState<number | null>(null)
@@ -141,9 +156,11 @@ function AccountTab({ user, t }: { user: User; t: Translations }) {
   }, [user.org_id])
 
   const phoneValid = !phone || isValidE164(phone)
-  const nameDirty = name.trim() !== user.name && name.trim().length > 0
-  const phoneDirty = (phone || null) !== (user.phone || null)
-  const dirty = (nameDirty || phoneDirty) && phoneValid && name.trim().length > 0
+  const nameDirty = name.trim() !== baseline.name && name.trim().length > 0
+  const phoneDirty = (phone || null) !== (baseline.phone || null)
+  const titleDirty = (title.trim() || null) !== (baseline.title || null)
+  const fontDirty = signatureFont !== baseline.signatureFont
+  const dirty = (nameDirty || phoneDirty || titleDirty || fontDirty) && phoneValid && name.trim().length > 0
 
   async function handlePhotoChange(url: string | null) {
     const previous = photoUrl
@@ -168,18 +185,32 @@ function AccountTab({ user, t }: { user: User; t: Translations }) {
     if (!dirty) return
     setSaving(true)
     setError('')
+    const nextName = name.trim()
+    const nextPhone = phone || ''
+    const nextTitle = title.trim()
     const { error: updateError } = await supabase
       .from('users')
-      .update({ name: name.trim(), phone: phone || null })
+      .update({
+        name: nextName,
+        phone: nextPhone || null,
+        title: nextTitle || null,
+        signature_font: signatureFont,
+      })
       .eq('id', user.id)
-    if (updateError) setError(updateError.message)
-    else setSavedAt(Date.now())
+    if (updateError) {
+      setError(updateError.message)
+    } else {
+      setBaseline({ name: nextName, phone: nextPhone, title: nextTitle, signatureFont })
+      setSavedAt(Date.now())
+    }
     setSaving(false)
   }
 
   function handleCancel() {
-    setName(user.name)
-    setPhone(user.phone || '')
+    setName(baseline.name)
+    setPhone(baseline.phone)
+    setTitle(baseline.title)
+    setSignatureFont(baseline.signatureFont)
     setError('')
   }
 
@@ -260,6 +291,50 @@ function AccountTab({ user, t }: { user: User; t: Translations }) {
             <p className="pt-1 text-xs" style={{ color: 'var(--color-success)' }}>{t.profileSaved}</p>
           )}
         </form>
+      </section>
+
+      <section className="space-y-5 border-t pt-10" style={{ borderColor: 'var(--color-border)' }}>
+        <div>
+          <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>{t.signingProfileSection}</h2>
+          <p className="mt-1 text-sm" style={{ color: 'var(--color-text-secondary)' }}>{t.signingProfileDesc}</p>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.signerTitleLabel}</label>
+          <input
+            type="text"
+            value={title}
+            onChange={e => setTitle(e.target.value)}
+            placeholder={t.signerTitlePlaceholder}
+            form="account-edit-form"
+            className="w-full rounded-lg border px-3 py-2 text-sm"
+            style={inputStyle}
+          />
+          <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.signerTitleHelp}</p>
+        </div>
+
+        <div>
+          <label className="mb-2 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.defaultSignatureStyle}</label>
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+            {SIGNATURE_FONTS.map(font => (
+              <button
+                key={font.name}
+                type="button"
+                onClick={() => setSignatureFont(font.name)}
+                className="rounded-xl border px-4 py-3 text-left transition-colors"
+                style={{
+                  borderColor: signatureFont === font.name ? 'var(--color-primary)' : 'var(--color-border)',
+                  backgroundColor: signatureFont === font.name ? 'var(--color-bg-secondary, var(--color-bg))' : 'transparent',
+                }}
+              >
+                <span className="block truncate text-xl" style={{ fontFamily: `'${font.name}', cursive`, color: 'var(--color-text)' }}>
+                  {name || user.name}
+                </span>
+                <span className="mt-0.5 block text-[10px]" style={{ color: 'var(--color-text-tertiary)' }}>{font.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
       </section>
 
       <section className="space-y-5 border-t pt-10" style={{ borderColor: 'var(--color-border)' }}>

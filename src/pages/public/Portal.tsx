@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import { useSpotlight, SpotlightTab, SpotlightBanner, SpotlightModal } from '../../components/SpotlightPortal'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import rehypeRaw from 'rehype-raw'
 import html2pdf from 'html2pdf.js'
 import { supabase } from '../../lib/supabase'
 import { useTheme } from '../../hooks/useTheme'
@@ -17,7 +18,7 @@ import { StatRow } from '../../components/portal/StatRow'
 import { InfoTooltip } from '../../components/InfoTooltip'
 import { AvatarWithBadge } from '../../components/portal/AvatarWithBadge'
 import { MonthStrip } from '../../components/portal/MonthStrip'
-import type { Employee, Sop, SopSignature, Organization, Contract, ContractSignature, FeedEvent } from '../../types/aliases'
+import type { Employee, Sop, SopSignature, SopVersion, Organization, Contract, ContractSignature, ContractVersion, FeedEvent } from '../../types/aliases'
 
 type AchievementSummary = {
   unlock_id: string
@@ -76,7 +77,9 @@ function monthFromIsoDate(iso: string): string {
   return iso.slice(0, 7) + '-01'
 }
 
-type Tab = 'home' | 'sops' | 'contracts' | 'spotlight' | 'leaderboard' | 'badges'
+type Tab = 'home' | 'documents' | 'spotlight' | 'leaderboard' | 'badges'
+type DocFilter = 'all' | 'sops' | 'contracts'
+type OpenDocType = 'sop' | 'contract' | null
 
 type BadgeData = {
   definition_id: string
@@ -132,21 +135,9 @@ type LeaderboardData = {
   }>
 }
 
-// ─── Signature Fonts ─────────────────────────────────────
-const SIGNATURE_FONTS = [
-  { name: 'Dancing Script', label: 'Classic' },
-  { name: 'Great Vibes', label: 'Elegant' },
-  { name: 'Caveat', label: 'Casual' },
-  { name: 'Homemade Apple', label: 'Handwritten' },
-]
+import { SIGNATURE_FONTS, ensureSignatureFontsLoaded } from '../../lib/signatureFonts'
 
-// Load Google Fonts for signatures
-const fontLink = document.createElement('link')
-fontLink.rel = 'stylesheet'
-fontLink.href = `https://fonts.googleapis.com/css2?family=${SIGNATURE_FONTS.map(f => f.name.replace(/ /g, '+')).join('&family=')}&display=swap`
-if (!document.head.querySelector(`link[href="${fontLink.href}"]`)) {
-  document.head.appendChild(fontLink)
-}
+ensureSignatureFontsLoaded()
 
 // ─── Icons (inline SVGs) ─────────────────────────────────
 function HomeIcon() {
@@ -229,6 +220,11 @@ export function Portal() {
   const [contracts, setContracts] = useState<Contract[]>([])
   const [activeContract, setActiveContract] = useState<Contract | null>(null)
   const [contractSignatures, setContractSignatures] = useState<Record<string, ContractSignature>>({})
+  // Employer signatures keyed by contract id, for the current version. Lets
+  // the rendered contract body show the manager's countersignature inline in
+  // the EMPLOYER block (matching how employee sigs render in the EMPLOYEE
+  // block).
+  const [contractEmployerSignatures, setContractEmployerSignatures] = useState<Record<string, ContractSignature>>({})
   const [feedEvents, setFeedEvents] = useState<FeedEvent[]>([])
   const [portal, setPortal] = useState<PortalHomeData | null>(null)
   const [unreadInformational, setUnreadInformational] = useState(0)
@@ -237,12 +233,25 @@ export function Portal() {
 
   // UI
   const [tab, setTab] = useState<Tab>('home')
+  const [docFilter, setDocFilter] = useState<DocFilter>('all')
+  const [openDocType, setOpenDocType] = useState<OpenDocType>(null)
   const [selectedFont, setSelectedFont] = useState(SIGNATURE_FONTS[0].name)
   const [signing, setSigning] = useState(false)
   const [error, setError] = useState('')
   const [showNotifications, setShowNotifications] = useState(false)
   const [showDocMenu, setShowDocMenu] = useState(false)
-  const [docContentLang, setDocContentLang] = useState<'en' | 'id'>('id')
+  // Doc content language follows the global UI language by default. The per-doc
+  // override in the doc menu lets a user read one document in the opposite
+  // language without flipping the whole UI; toggling the header language
+  // resyncs every doc so "EN in the header" never silently means "this contract
+  // is still in ID because that's what was sticky."
+  const [docContentLang, setDocContentLang] = useState<'en' | 'id'>(() => lang)
+
+  // Version history (lazy-loaded per opened document)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [historyVersions, setHistoryVersions] = useState<Array<SopVersion | ContractVersion>>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [previewVersion, setPreviewVersion] = useState<SopVersion | ContractVersion | null>(null)
   // Month-snapshot navigation: when the user picks a past month from the
   // strip at the top of the home tab, re-fetch portal_home with that period
   // so credits/bonuses/achievements reflect that month. Defaults to current.
@@ -260,11 +269,31 @@ export function Portal() {
 
   const spotlight = useSpotlight(slug, token)
 
+  // Observe the signature section so the FAB can hide once the user has
+  // scrolled it into view. Resets to false whenever a different doc opens
+  // (so a brand-new doc that lands at the top still shows the FAB).
+  useEffect(() => {
+    if (!openDocType) { setSignSectionVisible(false); return }
+    setSignSectionVisible(false)
+    const target = signSectionRef.current
+    if (!target) return
+    const observer = new IntersectionObserver(entries => {
+      const entry = entries[0]
+      if (entry) setSignSectionVisible(entry.isIntersecting)
+    }, { threshold: 0 })
+    observer.observe(target)
+    return () => observer.disconnect()
+  }, [openDocType, activeSop?.id, activeContract?.id])
+
   const signSectionRef = useRef<HTMLDivElement>(null)
   const notifRef = useRef<HTMLDivElement>(null)
   const docMenuRef = useRef<HTMLDivElement>(null)
   const docContentRef = useRef<HTMLDivElement>(null)
   const [downloading, setDownloading] = useState(false)
+  // Tracks whether the signature section is currently in the viewport. The
+  // floating "Jump to sign" button hides itself when true so it doesn't
+  // overlap the section the user has already reached.
+  const [signSectionVisible, setSignSectionVisible] = useState(false)
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -275,6 +304,13 @@ export function Portal() {
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
+
+  // Resync per-doc content language with the global UI language whenever the
+  // header toggle fires. A user who changes the header expects every
+  // document to follow — any prior per-doc override is intentionally cleared.
+  useEffect(() => {
+    setDocContentLang(lang)
+  }, [lang])
 
   useEffect(() => {
     async function load() {
@@ -316,10 +352,12 @@ export function Portal() {
 
       const sopList = docs?.sops ?? []
       setSops(sopList)
-      setActiveSop(sopList[0] ?? null)
 
       const contractList = docs?.contracts ?? []
       setContracts(contractList)
+      // Keep activeContract pre-selected so merge fields in any document
+      // resolve against the employee's primary contract context. The grid
+      // view never auto-opens — openDocType stays null until the user picks.
       setActiveContract(contractList[0] ?? null)
 
       // Load signatures (SOPs)
@@ -342,23 +380,31 @@ export function Portal() {
         }
       }
 
-      // Load signatures (contracts)
+      // Load signatures (contracts) — both employee's own signature and the
+      // employer's countersignature for each contract, so the rendered body
+      // can show both inline. Filtered to current-version sigs only;
+      // historical sigs are version-pinned and not relevant for display here.
       if (contractList.length > 0) {
+        const contractIds = contractList.map(c => c.id)
         const { data: csigs } = await supabase
           .from('contract_signatures')
           .select('*')
-          .in('contract_id', contractList.map(c => c.id))
-          .eq('employee_id', emp.id)
+          .in('contract_id', contractIds)
 
         if (csigs) {
-          const sigMap: Record<string, ContractSignature> = {}
+          const empSigs: Record<string, ContractSignature> = {}
+          const erSigs: Record<string, ContractSignature> = {}
           for (const sig of csigs) {
             const contract = contractList.find(c => c.id === sig.contract_id)
-            if (contract && sig.version_number === contract.current_version) {
-              sigMap[sig.contract_id] = sig
+            if (!contract || sig.version_number !== contract.current_version) continue
+            if (sig.signer_role === 'employer') {
+              erSigs[sig.contract_id] = sig
+            } else if (sig.employee_id === emp.id) {
+              empSigs[sig.contract_id] = sig
             }
           }
-          setContractSignatures(sigMap)
+          setContractSignatures(empSigs)
+          setContractEmployerSignatures(erSigs)
         }
       }
     }
@@ -418,11 +464,39 @@ export function Portal() {
     return () => { cancelled = true }
   }, [employee])
 
-  // Notifications: unsigned SOPs (actionable) + unread informational events.
-  // Actionable items persist until acted on; informational items clear when
-  // the user opens the bell dropdown.
+  // Notifications: unsigned documents (SOPs + contracts, actionable) +
+  // unread informational events. Actionable items persist until acted on;
+  // informational items clear when the user opens the bell dropdown.
   const unsignedSops = sops.filter(s => !sopSignatures[s.id])
-  const notificationCount = unsignedSops.length + unreadInformational
+  const unsignedContracts = contracts.filter(c => !contractSignatures[c.id])
+  const pendingActionCount = unsignedSops.length + unsignedContracts.length
+  const notificationCount = pendingActionCount + unreadInformational
+
+  // Documents grid: combined, sorted by recency (updated_at desc).
+  const allDocCards: DocCardItem[] = useMemo(() => {
+    const sopCards: DocCardItem[] = sops.map(sop => ({
+      type: 'sop' as const,
+      doc: sop,
+      needsAction: !sopSignatures[sop.id],
+      updatedAt: sop.updated_at ?? sop.created_at ?? '',
+      signedAt: sopSignatures[sop.id]?.signed_at ?? null,
+    }))
+    const contractCards: DocCardItem[] = contracts.map(c => ({
+      type: 'contract' as const,
+      doc: c,
+      needsAction: !contractSignatures[c.id],
+      updatedAt: c.updated_at ?? c.created_at ?? '',
+      signedAt: contractSignatures[c.id]?.signed_at ?? null,
+    }))
+    return [...sopCards, ...contractCards].sort((a, b) =>
+      b.updatedAt.localeCompare(a.updatedAt)
+    )
+  }, [sops, contracts, sopSignatures, contractSignatures])
+  const filteredDocCards = allDocCards.filter(c =>
+    docFilter === 'all' ? true : docFilter === 'sops' ? c.type === 'sop' : c.type === 'contract'
+  )
+  const pendingDocCards = filteredDocCards.filter(c => c.needsAction)
+  const archiveDocCards = filteredDocCards.filter(c => !c.needsAction)
 
   // Mark informational notifications as seen when the dropdown opens.
   useEffect(() => {
@@ -436,11 +510,67 @@ export function Portal() {
       .then(({ error }) => { if (!error) setUnreadInformational(0) })
   }, [showNotifications, unreadInformational, slugToken])
 
-  function goToNotification(sop: Sop) {
-    setTab('sops')
+  // Reset version-history view state when switching documents.
+  function resetHistoryState() {
+    setHistoryOpen(false)
+    setHistoryVersions([])
+    setPreviewVersion(null)
+  }
+
+  function openSopDoc(sop: Sop) {
+    resetHistoryState()
     setActiveSop(sop)
+    setOpenDocType('sop')
+    setTab('documents')
+  }
+
+  function openContractDoc(c: Contract) {
+    resetHistoryState()
+    setActiveContract(c)
+    setOpenDocType('contract')
+    setTab('documents')
+  }
+
+  function closeOpenDoc() {
+    resetHistoryState()
+    setOpenDocType(null)
+  }
+
+  // Notification → doc handlers land at the top of the document, not at the
+  // signature section, so employees actually read it first. A floating
+  // "Jump to sign" button (rendered alongside the doc) lets them jump to
+  // the bottom when they're ready.
+  function goToSopNotification(sop: Sop) {
+    openSopDoc(sop)
     setShowNotifications(false)
-    setTimeout(() => signSectionRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
+  }
+
+  function goToContractNotification(c: Contract) {
+    openContractDoc(c)
+    setShowNotifications(false)
+  }
+
+  // Lazy-load version history for the currently open document.
+  async function loadHistory() {
+    if (historyVersions.length > 0) { setHistoryOpen(true); return }
+    setHistoryLoading(true)
+    setHistoryOpen(true)
+    if (openDocType === 'sop' && activeSop) {
+      const { data } = await supabase
+        .from('sop_versions')
+        .select('*')
+        .eq('sop_id', activeSop.id)
+        .order('version_number', { ascending: false })
+      if (data) setHistoryVersions(data)
+    } else if (openDocType === 'contract' && activeContract) {
+      const { data } = await supabase
+        .from('contract_versions')
+        .select('*')
+        .eq('contract_id', activeContract.id)
+        .order('version_number', { ascending: false })
+      if (data) setHistoryVersions(data)
+    }
+    setHistoryLoading(false)
   }
 
   async function handleSign() {
@@ -512,23 +642,55 @@ export function Portal() {
   // Get document content based on content language toggle. Resolves any
   // {{merge_field}} tokens against the live employee/org/contract context so
   // employees see actual values like "Rp 3,400,000" rather than raw tokens.
+  // For contracts, the persisted signature (if any) is passed in so the
+  // {{employee_signature}}/{{employee_sign_date}} tokens render the signed
+  // name in-place. While the user is picking a font but hasn't confirmed,
+  // a preview signature is synthesized from the selected font so the body
+  // updates live as they tab through the four options.
   function getDocContent(doc: { content_markdown: string; content_markdown_id?: string | null }) {
     const raw = docContentLang === 'id' && doc.content_markdown_id
       ? doc.content_markdown_id
       : doc.content_markdown
+    // Pick the persisted employee signature matching whichever doc type is
+    // open. For unsigned docs, synthesize a preview signature from the
+    // currently-selected font so the body updates live as the user tabs
+    // through font options before confirming.
+    const persistedEmployeeSig = activeContract
+      ? contractSignatures[activeContract.id]
+      : activeSop
+        ? sopSignatures[activeSop.id]
+        : undefined
+    const employeeSignature = persistedEmployeeSig
+      ? { typed_name: persistedEmployeeSig.typed_name, signature_font: persistedEmployeeSig.signature_font, signed_at: persistedEmployeeSig.signed_at }
+      : ((activeContract || activeSop) && employee
+          ? { typed_name: employee.name, signature_font: selectedFont, signed_at: null }
+          : null)
+    const employerSig = activeContract ? contractEmployerSignatures[activeContract.id] : undefined
+    const employerSignature = employerSig
+      ? {
+          typed_name: employerSig.typed_name,
+          signature_font: employerSig.signature_font,
+          signed_at: employerSig.signed_at,
+          employer_name: employerSig.typed_name,
+          employer_title: employerSig.signer_title,
+        }
+      : null
     return renderMergeFields(raw, {
       employee,
       organization: org,
       contract: activeContract,
       today: new Date(),
       lang: docContentLang,
+      employeeSignature,
+      employerSignature,
     })
   }
 
-  async function handleDownloadPdf() {
+  async function handleDownloadPdf(includeSignature: boolean = true) {
     if (!docContentRef.current) return
-    const title = tab === 'sops' ? activeSop?.title : activeContract?.title
+    const title = openDocType === 'sop' ? activeSop?.title : activeContract?.title
     const filename = (title || 'document').replace(/[^a-zA-Z0-9\s-]/g, '').replace(/\s+/g, '-').toLowerCase()
+      + (includeSignature ? '' : '-blank')
 
     setDownloading(true)
     setShowDocMenu(false)
@@ -539,6 +701,24 @@ export function Portal() {
       clone.style.color = '#111827'
       clone.style.backgroundColor = '#ffffff'
       clone.style.padding = '0'
+      // For a "blank for signing" copy: strip the signed-name spans so the
+      // signature line becomes a blank underline. The merge resolver tags
+      // these spans with class="signature-name" specifically for this use.
+      // Sign-date spans carry the same class via the resolver path; for
+      // dates we instead want the literal blank line so we substitute the
+      // text rather than removing the element wholesale.
+      if (!includeSignature) {
+        clone.querySelectorAll('.signature-name').forEach(el => {
+          const span = el as HTMLElement
+          span.textContent = ' '
+          span.style.fontFamily = 'inherit'
+          span.style.fontSize = 'inherit'
+        })
+        clone.querySelectorAll('.signature-date').forEach(el => {
+          const span = el as HTMLElement
+          span.textContent = '____________________________'
+        })
+      }
       // Force all child elements to use dark text
       clone.querySelectorAll('*').forEach(el => {
         const htmlEl = el as HTMLElement
@@ -655,11 +835,7 @@ export function Portal() {
           <div className="flex items-center gap-3">
             {/* Language toggle */}
             <button
-              onClick={() => {
-                const next = lang === 'en' ? 'id' : 'en'
-                setLang(next)
-                setDocContentLang(next)
-              }}
+              onClick={() => setLang(lang === 'en' ? 'id' : 'en')}
               className="flex items-center gap-1.5 rounded-md px-2 py-1.5 transition-colors hover:opacity-70"
               style={{ color: 'var(--color-text-secondary)' }}
               title={lang === 'en' ? s.switchToId : s.switchToEn}
@@ -697,22 +873,22 @@ export function Portal() {
                     <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{s.notifications}</span>
                   </div>
 
-                  {unsignedSops.length === 0 && recentInformational.length === 0 ? (
+                  {pendingActionCount === 0 && recentInformational.length === 0 ? (
                     <div className="px-4 py-6 text-center text-sm" style={{ color: 'var(--color-text-tertiary)' }}>
                       {s.noNotifications}
                     </div>
                   ) : (
                     <div className="max-h-96 overflow-y-auto">
                       {/* To Do — actionable, persistent */}
-                      {unsignedSops.length > 0 && (
+                      {pendingActionCount > 0 && (
                         <div>
                           <div className="px-4 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-tertiary)' }}>
                             {s.notificationsToDo}
                           </div>
                           {unsignedSops.map(sop => (
                             <button
-                              key={sop.id}
-                              onClick={() => goToNotification(sop)}
+                              key={`sop-${sop.id}`}
+                              onClick={() => goToSopNotification(sop)}
                               className="flex w-full items-start gap-3 px-4 py-3 text-left transition-colors"
                               onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-secondary)' }}
                               onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
@@ -722,6 +898,23 @@ export function Portal() {
                               </div>
                               <div>
                                 <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{sop.title}</p>
+                                <p className="text-xs" style={{ color: 'var(--color-warning)' }}>{s.needsSignature}</p>
+                              </div>
+                            </button>
+                          ))}
+                          {unsignedContracts.map(c => (
+                            <button
+                              key={`contract-${c.id}`}
+                              onClick={() => goToContractNotification(c)}
+                              className="flex w-full items-start gap-3 px-4 py-3 text-left transition-colors"
+                              onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-secondary)' }}
+                              onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
+                            >
+                              <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: 'var(--color-diff-remove)' }}>
+                                <ContractIcon />
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{c.title}</p>
                                 <p className="text-xs" style={{ color: 'var(--color-warning)' }}>{s.needsSignature}</p>
                               </div>
                             </button>
@@ -793,338 +986,300 @@ export function Portal() {
               currentMonth={currentMonth}
               isCurrentMonth={isCurrentMonth}
               onSelectMonth={setSelectedMonth}
-              onOpenSop={sop => {
-                setTab('sops')
-                setActiveSop(sop)
-                setTimeout(() => signSectionRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
-              }}
+              onOpenSop={sop => openSopDoc(sop)}
               onSelectAchievement={setSelectedAchievement}
             />
           )}
 
-          {/* ─── SOP Tab Content ─── */}
-          {tab === 'sops' && (
-            <>
-              {sops.length === 0 ? (
-                <div className="rounded-xl border p-6 text-center" style={{ borderColor: 'var(--color-border)' }}>
-                  <DocIcon />
-                  <p className="mt-2 text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{s.noActiveSops}</p>
-                </div>
-              ) : (
-                <>
-                  {/* SOP list if multiple */}
-                  {sops.length > 1 && (
-                    <div className="mb-4 space-y-2">
-                      {sops.map(sop => (
-                        <button
-                          key={sop.id}
-                          onClick={() => setActiveSop(sop)}
-                          className="flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left transition-colors"
-                          style={{
-                            borderColor: activeSop?.id === sop.id ? 'var(--color-primary)' : 'var(--color-border)',
-                            backgroundColor: activeSop?.id === sop.id ? 'var(--color-bg-secondary)' : 'transparent',
-                          }}
-                        >
-                          <div>
-                            <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{sop.title}</p>
-                            <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{s.version} {sop.current_version}</p>
-                          </div>
-                          {sopSignatures[sop.id] ? <CheckCircle /> : (
-                            <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: 'var(--color-diff-remove)', color: 'var(--color-danger)' }}>
-                              {s.needsSignature}
-                            </span>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Active SOP content */}
-                  {activeSop && (
-                    <div>
-                      {/* Doc header */}
-                      <div className="mb-4 flex items-start justify-between">
-                        <div>
-                          <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>{activeSop.title}</h2>
-                          <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{s.version} {activeSop.current_version}</p>
-                        </div>
-                        {/* Doc menu */}
-                        <div className="relative" ref={docMenuRef}>
-                          <button onClick={() => setShowDocMenu(!showDocMenu)} className="rounded-lg p-2" style={{ color: 'var(--color-text-tertiary)' }}>
-                            <MoreIcon />
-                          </button>
-                          {showDocMenu && (
-                            <div className="absolute right-0 top-full mt-1 w-52 rounded-xl border py-1 shadow-lg" style={{ backgroundColor: 'var(--color-bg)', borderColor: 'var(--color-border)' }}>
-                              {/* Content language */}
-                              <div className="px-3 py-2">
-                                <p className="mb-1.5 text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>{s.contentLang}</p>
-                                <div className="flex gap-1 rounded-lg p-0.5" style={{ backgroundColor: 'var(--color-bg-tertiary)' }}>
-                                  <button
-                                    onClick={() => setDocContentLang('en')}
-                                    className="flex-1 rounded-md px-2 py-1 text-xs font-medium"
-                                    style={{
-                                      backgroundColor: docContentLang === 'en' ? 'var(--color-bg)' : 'transparent',
-                                      color: docContentLang === 'en' ? 'var(--color-text)' : 'var(--color-text-tertiary)',
-                                    }}
-                                  >
-                                    {s.english}
-                                  </button>
-                                  <button
-                                    onClick={() => setDocContentLang('id')}
-                                    className="flex-1 rounded-md px-2 py-1 text-xs font-medium"
-                                    style={{
-                                      backgroundColor: docContentLang === 'id' ? 'var(--color-bg)' : 'transparent',
-                                      color: docContentLang === 'id' ? 'var(--color-text)' : 'var(--color-text-tertiary)',
-                                    }}
-                                  >
-                                    {s.indonesian}
-                                  </button>
-                                </div>
-                              </div>
-                              <div className="my-1 border-t" style={{ borderColor: 'var(--color-border)' }} />
-                              <div className="px-3 py-2">
-                                <button
-                                  onClick={handleDownloadPdf}
-                                  disabled={downloading}
-                                  className="w-full rounded-lg px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
-                                  style={{ backgroundColor: 'var(--color-primary)' }}
-                                >
-                                  {downloading ? s.downloadingPdf : s.downloadPdf}
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Content */}
-                      <div ref={docContentRef} className="sop-content max-w-none" style={{ color: 'var(--color-text)' }}>
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                          {getDocContent(activeSop)}
-                        </ReactMarkdown>
-                      </div>
-
-                      {/* Signature */}
-                      <div ref={signSectionRef} className="mt-8 border-t pt-6 no-print" style={{ borderColor: 'var(--color-border)' }}>
-                        {sopSignatures[activeSop.id] ? (
-                          <div className="rounded-xl border p-4" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)' }}>
-                            <div className="flex items-center gap-3">
-                              <CheckCircle />
-                              <div>
-                                <p
-                                  className="text-xl"
-                                  style={{ fontFamily: `'${sopSignatures[activeSop.id].signature_font || 'Dancing Script'}', cursive`, color: 'var(--color-text)' }}
-                                >
-                                  {sopSignatures[activeSop.id].typed_name}
-                                </p>
-                                <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                                  {new Date(sopSignatures[activeSop.id].signed_at).toLocaleString()} &middot; {s.version} {sopSignatures[activeSop.id].version_number}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        ) : (
-                          <div>
-                            <h3 className="mb-1 text-base font-semibold" style={{ color: 'var(--color-text)' }}>{s.acknowledgeTitle}</h3>
-                            <p className="mb-3 text-sm" style={{ color: 'var(--color-text-secondary)' }}>{s.acknowledgeDesc}</p>
-                            <p className="mb-2 text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>{s.chooseStyle}</p>
-                            <div className="mb-4 grid grid-cols-2 gap-2">
-                              {SIGNATURE_FONTS.map(font => (
-                                <button
-                                  key={font.name}
-                                  type="button"
-                                  onClick={() => setSelectedFont(font.name)}
-                                  className="rounded-xl border px-4 py-3 text-left transition-colors"
-                                  style={{
-                                    borderColor: selectedFont === font.name ? 'var(--color-primary)' : 'var(--color-border)',
-                                    backgroundColor: selectedFont === font.name ? 'var(--color-bg-secondary)' : 'transparent',
-                                  }}
-                                >
-                                  <span
-                                    className="block truncate text-xl"
-                                    style={{ fontFamily: `'${font.name}', cursive`, color: 'var(--color-text)' }}
-                                  >
-                                    {employee.name}
-                                  </span>
-                                  <span className="mt-0.5 block text-[10px]" style={{ color: 'var(--color-text-tertiary)' }}>{font.label}</span>
-                                </button>
-                              ))}
-                            </div>
-                            <button
-                              onClick={handleSign}
-                              disabled={signing}
-                              className="w-full rounded-xl px-5 py-3 text-sm font-semibold text-white disabled:opacity-50"
-                              style={{ backgroundColor: 'var(--color-primary)' }}
-                            >
-                              {signing ? s.signing : s.confirmSign}
-                            </button>
-                            {error && <p className="mt-2 text-sm" style={{ color: 'var(--color-danger)' }}>{error}</p>}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-            </>
+          {/* ─── Documents Tab Content ─── */}
+          {tab === 'documents' && openDocType === null && (
+            <DocumentsGrid
+              s={s}
+              lang={lang}
+              docFilter={docFilter}
+              onSetFilter={setDocFilter}
+              pendingCards={pendingDocCards}
+              archiveCards={archiveDocCards}
+              totalCount={allDocCards.length}
+              onOpenSop={openSopDoc}
+              onOpenContract={openContractDoc}
+            />
           )}
 
-          {/* ─── Contracts Tab Content ─── */}
-          {tab === 'contracts' && (
-            <>
-              {contracts.length === 0 ? (
-                <div className="rounded-xl border p-6 text-center" style={{ borderColor: 'var(--color-border)' }}>
-                  <div className="mx-auto flex h-10 w-10 items-center justify-center" style={{ color: 'var(--color-text-tertiary)' }}><ContractIcon /></div>
-                  <p className="mt-2 text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{s.noActiveContracts}</p>
-                </div>
-              ) : (
-                <>
-                  {contracts.length > 1 && (
-                    <div className="mb-4 space-y-2">
-                      {contracts.map(c => (
-                        <button
-                          key={c.id}
-                          onClick={() => setActiveContract(c)}
-                          className="flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left transition-colors"
-                          style={{
-                            borderColor: activeContract?.id === c.id ? 'var(--color-primary)' : 'var(--color-border)',
-                            backgroundColor: activeContract?.id === c.id ? 'var(--color-bg-secondary)' : 'transparent',
-                          }}
-                        >
-                          <div>
-                            <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{c.title}</p>
-                            <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{s.version} {c.current_version}</p>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
+          {tab === 'documents' && openDocType !== null && (() => {
+            const isSop = openDocType === 'sop'
+            const doc = isSop ? activeSop : activeContract
+            if (!doc) return null
+            const sig = isSop
+              ? (activeSop ? sopSignatures[activeSop.id] : undefined)
+              : (activeContract ? contractSignatures[activeContract.id] : undefined)
+            const previewMd = previewVersion
+              ? (docContentLang === 'id' && previewVersion.resolved_markdown_id
+                  ? previewVersion.resolved_markdown_id
+                  : previewVersion.resolved_markdown_en)
+              : null
 
-                  {activeContract && (
-                    <div>
-                      <div className="mb-4 flex items-start justify-between">
-                        <div>
-                          <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>{activeContract.title}</h2>
-                          <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{s.version} {activeContract.current_version}</p>
-                        </div>
-                        {/* Doc menu (reuse same pattern) */}
-                        <div className="relative" ref={docMenuRef}>
-                          <button onClick={() => setShowDocMenu(!showDocMenu)} className="rounded-lg p-2" style={{ color: 'var(--color-text-tertiary)' }}>
-                            <MoreIcon />
-                          </button>
-                          {showDocMenu && (
-                            <div className="absolute right-0 top-full mt-1 w-52 rounded-xl border py-1 shadow-lg" style={{ backgroundColor: 'var(--color-bg)', borderColor: 'var(--color-border)' }}>
-                              <div className="px-3 py-2">
-                                <p className="mb-1.5 text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>{s.contentLang}</p>
-                                <div className="flex gap-1 rounded-lg p-0.5" style={{ backgroundColor: 'var(--color-bg-tertiary)' }}>
-                                  <button
-                                    onClick={() => setDocContentLang('en')}
-                                    className="flex-1 rounded-md px-2 py-1 text-xs font-medium"
-                                    style={{
-                                      backgroundColor: docContentLang === 'en' ? 'var(--color-bg)' : 'transparent',
-                                      color: docContentLang === 'en' ? 'var(--color-text)' : 'var(--color-text-tertiary)',
-                                    }}
-                                  >
-                                    {s.english}
-                                  </button>
-                                  <button
-                                    onClick={() => setDocContentLang('id')}
-                                    className="flex-1 rounded-md px-2 py-1 text-xs font-medium"
-                                    style={{
-                                      backgroundColor: docContentLang === 'id' ? 'var(--color-bg)' : 'transparent',
-                                      color: docContentLang === 'id' ? 'var(--color-text)' : 'var(--color-text-tertiary)',
-                                    }}
-                                  >
-                                    {s.indonesian}
-                                  </button>
-                                </div>
-                              </div>
-                              <div className="my-1 border-t" style={{ borderColor: 'var(--color-border)' }} />
-                              <div className="px-3 py-2">
-                                <button
-                                  onClick={handleDownloadPdf}
-                                  disabled={downloading}
-                                  className="w-full rounded-lg px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
-                                  style={{ backgroundColor: 'var(--color-primary)' }}
-                                >
-                                  {downloading ? s.downloadingPdf : s.downloadPdf}
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      <div ref={docContentRef} className="sop-content max-w-none" style={{ color: 'var(--color-text)' }}>
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                          {getDocContent(activeContract)}
-                        </ReactMarkdown>
-                      </div>
-
-                      {/* Contract signature */}
-                      <div className="mt-8 border-t pt-6 no-print" style={{ borderColor: 'var(--color-border)' }}>
-                        {contractSignatures[activeContract.id] ? (
-                          <div className="rounded-xl border p-4" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)' }}>
-                            <div className="flex items-center gap-3">
-                              <CheckCircle />
-                              <div>
-                                <p
-                                  className="text-xl"
-                                  style={{ fontFamily: `'${contractSignatures[activeContract.id].signature_font || 'Dancing Script'}', cursive`, color: 'var(--color-text)' }}
-                                >
-                                  {contractSignatures[activeContract.id].typed_name}
-                                </p>
-                                <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                                  {new Date(contractSignatures[activeContract.id].signed_at).toLocaleString()} &middot; {s.version} {contractSignatures[activeContract.id].version_number}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        ) : (
-                          <div>
-                            <h3 className="mb-1 text-base font-semibold" style={{ color: 'var(--color-text)' }}>{s.acknowledgeTitle}</h3>
-                            <p className="mb-3 text-sm" style={{ color: 'var(--color-text-secondary)' }}>{s.acknowledgeContractDesc}</p>
-                            <p className="mb-2 text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>{s.chooseStyle}</p>
-                            <div className="mb-4 grid grid-cols-2 gap-2">
-                              {SIGNATURE_FONTS.map(font => (
-                                <button
-                                  key={font.name}
-                                  type="button"
-                                  onClick={() => setSelectedFont(font.name)}
-                                  className="rounded-xl border px-4 py-3 text-left transition-colors"
-                                  style={{
-                                    borderColor: selectedFont === font.name ? 'var(--color-primary)' : 'var(--color-border)',
-                                    backgroundColor: selectedFont === font.name ? 'var(--color-bg-secondary)' : 'transparent',
-                                  }}
-                                >
-                                  <span
-                                    className="block truncate text-xl"
-                                    style={{ fontFamily: `'${font.name}', cursive`, color: 'var(--color-text)' }}
-                                  >
-                                    {employee.name}
-                                  </span>
-                                  <span className="mt-0.5 block text-[10px]" style={{ color: 'var(--color-text-tertiary)' }}>{font.label}</span>
-                                </button>
-                              ))}
-                            </div>
+            return (
+              <div>
+                {/* Top action row: back + menu */}
+                <div className="mb-3 flex items-center justify-between">
+                  <button
+                    onClick={closeOpenDoc}
+                    className="flex items-center gap-1 text-sm font-medium"
+                    style={{ color: 'var(--color-text-secondary)' }}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                    {s.backToDocuments}
+                  </button>
+                  <div className="relative" ref={docMenuRef}>
+                    <button onClick={() => setShowDocMenu(!showDocMenu)} className="rounded-lg p-2" style={{ color: 'var(--color-text-tertiary)' }}>
+                      <MoreIcon />
+                    </button>
+                    {showDocMenu && (
+                      <div className="absolute right-0 top-full mt-1 w-56 rounded-xl border py-1 shadow-lg" style={{ backgroundColor: 'var(--color-bg)', borderColor: 'var(--color-border)' }}>
+                        <div className="px-3 py-2">
+                          <p className="mb-1.5 text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>{s.contentLang}</p>
+                          <div className="flex gap-1 rounded-lg p-0.5" style={{ backgroundColor: 'var(--color-bg-tertiary)' }}>
                             <button
-                              onClick={handleSignContract}
-                              disabled={signing}
-                              className="w-full rounded-xl px-5 py-3 text-sm font-semibold text-white disabled:opacity-50"
-                              style={{ backgroundColor: 'var(--color-primary)' }}
+                              onClick={() => setDocContentLang('en')}
+                              className="flex-1 rounded-md px-2 py-1 text-xs font-medium"
+                              style={{
+                                backgroundColor: docContentLang === 'en' ? 'var(--color-bg)' : 'transparent',
+                                color: docContentLang === 'en' ? 'var(--color-text)' : 'var(--color-text-tertiary)',
+                              }}
                             >
-                              {signing ? s.signing : s.confirmSign}
+                              {s.english}
                             </button>
-                            {error && <p className="mt-2 text-sm" style={{ color: 'var(--color-danger)' }}>{error}</p>}
+                            <button
+                              onClick={() => setDocContentLang('id')}
+                              className="flex-1 rounded-md px-2 py-1 text-xs font-medium"
+                              style={{
+                                backgroundColor: docContentLang === 'id' ? 'var(--color-bg)' : 'transparent',
+                                color: docContentLang === 'id' ? 'var(--color-text)' : 'var(--color-text-tertiary)',
+                              }}
+                            >
+                              {s.indonesian}
+                            </button>
                           </div>
-                        )}
+                        </div>
+                        <div className="my-1 border-t" style={{ borderColor: 'var(--color-border)' }} />
+                        <button
+                          onClick={() => { setShowDocMenu(false); loadHistory() }}
+                          className="block w-full px-4 py-2 text-left text-sm font-medium transition-colors"
+                          style={{ color: 'var(--color-text)' }}
+                          onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-secondary)' }}
+                          onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
+                        >
+                          {s.versionHistory}
+                        </button>
+                        <div className="my-1 border-t" style={{ borderColor: 'var(--color-border)' }} />
+                        <div className="px-3 py-2 space-y-1.5">
+                          <button
+                            onClick={() => handleDownloadPdf(true)}
+                            disabled={downloading}
+                            className="w-full rounded-lg px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+                            style={{ backgroundColor: 'var(--color-primary)' }}
+                          >
+                            {downloading ? s.downloadingPdf : s.downloadPdf}
+                          </button>
+                          <button
+                            onClick={() => handleDownloadPdf(false)}
+                            disabled={downloading}
+                            className="w-full rounded-lg border px-3 py-2 text-xs font-medium disabled:opacity-50"
+                            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
+                          >
+                            {s.downloadBlankPdf}
+                          </button>
+                        </div>
                       </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Doc title */}
+                <div className="mb-4">
+                  <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>{doc.title}</h2>
+                  <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{s.version} {doc.current_version}</p>
+                </div>
+
+                {/* Viewing-older-version banner */}
+                {previewVersion && (
+                  <div
+                    className="mb-4 flex items-center justify-between rounded-xl border px-4 py-3"
+                    style={{ borderColor: 'var(--color-warning, #f59e0b)', backgroundColor: 'var(--color-warning-subtle, rgba(245, 158, 11, 0.1))' }}
+                  >
+                    <div>
+                      <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>
+                        {s.viewingVersion} · {s.version} {previewVersion.version_number}
+                      </p>
+                      <p className="text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>
+                        {new Date(previewVersion.created_at).toLocaleString()}
+                      </p>
                     </div>
-                  )}
-                </>
-              )}
-            </>
-          )}
+                    <button
+                      onClick={() => setPreviewVersion(null)}
+                      className="rounded-md px-2 py-1 text-xs font-medium"
+                      style={{ backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+                    >
+                      {s.backToCurrent}
+                    </button>
+                  </div>
+                )}
+
+                {/* Content */}
+                <div ref={docContentRef} className="sop-content max-w-none" style={{ color: 'var(--color-text)' }}>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+                    {previewMd ?? getDocContent(doc)}
+                  </ReactMarkdown>
+                </div>
+
+                {/* Floating "Jump to sign" button. Shown only on the current
+                    version when the doc is unsigned and the signature section
+                    isn't already in view. The doc lands at the top of the
+                    page on open so the employee reads it before signing —
+                    this gives them a one-tap shortcut down once they're
+                    ready, rather than slamming them straight to the bottom. */}
+                {!previewVersion && !sig && !signSectionVisible && (
+                  <button
+                    type="button"
+                    onClick={() => signSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+                    className="fixed left-1/2 z-30 -translate-x-1/2 rounded-full px-5 py-3 text-sm font-semibold text-white shadow-lg no-print"
+                    style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 5rem)', backgroundColor: 'var(--color-primary)' }}
+                  >
+                    {s.jumpToSign} ↓
+                  </button>
+                )}
+
+                {/* Signature (only on current version) */}
+                {!previewVersion && (
+                  <div ref={signSectionRef} className="mt-8 border-t pt-6 no-print" style={{ borderColor: 'var(--color-border)' }}>
+                    {sig ? (
+                      <div className="rounded-xl border p-4" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)' }}>
+                        <div className="flex items-center gap-3">
+                          <CheckCircle />
+                          <div>
+                            <p
+                              className="text-xl"
+                              style={{ fontFamily: `'${sig.signature_font || 'Dancing Script'}', cursive`, color: 'var(--color-text)' }}
+                            >
+                              {sig.typed_name}
+                            </p>
+                            <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                              {new Date(sig.signed_at).toLocaleString()} &middot; {s.version} {sig.version_number}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <h3 className="mb-1 text-base font-semibold" style={{ color: 'var(--color-text)' }}>{s.acknowledgeTitle}</h3>
+                        <p className="mb-3 text-sm" style={{ color: 'var(--color-text-secondary)' }}>{isSop ? s.acknowledgeDesc : s.acknowledgeContractDesc}</p>
+                        <p className="mb-2 text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>{s.chooseStyle}</p>
+                        <div className="mb-4 grid grid-cols-2 gap-2">
+                          {SIGNATURE_FONTS.map(font => (
+                            <button
+                              key={font.name}
+                              type="button"
+                              onClick={() => setSelectedFont(font.name)}
+                              className="rounded-xl border px-4 py-3 text-left transition-colors"
+                              style={{
+                                borderColor: selectedFont === font.name ? 'var(--color-primary)' : 'var(--color-border)',
+                                backgroundColor: selectedFont === font.name ? 'var(--color-bg-secondary)' : 'transparent',
+                              }}
+                            >
+                              <span
+                                className="block truncate text-xl"
+                                style={{ fontFamily: `'${font.name}', cursive`, color: 'var(--color-text)' }}
+                              >
+                                {employee.name}
+                              </span>
+                              <span className="mt-0.5 block text-[10px]" style={{ color: 'var(--color-text-tertiary)' }}>{font.label}</span>
+                            </button>
+                          ))}
+                        </div>
+                        <button
+                          onClick={isSop ? handleSign : handleSignContract}
+                          disabled={signing}
+                          className="w-full rounded-xl px-5 py-3 text-sm font-semibold text-white disabled:opacity-50"
+                          style={{ backgroundColor: 'var(--color-primary)' }}
+                        >
+                          {signing ? s.signing : s.confirmSign}
+                        </button>
+                        {error && <p className="mt-2 text-sm" style={{ color: 'var(--color-danger)' }}>{error}</p>}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Version history sheet */}
+                {historyOpen && (
+                  <div
+                    className="fixed inset-0 z-40 flex items-end justify-center"
+                    style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
+                    onClick={() => setHistoryOpen(false)}
+                  >
+                    <div
+                      className="w-full max-w-lg rounded-t-2xl border p-4"
+                      style={{ backgroundColor: 'var(--color-bg)', borderColor: 'var(--color-border)', maxHeight: '80vh', overflowY: 'auto' }}
+                      onClick={e => e.stopPropagation()}
+                    >
+                      <div className="mb-3 flex items-center justify-between">
+                        <h3 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>{s.versionHistory}</h3>
+                        <button
+                          onClick={() => setHistoryOpen(false)}
+                          className="rounded-lg p-1"
+                          style={{ color: 'var(--color-text-tertiary)' }}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
+                      </div>
+                      {historyLoading ? (
+                        <p className="py-6 text-center text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{s.loading}</p>
+                      ) : historyVersions.length === 0 ? (
+                        <p className="py-6 text-center text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{s.noPriorVersions}</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {historyVersions.map(v => {
+                            const isCurrent = v.version_number === doc.current_version
+                            return (
+                              <button
+                                key={`${v.version_number}-${v.created_at}`}
+                                onClick={() => {
+                                  if (isCurrent) {
+                                    setPreviewVersion(null)
+                                  } else {
+                                    setPreviewVersion(v)
+                                  }
+                                  setHistoryOpen(false)
+                                }}
+                                className="flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left transition-colors"
+                                style={{ borderColor: 'var(--color-border)' }}
+                              >
+                                <div>
+                                  <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+                                    {s.version} {v.version_number}
+                                    {isCurrent && (
+                                      <span className="ml-2 rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}>
+                                        {s.currentVersion}
+                                      </span>
+                                    )}
+                                  </p>
+                                  <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                                    {new Date(v.created_at).toLocaleString()}
+                                  </p>
+                                </div>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-text-tertiary)' }}><polyline points="9 18 15 12 9 6"/></svg>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })()}
 
 
           {/* ─── Spotlight Tab Content ─── */}
@@ -1162,8 +1317,7 @@ export function Portal() {
         <div className="mx-auto flex max-w-lg">
           {([
             { key: 'home' as Tab, label: s.home, icon: <HomeIcon /> },
-            { key: 'sops' as Tab, label: s.sops, icon: <DocIcon />, badge: notificationCount },
-            { key: 'contracts' as Tab, label: s.contracts, icon: <ContractIcon /> },
+            { key: 'documents' as Tab, label: s.documents, icon: <DocIcon />, badge: pendingActionCount },
             { key: 'spotlight' as Tab, label: s.spotlightTabLabel, icon: <SpotlightIcon /> },
             ...(org?.badges_enabled !== false
               ? [{ key: 'badges' as Tab, label: s.portalBadgesTabLabel, icon: <BadgeIcon /> }]
@@ -1223,6 +1377,186 @@ export function Portal() {
         onAcknowledge={spotlight.acknowledge}
         onDismiss={spotlight.dismiss}
       />
+    </div>
+  )
+}
+
+// ─── Documents Grid (combined SOPs + Contracts) ───────────
+type DocCardItem =
+  | { type: 'sop'; doc: Sop; needsAction: boolean; updatedAt: string; signedAt: string | null }
+  | { type: 'contract'; doc: Contract; needsAction: boolean; updatedAt: string; signedAt: string | null }
+
+function DocumentsGrid({
+  s,
+  lang,
+  docFilter,
+  onSetFilter,
+  pendingCards,
+  archiveCards,
+  totalCount,
+  onOpenSop,
+  onOpenContract,
+}: {
+  s: ReturnType<typeof useLang>['t']
+  lang: 'en' | 'id'
+  docFilter: DocFilter
+  onSetFilter: (f: DocFilter) => void
+  pendingCards: DocCardItem[]
+  archiveCards: DocCardItem[]
+  totalCount: number
+  onOpenSop: (sop: Sop) => void
+  onOpenContract: (c: Contract) => void
+}) {
+  const chips: Array<{ key: DocFilter; label: string }> = [
+    { key: 'all', label: s.documentsAll },
+    { key: 'sops', label: s.sops },
+    { key: 'contracts', label: s.contracts },
+  ]
+
+  function openCard(card: DocCardItem) {
+    if (card.type === 'sop') onOpenSop(card.doc)
+    else onOpenContract(card.doc)
+  }
+
+  function formatShortDate(iso: string): string {
+    const d = new Date(iso)
+    const now = new Date()
+    const opts: Intl.DateTimeFormatOptions = d.getFullYear() === now.getFullYear()
+      ? { day: 'numeric', month: 'short' }
+      : { day: 'numeric', month: 'short', year: 'numeric' }
+    return new Intl.DateTimeFormat(lang === 'id' ? 'id-ID' : 'en-GB', opts).format(d)
+  }
+
+  function renderCard(card: DocCardItem) {
+    const Icon = card.type === 'sop' ? DocIcon : ContractIcon
+    // Date line: signed docs anchor to the signature date (legal anchor —
+    // absolute is more meaningful than "5 days ago"); unsigned/awaiting docs
+    // show a relative "Updated" so freshness is obvious at a glance.
+    const dateLine = card.signedAt
+      ? `${s.statusSigned} ${formatShortDate(card.signedAt)}`
+      : card.updatedAt
+        ? `${s.metaUpdated} ${formatRelativeTime(card.updatedAt, lang)}`
+        : ''
+    return (
+      <button
+        key={`${card.type}-${card.doc.id}`}
+        onClick={() => openCard(card)}
+        className="relative flex flex-col rounded-xl border p-3 text-left transition-colors"
+        style={{
+          borderColor: card.needsAction ? 'var(--color-warning, #f59e0b)' : 'var(--color-border)',
+          backgroundColor: 'var(--color-bg)',
+        }}
+      >
+        {/* Status pill: top-right of card. Awaiting is amber-emphasized so it
+            draws the eye; Signed recedes to a muted check so the resting state
+            doesn't compete with documents that need action. */}
+        <span
+          className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold"
+          style={card.needsAction
+            ? {
+                backgroundColor: 'var(--color-warning-subtle, rgba(245, 158, 11, 0.15))',
+                color: 'var(--color-warning, #f59e0b)',
+              }
+            : {
+                backgroundColor: 'var(--color-success-subtle, rgba(34, 197, 94, 0.15))',
+                color: 'var(--color-success, #22c55e)',
+              }}
+        >
+          {card.needsAction ? (
+            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+          ) : (
+            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+          )}
+          {card.needsAction ? s.statusAwaiting : s.statusSigned}
+        </span>
+        <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-lg" style={{ backgroundColor: 'var(--color-bg-secondary)', color: 'var(--color-text-secondary)' }}>
+          <Icon />
+        </div>
+        <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-tertiary)' }}>
+          {card.type === 'sop' ? s.sops : s.contracts}
+        </p>
+        <p className="mt-0.5 line-clamp-2 text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+          {card.doc.title}
+        </p>
+        <p className="mt-1 text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>
+          v{card.doc.current_version}
+          {dateLine && ` · ${dateLine}`}
+        </p>
+      </button>
+    )
+  }
+
+  return (
+    <div className="pt-4">
+      {/* Filter segmented control (matches Leaderboard period selector) */}
+      <div
+        className="mb-4 flex rounded-lg p-0.5"
+        style={{ backgroundColor: 'var(--color-bg-tertiary)' }}
+      >
+        {chips.map(c => {
+          const active = docFilter === c.key
+          return (
+            <button
+              key={c.key}
+              type="button"
+              onClick={() => onSetFilter(c.key)}
+              className="flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
+              style={{
+                backgroundColor: active ? 'var(--color-bg)' : 'transparent',
+                color: active ? 'var(--color-text)' : 'var(--color-text-tertiary)',
+                boxShadow: active ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
+              }}
+            >
+              {c.label}
+            </button>
+          )
+        })}
+      </div>
+
+      {totalCount === 0 ? (
+        <div className="rounded-xl border p-6 text-center" style={{ borderColor: 'var(--color-border)' }}>
+          <div className="mx-auto flex h-10 w-10 items-center justify-center" style={{ color: 'var(--color-text-tertiary)' }}>
+            <DocIcon />
+          </div>
+          <p className="mt-2 text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{s.documentsEmpty}</p>
+        </div>
+      ) : (
+        <>
+          {pendingCards.length > 0 && (
+            <div className="mb-5">
+              <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-warning, #f59e0b)' }}>
+                {s.needsAction}
+              </h2>
+              <div className="grid grid-cols-2 gap-2">
+                {pendingCards.map(renderCard)}
+              </div>
+            </div>
+          )}
+
+          {archiveCards.length > 0 && (
+            <div>
+              {pendingCards.length > 0 && (
+                <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-tertiary)' }}>
+                  {s.yourDocuments}
+                </h2>
+              )}
+              <div className="grid grid-cols-2 gap-2">
+                {archiveCards.map(renderCard)}
+              </div>
+            </div>
+          )}
+
+          {pendingCards.length === 0 && archiveCards.length === 0 && (
+            <p className="py-6 text-center text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{s.documentsEmpty}</p>
+          )}
+        </>
+      )}
     </div>
   )
 }

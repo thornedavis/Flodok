@@ -234,7 +234,10 @@ export function SOPEdit({ user }: { user: User }) {
 
   const bypassUnsavedWarning = useUnsavedChangesWarning(hasChanges, t.unsavedChangesPrompt)
 
-  async function handleSave() {
+  // Persists the SOP at the given target status. Same shape as the contract
+  // editor: replaces the old status dropdown + Save with explicit
+  // "Save as draft" and "Publish" actions, both of which call this.
+  async function persistSOP(nextStatus: 'active' | 'draft' | 'archived') {
     if (!sop) return
     setError('')
     setSaving(true)
@@ -250,7 +253,7 @@ export function SOPEdit({ user }: { user: User }) {
       .update({
         title,
         employee_id: employeeId,
-        status,
+        status: nextStatus,
         updated_at: new Date().toISOString(),
       })
       .eq('id', sop.id)
@@ -265,7 +268,10 @@ export function SOPEdit({ user }: { user: User }) {
       )
     }
 
+    setStatus(nextStatus)
+
     if (!contentChanged) {
+      setSOP({ ...sop, title, employee_id: employeeId, status: nextStatus })
       setSaving(false)
       bypassUnsavedWarning()
       navigate('/dashboard/sops')
@@ -299,7 +305,7 @@ export function SOPEdit({ user }: { user: User }) {
     // the DB after a save (avoids "unsaved changes" reappearing).
     setContent(result.content_markdown)
     setContentId(result.content_markdown_id)
-    setSOP({ ...sop, content_markdown: result.content_markdown, content_markdown_id: result.content_markdown_id, current_version: result.version_number, title, employee_id: employeeId, status })
+    setSOP({ ...sop, content_markdown: result.content_markdown, content_markdown_id: result.content_markdown_id, current_version: result.version_number, title, employee_id: employeeId, status: nextStatus })
 
     if (employeeId) {
       await supabase.from('feed_events').insert({
@@ -325,6 +331,9 @@ export function SOPEdit({ user }: { user: User }) {
     navigate('/dashboard/sops')
   }
 
+  function handleSaveAsDraft() { persistSOP('draft') }
+  function handlePublish() { persistSOP('active') }
+
   if (!sop) return <div style={{ color: 'var(--color-text-secondary)' }}>{t.loading}</div>
 
   const inputStyle = {
@@ -346,27 +355,23 @@ export function SOPEdit({ user }: { user: User }) {
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.editSopTitle}</h1>
         <div className="flex items-center gap-3">
-          <div className="relative">
-            <span
-              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 inline-block h-2 w-2 rounded-full"
-              style={{ backgroundColor: statusColors[status] }}
-            />
-            <select
-              value={status}
-              onChange={e => setStatus(e.target.value as typeof status)}
-              className="appearance-none rounded-lg border py-2 pl-7 pr-8 text-sm font-medium"
-              style={{ ...inputStyle, color: statusColors[status] }}
-            >
-              <option value="draft">{t.statusDraft}</option>
-              <option value="active">{t.statusActive}</option>
-              <option value="archived">{t.statusArchived}</option>
-            </select>
-            <svg className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-text-tertiary)' }}>
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
-          </div>
+          <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.editSopTitle}</h1>
+          {/* Read-only status pill — the old dropdown lied because flipping
+              it didn't actually save anything. Status now advances via the
+              explicit Save as draft / Publish buttons. */}
+          <span className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium"
+            style={{ borderColor: 'var(--color-border)', color: statusColors[status], backgroundColor: 'var(--color-bg-secondary, var(--color-bg))' }}>
+            <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: statusColors[status] }} />
+            {status === 'active' ? t.statusActive : status === 'archived' ? t.statusArchived : t.statusDraft}
+          </span>
+          {status === 'active' && hasChanges && (
+            <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+              {t.editingActiveWillBumpVersion}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-3">
           <Link
             to={`/dashboard/sops/${sop.id}/history`}
             className="rounded-lg border px-4 py-2 text-sm"
@@ -382,10 +387,10 @@ export function SOPEdit({ user }: { user: User }) {
             {t.cancel}
           </button>
           <button
-            onClick={handleSave}
-            disabled={saving || !hasChanges}
-            className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-            style={{ backgroundColor: 'var(--color-primary)' }}
+            onClick={handleSaveAsDraft}
+            disabled={saving || (!hasChanges && status === 'draft')}
+            className="flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium disabled:opacity-50"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
           >
             {saving ? (
               <>
@@ -394,7 +399,15 @@ export function SOPEdit({ user }: { user: User }) {
                 </svg>
                 {translating ? t.savingTranslating : t.saving}
               </>
-            ) : (enChanged !== idChanged) ? t.saveAndTranslate : t.save}
+            ) : t.saveAsDraft}
+          </button>
+          <button
+            onClick={handlePublish}
+            disabled={saving || (!hasChanges && status === 'active')}
+            className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+            style={{ backgroundColor: 'var(--color-primary)' }}
+          >
+            {saving ? t.publishing : t.publish}
           </button>
         </div>
       </div>

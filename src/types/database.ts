@@ -237,28 +237,37 @@ export type Database = {
       contract_signatures: {
         Row: {
           contract_id: string
-          employee_id: string
+          employee_id: string | null
           id: string
           signature_font: string | null
           signed_at: string
+          signer_role: string
+          signer_title: string | null
+          signer_user_id: string | null
           typed_name: string
           version_number: number
         }
         Insert: {
           contract_id: string
-          employee_id: string
+          employee_id?: string | null
           id?: string
           signature_font?: string | null
           signed_at?: string
+          signer_role?: string
+          signer_title?: string | null
+          signer_user_id?: string | null
           typed_name: string
           version_number: number
         }
         Update: {
           contract_id?: string
-          employee_id?: string
+          employee_id?: string | null
           id?: string
           signature_font?: string | null
           signed_at?: string
+          signer_role?: string
+          signer_title?: string | null
+          signer_user_id?: string | null
           typed_name?: string
           version_number?: number
         }
@@ -275,6 +284,13 @@ export type Database = {
             columns: ["employee_id"]
             isOneToOne: false
             referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contract_signatures_signer_user_id_fkey"
+            columns: ["signer_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -394,9 +410,11 @@ export type Database = {
           current_version: number
           days_per_week: number | null
           employee_id: string | null
+          end_date: string | null
           hours_per_day: number | null
           id: string
           org_id: string
+          start_date: string | null
           status: string
           title: string
           updated_at: string
@@ -410,9 +428,11 @@ export type Database = {
           current_version?: number
           days_per_week?: number | null
           employee_id?: string | null
+          end_date?: string | null
           hours_per_day?: number | null
           id?: string
           org_id: string
+          start_date?: string | null
           status?: string
           title: string
           updated_at?: string
@@ -426,9 +446,11 @@ export type Database = {
           current_version?: number
           days_per_week?: number | null
           employee_id?: string | null
+          end_date?: string | null
           hours_per_day?: number | null
           id?: string
           org_id?: string
+          start_date?: string | null
           status?: string
           title?: string
           updated_at?: string
@@ -1489,6 +1511,8 @@ export type Database = {
           phone: string | null
           photo_url: string | null
           role: string
+          signature_font: string | null
+          title: string | null
         }
         Insert: {
           created_at?: string
@@ -1500,6 +1524,8 @@ export type Database = {
           phone?: string | null
           photo_url?: string | null
           role?: string
+          signature_font?: string | null
+          title?: string | null
         }
         Update: {
           created_at?: string
@@ -1511,6 +1537,8 @@ export type Database = {
           phone?: string | null
           photo_url?: string | null
           role?: string
+          signature_font?: string | null
+          title?: string | null
         }
         Relationships: [
           {

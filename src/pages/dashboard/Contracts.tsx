@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
@@ -8,6 +8,7 @@ import { InfoTooltip } from '../../components/InfoTooltip'
 import { FilterPill, FilterPanel, FilterSearchInput } from '../../components/FilterControls'
 import type { FilterPanelSection } from '../../components/FilterControls'
 import { ManageDepartmentsModal } from '../../components/ManageDepartmentsModal'
+import { DateTimePicker } from '../../components/DateTimePicker'
 import type { User, Contract, Employee, Tag } from '../../types/aliases'
 
 type ContractWithEmployee = Contract & { employee: Employee | null; tagIds: string[] }
@@ -441,8 +442,10 @@ function generateContractMarkdown(
   const daysTok = '{{days_per_week}}'
   const position = fields.position || '[Position]'
   const location = fields.workLocation || '[Work Location]'
-  const start = fields.startDate || '[Start Date]'
-  const end = fields.endDate || '[End Date]'
+  // Dates are now stored as structured columns and resolved via merge tokens
+  // at view time, so changing start/end in the dashboard reflows the body.
+  const start = '{{contract_start_date}}'
+  const end = '{{contract_end_date}}'
   const hours = fields.hoursPerDay || '8'
   const days = fields.daysPerWeek || '6'
   const leave = fields.annualLeave || '12'
@@ -578,13 +581,13 @@ The parties agree to the following terms and conditions:
 
 **EMPLOYER:**
 
-Name: ____________________________
+Name: {{employer_name}}
 
-Title: ____________________________
+Title: {{employer_title}}
 
-Signature: ________________________
+Signature: {{employer_signature}}
 
-Date: ____________________________
+Date: {{employer_sign_date}}
 
 &nbsp;
 
@@ -592,9 +595,9 @@ Date: ____________________________
 
 Name: **${name}**
 
-Signature: ________________________
+Signature: {{employee_signature}}
 
-Date: ____________________________
+Date: {{employee_sign_date}}
 `
 
   return md
@@ -614,6 +617,8 @@ function CreateContractModal({ orgId, employees, onClose, onCreated }: {
   const [title, setTitle] = useState('')
   const [employeeId, setEmployeeId] = useState('')
   const [empSearch, setEmpSearch] = useState('')
+  const [empOpen, setEmpOpen] = useState(false)
+  const empWrapRef = useRef<HTMLDivElement>(null)
   const [contractType, setContractType] = useState<ContractType>('pkwt')
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
@@ -636,6 +641,15 @@ function CreateContractModal({ orgId, employees, onClose, onCreated }: {
     document.addEventListener('keydown', handleKey)
     return () => document.removeEventListener('keydown', handleKey)
   }, [onClose])
+
+  useEffect(() => {
+    if (!empOpen) return
+    function handleClick(e: MouseEvent) {
+      if (empWrapRef.current && !empWrapRef.current.contains(e.target as Node)) setEmpOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [empOpen])
 
   const filteredEmployees = empSearch.trim()
     ? employees.filter(e => e.name.toLowerCase().includes(empSearch.toLowerCase()) || getEmployeeDepts(e).some(d => d.toLowerCase().includes(empSearch.toLowerCase())))
@@ -682,6 +696,9 @@ function CreateContractModal({ orgId, employees, onClose, onCreated }: {
         allowance_idr: allowanceIdr,
         hours_per_day: hoursPerDayInt,
         days_per_week: daysPerWeekInt,
+        start_date: startDate || null,
+        // PKWTT (permanent) contracts have no end date.
+        end_date: contractType === 'pkwt' ? (endDate || null) : null,
       })
       .select()
       .single()
@@ -764,15 +781,24 @@ function CreateContractModal({ orgId, employees, onClose, onCreated }: {
                 <button type="button" onClick={() => { setEmployeeId(''); setKtpNumber(''); setEmployeeAddress('') }} className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.clear}</button>
               </div>
             ) : (
-              <div className="relative">
-                <input type="text" value={empSearch} onChange={e => setEmpSearch(e.target.value)} placeholder={t.searchEmployeesPlaceholder} className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
-                {empSearch.trim() && (
-                  <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-32 overflow-y-auto rounded-lg border shadow-lg" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }}>
+              <div ref={empWrapRef} className="relative">
+                <input
+                  type="text"
+                  value={empSearch}
+                  onChange={e => { setEmpSearch(e.target.value); setEmpOpen(true) }}
+                  onFocus={() => setEmpOpen(true)}
+                  onKeyDown={e => { if (e.key === 'Escape' && empOpen) { e.stopPropagation(); setEmpOpen(false); (e.target as HTMLInputElement).blur() } }}
+                  placeholder={t.searchEmployeesPlaceholder}
+                  className="w-full rounded-lg border px-3 py-2 text-sm"
+                  style={inputStyle}
+                />
+                {empOpen && (
+                  <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-56 overflow-y-auto rounded-lg border shadow-lg" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }}>
                     {filteredEmployees.length === 0 ? (
                       <p className="px-3 py-2 text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{t.noMatches}</p>
                     ) : (
                       filteredEmployees.map(emp => (
-                        <button key={emp.id} type="button" onClick={() => { setEmployeeId(emp.id); setEmpSearch(''); if (emp.ktp_nik) setKtpNumber(emp.ktp_nik); if (emp.address) setEmployeeAddress(emp.address) }}
+                        <button key={emp.id} type="button" onClick={() => { setEmployeeId(emp.id); setEmpSearch(''); setEmpOpen(false); if (emp.ktp_nik) setKtpNumber(emp.ktp_nik); if (emp.address) setEmployeeAddress(emp.address) }}
                           className="flex w-full items-center justify-between px-3 py-2 text-left text-sm transition-colors" style={{ color: 'var(--color-text)' }}
                           onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
                           onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
@@ -817,12 +843,12 @@ function CreateContractModal({ orgId, employees, onClose, onCreated }: {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.startDateLabel}</label>
-                  <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full rounded-lg border px-3 py-1.5 text-sm" style={inputStyle} />
+                  <DateTimePicker mode="date" value={startDate} onChange={setStartDate} />
                 </div>
                 {contractType === 'pkwt' ? (
                   <div>
                     <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.endDateLabel}</label>
-                    <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full rounded-lg border px-3 py-1.5 text-sm" style={inputStyle} />
+                    <DateTimePicker mode="date" value={endDate} onChange={setEndDate} />
                   </div>
                 ) : (
                   <div>

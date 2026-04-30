@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { SOPEditor } from '../../components/Editor'
@@ -8,7 +8,11 @@ import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning'
 import { formatIdrDigits } from '../../lib/credits'
 import { InfoTooltip } from '../../components/InfoTooltip'
 import { writeSnapshot } from '../../lib/snapshotApi'
+import { SIGNATURE_FONTS, ensureSignatureFontsLoaded } from '../../lib/signatureFonts'
+import { DateTimePicker } from '../../components/DateTimePicker'
 import type { User, Contract, Tag, Employee, Organization } from '../../types/aliases'
+
+ensureSignatureFontsLoaded()
 
 const GENERATE_SYSTEM_PROMPT = `You are an expert employment contract writer for workplace documentation.
 
@@ -50,6 +54,8 @@ export function ContractEdit({ user }: { user: User }) {
   const [allowanceIdr, setAllowanceIdr] = useState<string>('')
   const [hoursPerDay, setHoursPerDay] = useState<string>('')
   const [daysPerWeek, setDaysPerWeek] = useState<string>('')
+  const [startDate, setStartDate] = useState<string>('')
+  const [endDate, setEndDate] = useState<string>('')
   const [changeSummary] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -60,6 +66,17 @@ export function ContractEdit({ user }: { user: User }) {
   const [allTags, setAllTags] = useState<Tag[]>([])
   const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set())
   const [newTagName, setNewTagName] = useState('')
+
+  // Activate & sign flow. The signing panel sits below the editor, hidden
+  // until the user clicks "Activate & sign" — at which point we save the
+  // contract first, reveal the panel, and scroll to it. On confirm we write
+  // the employer signature row and flip status to active.
+  const [showSignPanel, setShowSignPanel] = useState(false)
+  const [signerName, setSignerName] = useState(user.name)
+  const [signerTitle, setSignerTitle] = useState(user.title || '')
+  const [signerFont, setSignerFont] = useState(user.signature_font || SIGNATURE_FONTS[0].name)
+  const [signing, setSigning] = useState(false)
+  const signPanelRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     async function load() {
@@ -85,6 +102,8 @@ export function ContractEdit({ user }: { user: User }) {
         setAllowanceIdr(contractResult.data.allowance_idr?.toString() ?? '')
         setHoursPerDay(contractResult.data.hours_per_day?.toString() ?? '')
         setDaysPerWeek(contractResult.data.days_per_week?.toString() ?? '')
+        setStartDate(contractResult.data.start_date ?? '')
+        setEndDate(contractResult.data.end_date ?? '')
 
         if (contractResult.data.employee_id) {
           const emp = (empsResult.data || []).find(e => e.id === contractResult.data.employee_id)
@@ -236,8 +255,12 @@ export function ContractEdit({ user }: { user: User }) {
     parsedHoursPerDay !== contract.hours_per_day ||
     parsedDaysPerWeek !== contract.days_per_week
   ) : false
+  const datesChanged = contract ? (
+    (startDate || null) !== (contract.start_date || null) ||
+    (endDate || null) !== (contract.end_date || null)
+  ) : false
   const hasChanges = contract ? (
-    enChanged || idChanged || employeeChanged || wagesChanged ||
+    enChanged || idChanged || employeeChanged || wagesChanged || datesChanged ||
     title !== contract.title ||
     status !== contract.status ||
     changeSummary !== ''
@@ -245,8 +268,12 @@ export function ContractEdit({ user }: { user: User }) {
 
   const bypassUnsavedWarning = useUnsavedChangesWarning(hasChanges, t.unsavedChangesPrompt)
 
-  async function handleSave() {
-    if (!contract) return
+  // Persists the contract with the given target status. Used by both
+  // "Save as draft" and "Activate & sign" — the latter passes 'draft' here
+  // and only flips to 'active' once the signature is confirmed below.
+  // Returns the new version number when a snapshot was created, else null.
+  async function persistContract(nextStatus: 'active' | 'draft' | 'archived'): Promise<{ versionNumber: number | null } | null> {
+    if (!contract) return null
     setError('')
     setSaving(true)
 
@@ -262,22 +289,21 @@ export function ContractEdit({ user }: { user: User }) {
     if (!baseWageValid || !allowanceValid) {
       setError(t.contractInvalidWages)
       setSaving(false)
-      return
+      return null
     }
 
-    // Metadata-only fields the snapshot doesn't own (title, status). The
-    // snapshot helper handles employee_id + structural fields + content +
-    // version bump.
     const { error: updateError } = await supabase
       .from('contracts')
       .update({
         title,
-        status,
+        status: nextStatus,
+        start_date: startDate || null,
+        end_date: endDate || null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', contract.id)
 
-    if (updateError) { setError(updateError.message); setSaving(false); return }
+    if (updateError) { setError(updateError.message); setSaving(false); return null }
 
     await supabase.from('contract_tags').delete().eq('contract_id', contract.id)
     if (selectedTagIds.size > 0) {
@@ -286,11 +312,12 @@ export function ContractEdit({ user }: { user: User }) {
       )
     }
 
+    setStatus(nextStatus)
+
     if (!snapshotNeeded) {
+      setContract({ ...contract, title, status: nextStatus, start_date: startDate || null, end_date: endDate || null })
       setSaving(false)
-      bypassUnsavedWarning()
-      navigate('/dashboard/contracts')
-      return
+      return { versionNumber: null }
     }
 
     setTranslating(true)
@@ -313,7 +340,7 @@ export function ContractEdit({ user }: { user: User }) {
       setTranslating(false)
       setSaving(false)
       setError(err instanceof Error ? err.message : 'Snapshot failed')
-      return
+      return null
     }
     setTranslating(false)
 
@@ -322,7 +349,7 @@ export function ContractEdit({ user }: { user: User }) {
     setContract({
       ...contract,
       title,
-      status,
+      status: nextStatus,
       content_markdown: result.content_markdown,
       content_markdown_id: result.content_markdown_id,
       current_version: result.version_number,
@@ -331,6 +358,8 @@ export function ContractEdit({ user }: { user: User }) {
       allowance_idr: parsedAllowance,
       hours_per_day: parsedHoursPerDay,
       days_per_week: parsedDaysPerWeek,
+      start_date: startDate || null,
+      end_date: endDate || null,
     })
 
     if (employeeId) {
@@ -348,9 +377,60 @@ export function ContractEdit({ user }: { user: User }) {
 
     if (result.translation_status === 'failed') {
       setError(t.snapshotTranslationFailed)
-      return
+      return { versionNumber: result.version_number }
     }
 
+    return { versionNumber: result.version_number }
+  }
+
+  async function handleSaveAsDraft() {
+    const result = await persistContract('draft')
+    if (!result) return
+    bypassUnsavedWarning()
+    navigate('/dashboard/contracts')
+  }
+
+  // Editing an active contract auto-bumps to a new (draft) version on save.
+  // The save here keeps status at 'draft' — only the signature confirmation
+  // below flips it to 'active'. If there are no changes (e.g. the contract
+  // was already a clean draft awaiting signature), skip straight to the panel.
+  async function handleActivateAndSign() {
+    if (hasChanges) {
+      const result = await persistContract('draft')
+      if (!result) return
+    }
+    setShowSignPanel(true)
+    setTimeout(() => signPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50)
+  }
+
+  async function handleConfirmSign() {
+    if (!contract || !signerName.trim() || signing) return
+    setSigning(true)
+    setError('')
+
+    const { error: sigError } = await supabase
+      .from('contract_signatures')
+      .insert({
+        contract_id: contract.id,
+        version_number: contract.current_version,
+        signer_role: 'employer',
+        signer_user_id: user.id,
+        signer_title: signerTitle.trim() || null,
+        typed_name: signerName.trim(),
+        signature_font: signerFont,
+      })
+
+    if (sigError) { setError(sigError.message); setSigning(false); return }
+
+    const { error: statusError } = await supabase
+      .from('contracts')
+      .update({ status: 'active', updated_at: new Date().toISOString() })
+      .eq('id', contract.id)
+
+    if (statusError) { setError(statusError.message); setSigning(false); return }
+
+    setStatus('active')
+    setSigning(false)
     bypassUnsavedWarning()
     navigate('/dashboard/contracts')
   }
@@ -372,31 +452,35 @@ export function ContractEdit({ user }: { user: User }) {
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.editContractTitle}</h1>
         <div className="flex items-center gap-3">
-          <div className="relative">
-            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 inline-block h-2 w-2 rounded-full" style={{ backgroundColor: statusColors[status] }} />
-            <select
-              value={status}
-              onChange={e => setStatus(e.target.value as typeof status)}
-              className="appearance-none rounded-lg border py-2 pl-7 pr-8 text-sm font-medium"
-              style={{ ...inputStyle, color: statusColors[status] }}
-            >
-              <option value="draft">{t.statusDraft}</option>
-              <option value="active">{t.statusActive}</option>
-              <option value="archived">{t.statusArchived}</option>
-            </select>
-            <svg className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-text-tertiary)' }}>
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
-          </div>
+          <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.editContractTitle}</h1>
+          {/* Read-only status pill — replaces the old dropdown. Status now
+              advances via the explicit "Activate & sign" action below; the
+              dropdown lied because flipping to active didn't actually sign. */}
+          <span className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium"
+            style={{ borderColor: 'var(--color-border)', color: statusColors[status], backgroundColor: 'var(--color-bg-secondary, var(--color-bg))' }}>
+            <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: statusColors[status] }} />
+            {status === 'active' ? t.statusActive : status === 'archived' ? t.statusArchived : t.statusDraft}
+          </span>
+          {status === 'active' && hasChanges && (
+            <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+              {t.editingActiveWillBumpVersion}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-3">
           <Link to={`/dashboard/contracts/${contract.id}/history`} className="rounded-lg border px-4 py-2 text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>{t.historyLinkLabel}</Link>
           <button onClick={() => navigate('/dashboard/contracts')} className="rounded-lg border px-4 py-2 text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>{t.cancel}</button>
-          <button onClick={handleSave} disabled={saving || !hasChanges}
-            className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50" style={{ backgroundColor: 'var(--color-primary)' }}>
+          <button onClick={handleSaveAsDraft} disabled={saving || (!hasChanges && status === 'draft')}
+            className="flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium disabled:opacity-50"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
             {saving ? (
               <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>{translating ? t.savingTranslating : t.saving}</>
-            ) : (enChanged !== idChanged) ? t.saveAndTranslate : t.save}
+            ) : t.saveAsDraft}
+          </button>
+          <button onClick={handleActivateAndSign} disabled={saving || signing}
+            className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50" style={{ backgroundColor: 'var(--color-primary)' }}>
+            {t.activateAndSign}
           </button>
         </div>
       </div>
@@ -467,6 +551,16 @@ export function ContractEdit({ user }: { user: User }) {
         </div>
 
         <div className="py-4">
+          <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.startDateLabel}</label>
+              <DateTimePicker mode="date" value={startDate} onChange={setStartDate} />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.endDateLabel}</label>
+              <DateTimePicker mode="date" value={endDate} onChange={setEndDate} />
+            </div>
+          </div>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
               <label className="mb-1 flex items-center gap-1 text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
@@ -619,6 +713,7 @@ export function ContractEdit({ user }: { user: User }) {
                   } : null,
                   today: new Date(),
                   lang: 'en',
+                  signer: { name: user.name, title: user.title },
                 }),
               }}
             />
@@ -643,6 +738,7 @@ export function ContractEdit({ user }: { user: User }) {
                   } : null,
                   today: new Date(),
                   lang: 'id',
+                  signer: { name: user.name, title: user.title },
                 }),
               }}
             />
@@ -670,6 +766,54 @@ export function ContractEdit({ user }: { user: User }) {
             </button>
           </div>
         </div>
+
+        {showSignPanel && (
+          <div ref={signPanelRef} className="rounded-xl border p-5" style={{ borderColor: 'var(--color-primary)', backgroundColor: 'var(--color-bg-secondary, var(--color-bg))' }}>
+            <h3 className="mb-1 text-base font-semibold" style={{ color: 'var(--color-text)' }}>{t.signAsEmployer}</h3>
+            <p className="mb-4 text-sm" style={{ color: 'var(--color-text-secondary)' }}>{t.signAsEmployerDesc}</p>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.signerNameLabel}</label>
+                <input type="text" value={signerName} onChange={e => setSignerName(e.target.value)} className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.signerTitleLabel}</label>
+                <input type="text" value={signerTitle} onChange={e => setSignerTitle(e.target.value)} placeholder={t.signerTitlePlaceholder} className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
+              </div>
+            </div>
+            <p className="mb-2 mt-4 text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>{t.chooseSignatureStyle}</p>
+            <div className="mb-4 grid grid-cols-2 gap-2 md:grid-cols-4">
+              {SIGNATURE_FONTS.map(font => (
+                <button
+                  key={font.name}
+                  type="button"
+                  onClick={() => setSignerFont(font.name)}
+                  className="rounded-xl border px-4 py-3 text-left transition-colors"
+                  style={{
+                    borderColor: signerFont === font.name ? 'var(--color-primary)' : 'var(--color-border)',
+                    backgroundColor: signerFont === font.name ? 'var(--color-bg)' : 'transparent',
+                  }}
+                >
+                  <span className="block truncate text-xl" style={{ fontFamily: `'${font.name}', cursive`, color: 'var(--color-text)' }}>
+                    {signerName || user.name}
+                  </span>
+                  <span className="mt-0.5 block text-[10px]" style={{ color: 'var(--color-text-tertiary)' }}>{font.label}</span>
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={handleConfirmSign} disabled={signing || !signerName.trim()}
+                className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                style={{ backgroundColor: 'var(--color-primary)' }}>
+                {signing && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>}
+                {signing ? t.signing : t.confirmAndActivate}
+              </button>
+              <button onClick={() => setShowSignPanel(false)} disabled={signing} className="rounded-lg border px-4 py-2 text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>
+                {t.cancel}
+              </button>
+            </div>
+          </div>
+        )}
 
       </div>
     </div>
