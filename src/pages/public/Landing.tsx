@@ -1,6 +1,9 @@
 import { Link } from 'react-router-dom'
 import { getAvatarGradient, getInitials } from '../../lib/avatar'
 import { InteractiveDemo } from '../../components/landing/InteractiveDemo'
+import { SiteFooter } from '../../components/PublicSiteLayout'
+import { PricingCalculator } from '../../components/PricingCalculator'
+import { FREE_EMPLOYEE_LIMIT, PRO_MIN_SEATS, calculateProMonthlyIdr, formatIdr } from '../../lib/pricing'
 
 export function Landing() {
   return (
@@ -81,7 +84,7 @@ function Hero() {
         </div>
 
         <p className="mt-4 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-          Free for teams up to 10 · 5-minute setup · Cancel anytime
+          Free for up to 2 employees · 5-minute setup · Cancel anytime
         </p>
 
         {/* Interactive product demo */}
@@ -308,17 +311,17 @@ function BentoCard({
 function HowItWorks() {
   const steps = [
     {
-      number: '01',
+      number: '1',
       title: 'Set up your organization',
       body: 'Add your company name, time zone, and brand. Five minutes flat — no onboarding call required.',
     },
     {
-      number: '02',
+      number: '2',
       title: 'Invite your team',
       body: 'One link, sent over WhatsApp or email. Your team is in before they finish their kopi.',
     },
     {
-      number: '03',
+      number: '3',
       title: 'Tighten your operation',
       body: 'Publish SOPs, send contracts, run reviews. Watch the work that used to live in your head become repeatable.',
     },
@@ -354,11 +357,8 @@ function HowItWorks() {
               }}
             >
               <div
-                className="mb-5 inline-flex h-9 w-9 items-center justify-center rounded-lg text-sm font-mono font-semibold"
-                style={{
-                  backgroundColor: 'var(--color-bg-tertiary)',
-                  color: 'var(--color-primary)',
-                }}
+                className="mb-3 text-5xl font-semibold leading-none tracking-tight md:text-6xl"
+                style={{ color: 'var(--color-primary)' }}
               >
                 {step.number}
               </div>
@@ -379,203 +379,170 @@ function HowItWorks() {
 // ─── Pricing ────────────────────────────────────────────
 
 function Pricing() {
-  const tiers = [
-    {
-      name: 'Starter',
-      price: 'Rp 0',
-      cadence: '/ month',
-      blurb: 'For small teams getting their operation off the ground.',
-      features: [
-        'Up to 10 employees',
-        'Unlimited SOPs',
-        'Public employee portal',
-        'Bahasa & English UI',
-        'Community support',
-      ],
-      cta: 'Start free',
-      highlighted: false,
-    },
-    {
-      name: 'Pro',
-      price: 'Rp 290.000',
-      cadence: '/ month',
-      blurb: 'For growing teams that need contracts, reviews, and integrations.',
-      features: [
-        'Up to 50 employees',
-        'Everything in Starter',
-        'Contracts & e-signatures',
-        'Performance reviews',
-        'Integrations (Fireflies, Slack)',
-        'Priority email support',
-      ],
-      cta: 'Start free trial',
-      highlighted: true,
-    },
-    {
-      name: 'Scale',
-      price: 'Rp 890.000',
-      cadence: '/ month',
-      blurb: 'For larger operations with custom needs.',
-      features: [
-        'Unlimited employees',
-        'Everything in Pro',
-        'Custom roles & permissions',
-        'SSO (SAML)',
-        'Dedicated success manager',
-        'Custom SLAs',
-      ],
-      cta: 'Talk to sales',
-      highlighted: false,
-    },
-  ]
+  const proStartingMonthly = calculateProMonthlyIdr(PRO_MIN_SEATS)
+
+  const features = {
+    free: [
+      `Up to ${FREE_EMPLOYEE_LIMIT} employees`,
+      '1 SOP and 1 contract per employee',
+      'Public employee portal',
+      'Bahasa & English UI · in-app translation',
+    ],
+    pro: [
+      'Unlimited SOPs & contracts',
+      'AI drafting & translation, included',
+      'Contracts, e-signatures, performance reviews',
+      'All integrations (Fireflies, Slack, Google)',
+    ],
+  }
 
   return (
     <section id="pricing" className="px-6 py-24">
-      <div className="mx-auto max-w-6xl">
+      <div className="mx-auto max-w-5xl">
         <div className="mx-auto mb-14 max-w-2xl text-center">
           <p className="mb-3 text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-primary)' }}>
             Pricing
           </p>
           <h2 className="text-3xl font-semibold tracking-tight md:text-4xl" style={{ color: 'var(--color-text)' }}>
-            Simple pricing. No surprises.
+            Pay per seat. Get cheaper as you grow.
           </h2>
           <p className="mt-4 text-base" style={{ color: 'var(--color-text-secondary)' }}>
-            Start free. Upgrade when your team outgrows it. Cancel anytime — we'll never make you talk to anyone.
+            Free for the first {FREE_EMPLOYEE_LIMIT} employees. After that, graduated
+            per-seat pricing — drag the slider to see your bill.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
-          {tiers.map(tier => (
-            <div
-              key={tier.name}
-              className="relative flex flex-col rounded-2xl border p-7"
-              style={{
-                borderColor: tier.highlighted ? 'var(--color-primary)' : 'var(--color-border)',
-                backgroundColor: tier.highlighted ? 'var(--color-bg-secondary)' : 'var(--color-bg)',
-                boxShadow: tier.highlighted ? '0 0 0 1px var(--color-primary)' : 'none',
-              }}
-            >
-              {tier.highlighted && (
-                <div
-                  className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full px-3 py-1 text-xs font-semibold text-white"
-                  style={{ backgroundColor: 'var(--color-primary)' }}
-                >
-                  Most popular
-                </div>
-              )}
-
-              <div className="mb-1 text-sm font-semibold" style={{ color: 'var(--color-text-secondary)' }}>
-                {tier.name}
-              </div>
-              <div className="mb-1 flex items-baseline gap-1">
-                <span className="text-3xl font-semibold tracking-tight" style={{ color: 'var(--color-text)' }}>
-                  {tier.price}
-                </span>
-                <span className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>
-                  {tier.cadence}
-                </span>
-              </div>
-              <p className="mb-6 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-                {tier.blurb}
-              </p>
-
-              <Link
-                to="/signup"
-                className="mb-6 block rounded-lg px-4 py-2 text-center text-sm font-semibold transition-opacity hover:opacity-90"
-                style={
-                  tier.highlighted
-                    ? { backgroundColor: 'var(--color-primary)', color: '#fff' }
-                    : {
-                        backgroundColor: 'var(--color-bg-tertiary)',
-                        color: 'var(--color-text)',
-                      }
-                }
-              >
-                {tier.cta}
-              </Link>
-
-              <ul className="space-y-2.5">
-                {tier.features.map(f => (
-                  <li key={f} className="flex items-start gap-2.5 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="mt-0.5 shrink-0"
-                      style={{ color: 'var(--color-success)' }}
-                    >
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
-                    <span>{f}</span>
-                  </li>
-                ))}
-              </ul>
+        {/* Two tier summary */}
+        <div className="mx-auto mb-8 grid max-w-3xl grid-cols-1 gap-4 md:grid-cols-2">
+          <div
+            className="rounded-2xl border p-6"
+            style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }}
+          >
+            <div className="mb-1 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-tertiary)' }}>
+              Free
             </div>
-          ))}
+            <div className="mb-3 flex items-baseline gap-1">
+              <span className="text-2xl font-semibold tracking-tight" style={{ color: 'var(--color-text)' }}>
+                Rp 0
+              </span>
+              <span className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>forever</span>
+            </div>
+            <ul className="space-y-1.5 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+              {features.free.map(f => (
+                <li key={f} className="flex items-start gap-2"><PriceCheck /><span>{f}</span></li>
+              ))}
+            </ul>
+          </div>
+
+          <div
+            className="rounded-2xl border p-6"
+            style={{
+              borderColor: 'var(--color-primary)',
+              backgroundColor: 'var(--color-bg-secondary)',
+              boxShadow: '0 0 0 1px var(--color-primary)',
+            }}
+          >
+            <div className="mb-1 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-primary)' }}>
+              Pro · from {formatIdr(proStartingMonthly)}/mo
+            </div>
+            <div className="mb-3 flex items-baseline gap-1">
+              <span className="text-2xl font-semibold tracking-tight" style={{ color: 'var(--color-text)' }}>
+                Rp 80k → 30k
+              </span>
+              <span className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>per seat</span>
+            </div>
+            <ul className="space-y-1.5 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+              {features.pro.map(f => (
+                <li key={f} className="flex items-start gap-2"><PriceCheck /><span>{f}</span></li>
+              ))}
+            </ul>
+          </div>
         </div>
 
-        <p className="mt-8 text-center text-sm" style={{ color: 'var(--color-text-tertiary)' }}>
-          Prices in IDR, billed monthly. Annual plans save 20%.
-        </p>
+        {/* Calculator */}
+        <div className="mx-auto max-w-3xl">
+          <PricingCalculator />
+        </div>
+
+        <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+          <Link
+            to="/signup"
+            className="inline-flex items-center justify-center rounded-lg px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+            style={{ backgroundColor: 'var(--color-primary)' }}
+          >
+            Start free →
+          </Link>
+          <Link
+            to="/pricing"
+            className="inline-flex items-center justify-center rounded-lg border px-5 py-2.5 text-sm font-semibold transition-colors"
+            style={{
+              borderColor: 'var(--color-border)',
+              color: 'var(--color-text)',
+              backgroundColor: 'var(--color-bg)',
+            }}
+          >
+            See full comparison
+          </Link>
+        </div>
       </div>
     </section>
   )
 }
 
+function PriceCheck() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="mt-0.5 shrink-0"
+      style={{ color: 'var(--color-success)' }}
+    >
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  )
+}
+
 // ─── Testimonials ───────────────────────────────────────
 
+type Testimonial = { id: string; name: string; role: string; company: string; quote: string }
+
+const TESTIMONIALS: Testimonial[] = [
+  { id: 'sari-wijaya',     name: 'Sari Wijaya',     role: 'COO',                 company: 'Nusa Coffee Co.', quote: "We replaced four different tools with Flodok. Onboarding a new hire used to take us a full week — now it's under a day." },
+  { id: 'rian-pratama',    name: 'Rian Pratama',    role: 'Head of People',      company: 'Lumio Studio',    quote: "The fact that it's in Bahasa, supports WITA, and is priced in Rupiah is the only reason my team actually uses it." },
+  { id: 'dewi-kusuma',     name: 'Dewi Kusuma',     role: 'Operations Lead',     company: 'Pasar Lokal',     quote: "Our SOPs used to live in a Google Drive nobody opened. My warehouse team checks Flodok on their phones before every shift now." },
+  { id: 'ahmad-surya',     name: 'Ahmad Surya',     role: 'Founder',             company: 'Halo Studio',     quote: "Setup took 20 minutes. We had contracts going out the same afternoon. I was bracing for a six-week implementation." },
+  { id: 'maya-indrawati',  name: 'Maya Indrawati',  role: 'HR Director',         company: 'Tanaman.co',      quote: "The public employee portal sold me. No accounts, no IT tickets — staff just open the link and everything is there." },
+  { id: 'reza-maulana',    name: 'Reza Maulana',    role: 'CTO',                 company: 'Sentana',         quote: "Engineers actually keep our deploy SOP up to date now because suggesting an edit is one tap from the portal." },
+  { id: 'putri-lestari',   name: 'Putri Lestari',   role: 'Customer Success',    company: 'Beautify ID',     quote: "Every CS rep handles refunds the same way. Our customer satisfaction stopped depending on which agent you got." },
+  { id: 'budi-santoso',    name: 'Budi Santoso',    role: 'Operations Manager',  company: 'BERAS PRIMA',     quote: "Cycle counts went from 'whoever was free' to a documented procedure. Our shrinkage dropped by half in one quarter." },
+  { id: 'citra-permata',   name: 'Citra Permata',   role: 'Founder',             company: 'Mitra Niaga',     quote: "I onboarded our 30th employee last week without any of the chaos that came with the 10th. Flodok carried that." },
+  { id: 'eko-wijaya',      name: 'Eko Wijaya',      role: 'General Manager',     company: 'KOPI ◆ NUSA',     quote: "The credits-as-allowance system is the cleverest performance tool I've used. Staff care about it because it's real money." },
+  { id: 'sinta-dewi',      name: 'Sinta Dewi',      role: 'Co-founder',          company: 'JogjaTech',       quote: "Bahasa-first contracts that look professional, with the merge fields filling themselves in. Our legal team finally relaxed." },
+  { id: 'hendra-kusumo',   name: 'Hendra Kusumo',   role: 'Director',            company: 'Pasar Lokal',     quote: "We rolled this out across three offices in a week. Same SOPs, same contracts, same standard — finally." },
+]
+
 function Testimonials() {
-  const quotes = [
-    {
-      quote:
-        "We replaced four different tools with Flodok. Onboarding a new hire used to take us a full week — now it's under a day.",
-      name: 'Sari Wijaya',
-      role: 'COO',
-      company: 'Nusa Coffee Co.',
-      id: 'sari-wijaya',
-    },
-    {
-      quote:
-        "The fact that it's in Bahasa, supports WITA, and is priced in Rupiah is the only reason my team actually uses it. The other tools we tried felt foreign.",
-      name: 'Rian Pratama',
-      role: 'Head of People',
-      company: 'Lumio Studio',
-      id: 'rian-pratama',
-    },
-    {
-      quote:
-        "Our SOPs used to live in a Google Drive nobody opened. Now my warehouse team checks Flodok on their phones before every shift.",
-      name: 'Dewi Kusuma',
-      role: 'Operations Lead',
-      company: 'Pasar Lokal',
-      id: 'dewi-kusuma',
-    },
-    {
-      quote:
-        "Setup took 20 minutes. We had contracts going out the same afternoon. I was bracing for a six-week implementation.",
-      name: 'Ahmad Surya',
-      role: 'Founder',
-      company: 'Halo Studio',
-      id: 'ahmad-surya',
-    },
-  ]
+  const half = Math.ceil(TESTIMONIALS.length / 2)
+  const rowA = TESTIMONIALS.slice(0, half)
+  const rowB = TESTIMONIALS.slice(half)
 
   return (
     <section
       id="testimonials"
-      className="border-y px-6 py-24"
+      className="border-y py-24"
       style={{
         borderColor: 'var(--color-border)',
         backgroundColor: 'var(--color-bg-secondary)',
       }}
     >
-      <div className="mx-auto max-w-6xl">
-        <div className="mx-auto mb-14 max-w-2xl text-center">
+      <div className="mb-14 px-6">
+        <div className="mx-auto max-w-2xl text-center">
           <p className="mb-3 text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-primary)' }}>
             Loved by operators
           </p>
@@ -583,55 +550,90 @@ function Testimonials() {
             From Jakarta to Makassar to Medan.
           </h2>
         </div>
+      </div>
 
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-          {quotes.map(q => (
-            <div
-              key={q.id}
-              className="rounded-2xl border p-7"
-              style={{
-                borderColor: 'var(--color-border)',
-                backgroundColor: 'var(--color-bg)',
-              }}
-            >
-              <div className="mb-5 flex gap-0.5">
-                {[0, 1, 2, 3, 4].map(i => (
-                  <svg
-                    key={i}
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                    style={{ color: 'var(--color-warning)' }}
-                  >
-                    <polygon points="12,2 15,9 22,9 17,14 19,21 12,17 5,21 7,14 2,9 9,9" />
-                  </svg>
-                ))}
-              </div>
-
-              <p className="mb-6 text-base leading-relaxed" style={{ color: 'var(--color-text)' }}>
-                "{q.quote}"
-              </p>
-
-              <div className="flex items-center gap-3">
-                <div
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-semibold"
-                  style={{ background: getAvatarGradient(q.id), color: 'var(--color-text)' }}
-                >
-                  {getInitials(q.name)}
-                </div>
-                <div>
-                  <div className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{q.name}</div>
-                  <div className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                    {q.role} · {q.company}
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+      <div
+        className="group/marquee space-y-4"
+        style={{
+          maskImage: 'linear-gradient(to right, transparent, black 6%, black 94%, transparent)',
+          WebkitMaskImage: 'linear-gradient(to right, transparent, black 6%, black 94%, transparent)',
+        }}
+      >
+        <TestimonialMarqueeRow quotes={rowA} duration={70} reverse={false} />
+        <TestimonialMarqueeRow quotes={rowB} duration={85} reverse={true} />
       </div>
     </section>
+  )
+}
+
+function TestimonialMarqueeRow({
+  quotes, duration, reverse,
+}: {
+  quotes: Testimonial[]
+  duration: number
+  reverse: boolean
+}) {
+  // Duplicate so the loop is seamless — at translate -50% the second copy
+  // sits exactly where the first started.
+  const loop = [...quotes, ...quotes]
+  const animation = `marquee ${duration}s linear infinite${reverse ? ' reverse' : ''}`
+  return (
+    <div className="overflow-hidden">
+      <div
+        className="flex w-max gap-4 group-hover/marquee:[animation-play-state:paused]"
+        style={{ animation }}
+      >
+        {loop.map((q, i) => (
+          <TestimonialCard key={`${q.id}-${i}`} quote={q} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function TestimonialCard({ quote }: { quote: Testimonial }) {
+  return (
+    <div
+      className="flex w-[340px] shrink-0 flex-col rounded-2xl border p-6 sm:w-[380px]"
+      style={{
+        borderColor: 'var(--color-border)',
+        backgroundColor: 'var(--color-bg)',
+      }}
+    >
+      <div className="mb-4 flex items-center gap-3">
+        <div
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-semibold"
+          style={{ background: getAvatarGradient(quote.id), color: 'var(--color-text)' }}
+        >
+          {getInitials(quote.name)}
+        </div>
+        <div className="min-w-0">
+          <div className="truncate text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{quote.name}</div>
+          <div className="truncate text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+            {quote.role} · {quote.company}
+          </div>
+        </div>
+      </div>
+
+      <div className="mb-3 flex gap-0.5">
+        {[0, 1, 2, 3, 4].map(i => (
+          <svg
+            key={i}
+            width="13"
+            height="13"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            style={{ color: 'var(--color-warning)' }}
+          >
+            <polygon points="12,2 15,9 22,9 17,14 19,21 12,17 5,21 7,14 2,9 9,9" />
+          </svg>
+        ))}
+      </div>
+
+      <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>
+        "{quote.quote}"
+      </p>
+    </div>
   )
 }
 
@@ -649,11 +651,11 @@ function FAQ() {
     },
     {
       q: 'Can I import existing SOPs?',
-      a: "Yes. Paste from Google Docs, Notion, or Word — Flodok preserves formatting, lists, tables, and links. For larger migrations, our team will handle the import for you on Pro and Scale plans.",
+      a: "Yes. Paste from Google Docs, Notion, or Word — Flodok preserves formatting, lists, tables, and links. For larger migrations, our team will handle the import for you on Pro as a paid add-on.",
     },
     {
       q: 'How does pricing work?',
-      a: "Starter is free forever for teams up to 10. Pro is Rp 290.000/month for up to 50 employees. Scale is Rp 890.000/month for unlimited. All plans are month-to-month — annual saves 20%. Cancel anytime in settings.",
+      a: "Free forever for up to 2 employees (1 SOP and 1 contract per employee). Beyond that, Pro uses graduated per-seat pricing: Rp 80.000 each for seats 1–15, Rp 50.000 each for seats 16–40, and Rp 30.000 each for seats 41+, with a 3-employee minimum. AI features and integrations are bundled in Pro under fair use. All plans month-to-month, annual saves 20%.",
     },
     {
       q: 'Is my data secure?',
@@ -723,57 +725,96 @@ function FAQ() {
   )
 }
 
-// ─── CTA Section ────────────────────────────────────────
+// ─── CTA Section + footer + giant wordmark ──────────────
+// Gradient backdrop runs full-width and continues behind the footer; the
+// final flourish is a huge "Flodok" wordmark sliced in half at the very
+// bottom — only the upper half visible.
 
 function CTASection() {
   return (
-    <section className="px-6 pb-24">
-      <div className="mx-auto max-w-5xl">
+    <section
+      className="relative isolate overflow-hidden"
+      style={{
+        // All-blue palette, kept calm and centered. Stack order matters —
+        // the topmost layer here is the soft top fade that gives breathing
+        // room above the blobs (no hard color line at the section seam).
+        backgroundImage:
+          // Top fade — keeps the first ~18% nearly black so the section
+          // blends into whatever sits above it, then becomes transparent.
+          'linear-gradient(180deg, #04070d 0%, rgba(4,7,13,0.6) 12%, transparent 22%),' +
+          // Brand blue glow, slightly off-centre, the dominant shape.
+          'radial-gradient(ellipse 60% 55% at 38% 48%, rgba(59, 130, 246, 0.42) 0%, transparent 65%),' +
+          // Deeper blue (blue-700), right side, lower — adds depth on the
+          // opposite axis without competing for attention.
+          'radial-gradient(ellipse 55% 50% at 78% 68%, rgba(29, 78, 216, 0.38) 0%, transparent 65%),' +
+          // Soft sky-blue accent, bottom-left, subtle.
+          'radial-gradient(ellipse 50% 45% at 18% 80%, rgba(14, 165, 233, 0.28) 0%, transparent 70%),' +
+          // Faint glow seating the giant wordmark at the bottom.
+          'radial-gradient(ellipse 90% 30% at 50% 108%, rgba(96, 165, 250, 0.18) 0%, transparent 70%),' +
+          // Base — slight mid-section lift, otherwise near-black throughout.
+          'linear-gradient(180deg, #04070d 0%, #060b18 55%, #04070d 100%)',
+        color: '#ffffff',
+      }}
+    >
+      {/* Subtle grain so the gradient doesn't band on flat displays */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 opacity-[0.04] mix-blend-overlay"
+        style={{
+          backgroundImage:
+            'radial-gradient(rgba(255,255,255,0.5) 1px, transparent 1px)',
+          backgroundSize: '3px 3px',
+        }}
+      />
+
+      {/* CTA copy */}
+      <div className="relative px-6 pb-20 pt-28 text-center md:pb-24 md:pt-32">
+        <h2 className="relative mx-auto max-w-2xl text-3xl font-semibold tracking-tight md:text-5xl">
+          Run your team like the world's best.
+        </h2>
+        <p className="relative mx-auto mt-4 max-w-xl text-base md:text-lg" style={{ color: 'rgba(255,255,255,0.75)' }}>
+          Free for up to 2 employees. Five minutes to set up. No card. No call.
+        </p>
+
+        <div className="relative mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+          <Link
+            to="/signup"
+            className="inline-flex items-center justify-center rounded-lg px-6 py-3 text-sm font-semibold transition-opacity hover:opacity-90"
+            style={{ backgroundColor: 'var(--color-primary)', color: '#ffffff' }}
+          >
+            Start free →
+          </Link>
+          <a
+            href="mailto:hello@flodok.com"
+            className="inline-flex items-center justify-center rounded-lg border px-6 py-3 text-sm font-semibold transition-colors"
+            style={{
+              borderColor: 'rgba(255,255,255,0.3)',
+              color: '#ffffff',
+            }}
+          >
+            Talk to sales
+          </a>
+        </div>
+      </div>
+
+      {/* Footer rendered transparently so the gradient bleeds through */}
+      <div className="relative">
+        <SiteFooter transparent />
+      </div>
+
+      {/* Giant cut-off wordmark — top half only, sitting flush with the
+          bottom edge. translate-y-1/2 hides the lower half; overflow-hidden
+          on the section clips the rest. */}
+      <div aria-hidden className="relative pt-8">
         <div
-          className="relative overflow-hidden rounded-3xl border px-8 py-16 text-center md:px-16 md:py-20"
+          className="select-none whitespace-nowrap text-center font-semibold leading-[0.8] tracking-tighter"
           style={{
-            borderColor: 'var(--color-border)',
-            backgroundColor: 'var(--color-text)',
-            color: 'var(--color-bg)',
+            fontSize: 'clamp(120px, 28vw, 480px)',
+            color: 'rgba(255,255,255,0.08)',
+            transform: 'translateY(38%)',
           }}
         >
-          {/* Decorative grid */}
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-0 opacity-[0.06]"
-            style={{
-              backgroundImage:
-                'linear-gradient(currentColor 1px, transparent 1px), linear-gradient(90deg, currentColor 1px, transparent 1px)',
-              backgroundSize: '32px 32px',
-            }}
-          />
-
-          <h2 className="relative mx-auto max-w-2xl text-3xl font-semibold tracking-tight md:text-5xl">
-            Run your team like the world's best.
-          </h2>
-          <p className="relative mx-auto mt-4 max-w-xl text-base md:text-lg" style={{ opacity: 0.7 }}>
-            Free for teams up to 10. Five minutes to set up. No card. No call.
-          </p>
-
-          <div className="relative mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Link
-              to="/signup"
-              className="inline-flex items-center justify-center rounded-lg px-6 py-3 text-sm font-semibold transition-opacity hover:opacity-90"
-              style={{ backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
-            >
-              Start free →
-            </Link>
-            <a
-              href="mailto:hello@flodok.com"
-              className="inline-flex items-center justify-center rounded-lg border px-6 py-3 text-sm font-semibold transition-colors"
-              style={{
-                borderColor: 'color-mix(in srgb, var(--color-bg) 30%, transparent)',
-                color: 'var(--color-bg)',
-              }}
-            >
-              Talk to sales
-            </a>
-          </div>
+          Flodok
         </div>
       </div>
     </section>

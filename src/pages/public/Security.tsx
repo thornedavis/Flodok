@@ -57,7 +57,7 @@ function Pillars() {
           <circle cx="12" cy="7" r="4" />
         </svg>
       ),
-      body: 'bcrypt-hashed passwords with strong policy. SSO via Google Workspace and SAML (Scale plan). Optional MFA for every user.',
+      body: 'bcrypt-hashed passwords with strong policy. SSO via Google Workspace on Pro; SAML on custom plans. Optional MFA for every user.',
     },
     {
       title: 'Access control',
@@ -96,7 +96,7 @@ function Pillars() {
           <polyline points="3 12 8 12 11 21 13 3 16 12 21 12" />
         </svg>
       ),
-      body: 'Daily backups with 30-day retention. Disaster recovery plan tested twice a year. 99.9% uptime SLA on Pro and Scale plans.',
+      body: 'Daily backups with 30-day retention. Disaster recovery plan tested twice a year. 99.9% uptime SLA on Pro plans.',
     },
   ]
 

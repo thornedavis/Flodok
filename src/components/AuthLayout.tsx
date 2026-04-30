@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { Wordmark, WordmarkOnDark } from './Brand'
 
 export function AuthLayout({
   panelEyebrow,
@@ -55,12 +56,8 @@ export function AuthLayout({
 
         {/* Top: brand */}
         <div className="relative p-10">
-          <Link
-            to="/"
-            className="text-lg font-semibold tracking-tight"
-            style={{ color: '#fff' }}
-          >
-            Flodok
+          <Link to="/" aria-label="Flodok — home" className="inline-flex items-center">
+            <WordmarkOnDark height={24} />
           </Link>
         </div>
 
@@ -96,12 +93,8 @@ export function AuthLayout({
         <div className="w-full max-w-sm">
           {/* Mobile-only brand mark */}
           <div className="mb-8 flex justify-center md:hidden">
-            <Link
-              to="/"
-              className="text-xl font-semibold tracking-tight"
-              style={{ color: 'var(--color-text)' }}
-            >
-              Flodok
+            <Link to="/" aria-label="Flodok — home" className="inline-flex items-center">
+              <Wordmark height={26} />
             </Link>
           </div>
 

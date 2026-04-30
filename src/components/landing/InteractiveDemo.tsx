@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { getAvatarGradient, getInitials } from '../../lib/avatar'
+import { calculateProMonthlyIdr } from '../../lib/pricing'
+import { Wordmark } from '../Brand'
 
 // Lazy-loads the four cursive Google Fonts used by the typed-signature picker
 // in the contract preview. Idempotent — safe to call repeatedly.
@@ -477,8 +479,8 @@ function DemoSidebar({ page, setPage }: { page: DemoPage; setPage: (p: DemoPage)
       className="hidden border-r p-3 md:flex md:flex-col"
       style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)' }}
     >
-      <div className="mb-4 px-2 pt-1 text-sm font-semibold tracking-tight" style={{ color: 'var(--color-text)' }}>
-        Flodok
+      <div className="mb-4 px-2 pt-1">
+        <Wordmark height={16} />
       </div>
       <nav className="flex-1 space-y-0.5">
         {NAV_ITEMS.map(item => {
@@ -1896,10 +1898,10 @@ function BillingPanel() {
         <div>
           <div className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--color-text-tertiary)' }}>Current plan</div>
           <div className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Pro · monthly</div>
-          <div className="text-[10px]" style={{ color: 'var(--color-text-tertiary)' }}>Up to 50 employees · {HEADCOUNT} used</div>
+          <div className="text-[10px]" style={{ color: 'var(--color-text-tertiary)' }}>{HEADCOUNT} seats · graduated per-seat pricing</div>
         </div>
         <div className="text-right">
-          <div className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>{formatIdr(290_000)}</div>
+          <div className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>{formatIdr(calculateProMonthlyIdr(HEADCOUNT))}</div>
           <div className="text-[10px]" style={{ color: 'var(--color-text-tertiary)' }}>per month</div>
         </div>
       </div>

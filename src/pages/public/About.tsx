@@ -212,7 +212,7 @@ function AboutCTA() {
             Run your operation with us.
           </h2>
           <p className="mx-auto mt-3 max-w-xl text-base" style={{ color: 'var(--color-text-secondary)' }}>
-            Free for teams up to 10. Five minutes to set up.
+            Free for up to 2 employees. Five minutes to set up.
           </p>
           <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link

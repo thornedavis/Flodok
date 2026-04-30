@@ -1,11 +1,20 @@
-import { Fragment, useState } from 'react'
+import { Fragment } from 'react'
 import { Link } from 'react-router-dom'
+import { PricingCalculator } from '../../components/PricingCalculator'
+import {
+  FREE_EMPLOYEE_LIMIT,
+  PRO_BRACKETS,
+  PRO_MIN_SEATS,
+  calculateProMonthlyIdr,
+  formatIdr,
+} from '../../lib/pricing'
 
 export function Pricing() {
   return (
     <main>
       <PricingHero />
       <PricingTiers />
+      <CalculatorSection />
       <ComparisonTable />
       <AddOns />
       <PricingFAQ />
@@ -33,8 +42,9 @@ function PricingHero() {
           Pricing built for Indonesian teams.
         </h1>
         <p className="mx-auto mt-5 max-w-xl text-base md:text-lg" style={{ color: 'var(--color-text-secondary)' }}>
-          Start free. Upgrade when you outgrow it. Always priced in Rupiah,
-          always month-to-month. Annual plans save 20%.
+          Start free for up to {FREE_EMPLOYEE_LIMIT} employees. After that, pay per
+          seat — and the rate drops as your team grows. Always priced in Rupiah,
+          always month-to-month.
         </p>
       </div>
     </section>
@@ -44,182 +54,147 @@ function PricingHero() {
 // ─── Tiers ──────────────────────────────────────────────
 
 function PricingTiers() {
-  const [annual, setAnnual] = useState(false)
-
-  const tiers = [
-    {
-      name: 'Starter',
-      monthly: 0,
-      annual: 0,
-      blurb: 'For small teams getting started.',
-      features: [
-        'Up to 10 employees',
-        'Unlimited SOPs',
-        'Public employee portal',
-        'Bahasa & English UI',
-        'Community support',
-      ],
-      cta: 'Start free',
-      highlighted: false,
-    },
-    {
-      name: 'Pro',
-      monthly: 290_000,
-      annual: 232_000,
-      blurb: 'For growing teams.',
-      features: [
-        'Up to 50 employees',
-        'Everything in Starter',
-        'Contracts & e-signatures',
-        'Performance reviews',
-        'Integrations (Fireflies, Slack)',
-        'Priority email support',
-      ],
-      cta: 'Start free trial',
-      highlighted: true,
-    },
-    {
-      name: 'Scale',
-      monthly: 890_000,
-      annual: 712_000,
-      blurb: 'For larger operations.',
-      features: [
-        'Unlimited employees',
-        'Everything in Pro',
-        'Custom roles & permissions',
-        'SSO (SAML)',
-        'Dedicated success manager',
-        'Custom SLAs',
-      ],
-      cta: 'Talk to sales',
-      highlighted: false,
-    },
-  ]
+  const proStartingMonthly = calculateProMonthlyIdr(PRO_MIN_SEATS)
 
   return (
-    <section className="px-6 pb-20">
-      <div className="mx-auto max-w-6xl">
-        {/* Billing toggle */}
+    <section className="px-6 pb-16">
+      <div className="mx-auto grid max-w-4xl grid-cols-1 gap-5 md:grid-cols-2">
+        {/* Free */}
         <div
-          className="mx-auto mb-10 inline-flex items-center gap-1 rounded-full border p-1"
+          className="relative flex flex-col rounded-2xl border p-7"
           style={{
             borderColor: 'var(--color-border)',
-            backgroundColor: 'var(--color-bg-secondary)',
-            display: 'flex',
-            width: 'fit-content',
-            marginInline: 'auto',
+            backgroundColor: 'var(--color-bg)',
           }}
         >
-          <button
-            type="button"
-            onClick={() => setAnnual(false)}
-            className="rounded-full px-4 py-1.5 text-sm font-medium transition-colors"
-            style={{
-              backgroundColor: !annual ? 'var(--color-bg)' : 'transparent',
-              color: !annual ? 'var(--color-text)' : 'var(--color-text-secondary)',
-              boxShadow: !annual ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
-            }}
-          >
-            Monthly
-          </button>
-          <button
-            type="button"
-            onClick={() => setAnnual(true)}
-            className="flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium transition-colors"
-            style={{
-              backgroundColor: annual ? 'var(--color-bg)' : 'transparent',
-              color: annual ? 'var(--color-text)' : 'var(--color-text-secondary)',
-              boxShadow: annual ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
-            }}
-          >
-            Annual
-            <span
-              className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
-              style={{
-                backgroundColor: 'var(--color-diff-add)',
-                color: 'var(--color-success)',
-              }}
-            >
-              −20%
+          <div className="mb-1 text-sm font-semibold" style={{ color: 'var(--color-text-secondary)' }}>
+            Free
+          </div>
+          <div className="mb-1 flex items-baseline gap-1">
+            <span className="text-3xl font-semibold tracking-tight" style={{ color: 'var(--color-text)' }}>
+              Rp 0
             </span>
-          </button>
-        </div>
+            <span className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>
+              forever
+            </span>
+          </div>
+          <p className="mb-6 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+            Try the flow end-to-end before you commit to anything.
+          </p>
 
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
-          {tiers.map(tier => {
-            const price = annual ? tier.annual : tier.monthly
-            return (
-              <div
-                key={tier.name}
-                className="relative flex flex-col rounded-2xl border p-7"
-                style={{
-                  borderColor: tier.highlighted ? 'var(--color-primary)' : 'var(--color-border)',
-                  backgroundColor: tier.highlighted ? 'var(--color-bg-secondary)' : 'var(--color-bg)',
-                  boxShadow: tier.highlighted ? '0 0 0 1px var(--color-primary)' : 'none',
-                }}
+          <Link
+            to="/signup"
+            className="mb-6 block rounded-lg px-4 py-2 text-center text-sm font-semibold transition-opacity hover:opacity-90"
+            style={{
+              backgroundColor: 'var(--color-bg-tertiary)',
+              color: 'var(--color-text)',
+            }}
+          >
+            Start free
+          </Link>
+
+          <ul className="space-y-2.5">
+            {[
+              `Up to ${FREE_EMPLOYEE_LIMIT} employees`,
+              '1 SOP and 1 contract per employee',
+              'Public employee portal',
+              'Bahasa & English UI · in-app translation',
+              'Community support',
+            ].map(f => (
+              <li
+                key={f}
+                className="flex items-start gap-2.5 text-sm"
+                style={{ color: 'var(--color-text-secondary)' }}
               >
-                {tier.highlighted && (
-                  <div
-                    className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full px-3 py-1 text-xs font-semibold text-white"
-                    style={{ backgroundColor: 'var(--color-primary)' }}
-                  >
-                    Most popular
-                  </div>
-                )}
-
-                <div className="mb-1 text-sm font-semibold" style={{ color: 'var(--color-text-secondary)' }}>
-                  {tier.name}
-                </div>
-                <div className="mb-1 flex items-baseline gap-1">
-                  <span className="text-3xl font-semibold tracking-tight" style={{ color: 'var(--color-text)' }}>
-                    {price === 0 ? 'Rp 0' : `Rp ${price.toLocaleString('id-ID')}`}
-                  </span>
-                  <span className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>
-                    / month
-                  </span>
-                </div>
-                <p className="mb-6 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-                  {tier.blurb}
-                </p>
-
-                <Link
-                  to={tier.cta === 'Talk to sales' ? '/contact' : '/signup'}
-                  className="mb-6 block rounded-lg px-4 py-2 text-center text-sm font-semibold transition-opacity hover:opacity-90"
-                  style={
-                    tier.highlighted
-                      ? { backgroundColor: 'var(--color-primary)', color: '#fff' }
-                      : {
-                          backgroundColor: 'var(--color-bg-tertiary)',
-                          color: 'var(--color-text)',
-                        }
-                  }
-                >
-                  {tier.cta}
-                </Link>
-
-                <ul className="space-y-2.5">
-                  {tier.features.map(f => (
-                    <li
-                      key={f}
-                      className="flex items-start gap-2.5 text-sm"
-                      style={{ color: 'var(--color-text-secondary)' }}
-                    >
-                      <Check />
-                      <span>{f}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )
-          })}
+                <Check />
+                <span>{f}</span>
+              </li>
+            ))}
+            <li
+              className="flex items-start gap-2.5 text-sm"
+              style={{ color: 'var(--color-text-tertiary)' }}
+            >
+              <Dash />
+              <span>No AI features or integrations</span>
+            </li>
+          </ul>
         </div>
 
-        <p className="mt-8 text-center text-sm" style={{ color: 'var(--color-text-tertiary)' }}>
-          {annual
-            ? 'Billed annually in Rupiah. Cancel anytime.'
-            : 'Billed monthly in Rupiah. Cancel anytime.'}
-        </p>
+        {/* Pro */}
+        <div
+          className="relative flex flex-col rounded-2xl border p-7"
+          style={{
+            borderColor: 'var(--color-primary)',
+            backgroundColor: 'var(--color-bg-secondary)',
+            boxShadow: '0 0 0 1px var(--color-primary)',
+          }}
+        >
+          <div
+            className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full px-3 py-1 text-xs font-semibold text-white"
+            style={{ backgroundColor: 'var(--color-primary)' }}
+          >
+            For growing teams
+          </div>
+
+          <div className="mb-1 text-sm font-semibold" style={{ color: 'var(--color-text-secondary)' }}>
+            Pro
+          </div>
+          <div className="mb-1 flex items-baseline gap-1">
+            <span
+              className="text-xs font-semibold uppercase tracking-wider"
+              style={{ color: 'var(--color-text-tertiary)' }}
+            >
+              From
+            </span>
+            <span className="text-3xl font-semibold tracking-tight" style={{ color: 'var(--color-text)' }}>
+              {formatIdr(proStartingMonthly)}
+            </span>
+            <span className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>
+              / month
+            </span>
+          </div>
+          <p className="mb-6 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+            Per-seat pricing. Get cheaper per seat as your team grows.
+            Minimum {PRO_MIN_SEATS} employees.
+          </p>
+
+          <Link
+            to="/signup"
+            className="mb-6 block rounded-lg px-4 py-2 text-center text-sm font-semibold text-white transition-opacity hover:opacity-90"
+            style={{ backgroundColor: 'var(--color-primary)' }}
+          >
+            Start free trial
+          </Link>
+
+          <ul className="space-y-2.5">
+            {[
+              'Unlimited SOPs & contracts',
+              'AI-assisted drafting & translation, included',
+              'Contracts & e-signatures',
+              'Performance reviews · awards · 1:1s',
+              'All integrations (Fireflies, Slack, Google)',
+              'Priority email support',
+            ].map(f => (
+              <li
+                key={f}
+                className="flex items-start gap-2.5 text-sm"
+                style={{ color: 'var(--color-text-secondary)' }}
+              >
+                <Check />
+                <span>{f}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
       </div>
+
+      <p className="mx-auto mt-8 max-w-2xl text-center text-sm" style={{ color: 'var(--color-text-tertiary)' }}>
+        Need SSO, custom contracts, or a DPA?{' '}
+        <Link to="/contact" style={{ color: 'var(--color-primary)' }} className="font-semibold hover:underline">
+          Talk to us
+        </Link>{' '}
+        — we'll scope a custom plan for organizations with 200+ employees or compliance requirements.
+      </p>
     </section>
   )
 }
@@ -253,11 +228,70 @@ function Dash() {
       stroke="currentColor"
       strokeWidth="2"
       strokeLinecap="round"
-      className="shrink-0"
+      className="mt-1 shrink-0"
       style={{ color: 'var(--color-text-tertiary)' }}
     >
       <line x1="5" y1="12" x2="19" y2="12" />
     </svg>
+  )
+}
+
+// ─── Calculator ────────────────────────────────────────
+
+function CalculatorSection() {
+  return (
+    <section className="border-y px-6 py-20" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)' }}>
+      <div className="mx-auto max-w-3xl">
+        <div className="mb-10 text-center">
+          <p
+            className="mb-3 text-xs font-semibold uppercase tracking-widest"
+            style={{ color: 'var(--color-primary)' }}
+          >
+            Pricing calculator
+          </p>
+          <h2 className="text-3xl font-semibold tracking-tight md:text-4xl" style={{ color: 'var(--color-text)' }}>
+            See exactly what you'd pay.
+          </h2>
+          <p className="mx-auto mt-4 max-w-xl text-base" style={{ color: 'var(--color-text-secondary)' }}>
+            Drag the slider — your bill is the sum of seats in each bracket,
+            like income-tax brackets. Adding a seat never makes your total
+            cheaper.
+          </p>
+        </div>
+
+        <PricingCalculator />
+
+        <div className="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {PRO_BRACKETS.map((bracket, i) => {
+            const prevCap = i === 0 ? 0 : (PRO_BRACKETS[i - 1].upTo ?? 0)
+            const label =
+              bracket.upTo === null
+                ? `Seats ${prevCap + 1}+`
+                : `Seats ${prevCap + 1}–${bracket.upTo}`
+            return (
+              <div
+                key={label}
+                className="rounded-xl border p-4 text-center"
+                style={{
+                  borderColor: 'var(--color-border)',
+                  backgroundColor: 'var(--color-bg)',
+                }}
+              >
+                <div className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-tertiary)' }}>
+                  {label}
+                </div>
+                <div className="mt-1 text-xl font-semibold" style={{ color: 'var(--color-text)' }}>
+                  {formatIdr(bracket.pricePerSeat)}
+                </div>
+                <div className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                  per seat / month
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </section>
   )
 }
 
@@ -268,59 +302,67 @@ function ComparisonTable() {
     {
       name: 'Core',
       rows: [
-        { feature: 'Employees', values: ['Up to 10', 'Up to 50', 'Unlimited'] },
-        { feature: 'SOPs', values: ['Unlimited', 'Unlimited', 'Unlimited'] },
-        { feature: 'Public employee portal', values: [true, true, true] },
-        { feature: 'Bahasa & English UI', values: [true, true, true] },
-        { feature: 'WIB · WITA · WIT time zones', values: [true, true, true] },
+        { feature: 'Employees', values: [`Up to ${FREE_EMPLOYEE_LIMIT}`, 'Per seat — graduated'] },
+        { feature: 'SOPs', values: [`${FREE_EMPLOYEE_LIMIT} max (1 per employee)`, 'Unlimited'] },
+        { feature: 'Contracts', values: [`${FREE_EMPLOYEE_LIMIT} max (1 per employee)`, 'Unlimited'] },
+        { feature: 'Public employee portal', values: [true, true] },
+        { feature: 'Bahasa & English UI', values: [true, true] },
+        { feature: 'In-app translation', values: [true, true] },
+        { feature: 'WIB · WITA · WIT time zones', values: [true, true] },
+      ],
+    },
+    {
+      name: 'AI features',
+      rows: [
+        { feature: 'AI-drafted SOPs', values: [false, 'Included · fair use'] },
+        { feature: 'AI-drafted contracts', values: [false, 'Included · fair use'] },
+        { feature: 'Auto-translate documents', values: [false, 'Included · fair use'] },
+        { feature: 'Meeting transcript → SOP updates', values: [false, 'Included · fair use'] },
       ],
     },
     {
       name: 'Documents',
       rows: [
-        { feature: 'SOP versioning & history', values: [true, true, true] },
-        { feature: 'Contracts & e-signatures', values: [false, true, true] },
-        { feature: 'Custom contract templates', values: [false, true, true] },
-        { feature: 'Bulk import (CSV / DOCX)', values: [false, true, true] },
-        { feature: 'PDF export', values: [true, true, true] },
+        { feature: 'SOP versioning & history', values: [true, true] },
+        { feature: 'E-signatures', values: [false, true] },
+        { feature: 'Custom contract templates', values: [false, true] },
+        { feature: 'Bulk import (CSV / DOCX)', values: [false, true] },
+        { feature: 'PDF export', values: [true, true] },
       ],
     },
     {
       name: 'People',
       rows: [
-        { feature: 'Employee directory', values: [true, true, true] },
-        { feature: 'Performance reviews', values: [false, true, true] },
-        { feature: '1:1 trackers', values: [false, true, true] },
-        { feature: 'Awards & gamification', values: [false, true, true] },
-        { feature: 'Custom roles & permissions', values: [false, false, true] },
+        { feature: 'Employee directory', values: [true, true] },
+        { feature: 'Performance reviews', values: [false, true] },
+        { feature: '1:1 trackers', values: [false, true] },
+        { feature: 'Awards & gamification', values: [false, true] },
       ],
     },
     {
       name: 'Integrations',
       rows: [
-        { feature: 'Fireflies (meeting notes)', values: [false, true, true] },
-        { feature: 'Slack notifications', values: [false, true, true] },
-        { feature: 'Google Workspace SSO', values: [false, true, true] },
-        { feature: 'SAML SSO', values: [false, false, true] },
-        { feature: 'Webhook API', values: [false, false, true] },
+        { feature: 'Fireflies (meeting notes)', values: [false, true] },
+        { feature: 'Slack notifications', values: [false, true] },
+        { feature: 'Google Workspace SSO', values: [false, true] },
+        { feature: 'SAML SSO', values: [false, 'Custom plan'] },
+        { feature: 'Webhook API', values: [false, 'Custom plan'] },
       ],
     },
     {
-      name: 'Support & SLA',
+      name: 'Support',
       rows: [
-        { feature: 'Community support', values: [true, true, true] },
-        { feature: 'Email support', values: [false, true, true] },
-        { feature: 'Priority response (< 4h)', values: [false, true, true] },
-        { feature: 'Dedicated success manager', values: [false, false, true] },
-        { feature: 'Custom SLA', values: [false, false, true] },
-        { feature: 'Onboarding & training', values: [false, 'Self-serve', 'White-glove'] },
+        { feature: 'Community support', values: [true, true] },
+        { feature: 'Email support', values: [false, true] },
+        { feature: 'Priority response (< 4h)', values: [false, true] },
+        { feature: 'Onboarding & training', values: [false, 'Self-serve · paid white-glove'] },
       ],
     },
   ]
 
   return (
-    <section className="border-y px-6 py-20" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)' }}>
-      <div className="mx-auto max-w-5xl">
+    <section className="px-6 py-20">
+      <div className="mx-auto max-w-4xl">
         <div className="mb-10 text-center">
           <h2 className="text-3xl font-semibold tracking-tight md:text-4xl" style={{ color: 'var(--color-text)' }}>
             Compare every feature.
@@ -338,7 +380,7 @@ function ComparisonTable() {
                   className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider"
                   style={{ color: 'var(--color-text-tertiary)' }}
                 />
-                {['Starter', 'Pro', 'Scale'].map((name, i) => (
+                {['Free', 'Pro'].map((name, i) => (
                   <th
                     key={name}
                     className="px-5 py-4 text-left text-sm font-semibold"
@@ -357,7 +399,7 @@ function ComparisonTable() {
                 <Fragment key={group.name}>
                   <tr style={{ backgroundColor: 'var(--color-bg-secondary)' }}>
                     <td
-                      colSpan={4}
+                      colSpan={3}
                       className="px-5 py-3 text-xs font-semibold uppercase tracking-wider"
                       style={{ color: 'var(--color-text-tertiary)' }}
                     >
@@ -418,7 +460,7 @@ function AddOns() {
   ]
 
   return (
-    <section className="px-6 py-20">
+    <section className="border-y px-6 py-20" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)' }}>
       <div className="mx-auto max-w-5xl">
         <div className="mb-10 text-center">
           <p
@@ -439,7 +481,7 @@ function AddOns() {
               className="rounded-2xl border p-6"
               style={{
                 borderColor: 'var(--color-border)',
-                backgroundColor: 'var(--color-bg-secondary)',
+                backgroundColor: 'var(--color-bg)',
               }}
             >
               <h3 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>
@@ -464,32 +506,40 @@ function AddOns() {
 function PricingFAQ() {
   const items = [
     {
+      q: 'How does per-seat pricing actually work?',
+      a: `We use graduated brackets, like income-tax brackets. Seats 1–15 are always Rp ${(80_000).toLocaleString('id-ID')} each. Seats 16–40 are always Rp ${(50_000).toLocaleString('id-ID')} each. Seats 41+ are always Rp ${(30_000).toLocaleString('id-ID')} each. Your monthly bill is the sum across the brackets your team fills. Adding a seat never makes your total cheaper.`,
+    },
+    {
+      q: 'What happens when I add or remove an employee mid-cycle?',
+      a: "Nothing painful. You add or remove the employee in Flodok and we update your seat count with our payment processor. The cost difference is prorated and shows up on your next monthly invoice — no surprise mid-month charge, no need to re-enter your card. Removing employees works the same way: you get a prorated credit applied to the next bill.",
+    },
+    {
       q: 'What counts as an "employee"?',
-      a: "Anyone you've added to your Flodok organization with an account. People who only access the public employee portal (read-only, no login) don't count toward your limit.",
+      a: "Anyone you've added to your Flodok organization with an account. People who only access the public employee portal (read-only, no login) don't count toward your seat count.",
     },
     {
-      q: 'Can I change plans anytime?',
-      a: "Yes. Upgrade instantly — we'll prorate the difference. Downgrade applies at the start of your next billing cycle.",
+      q: 'Why is there a 3-employee minimum on Pro?',
+      a: `The Free plan covers solo founders and 2-person teams forever — that's its job. Pro is built for teams large enough to justify contracts, performance reviews, and integrations, so it starts at ${PRO_MIN_SEATS} seats. If you only have ${FREE_EMPLOYEE_LIMIT} people, Free almost certainly does what you need.`,
     },
     {
-      q: 'What happens if I exceed my plan limit?',
-      a: "Nothing breaks. We'll notify you and your account stays fully functional. You'll have 14 days to upgrade or remove employees before any changes apply.",
+      q: 'How is my AI usage billed?',
+      a: "It isn't. AI-drafted SOPs, contract drafting, document translation, and meeting-transcript processing are all included on Pro under a fair-use policy. We'll only reach out if usage is materially above what a normal team would generate — and we'd rather move you to a custom plan than slap on usage fees.",
     },
     {
       q: 'What payment methods do you accept?',
-      a: "Bank transfer (BCA, Mandiri, BNI, BRI), credit card (Visa, Mastercard, JCB), and Indonesian e-wallets (OVO, GoPay, DANA) for monthly plans. Annual contracts can be paid by bank transfer with invoice.",
+      a: "Bank transfer (BCA, Mandiri, BNI, BRI), credit card (Visa, Mastercard, JCB), and Indonesian e-wallets (OVO, GoPay, DANA) for monthly plans. Annual contracts can be paid by bank transfer with a Faktur Pajak.",
     },
     {
       q: 'Are there setup fees?',
-      a: "No setup fees on Starter or Pro. Scale customers can opt into our white-glove onboarding (priced separately) — but it's never required.",
+      a: "No. Self-serve onboarding is included on every plan — including Free. White-glove migration and on-site training are available as paid add-ons but never required.",
     },
     {
       q: 'Do you offer non-profit or education discounts?',
-      a: "Yes — registered yayasan (foundations) and accredited Indonesian schools get 50% off Pro and Scale plans. Email sales@flodok.com with your registration to claim.",
+      a: "Yes — registered yayasan (foundations) and accredited Indonesian schools get 50% off Pro. Email sales@flodok.com with your registration to claim.",
     },
     {
       q: 'Do you offer custom enterprise plans?',
-      a: "For organizations with 500+ employees, complex compliance needs, or air-gapped deployments, we build custom plans. Get in touch and we'll scope it together.",
+      a: "For organizations with 200+ employees, SSO/SAML requirements, custom contracts, or compliance needs (DPA, audit reports, air-gapped deployments), we build custom plans. Get in touch and we'll scope it together.",
     },
     {
       q: 'Refund policy?',

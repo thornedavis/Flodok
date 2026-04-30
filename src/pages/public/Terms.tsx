@@ -109,9 +109,10 @@ export function Terms() {
           heading: '6. Free Plan & Trials',
           body: (
             <p>
-              The Starter plan is free for organizations of up to 10 employees. Trials of paid plans
-              may be offered at our discretion. We may modify or discontinue free plans and trials at
-              any time. Free accounts inactive for 12 months may be deleted with 30 days' notice.
+              The Free plan is available for organizations of up to 2 employees, with up to 1 SOP and
+              1 contract per employee. Trials of paid plans may be offered at our discretion. We may
+              modify or discontinue free plans and trials at any time. Free accounts inactive for 12
+              months may be deleted with 30 days' notice.
             </p>
           ),
         },

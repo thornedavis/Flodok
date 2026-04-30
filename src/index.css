@@ -54,6 +54,12 @@ body {
   to { transform: translateX(-50%); }
 }
 
+/* Theme-aware brand marks (see Brand.tsx) */
+.brand-for-dark { display: none; }
+.brand-for-light { display: inline-block; }
+.dark .brand-for-light { display: none; }
+.dark .brand-for-dark { display: inline-block; }
+
 /* Long-form legal/policy pages */
 .legal-prose {
   color: var(--color-text-secondary);

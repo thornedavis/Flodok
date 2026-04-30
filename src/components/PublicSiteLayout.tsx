@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
 import { useTheme } from '../hooks/useTheme'
+import { Wordmark } from './Brand'
 
 // ─── Layout ─────────────────────────────────────────────
 
@@ -20,6 +21,10 @@ export function PublicSiteLayout() {
     window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior })
   }, [location.pathname, location.hash])
 
+  // Landing page renders its own gradient-backed footer inside the CTA flow,
+  // so we skip the standard one here to avoid double rendering.
+  const ownsFooter = location.pathname === '/'
+
   return (
     <div
       className="min-h-screen"
@@ -27,7 +32,7 @@ export function PublicSiteLayout() {
     >
       <SiteNav />
       <Outlet />
-      <SiteFooter />
+      {!ownsFooter && <SiteFooter />}
     </div>
   )
 }
@@ -45,9 +50,9 @@ function SiteNav() {
         backdropFilter: 'blur(10px)',
       }}
     >
-      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-6">
-        <Link to="/" className="text-lg font-semibold tracking-tight" style={{ color: 'var(--color-text)' }}>
-          Flodok
+      <div className="mx-auto flex h-20 max-w-6xl items-center justify-between px-6">
+        <Link to="/" aria-label="Flodok — home" className="flex items-center">
+          <Wordmark />
         </Link>
 
         <nav className="hidden items-center gap-7 text-sm md:flex" style={{ color: 'var(--color-text-secondary)' }}>
@@ -94,17 +99,19 @@ function SiteNav() {
 
 // ─── Footer ─────────────────────────────────────────────
 
-function SiteFooter() {
+export function SiteFooter({ transparent = false }: { transparent?: boolean } = {}) {
   return (
     <footer
-      className="border-t px-6 py-14"
-      style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)' }}
+      className={transparent ? 'px-6 py-14' : 'border-t px-6 py-14'}
+      style={transparent
+        ? { color: 'var(--color-text)' }
+        : { borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)' }}
     >
       <div className="mx-auto max-w-6xl">
         <div className="grid grid-cols-2 gap-10 md:grid-cols-5">
           <div className="col-span-2">
-            <Link to="/" className="text-lg font-semibold tracking-tight" style={{ color: 'var(--color-text)' }}>
-              Flodok
+            <Link to="/" aria-label="Flodok — home" className="inline-flex items-center">
+              <Wordmark height={24} />
             </Link>
             <p className="mt-3 max-w-xs text-sm" style={{ color: 'var(--color-text-secondary)' }}>
               The operations OS for Indonesia's best teams. Made in Jakarta.

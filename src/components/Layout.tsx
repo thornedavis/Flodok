@@ -8,6 +8,7 @@ import { getAvatarGradient } from '../lib/avatar'
 import { supabase } from '../lib/supabase'
 import type { Translations } from '../lib/translations'
 import type { Organization, User } from '../types/aliases'
+import { Wordmark } from './Brand'
 
 type NavKey = 'navOverview' | 'navEmployees' | 'navSops' | 'navContracts' | 'navPerformance' | 'navSpotlight' | 'navPending' | 'navSettings'
 
@@ -156,10 +157,10 @@ function Sidebar({ user, mobileOpen, onCloseMobile }: {
         <div className="flex h-14 items-center px-5">
           <Link
             to="/dashboard"
-            className="text-lg font-semibold tracking-tight"
-            style={{ color: 'var(--color-text)' }}
+            aria-label="Flodok — dashboard"
+            className="inline-flex items-center"
           >
-            Flodok
+            <Wordmark height={22} />
           </Link>
         </div>
 

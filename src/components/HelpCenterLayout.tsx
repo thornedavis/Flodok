@@ -13,6 +13,7 @@ import {
   sectionBySlug,
 } from '../pages/help/data'
 import type { IconKey } from '../pages/help/data'
+import { Wordmark } from './Brand'
 
 // ─── Layout ─────────────────────────────────────────────
 
@@ -297,10 +298,10 @@ function HelpSidebar() {
       <div className="flex h-14 items-center px-5">
         <Link
           to="/"
-          className="text-lg font-semibold tracking-tight"
-          style={{ color: 'var(--color-text)' }}
+          aria-label="Flodok — home"
+          className="inline-flex items-center"
         >
-          Flodok
+          <Wordmark height={22} />
         </Link>
       </div>
 

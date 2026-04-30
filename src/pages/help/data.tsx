@@ -106,7 +106,7 @@ const QUICKSTART: ReactNode = (
     <P>
       Head to <Link to="/signup">flodok.com/signup</Link> and create a free
       account. You'll need a name, the legal name of your organization, an email,
-      and a password. The Starter plan is free forever for teams up to 10
+      and a password. The Free plan is free forever for teams up to 2
       employees — no card required.
     </P>
 
@@ -158,26 +158,57 @@ const QUICKSTART: ReactNode = (
 const PLANS: ReactNode = (
   <>
     <P>
-      Flodok offers three plans: Starter (free), Pro (Rp 290.000/month), and
-      Scale (Rp 890.000/month). All plans include unlimited SOPs, the public
-      employee portal, Bahasa & English UI, and WIB/WITA/WIT time zones.
+      Flodok has two plans: <strong>Free</strong> and <strong>Pro</strong>. Both
+      include the public employee portal, Bahasa & English UI, in-app
+      translation, and WIB/WITA/WIT time zones. Pro adds AI features,
+      contracts, e-signatures, performance reviews, and integrations.
     </P>
 
-    <H3 id="comparison">What's different per tier</H3>
+    <H3 id="comparison">What's different per plan</H3>
     <Bullets
       items={[
-        <><strong>Starter</strong> — Up to 10 employees. Best for small teams figuring things out.</>,
-        <><strong>Pro</strong> — Up to 50 employees. Adds contracts, e-signatures, performance reviews, and integrations (Fireflies, Slack).</>,
-        <><strong>Scale</strong> — Unlimited employees. Adds custom roles, SAML SSO, dedicated success manager, custom SLAs.</>,
+        <><strong>Free</strong> — Up to 2 employees, with 1 SOP and 1 contract per employee. No AI features or integrations. Forever free, no card required.</>,
+        <><strong>Pro</strong> — Per-seat pricing, 3-employee minimum. Unlimited SOPs and contracts, AI drafting and translation included, e-signatures, performance reviews, and all integrations (Fireflies, Slack, Google Workspace).</>,
       ]}
     />
 
+    <H3 id="how-pro-pricing-works">How Pro pricing works</H3>
+    <P>
+      Pro uses graduated per-seat pricing — like income-tax brackets. Each seat
+      is priced based on which bracket it falls into, so the total cost only
+      ever goes up as you add seats:
+    </P>
+    <Bullets
+      items={[
+        <><strong>Seats 1–15</strong> — Rp 80.000 per seat / month</>,
+        <><strong>Seats 16–40</strong> — Rp 50.000 per seat / month</>,
+        <><strong>Seats 41+</strong> — Rp 30.000 per seat / month</>,
+      ]}
+    />
+    <P>
+      A 10-employee team pays Rp 800.000/month. A 30-employee team pays
+      Rp 1.950.000/month (15 × 80k + 15 × 50k). A 100-employee team pays
+      Rp 4.250.000/month (15 × 80k + 25 × 50k + 60 × 30k). Drag the slider on
+      our <Link to="/pricing">pricing page</Link> to see your exact bill.
+    </P>
+
     <H3 id="billing">How billing works</H3>
     <P>
-      All plans are month-to-month, billed in Indonesian Rupiah. Annual plans
-      save 20% and can be paid by bank transfer with a tax invoice. Upgrades
-      take effect immediately and we prorate the difference. Downgrades apply at
-      the start of your next billing cycle.
+      Pro is month-to-month, billed in Indonesian Rupiah. Annual plans save 20%
+      and can be paid by bank transfer with a tax invoice. When you add or
+      remove employees mid-cycle, we update your seat count and the difference
+      is <strong>prorated and applied to your next monthly invoice</strong> —
+      no surprise mid-month charges, no need to re-enter your card.
+    </P>
+
+    <H3 id="ai-fair-use">AI fair-use policy</H3>
+    <P>
+      AI features (SOP drafting, contract drafting, document translation,
+      meeting-transcript processing) are bundled into Pro at no extra cost
+      under a fair-use policy. We don't meter usage. We'll only reach out if
+      your usage is materially above what a normal team of your size would
+      generate — and even then we'd rather move you to a custom plan than slap
+      on usage fees.
     </P>
 
     <H3 id="payment">Payment methods</H3>
@@ -191,9 +222,9 @@ const PLANS: ReactNode = (
     />
 
     <Callout type="note">
-      Registered yayasan and accredited Indonesian schools get 50% off Pro and
-      Scale plans. Email <a href="mailto:sales@flodok.com">sales@flodok.com</a>{' '}
-      with your registration to claim.
+      Registered yayasan and accredited Indonesian schools get 50% off Pro.
+      Email <a href="mailto:sales@flodok.com">sales@flodok.com</a> with your
+      registration to claim.
     </Callout>
 
     <P>
@@ -205,8 +236,9 @@ const PLANS: ReactNode = (
 const ROLES: ReactNode = (
   <>
     <P>
-      Flodok has four built-in roles. Custom roles with granular permissions are
-      available on the Scale plan.
+      Flodok has four built-in roles. Custom roles with granular permissions
+      are available on custom plans for organizations with compliance needs —
+      <Link to="/contact"> get in touch</Link> if you need this.
     </P>
 
     <H3 id="admin">Admin</H3>
@@ -239,8 +271,8 @@ const ROLES: ReactNode = (
 
     <Callout type="tip">
       Flodok defaults are conservative — managers can't see other teams,
-      employees can't see each other's contracts. If that's too tight, custom
-      roles on Scale let you broaden specific permissions per role.
+      employees can't see each other's contracts. If that's too tight,
+      custom-plan customers can broaden specific permissions per role.
     </Callout>
   </>
 )
@@ -263,7 +295,7 @@ const INVITES: ReactNode = (
 
     <H3 id="bulk">Bulk inviting</H3>
     <P>
-      Pro and Scale plans support CSV upload — name, email, role, department.
+      Pro supports CSV upload — name, email, role, department.
       We send invites in batches and surface anyone who didn't receive theirs
       (typo, bounce, etc.) so you can resend.
     </P>
@@ -388,9 +420,9 @@ const SOP_IMPORT: ReactNode = (
 
     <H3 id="bulk">Bulk migration</H3>
     <P>
-      For 50+ SOPs, our team will handle the migration as part of Pro and
-      Scale onboarding. Send us a Drive folder or a zip of files and you'll
-      have everything in Flodok within a week. Email{' '}
+      For 50+ SOPs, our team can handle the migration as a paid add-on. Send
+      us a Drive folder or a zip of files and you'll have everything in Flodok
+      within a week. Email{' '}
       <a href="mailto:onboarding@flodok.com">onboarding@flodok.com</a>.
     </P>
   </>
@@ -768,8 +800,9 @@ const INTEGRATIONS_SLACK: ReactNode = (
 const INTEGRATIONS_SSO: ReactNode = (
   <>
     <P>
-      Single sign-on through Google Workspace (Pro plan and above) or generic
-      SAML 2.0 (Scale plan).
+      Single sign-on through Google Workspace is included on Pro. Generic
+      SAML 2.0 SSO (Okta, Azure AD, JumpCloud) is available on custom plans —
+      <Link to="/contact"> get in touch</Link> if you need it.
     </P>
 
     <H3 id="google">Google Workspace</H3>
@@ -914,8 +947,8 @@ const BILLING_MANAGE: ReactNode = (
     <H3 id="cancel">Cancelling</H3>
     <P>
       <strong>Settings → Billing → Cancel subscription</strong>. Your account
-      stays active until the end of the paid period, then drops back to
-      Starter (or read-only if you exceed Starter's 10-employee limit). Your
+      stays active until the end of the paid period, then drops back to the
+      Free plan (or read-only if you exceed Free's 2-employee limit). Your
       data is retained for 30 days for export, then permanently deleted.
     </P>
   </>
@@ -941,7 +974,7 @@ const BILLING_PAYMENT: ReactNode = (
     <Bullets
       items={[
         'Credit card — Visa, Mastercard, JCB',
-        'Wire transfer — for annual contracts on Pro and Scale (invoiced)',
+        'Wire transfer — for annual Pro contracts (invoiced)',
       ]}
     />
 
@@ -1156,7 +1189,7 @@ export const sections: DocSection[] = [
       {
         slug: 'integrations-sso',
         title: 'Google SSO & SAML',
-        description: 'Single sign-on via Google Workspace (Pro) or any SAML 2.0 IdP (Scale).',
+        description: 'Single sign-on via Google Workspace (Pro) or any SAML 2.0 IdP (custom plan).',
         iconKey: 'lock',
         body: INTEGRATIONS_SSO,
       },
@@ -1253,7 +1286,7 @@ export const faqGroups: FAQGroup[] = [
       },
       {
         q: 'Is there a free plan?',
-        a: <P>Yes — Starter is free forever for organizations of up to 10 employees, with unlimited SOPs and the public portal included.</P>,
+        a: <P>Yes — the Free plan covers organizations of up to 2 employees forever, with 1 SOP and 1 contract per employee plus the public portal. Beyond that you'll need Pro, which uses graduated per-seat pricing starting at Rp 240.000/month for 3 employees.</P>,
       },
     ],
   },
