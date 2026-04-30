@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { getAvatarGradient, getInitials } from '../../lib/avatar'
+import { InteractiveDemo } from '../../components/landing/InteractiveDemo'
 
 export function Landing() {
   return (
@@ -83,134 +84,26 @@ function Hero() {
           Free for teams up to 10 · 5-minute setup · Cancel anytime
         </p>
 
-        {/* Product mockup */}
+        {/* Interactive product demo */}
         <div className="mt-14">
-          <ProductMockup />
+          <div className="mx-auto mb-3 flex max-w-5xl items-end justify-end gap-1.5 pr-3">
+            <span className="text-xs font-medium tracking-wide" style={{ color: 'var(--color-text-tertiary)' }}>
+              Interactive demo — click anywhere
+            </span>
+            <svg
+              width="28" height="28" viewBox="0 0 28 28" fill="none"
+              stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round"
+              style={{ color: 'var(--color-text-tertiary)' }}
+              aria-hidden
+            >
+              <path d="M3 4 C 14 6, 22 12, 23 24" />
+              <polyline points="19 20 23 24 26 20" />
+            </svg>
+          </div>
+          <InteractiveDemo />
         </div>
       </div>
     </section>
-  )
-}
-
-function ProductMockup() {
-  return (
-    <div
-      className="mx-auto max-w-5xl overflow-hidden rounded-2xl border shadow-2xl"
-      style={{
-        borderColor: 'var(--color-border)',
-        backgroundColor: 'var(--color-bg-secondary)',
-      }}
-    >
-      {/* Window chrome */}
-      <div
-        className="flex items-center gap-2 border-b px-4 py-2.5"
-        style={{ borderColor: 'var(--color-border)' }}
-      >
-        <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: '#ef4444' }} />
-        <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: '#eab308' }} />
-        <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: '#22c55e' }} />
-        <div
-          className="ml-3 hidden rounded-md px-3 py-0.5 text-xs sm:block"
-          style={{ backgroundColor: 'var(--color-bg)', color: 'var(--color-text-tertiary)' }}
-        >
-          app.flodok.com/dashboard
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-[200px_1fr]">
-        {/* Sidebar */}
-        <div
-          className="hidden border-r p-3 md:block"
-          style={{ borderColor: 'var(--color-border)' }}
-        >
-          <div className="mb-4 px-2 text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
-            Acme Indonesia
-          </div>
-          {[
-            'Overview',
-            'Employees',
-            'SOPs',
-            'Contracts',
-            'Performance',
-            'Pending',
-            'Settings',
-          ].map((item, i) => (
-            <div
-              key={item}
-              className="mb-0.5 flex items-center gap-2 rounded-md px-2 py-1.5 text-xs"
-              style={{
-                backgroundColor: i === 2 ? 'var(--color-bg-tertiary)' : 'transparent',
-                color: i === 2 ? 'var(--color-text)' : 'var(--color-text-secondary)',
-                fontWeight: i === 2 ? 600 : 400,
-              }}
-            >
-              <span className="h-3 w-3 rounded-sm" style={{ backgroundColor: 'var(--color-border)' }} />
-              {item}
-            </div>
-          ))}
-        </div>
-
-        {/* Main panel */}
-        <div className="p-5" style={{ backgroundColor: 'var(--color-bg)' }}>
-          <div className="mb-4 flex items-center justify-between">
-            <div>
-              <div className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>SOPs</div>
-              <div className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>24 active · 3 pending review</div>
-            </div>
-            <div
-              className="rounded-md px-2.5 py-1 text-xs font-semibold text-white"
-              style={{ backgroundColor: 'var(--color-primary)' }}
-            >
-              + New SOP
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            {[
-              { name: 'Customer onboarding playbook', dept: 'Sales', updated: '2 hari yang lalu' },
-              { name: 'Cash handling — daily close', dept: 'Operations', updated: '5 hari yang lalu' },
-              { name: 'Refund & dispute handling', dept: 'Customer Success', updated: '1 minggu yang lalu' },
-              { name: 'New hire — week one checklist', dept: 'People', updated: '2 minggu yang lalu' },
-              { name: 'Inventory reconciliation', dept: 'Operations', updated: '3 minggu yang lalu' },
-            ].map((sop, i) => (
-              <div
-                key={i}
-                className="flex items-center justify-between rounded-lg border px-3 py-2.5"
-                style={{
-                  borderColor: 'var(--color-border)',
-                  backgroundColor: 'var(--color-bg-secondary)',
-                }}
-              >
-                <div className="flex min-w-0 items-center gap-3">
-                  <div
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md"
-                    style={{ backgroundColor: 'var(--color-bg-tertiary)' }}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-text-secondary)' }}>
-                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                      <polyline points="14 2 14 8 20 8" />
-                    </svg>
-                  </div>
-                  <div className="min-w-0">
-                    <div className="truncate text-xs font-semibold" style={{ color: 'var(--color-text)' }}>{sop.name}</div>
-                    <div className="text-[10px]" style={{ color: 'var(--color-text-tertiary)' }}>{sop.dept} · updated {sop.updated}</div>
-                  </div>
-                </div>
-                <span
-                  className="rounded-full px-2 py-0.5 text-[10px] font-medium"
-                  style={{
-                    backgroundColor: 'var(--color-diff-add)',
-                    color: 'var(--color-success)',
-                  }}
-                >
-                  Live
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
   )
 }
 
