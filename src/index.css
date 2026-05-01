@@ -54,6 +54,85 @@ body {
   to { transform: translateX(-50%); }
 }
 
+/* Hero illustration ambient halo — slow combined scale + opacity breath. */
+@keyframes hero-glow-pulse {
+  0%, 100% { transform: scale(1.35); opacity: 0.38; }
+  50%      { transform: scale(1.5);  opacity: 0.55; }
+}
+.hero-glow {
+  animation: hero-glow-pulse 9s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-glow { animation: none; }
+}
+
+/* Bento card hover animations.
+ * Elements rest at their final position; on group hover the
+ * `bento-anim-*` keyframes loop, replaying the slide-in sequence.
+ * Keyframes start and end at the resting state so hover-on / hover-off
+ * never snap. */
+@keyframes bento-fade-up {
+  0%, 100%  { opacity: 1; transform: translateY(0); }
+  8%        { opacity: 0; transform: translateY(12px); }
+  28%, 85%  { opacity: 1; transform: translateY(0); }
+}
+@keyframes bento-fade-left {
+  0%, 100%  { opacity: 1; transform: translateX(0); }
+  8%        { opacity: 0; transform: translateX(-18px); }
+  28%, 85%  { opacity: 1; transform: translateX(0); }
+}
+@keyframes bento-fade-right {
+  0%, 100%  { opacity: 1; transform: translateX(0); }
+  8%        { opacity: 0; transform: translateX(18px); }
+  28%, 85%  { opacity: 1; transform: translateX(0); }
+}
+@keyframes bento-fade-in {
+  0%, 100%  { opacity: 1; }
+  8%        { opacity: 0; }
+  28%, 85%  { opacity: 1; }
+}
+
+.bento-anim { opacity: 1; }
+.group:hover .bento-anim-up    { animation: bento-fade-up    4s ease-out infinite both; }
+.group:hover .bento-anim-left  { animation: bento-fade-left  4s ease-out infinite both; }
+.group:hover .bento-anim-right { animation: bento-fade-right 4s ease-out infinite both; }
+.group:hover .bento-anim-fade  { animation: bento-fade-in    4s ease-out infinite both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .group:hover .bento-anim-up,
+  .group:hover .bento-anim-left,
+  .group:hover .bento-anim-right,
+  .group:hover .bento-anim-fade { animation: none; }
+}
+
+/* Compensation ring draw-on animation, scoped to the Portal bento card.
+ * Targets the foreground arc paths inside CompensationRing (stroke-width 28,
+ * no opacity attribute) and the icon path groups (stroke-width 2.2). On
+ * hover the arcs sweep on around the avatar; icons fade in as they finish. */
+@keyframes ring-draw {
+  0%, 100% { stroke-dashoffset: 0; }
+  8%       { stroke-dashoffset: 1000; }
+  45%, 85% { stroke-dashoffset: 0; }
+}
+@keyframes ring-icon-fade {
+  0%, 100% { opacity: 1; }
+  8%, 30%  { opacity: 0; }
+  55%, 85% { opacity: 1; }
+}
+.portal-ring-anim svg path[stroke-width="28"]:not([opacity]) {
+  stroke-dasharray: 1000;
+}
+.group:hover .portal-ring-anim svg path[stroke-width="28"]:not([opacity]) {
+  animation: ring-draw 4s ease-out infinite both;
+}
+.group:hover .portal-ring-anim svg g[stroke-width="2.2"] {
+  animation: ring-icon-fade 4s ease-out infinite both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .group:hover .portal-ring-anim svg path[stroke-width="28"]:not([opacity]),
+  .group:hover .portal-ring-anim svg g[stroke-width="2.2"] { animation: none; }
+}
+
 /* Theme-aware brand marks (see Brand.tsx) */
 .brand-for-dark { display: none; }
 .brand-for-light { display: inline-block; }

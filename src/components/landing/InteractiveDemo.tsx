@@ -351,7 +351,7 @@ export function InteractiveDemo() {
 
   const shellClass = fullscreen
     ? 'fixed inset-3 z-50 flex flex-col overflow-hidden rounded-2xl border text-left shadow-2xl md:inset-6'
-    : 'mx-auto flex max-w-5xl flex-col overflow-hidden rounded-2xl border text-left shadow-2xl'
+    : 'flex w-full flex-col overflow-hidden rounded-2xl border text-left shadow-2xl'
 
   const gridClass = fullscreen
     ? 'grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[180px_1fr]'
