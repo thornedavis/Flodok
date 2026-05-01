@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { getAvatarGradient, getInitials } from '../../lib/avatar'
 import { InteractiveDemo } from '../../components/landing/InteractiveDemo'
+import { MobilePortalMock } from '../../components/landing/MobilePortalMock'
 import { SiteFooter } from '../../components/PublicSiteLayout'
 import { PricingCalculator } from '../../components/PricingCalculator'
 import { FREE_EMPLOYEE_LIMIT, PRO_MIN_SEATS, calculateProMonthlyIdr, formatIdr } from '../../lib/pricing'
@@ -108,23 +109,37 @@ function Hero() {
           </div>
         </div>
 
-        {/* Interactive product demo */}
-        <div className="mt-14">
-          <div className="mb-3 flex items-end justify-end gap-1.5 pr-3">
-            <span className="text-xs font-medium tracking-wide" style={{ color: 'var(--color-text-tertiary)' }}>
-              Interactive demo — click anywhere
-            </span>
-            <svg
-              width="28" height="28" viewBox="0 0 28 28" fill="none"
-              stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round"
-              style={{ color: 'var(--color-text-tertiary)' }}
-              aria-hidden
-            >
-              <path d="M3 4 C 14 6, 22 12, 23 24" />
-              <polyline points="19 20 23 24 26 20" />
-            </svg>
+        {/* Interactive product demo + mobile portal mock overlay */}
+        <div className="relative mt-14">
+          {/* Desktop demo column — left-aligned and slightly narrowed on
+              lg+ so the phone mock can lean against its bottom-right
+              without covering too much of the dashboard. */}
+          <div className="lg:max-w-[calc(100%-80px)] xl:max-w-[calc(100%-120px)]">
+            <div className="mb-3 flex items-end justify-end gap-1.5 pr-3">
+              <span className="text-xs font-medium tracking-wide" style={{ color: 'var(--color-text-tertiary)' }}>
+                Interactive demo — click anywhere
+              </span>
+              <svg
+                width="28" height="28" viewBox="0 0 28 28" fill="none"
+                stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round"
+                style={{ color: 'var(--color-text-tertiary)' }}
+                aria-hidden
+              >
+                <path d="M3 4 C 14 6, 22 12, 23 24" />
+                <polyline points="19 20 23 24 26 20" />
+              </svg>
+            </div>
+            <InteractiveDemo />
           </div>
-          <InteractiveDemo />
+
+          {/* Phone — desktop only, positioned at bottom-right, peeking
+              out past the demo's bottom and right edges. */}
+          <div
+            className="pointer-events-auto absolute bottom-0 right-0 z-10 hidden lg:block"
+            style={{ transform: 'translate(8px, 40px)' }}
+          >
+            <MobilePortalMock />
+          </div>
         </div>
       </div>
     </section>
