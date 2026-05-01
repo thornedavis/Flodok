@@ -839,8 +839,8 @@ function OverviewView() {
 
       {/* Recognition + compensation */}
       <div className="grid gap-4 lg:grid-cols-2">
-        <RecognitionMoments />
         <CompensationTotal />
+        <RecognitionMoments />
       </div>
 
       {/* Recent activity + team comp */}

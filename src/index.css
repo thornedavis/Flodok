@@ -54,6 +54,30 @@ body {
   to { transform: translateX(-50%); }
 }
 
+/* Phone mock bezel — silver in light mode, dark graphite in dark mode. */
+.phone-bezel {
+  background: linear-gradient(135deg, #9ca3af 0%, #e5e7eb 100%);
+}
+.phone-bezel-edge {
+  box-shadow:
+    0 60px 120px -20px rgba(0,0,0,0.30),
+    0 25px 50px  -12px rgba(0,0,0,0.20),
+    0 8px 20px   -4px  rgba(0,0,0,0.15),
+    0 0 0 1px          rgba(255,255,255,0.7),
+    0 0 0 2px          rgba(0,0,0,0.10);
+}
+:root.dark .phone-bezel {
+  background: linear-gradient(180deg, #2a2a2a 0%, #1a1a1a 100%);
+}
+:root.dark .phone-bezel-edge {
+  box-shadow:
+    0 60px 120px -20px rgba(0,0,0,0.75),
+    0 25px 50px  -12px rgba(0,0,0,0.55),
+    0 8px 20px   -4px  rgba(0,0,0,0.40),
+    0 0 0 1px          rgba(255,255,255,0.05),
+    0 0 0 2px          rgba(0,0,0,0.60);
+}
+
 /* Hero illustration ambient halo — slow combined scale + opacity breath. */
 @keyframes hero-glow-pulse {
   0%, 100% { transform: scale(1.35); opacity: 0.38; }

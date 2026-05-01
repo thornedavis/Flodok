@@ -9,6 +9,11 @@ import { FREE_EMPLOYEE_LIMIT, PRO_MIN_SEATS, calculateProMonthlyIdr, formatIdr }
 import { ensureSignatureFontsLoaded } from '../../lib/signatureFonts'
 import { CompensationRing, ShieldPath, WalletPath, CoinPath, GiftPath } from '../../components/portal/CompensationRing'
 import heroImageUrl from '../../assets/flodok-hero-illustration.webp'
+// Inline the step illustrations so the white outlines can inherit
+// `currentColor` and flip to black in light mode, white in dark mode.
+import orgSetupIllustration from '../../assets/Organisation-Setup-Flodok.svg?raw'
+import inviteTeamIllustration from '../../assets/Invite-Your-Team-Flodok.svg?raw'
+import tightenOpsIllustration from '../../assets/Tighten-Operations-Flodok.svg?raw'
 
 export function Landing() {
   return (
@@ -963,16 +968,19 @@ function HowItWorks() {
       number: '1',
       title: 'Set up your organization',
       body: 'Add your company name, time zone, and brand. Five minutes flat — no onboarding call required.',
+      illustration: orgSetupIllustration,
     },
     {
       number: '2',
       title: 'Invite your team',
       body: 'One link, sent over WhatsApp or email. Your team is in before they finish their kopi.',
+      illustration: inviteTeamIllustration,
     },
     {
       number: '3',
       title: 'Tighten your operation',
       body: 'Publish SOPs, send contracts, run reviews. Watch the work that used to live in your head become repeatable.',
+      illustration: tightenOpsIllustration,
     },
   ]
 
@@ -999,24 +1007,35 @@ function HowItWorks() {
           {steps.map(step => (
             <div
               key={step.number}
-              className="rounded-2xl border p-6"
+              className="flex flex-col overflow-hidden rounded-2xl border"
               style={{
                 borderColor: 'var(--color-border)',
                 backgroundColor: 'var(--color-bg)',
               }}
             >
               <div
-                className="mb-3 text-5xl font-semibold leading-none tracking-tight md:text-6xl"
-                style={{ color: 'var(--color-primary)' }}
-              >
-                {step.number}
+                className="flex aspect-[4/3] items-center justify-center [&_svg]:h-full [&_svg]:w-full"
+                style={{
+                  backgroundColor: 'var(--color-bg-secondary)',
+                  color: 'var(--color-text)',
+                }}
+                dangerouslySetInnerHTML={{ __html: step.illustration }}
+                aria-hidden
+              />
+              <div className="p-6">
+                <div
+                  className="mb-3 text-5xl font-semibold leading-none tracking-tight md:text-6xl"
+                  style={{ color: 'var(--color-primary)' }}
+                >
+                  {step.number}
+                </div>
+                <h3 className="mb-2 text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
+                  {step.title}
+                </h3>
+                <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>
+                  {step.body}
+                </p>
               </div>
-              <h3 className="mb-2 text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
-                {step.title}
-              </h3>
-              <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>
-                {step.body}
-              </p>
             </div>
           ))}
         </div>
@@ -1053,7 +1072,7 @@ function Pricing() {
             Pricing
           </p>
           <h2 className="text-3xl font-semibold tracking-tight md:text-4xl" style={{ color: 'var(--color-text)' }}>
-            Pay per seat. Get cheaper as you grow.
+            Pay per seat. Save as you grow.
           </h2>
           <p className="mt-4 text-base" style={{ color: 'var(--color-text-secondary)' }}>
             Free for the first {FREE_EMPLOYEE_LIMIT} employees. After that, graduated
@@ -1064,27 +1083,39 @@ function Pricing() {
         {/* Two tier summary */}
         <div className="mx-auto mb-8 grid max-w-3xl grid-cols-1 gap-4 md:grid-cols-2">
           <div
-            className="rounded-2xl border p-6"
+            className="flex flex-col rounded-2xl border p-6"
             style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }}
           >
             <div className="mb-1 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-tertiary)' }}>
               Free
             </div>
-            <div className="mb-3 flex items-baseline gap-1">
-              <span className="text-2xl font-semibold tracking-tight" style={{ color: 'var(--color-text)' }}>
+            <div className="mb-3 flex items-baseline gap-2">
+              <span className="text-3xl font-semibold tracking-tight md:text-4xl" style={{ color: 'var(--color-text)' }}>
                 Rp 0
               </span>
               <span className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>forever</span>
             </div>
+            <hr className="mb-5 border-t" style={{ borderColor: 'var(--color-border)' }} />
             <ul className="space-y-1.5 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
               {features.free.map(f => (
                 <li key={f} className="flex items-start gap-2"><PriceCheck /><span>{f}</span></li>
               ))}
             </ul>
+            <Link
+              to="/signup"
+              className="mt-6 inline-flex items-center justify-center rounded-lg border px-4 py-2.5 text-sm font-semibold transition-colors"
+              style={{
+                borderColor: 'var(--color-border)',
+                backgroundColor: 'var(--color-bg-secondary)',
+                color: 'var(--color-text)',
+              }}
+            >
+              Start free
+            </Link>
           </div>
 
           <div
-            className="rounded-2xl border p-6"
+            className="flex flex-col rounded-2xl border p-6"
             style={{
               borderColor: 'var(--color-primary)',
               backgroundColor: 'var(--color-bg-secondary)',
@@ -1094,17 +1125,25 @@ function Pricing() {
             <div className="mb-1 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-primary)' }}>
               Pro · from {formatIdr(proStartingMonthly)}/mo
             </div>
-            <div className="mb-3 flex items-baseline gap-1">
-              <span className="text-2xl font-semibold tracking-tight" style={{ color: 'var(--color-text)' }}>
+            <div className="mb-3 flex flex-wrap items-baseline gap-2">
+              <span className="text-3xl font-semibold tracking-tight md:text-4xl" style={{ color: 'var(--color-text)' }}>
                 Rp 80k → 30k
               </span>
               <span className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>per seat</span>
             </div>
+            <hr className="mb-5 border-t" style={{ borderColor: 'var(--color-border)' }} />
             <ul className="space-y-1.5 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
               {features.pro.map(f => (
                 <li key={f} className="flex items-start gap-2"><PriceCheck /><span>{f}</span></li>
               ))}
             </ul>
+            <Link
+              to="/signup"
+              className="mt-6 inline-flex items-center justify-center rounded-lg px-4 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+              style={{ backgroundColor: 'var(--color-primary)' }}
+            >
+              Start free trial →
+            </Link>
           </div>
         </div>
 

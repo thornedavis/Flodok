@@ -3,7 +3,6 @@ import {
   PRO_BRACKETS,
   PRO_MIN_SEATS,
   calculateProMonthlyIdr,
-  calculateProAnnualMonthlyEquivalent,
   formatIdr,
 } from '../lib/pricing'
 
@@ -11,19 +10,15 @@ const SLIDER_MIN = PRO_MIN_SEATS
 const SLIDER_MAX = 100
 
 type Props = {
-  /** Show annual savings line. */
-  showAnnualToggle?: boolean
   /** Compact variant — used in landing-page hero context. */
   compact?: boolean
 }
 
-export function PricingCalculator({ showAnnualToggle = true, compact = false }: Props) {
+export function PricingCalculator({ compact = false }: Props = {}) {
   const [seats, setSeats] = useState(10)
-  const [annual, setAnnual] = useState(false)
+  const [breakdownOpen, setBreakdownOpen] = useState(false)
 
   const monthly = useMemo(() => calculateProMonthlyIdr(seats), [seats])
-  const annualPerMonth = useMemo(() => calculateProAnnualMonthlyEquivalent(seats), [seats])
-  const displayed = annual ? annualPerMonth : monthly
 
   const bracketRows = useMemo(() => {
     const rows: { range: string; seats: number; rate: number; subtotal: number }[] = []
@@ -62,75 +57,24 @@ export function PricingCalculator({ showAnnualToggle = true, compact = false }: 
         padding: compact ? '1.25rem' : '1.75rem',
       }}
     >
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <div
-            className="mb-1 text-xs font-semibold uppercase tracking-wider"
-            style={{ color: 'var(--color-text-tertiary)' }}
-          >
-            Pro plan estimate
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span
-              className={compact ? 'text-3xl font-semibold tracking-tight' : 'text-4xl font-semibold tracking-tight'}
-              style={{ color: 'var(--color-text)' }}
-            >
-              {formatIdr(displayed)}
-            </span>
-            <span className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>
-              / month
-            </span>
-          </div>
-          {annual && (
-            <div className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-              Billed annually · saves {formatIdr((monthly - annualPerMonth) * 12)} / year
-            </div>
-          )}
+      <div>
+        <div
+          className="mb-1 text-xs font-semibold uppercase tracking-wider"
+          style={{ color: 'var(--color-text-tertiary)' }}
+        >
+          Pro plan estimate
         </div>
-
-        {showAnnualToggle && (
-          <div
-            className="inline-flex items-center gap-1 rounded-full border p-1"
-            style={{
-              borderColor: 'var(--color-border)',
-              backgroundColor: 'var(--color-bg-secondary)',
-            }}
+        <div className="flex items-baseline gap-2">
+          <span
+            className={compact ? 'text-3xl font-semibold tracking-tight' : 'text-4xl font-semibold tracking-tight'}
+            style={{ color: 'var(--color-text)' }}
           >
-            <button
-              type="button"
-              onClick={() => setAnnual(false)}
-              className="rounded-full px-3 py-1 text-xs font-medium transition-colors"
-              style={{
-                backgroundColor: !annual ? 'var(--color-bg)' : 'transparent',
-                color: !annual ? 'var(--color-text)' : 'var(--color-text-secondary)',
-                boxShadow: !annual ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
-              }}
-            >
-              Monthly
-            </button>
-            <button
-              type="button"
-              onClick={() => setAnnual(true)}
-              className="flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors"
-              style={{
-                backgroundColor: annual ? 'var(--color-bg)' : 'transparent',
-                color: annual ? 'var(--color-text)' : 'var(--color-text-secondary)',
-                boxShadow: annual ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
-              }}
-            >
-              Annual
-              <span
-                className="rounded-full px-1.5 py-px text-[10px] font-semibold"
-                style={{
-                  backgroundColor: 'var(--color-diff-add)',
-                  color: 'var(--color-success)',
-                }}
-              >
-                −20%
-              </span>
-            </button>
-          </div>
-        )}
+            {formatIdr(monthly)}
+          </span>
+          <span className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>
+            / month
+          </span>
+        </div>
       </div>
 
       <div className="mt-5">
@@ -189,71 +133,102 @@ export function PricingCalculator({ showAnnualToggle = true, compact = false }: 
       </div>
 
       {!compact && (
-        <div
-          className="mt-5 rounded-xl border"
-          style={{
-            borderColor: 'var(--color-border)',
-            backgroundColor: 'var(--color-bg-secondary)',
-          }}
-        >
-          <table className="w-full text-sm">
-            <thead>
-              <tr
-                className="text-left text-[11px] font-semibold uppercase tracking-wider"
-                style={{ color: 'var(--color-text-tertiary)' }}
-              >
-                <th className="px-4 py-2.5">Bracket</th>
-                <th className="px-4 py-2.5 text-right">Seats</th>
-                <th className="px-4 py-2.5 text-right">Rate</th>
-                <th className="px-4 py-2.5 text-right">Subtotal</th>
-              </tr>
-            </thead>
-            <tbody>
-              {bracketRows.map(row => {
-                const dim = row.seats === 0
-                return (
+        <div className="mt-5">
+          <button
+            type="button"
+            onClick={() => setBreakdownOpen(o => !o)}
+            className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-xs font-medium transition-colors"
+            style={{
+              color: 'var(--color-text-secondary)',
+              backgroundColor: breakdownOpen ? 'var(--color-bg-secondary)' : 'transparent',
+            }}
+            aria-expanded={breakdownOpen}
+            aria-controls="pricing-breakdown"
+            onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-secondary)' }}
+            onMouseOut={e => { e.currentTarget.style.backgroundColor = breakdownOpen ? 'var(--color-bg-secondary)' : 'transparent' }}
+          >
+            <span>{breakdownOpen ? 'Hide breakdown' : 'See per-bracket breakdown'}</span>
+            <svg
+              width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+              style={{
+                transform: breakdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                transition: 'transform 0.15s ease',
+              }}
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+
+          {breakdownOpen && (
+            <div
+              id="pricing-breakdown"
+              className="mt-3 overflow-hidden rounded-xl border"
+              style={{
+                borderColor: 'var(--color-border)',
+                backgroundColor: 'var(--color-bg-secondary)',
+              }}
+            >
+              <table className="w-full text-sm">
+                <thead>
                   <tr
-                    key={row.range}
-                    style={{
-                      borderTop: '1px solid var(--color-border)',
-                      opacity: dim ? 0.45 : 1,
-                    }}
+                    className="text-left text-[11px] font-semibold uppercase tracking-wider"
+                    style={{ color: 'var(--color-text-tertiary)' }}
                   >
-                    <td className="px-4 py-2.5" style={{ color: 'var(--color-text)' }}>
-                      {row.range}
-                    </td>
-                    <td className="px-4 py-2.5 text-right tabular-nums" style={{ color: 'var(--color-text-secondary)' }}>
-                      {row.seats}
-                    </td>
-                    <td className="px-4 py-2.5 text-right tabular-nums" style={{ color: 'var(--color-text-secondary)' }}>
-                      {formatIdr(row.rate)}
+                    <th className="px-4 py-2.5">Bracket</th>
+                    <th className="px-4 py-2.5 text-right">Seats</th>
+                    <th className="px-4 py-2.5 text-right">Rate</th>
+                    <th className="px-4 py-2.5 text-right">Subtotal</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bracketRows.map(row => {
+                    const dim = row.seats === 0
+                    return (
+                      <tr
+                        key={row.range}
+                        style={{
+                          borderTop: '1px solid var(--color-border)',
+                          opacity: dim ? 0.45 : 1,
+                        }}
+                      >
+                        <td className="px-4 py-2.5" style={{ color: 'var(--color-text)' }}>
+                          {row.range}
+                        </td>
+                        <td className="px-4 py-2.5 text-right tabular-nums" style={{ color: 'var(--color-text-secondary)' }}>
+                          {row.seats}
+                        </td>
+                        <td className="px-4 py-2.5 text-right tabular-nums" style={{ color: 'var(--color-text-secondary)' }}>
+                          {formatIdr(row.rate)}
+                        </td>
+                        <td
+                          className="px-4 py-2.5 text-right font-semibold tabular-nums"
+                          style={{ color: 'var(--color-text)' }}
+                        >
+                          {formatIdr(row.subtotal)}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                  <tr style={{ borderTop: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg)' }}>
+                    <td
+                      colSpan={3}
+                      className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider"
+                      style={{ color: 'var(--color-text-tertiary)' }}
+                    >
+                      Total / month
                     </td>
                     <td
                       className="px-4 py-2.5 text-right font-semibold tabular-nums"
                       style={{ color: 'var(--color-text)' }}
                     >
-                      {formatIdr(row.subtotal)}
+                      {formatIdr(monthly)}
                     </td>
                   </tr>
-                )
-              })}
-              <tr style={{ borderTop: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg)' }}>
-                <td
-                  colSpan={3}
-                  className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider"
-                  style={{ color: 'var(--color-text-tertiary)' }}
-                >
-                  Total / month
-                </td>
-                <td
-                  className="px-4 py-2.5 text-right font-semibold tabular-nums"
-                  style={{ color: 'var(--color-text)' }}
-                >
-                  {formatIdr(monthly)}
-                </td>
-              </tr>
-            </tbody>
-          </table>
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -113,16 +113,7 @@ export function MobilePortalMock({ className = '' }: { className?: string }) {
 
 function PhoneFrame({ children }: { children: React.ReactNode }) {
   return (
-    <div
-      className="relative rounded-[44px] p-[6px]"
-      style={{
-        background: 'linear-gradient(180deg, #2a2a2a 0%, #1a1a1a 100%)',
-        boxShadow:
-          '0 30px 80px -20px rgba(0,0,0,0.55), ' +
-          '0 0 0 1px rgba(255,255,255,0.05), ' +
-          '0 0 0 2px rgba(0,0,0,0.6)',
-      }}
-    >
+    <div className="phone-bezel phone-bezel-edge relative rounded-[44px] p-[6px]">
       <div
         className="relative overflow-hidden rounded-[38px]"
         style={{ height: 568, backgroundColor: 'var(--color-bg)' }}
@@ -385,11 +376,10 @@ function CompensationRing() {
       </svg>
       <div className="absolute inset-0 flex items-center justify-center">
         <div
-          className="flex h-[110px] w-[110px] items-center justify-center overflow-hidden rounded-full text-base font-semibold"
-          style={{ background: getAvatarGradient(PORTAL_USER.id), color: '#1a1a1a' }}
-        >
-          {getInitials(PORTAL_USER.name)}
-        </div>
+          className="h-[110px] w-[110px] overflow-hidden rounded-full"
+          style={{ background: getAvatarGradient(PORTAL_USER.id) }}
+          aria-hidden
+        />
       </div>
     </div>
   )
