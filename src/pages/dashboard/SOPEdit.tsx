@@ -6,12 +6,14 @@ import { useLang } from '../../contexts/LanguageContext'
 import { primaryDept, deptsJoined } from '../../lib/employee'
 import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning'
 import { writeSnapshot } from '../../lib/snapshotApi'
+import { useBilling } from '../../contexts/BillingContext'
 import type { User, Sop, Tag, Employee, Organization } from '../../types/aliases'
 
 export function SOPEdit({ user }: { user: User }) {
   const { t } = useLang()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { canWrite } = useBilling()
   const [sop, setSOP] = useState<Sop | null>(null)
   const [organization, setOrganization] = useState<Organization | null>(null)
   const [employee, setEmployee] = useState<Employee | null>(null)
@@ -388,8 +390,9 @@ export function SOPEdit({ user }: { user: User }) {
           </button>
           <button
             onClick={handleSaveAsDraft}
-            disabled={saving || (!hasChanges && status === 'draft')}
-            className="flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium disabled:opacity-50"
+            disabled={saving || !canWrite || (!hasChanges && status === 'draft')}
+            title={!canWrite ? t.dunningWriteBlocked : undefined}
+            className="flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
             style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
           >
             {saving ? (
@@ -403,8 +406,9 @@ export function SOPEdit({ user }: { user: User }) {
           </button>
           <button
             onClick={handlePublish}
-            disabled={saving || (!hasChanges && status === 'active')}
-            className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+            disabled={saving || !canWrite || (!hasChanges && status === 'active')}
+            title={!canWrite ? t.dunningWriteBlocked : undefined}
+            className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
             style={{ backgroundColor: 'var(--color-primary)' }}
           >
             {saving ? (
@@ -549,8 +553,8 @@ export function SOPEdit({ user }: { user: User }) {
               <button
                 type="button"
                 onClick={() => handleTranslate(translateDirection)}
-                disabled={translating || !hasSourceContent || needsSaveBeforeTranslate}
-                title={needsSaveBeforeTranslate ? t.saveChangesBeforeTranslatingHint : undefined}
+                disabled={translating || !canWrite || !hasSourceContent || needsSaveBeforeTranslate}
+                title={!canWrite ? t.dunningWriteBlocked : needsSaveBeforeTranslate ? t.saveChangesBeforeTranslatingHint : undefined}
                 className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all disabled:opacity-50"
                 style={{
                   borderColor: translateDone ? 'var(--color-success, #22c55e)' : 'var(--color-border)',
@@ -650,8 +654,9 @@ export function SOPEdit({ user }: { user: User }) {
             <button
               type="button"
               onClick={handleGenerate}
-              disabled={generating || !aiPrompt.trim()}
-              className="flex shrink-0 items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+              disabled={generating || !canWrite || !aiPrompt.trim()}
+              title={!canWrite ? t.dunningWriteBlocked : undefined}
+              className="flex shrink-0 items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
               style={{ backgroundColor: 'var(--color-primary)' }}
             >
               {generating && (

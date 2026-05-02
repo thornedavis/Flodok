@@ -5,7 +5,7 @@ import { InteractiveDemo } from '../../components/landing/InteractiveDemo'
 import { MobilePortalMock } from '../../components/landing/MobilePortalMock'
 import { SiteFooter } from '../../components/PublicSiteLayout'
 import { PricingCalculator } from '../../components/PricingCalculator'
-import { FREE_EMPLOYEE_LIMIT, PRO_MIN_SEATS, calculateProMonthlyIdr, formatIdr } from '../../lib/pricing'
+import { FREE_EMPLOYEE_LIMIT, PRO_MIN_SEATS, FREE_FEATURES, PRO_FEATURES, calculateProMonthlyIdr, formatIdr } from '../../lib/pricing'
 import { ensureSignatureFontsLoaded } from '../../lib/signatureFonts'
 import { CompensationRing, ShieldPath, WalletPath, CoinPath, GiftPath } from '../../components/portal/CompensationRing'
 import heroImageUrl from '../../assets/flodok-hero-illustration.webp'
@@ -1049,20 +1049,7 @@ function HowItWorks() {
 function Pricing() {
   const proStartingMonthly = calculateProMonthlyIdr(PRO_MIN_SEATS)
 
-  const features = {
-    free: [
-      `Up to ${FREE_EMPLOYEE_LIMIT} employees`,
-      '1 SOP and 1 contract per employee',
-      'Public employee portal',
-      'Bahasa & English UI · in-app translation',
-    ],
-    pro: [
-      'Unlimited SOPs & contracts',
-      'AI drafting & translation, included',
-      'Contracts, e-signatures, performance reviews',
-      'All integrations (Fireflies, Slack, Google)',
-    ],
-  }
+  const features = { free: FREE_FEATURES, pro: PRO_FEATURES }
 
   return (
     <section id="pricing" className="px-6 py-24">
@@ -1072,11 +1059,11 @@ function Pricing() {
             Pricing
           </p>
           <h2 className="text-3xl font-semibold tracking-tight md:text-4xl" style={{ color: 'var(--color-text)' }}>
-            Pay per seat. Save as you grow.
+            Pay per employee. Save as you grow.
           </h2>
           <p className="mt-4 text-base" style={{ color: 'var(--color-text-secondary)' }}>
             Free for the first {FREE_EMPLOYEE_LIMIT} employees. After that, graduated
-            per-seat pricing — drag the slider to see your bill.
+            per-employee pricing — drag the slider to see your bill.
           </p>
         </div>
 
@@ -1115,21 +1102,30 @@ function Pricing() {
           </div>
 
           <div
-            className="flex flex-col rounded-2xl border p-6"
+            className="relative flex flex-col rounded-2xl border p-6"
             style={{
               borderColor: 'var(--color-primary)',
               backgroundColor: 'var(--color-bg-secondary)',
               boxShadow: '0 0 0 1px var(--color-primary)',
             }}
           >
+            <div
+              className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full px-3 py-1 text-xs font-semibold text-white"
+              style={{ backgroundColor: 'var(--color-primary)' }}
+            >
+              For growing teams
+            </div>
             <div className="mb-1 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-primary)' }}>
-              Pro · from {formatIdr(proStartingMonthly)}/mo
+              Pro
             </div>
             <div className="mb-3 flex flex-wrap items-baseline gap-2">
-              <span className="text-3xl font-semibold tracking-tight md:text-4xl" style={{ color: 'var(--color-text)' }}>
-                Rp 80k → 30k
+              <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-tertiary)' }}>
+                From
               </span>
-              <span className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>per seat</span>
+              <span className="text-3xl font-semibold tracking-tight md:text-4xl" style={{ color: 'var(--color-text)' }}>
+                {formatIdr(proStartingMonthly)}
+              </span>
+              <span className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>/ month</span>
             </div>
             <hr className="mb-5 border-t" style={{ borderColor: 'var(--color-border)' }} />
             <ul className="space-y-1.5 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
@@ -1142,7 +1138,7 @@ function Pricing() {
               className="mt-6 inline-flex items-center justify-center rounded-lg px-4 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
               style={{ backgroundColor: 'var(--color-primary)' }}
             >
-              Start free trial →
+              Get started now →
             </Link>
           </div>
         </div>
@@ -1343,7 +1339,7 @@ function FAQ() {
     },
     {
       q: 'How does pricing work?',
-      a: "Free forever for up to 2 employees (1 SOP and 1 contract per employee). Beyond that, Pro uses graduated per-seat pricing: Rp 80.000 each for seats 1–15, Rp 50.000 each for seats 16–40, and Rp 30.000 each for seats 41+, with a 3-employee minimum. AI features and integrations are bundled in Pro under fair use. All plans month-to-month, annual saves 20%.",
+      a: "Free forever for up to 2 employees (1 SOP and 1 contract per employee). Beyond that, Pro uses graduated per-employee pricing: Rp 100,000 each for employees 1–15, Rp 70,000 each for employees 16–40, and Rp 50,000 each for employees 41+, with a 3-employee minimum. AI features and integrations are bundled in Pro under fair use. All plans month-to-month, annual saves 20%.",
     },
     {
       q: 'Is my data secure?',

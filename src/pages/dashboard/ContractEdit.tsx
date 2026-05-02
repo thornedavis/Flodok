@@ -10,6 +10,7 @@ import { InfoTooltip } from '../../components/InfoTooltip'
 import { writeSnapshot } from '../../lib/snapshotApi'
 import { SIGNATURE_FONTS, ensureSignatureFontsLoaded } from '../../lib/signatureFonts'
 import { DateTimePicker } from '../../components/DateTimePicker'
+import { useBilling } from '../../contexts/BillingContext'
 import type { User, Contract, Tag, Employee, Organization } from '../../types/aliases'
 
 ensureSignatureFontsLoaded()
@@ -38,6 +39,7 @@ export function ContractEdit({ user }: { user: User }) {
   const { t } = useLang()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { canWrite } = useBilling()
   const [contract, setContract] = useState<Contract | null>(null)
   const [organization, setOrganization] = useState<Organization | null>(null)
   const [employee, setEmployee] = useState<Employee | null>(null)
@@ -471,14 +473,14 @@ export function ContractEdit({ user }: { user: User }) {
         <div className="flex items-center gap-3">
           <Link to={`/dashboard/contracts/${contract.id}/history`} className="rounded-lg border px-4 py-2 text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>{t.historyLinkLabel}</Link>
           <button onClick={() => navigate('/dashboard/contracts')} className="rounded-lg border px-4 py-2 text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>{t.cancel}</button>
-          <button onClick={handleSaveAsDraft} disabled={saving || (!hasChanges && status === 'draft')}
+          <button onClick={handleSaveAsDraft} disabled={saving || !canWrite || (!hasChanges && status === 'draft')} title={!canWrite ? t.dunningWriteBlocked : undefined}
             className="flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium disabled:opacity-50"
             style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
             {saving ? (
               <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>{translating ? t.savingTranslating : t.saving}</>
             ) : t.saveAsDraft}
           </button>
-          <button onClick={handleActivateAndSign} disabled={saving || signing}
+          <button onClick={handleActivateAndSign} disabled={saving || signing || !canWrite} title={!canWrite ? t.dunningWriteBlocked : undefined}
             className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50" style={{ backgroundColor: 'var(--color-primary)' }}>
             {saving ? (
               <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>{translating ? t.savingTranslating : t.saving}</>
@@ -669,8 +671,8 @@ export function ContractEdit({ user }: { user: User }) {
                   {t.bahasaIndonesiaLabel}
                 </button>
               </div>
-              <button type="button" onClick={() => handleTranslate(translateDirection)} disabled={translating || !hasSourceContent || needsSaveBeforeTranslate}
-                title={needsSaveBeforeTranslate ? t.saveChangesBeforeTranslatingHint : undefined}
+              <button type="button" onClick={() => handleTranslate(translateDirection)} disabled={translating || !canWrite || !hasSourceContent || needsSaveBeforeTranslate}
+                title={!canWrite ? t.dunningWriteBlocked : needsSaveBeforeTranslate ? t.saveChangesBeforeTranslatingHint : undefined}
                 className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all disabled:opacity-50"
                 style={{ borderColor: translateDone ? 'var(--color-success, #22c55e)' : 'var(--color-border)', color: translateDone ? 'var(--color-success, #22c55e)' : 'var(--color-text-secondary)' }}
                 onMouseOver={e => { if (!translateDone) e.currentTarget.style.borderColor = 'var(--color-primary)' }}
@@ -761,7 +763,7 @@ export function ContractEdit({ user }: { user: User }) {
                 ? t.aiContractPromptWithContent
                 : t.aiContractPromptEmpty((employee && primaryDept(employee)) || 'full-time')}
               disabled={generating} className="flex-1 rounded-lg border px-3 py-2 text-sm outline-none disabled:opacity-50" style={inputStyle} />
-            <button type="button" onClick={handleGenerate} disabled={generating || !aiPrompt.trim()}
+            <button type="button" onClick={handleGenerate} disabled={generating || !canWrite || !aiPrompt.trim()} title={!canWrite ? t.dunningWriteBlocked : undefined}
               className="flex shrink-0 items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-60" style={{ backgroundColor: 'var(--color-primary)' }}>
               {generating && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>}
               {generating ? t.generating : t.generate}

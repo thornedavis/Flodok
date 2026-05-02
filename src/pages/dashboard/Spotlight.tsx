@@ -6,6 +6,7 @@ import { formatRelativeTime } from '../../lib/relativeTime'
 import { FilterPill, FilterPanel, FilterSearchInput } from '../../components/FilterControls'
 import type { FilterPanelSection } from '../../components/FilterControls'
 import type { Lang, Translations } from '../../lib/translations'
+import { useBilling } from '../../contexts/BillingContext'
 import type { User, SpotlightPost, SpotlightStatus, SpotlightPriority } from '../../types/aliases'
 
 type StatusFilter = 'all' | SpotlightStatus
@@ -20,6 +21,7 @@ type PostWithStats = SpotlightPost & {
 export function Spotlight({ user }: { user: User }) {
   const { t, lang } = useLang()
   const navigate = useNavigate()
+  const { canWrite } = useBilling()
   const [posts, setPosts] = useState<PostWithStats[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<StatusFilter>('all')
@@ -164,7 +166,9 @@ export function Spotlight({ user }: { user: User }) {
         </div>
         <button
           onClick={() => navigate('/dashboard/spotlight/new')}
-          className="shrink-0 rounded-lg px-4 py-2 text-sm font-medium text-white"
+          disabled={!canWrite}
+          title={!canWrite ? t.dunningWriteBlocked : undefined}
+          className="shrink-0 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
           style={{ backgroundColor: 'var(--color-primary)' }}
         >
           {t.spotlightNew}

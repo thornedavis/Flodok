@@ -7,6 +7,7 @@ import { useLang } from '../../contexts/LanguageContext'
 import { getEmployeeDepts } from '../../lib/employee'
 import { useOutletContext } from 'react-router-dom'
 import type { DashboardOutletContext } from '../../components/Layout'
+import { useBilling } from '../../contexts/BillingContext'
 import type { Translations } from '../../lib/translations'
 import type {
   User, Employee, SpotlightPost,
@@ -49,6 +50,7 @@ const DEFAULT_FORM: FormState = {
 export function SpotlightEdit({ user }: { user: User }) {
   const { t } = useLang()
   const navigate = useNavigate()
+  const { canWrite } = useBilling()
   const { id } = useParams<{ id?: string }>()
   const { org } = useOutletContext<DashboardOutletContext>()
   const isNew = !id
@@ -337,17 +339,19 @@ export function SpotlightEdit({ user }: { user: User }) {
           <>
             <button
               onClick={handleSaveContent}
-              disabled={saving}
-              className="rounded-lg border px-4 py-2 text-sm font-medium"
-              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', opacity: saving ? 0.6 : 1 }}
+              disabled={saving || !canWrite}
+              title={!canWrite ? t.dunningWriteBlocked : undefined}
+              className="rounded-lg border px-4 py-2 text-sm font-medium disabled:cursor-not-allowed"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', opacity: (saving || !canWrite) ? 0.5 : 1 }}
             >
               {t.spotlightSaveNoRepublish}
             </button>
             <button
               onClick={handleSaveAndRepublish}
-              disabled={saving}
-              className="rounded-lg px-4 py-2 text-sm font-medium text-white"
-              style={{ backgroundColor: 'var(--color-primary)', opacity: saving ? 0.6 : 1 }}
+              disabled={saving || !canWrite}
+              title={!canWrite ? t.dunningWriteBlocked : undefined}
+              className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed"
+              style={{ backgroundColor: 'var(--color-primary)', opacity: (saving || !canWrite) ? 0.5 : 1 }}
             >
               {t.spotlightSaveAndRepublish}
             </button>
@@ -356,27 +360,30 @@ export function SpotlightEdit({ user }: { user: User }) {
           <>
             <button
               onClick={handleSaveDraft}
-              disabled={saving}
-              className="rounded-lg border px-4 py-2 text-sm font-medium"
-              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', opacity: saving ? 0.6 : 1 }}
+              disabled={saving || !canWrite}
+              title={!canWrite ? t.dunningWriteBlocked : undefined}
+              className="rounded-lg border px-4 py-2 text-sm font-medium disabled:cursor-not-allowed"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', opacity: (saving || !canWrite) ? 0.5 : 1 }}
             >
               {t.spotlightSaveDraft}
             </button>
             {willBeScheduled && (
               <button
                 onClick={handleSchedule}
-                disabled={saving}
-                className="rounded-lg border px-4 py-2 text-sm font-medium"
-                style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', opacity: saving ? 0.6 : 1 }}
+                disabled={saving || !canWrite}
+                title={!canWrite ? t.dunningWriteBlocked : undefined}
+                className="rounded-lg border px-4 py-2 text-sm font-medium disabled:cursor-not-allowed"
+                style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', opacity: (saving || !canWrite) ? 0.5 : 1 }}
               >
                 {t.spotlightSchedule}
               </button>
             )}
             <button
               onClick={handlePublish}
-              disabled={saving}
-              className="rounded-lg px-4 py-2 text-sm font-medium text-white"
-              style={{ backgroundColor: 'var(--color-primary)', opacity: saving ? 0.6 : 1 }}
+              disabled={saving || !canWrite}
+              title={!canWrite ? t.dunningWriteBlocked : undefined}
+              className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed"
+              style={{ backgroundColor: 'var(--color-primary)', opacity: (saving || !canWrite) ? 0.5 : 1 }}
             >
               {t.spotlightPublish}
             </button>

@@ -30,8 +30,8 @@ export function PricingCalculator({ compact = false }: Props = {}) {
       const seatsInTier = Math.min(remaining, tierWidth)
       const rangeLabel =
         bracket.upTo === null
-          ? `Seats ${prevCap + 1}+`
-          : `Seats ${prevCap + 1}–${bracket.upTo}`
+          ? `Employees ${prevCap + 1}+`
+          : `Employees ${prevCap + 1}–${bracket.upTo}`
       rows.push({
         range: rangeLabel,
         seats: Math.max(seatsInTier, 0),
@@ -176,7 +176,7 @@ export function PricingCalculator({ compact = false }: Props = {}) {
                     style={{ color: 'var(--color-text-tertiary)' }}
                   >
                     <th className="px-4 py-2.5">Bracket</th>
-                    <th className="px-4 py-2.5 text-right">Seats</th>
+                    <th className="px-4 py-2.5 text-right">Employees</th>
                     <th className="px-4 py-2.5 text-right">Rate</th>
                     <th className="px-4 py-2.5 text-right">Subtotal</th>
                   </tr>

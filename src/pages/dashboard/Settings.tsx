@@ -18,6 +18,17 @@ import { ConnectFirefliesDialog } from '../../components/integrations/ConnectFir
 import { ConnectAsanaDialog } from '../../components/integrations/ConnectAsanaDialog'
 import { listIntegrations, deleteIntegration, type IntegrationRow } from '../../lib/integrations'
 import { SIGNATURE_FONTS, ensureSignatureFontsLoaded } from '../../lib/signatureFonts'
+import {
+  loadOrgBilling,
+  openPortal,
+  getPaymentMethod,
+  isPro as isProOrg,
+  type OrgBilling,
+  type PaymentMethod,
+} from '../../lib/billing'
+import { calculateProMonthlyIdr, formatIdr, FREE_EMPLOYEE_LIMIT, PRO_MIN_SEATS } from '../../lib/pricing'
+import { UpgradeModal } from '../../components/UpgradeModal'
+import { useBilling } from '../../contexts/BillingContext'
 
 ensureSignatureFontsLoaded()
 
@@ -106,7 +117,7 @@ export function Settings({ user }: { user: User }) {
       {tab === 'credits' && isAdmin && <CreditsTab user={user} t={t} />}
       {tab === 'bonuses' && isAdmin && <BonusesTab user={user} t={t} />}
       {tab === 'achievements' && isAdmin && <AchievementsTab user={user} t={t} />}
-      {tab === 'billing' && <BillingTab t={t} />}
+      {tab === 'billing' && <BillingTab user={user} t={t} />}
     </div>
   )
 }
@@ -394,6 +405,7 @@ const EMPTY_ADDRESS: AddressValue = { street: '', city: '', province: '', postal
 function OrganizationTab({ user, t }: { user: User; t: Translations }) {
   const { lang } = useLang()
   const { isAdmin } = useRole(user)
+  const { canWrite: billingCanWrite } = useBilling()
   const [org, setOrg] = useState<Organization | null>(null)
   const [orgName, setOrgName] = useState('')
   const [orgPhone, setOrgPhone] = useState('')
@@ -524,8 +536,9 @@ function OrganizationTab({ user, t }: { user: User; t: Translations }) {
               <button
                 type="submit"
                 form="org-edit-form"
-                disabled={saving || !dirty}
-                className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                disabled={saving || !billingCanWrite || !dirty}
+                title={!billingCanWrite ? t.dunningWriteBlocked : undefined}
+                className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
                 style={{ backgroundColor: 'var(--color-primary)' }}
               >
                 {saving ? t.saving : t.save}
@@ -1030,6 +1043,7 @@ function InviteMemberModal({ user, t, existingInvites, onClose, onCreated }: {
 // ─── Integrations tab ───────────────────────────────────
 
 function IntegrationsTab({ user, t }: { user: User; t: Translations }) {
+  const { canWrite: billingCanWrite } = useBilling()
   const [integrations, setIntegrations] = useState<IntegrationRow[]>([])
   const [reviewMode, setReviewMode] = useState<boolean | null>(null)
   const [updatingReviewMode, setUpdatingReviewMode] = useState(false)
@@ -1118,20 +1132,20 @@ function IntegrationsTab({ user, t }: { user: User; t: Translations }) {
             title={t.firefliesTitle}
             description={t.firefliesDesc}
             row={fireflies}
-            onConnect={() => setActiveDialog('fireflies')}
-            onDisconnect={() => handleDisconnect('fireflies')}
+            onConnect={billingCanWrite ? () => setActiveDialog('fireflies') : () => {}}
+            onDisconnect={billingCanWrite ? () => handleDisconnect('fireflies') : () => {}}
             onVerified={loadData}
-            busy={busyProvider === 'fireflies'}
+            busy={busyProvider === 'fireflies' || !billingCanWrite}
             t={t}
           />
           <IntegrationCard
             title={t.asanaTitle}
             description={t.asanaDesc}
             row={asana}
-            onConnect={() => setActiveDialog('asana')}
-            onDisconnect={() => handleDisconnect('asana')}
+            onConnect={billingCanWrite ? () => setActiveDialog('asana') : () => {}}
+            onDisconnect={billingCanWrite ? () => handleDisconnect('asana') : () => {}}
             onVerified={loadData}
-            busy={busyProvider === 'asana'}
+            busy={busyProvider === 'asana' || !billingCanWrite}
             t={t}
           />
         </div>
@@ -1766,40 +1780,364 @@ function AchievementsTab({ user, t }: { user: User; t: Translations }) {
   )
 }
 
-// ─── Billing tab (placeholder) ──────────────────────────
+// ─── Billing tab ───────────────────────────────────────
 
-function BillingTab({ t }: { t: Translations }) {
+function BillingTab({ user, t }: { user: User; t: Translations }) {
+  const { isAdmin } = useRole(user)
+  const [billing, setBilling] = useState<OrgBilling | null>(null)
+  const [orgName, setOrgName] = useState<string>('')
+  const [employeeCount, setEmployeeCount] = useState<number>(0)
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState<'portal' | 'portal_payment' | 'portal_cancel' | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [showUpgrade, setShowUpgrade] = useState(false)
+  const [showAdjust, setShowAdjust] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const [b, orgRow, { count }] = await Promise.all([
+          loadOrgBilling(user.org_id),
+          supabase.from('organizations').select('name').eq('id', user.org_id).single(),
+          supabase
+            .from('employees')
+            .select('*', { count: 'exact', head: true })
+            .eq('org_id', user.org_id),
+        ])
+        if (cancelled) return
+        setBilling(b)
+        setOrgName(orgRow.data?.name ?? '')
+        setEmployeeCount(count ?? 0)
+        // Fetch the saved card lazily — only relevant for Pro orgs, and we
+        // don't want to block the rest of the page on the Stripe round trip.
+        if (b && isProOrg(b)) {
+          getPaymentMethod()
+            .then(pm => { if (!cancelled) setPaymentMethod(pm) })
+            .catch(err => console.error('payment-method fetch failed:', err))
+        }
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : String(e))
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [user.org_id, refreshKey])
+
+  async function handlePortal(flow?: 'payment_method_update' | 'subscription_cancel') {
+    const busyKey = flow === 'payment_method_update'
+      ? 'portal_payment'
+      : flow === 'subscription_cancel'
+        ? 'portal_cancel'
+        : 'portal'
+    setBusy(busyKey)
+    setError(null)
+    try {
+      const url = await openPortal({
+        returnUrl: `${window.location.origin}/settings?tab=billing`,
+        flow,
+      })
+      window.location.href = url
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+      setBusy(null)
+    }
+  }
+
+  if (loading) {
+    return <div className="p-10 text-center text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{t.billingLoading}</div>
+  }
+  if (!billing) {
+    return <div className="p-10 text-center text-sm" style={{ color: 'var(--color-error)' }}>{error ?? t.billingLoadError}</div>
+  }
+
+  const onPro = isProOrg(billing)
+  // For Pro: use the actual Stripe subscription quantity (what they're being
+  // billed). For Free: compute the floor (employees or PRO_MIN_SEATS) so the
+  // "what Pro would cost" estimate is meaningful.
+  const billableSeats = onPro && billing.subscription_quantity != null
+    ? billing.subscription_quantity
+    : Math.max(employeeCount, PRO_MIN_SEATS)
+  const monthlyEstimate = calculateProMonthlyIdr(billableSeats)
+  const periodEndDate = billing.current_period_end
+    ? new Date(billing.current_period_end).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
+    : null
+
   return (
-    <section>
-      <div
-        className="rounded-xl border border-dashed p-10 text-center"
-        style={{ borderColor: 'var(--color-border)' }}
-      >
-        <svg
-          width="32"
-          height="32"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="mx-auto mb-3"
-          style={{ color: 'var(--color-text-tertiary)' }}
+    <section className="space-y-6">
+      {/* PLAN */}
+      <BillingSection title={t.billingPlanSection}>
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>
+                {onPro
+                  ? `${t.billingPlanPro} · ${formatIdr(monthlyEstimate)} / month`
+                  : t.billingPlanFreeHeading}
+              </span>
+              {onPro && billing.subscription_status && billing.subscription_status !== 'active' && (
+                <span
+                  className="rounded-full px-2 py-0.5 text-xs font-semibold"
+                  style={{ backgroundColor: 'var(--color-warning-bg, #fef3c7)', color: 'var(--color-warning, #92400e)' }}
+                >
+                  {billing.subscription_status}
+                </span>
+              )}
+            </div>
+            <p className="mt-1 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+              {onPro
+                ? t.billingProDesc.replace('{count}', String(employeeCount)).replace('{billable}', String(billableSeats))
+                : t.billingFreeDescShort.replace('{limit}', String(FREE_EMPLOYEE_LIMIT))}
+            </p>
+            {onPro && periodEndDate && (
+              <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                {billing.cancel_at_period_end ? t.billingProAccessUntil : t.billingNextInvoice} {periodEndDate}
+              </p>
+            )}
+
+            {/* Employee usage bar — denominator is the Free cap for Free orgs,
+                or the paid Stripe quantity for Pro orgs. On Free, hitting the
+                cap turns the bar red (hard limit). On Pro, the cap is soft —
+                adding more auto-bumps the subscription quantity — so we just
+                show the bar at full without the red warning. */}
+            <div className="mt-4 max-w-md">
+              <div className="mb-1 flex justify-between text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                <span>{t.billingEmployees}</span>
+                <span>{employeeCount} / {onPro ? billableSeats : FREE_EMPLOYEE_LIMIT}</span>
+              </div>
+              <div className="h-1.5 w-full overflow-hidden rounded-full" style={{ backgroundColor: 'var(--color-bg-tertiary)' }}>
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{
+                    width: `${Math.min(100, (employeeCount / (onPro ? billableSeats : FREE_EMPLOYEE_LIMIT)) * 100)}%`,
+                    backgroundColor:
+                      !onPro && employeeCount >= FREE_EMPLOYEE_LIMIT ? '#ef4444' : 'var(--color-primary)',
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => (onPro ? setShowAdjust(true) : setShowUpgrade(true))}
+              className="shrink-0 rounded-lg border px-4 py-2 text-sm font-semibold transition-colors"
+              style={{
+                borderColor: onPro ? 'var(--color-border)' : 'transparent',
+                color: onPro ? 'var(--color-text)' : 'white',
+                backgroundColor: onPro ? 'var(--color-bg)' : 'var(--color-primary)',
+              }}
+            >
+              {onPro ? t.billingAdjustButton : t.billingUpgradeButton}
+            </button>
+          )}
+        </div>
+
+        {billing.cancel_at_period_end && (
+          <p className="mt-4 rounded-md px-3 py-2 text-xs" style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}>
+            {t.billingCancelScheduledNote}
+          </p>
+        )}
+      </BillingSection>
+
+      {/* BILLING INFORMATION */}
+      <BillingSection title={t.billingInfoSection}>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>
+              {orgName || '—'}
+            </div>
+            <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+              {user.email}
+            </div>
+            {!onPro && (
+              <p className="mt-2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                {t.billingInfoEmpty}
+              </p>
+            )}
+          </div>
+          {onPro && isAdmin && (
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => handlePortal()}
+                disabled={busy !== null}
+                className="rounded-lg border px-3.5 py-2 text-sm font-medium transition-colors disabled:opacity-50"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', backgroundColor: 'var(--color-bg)' }}
+              >
+                {busy === 'portal' ? t.billingRedirecting : t.billingChangeInfoButton}
+              </button>
+              <button
+                type="button"
+                onClick={() => handlePortal()}
+                disabled={busy !== null}
+                className="rounded-lg border px-3.5 py-2 text-sm font-medium transition-colors disabled:opacity-50"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', backgroundColor: 'var(--color-bg)' }}
+              >
+                {t.billingHistoryButton}
+              </button>
+            </div>
+          )}
+        </div>
+      </BillingSection>
+
+      {/* PAYMENT DETAILS */}
+      <BillingSection title={t.billingPaymentSection}>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div
+              className="flex h-9 w-12 items-center justify-center rounded-md"
+              style={{ backgroundColor: 'var(--color-bg-tertiary)' }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-text-tertiary)' }}>
+                <rect x="2" y="5" width="20" height="14" rx="2" />
+                <line x1="2" y1="10" x2="22" y2="10" />
+              </svg>
+            </div>
+            <div>
+              {onPro ? (
+                paymentMethod ? (
+                  <>
+                    <div className="text-sm" style={{ color: 'var(--color-text)' }}>
+                      <span className="font-semibold">{formatCardBrand(paymentMethod.brand)}</span>
+                      <span className="ml-2 font-mono tracking-widest" style={{ color: 'var(--color-text-secondary)' }}>
+                        •••• {paymentMethod.last4}
+                      </span>
+                    </div>
+                    <div className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                      {t.billingExpires} {String(paymentMethod.exp_month).padStart(2, '0')}/{String(paymentMethod.exp_year).slice(-2)}
+                    </div>
+                  </>
+                ) : (
+                  <div className="font-mono text-sm tracking-widest" style={{ color: 'var(--color-text-tertiary)' }}>
+                    •••• •••• •••• ••••
+                  </div>
+                )
+              ) : (
+                <>
+                  <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+                    {t.billingPaymentEmptyTitle}
+                  </div>
+                  <div className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                    {t.billingPaymentEmptyBody}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+          {onPro && isAdmin && (
+            <button
+              type="button"
+              onClick={() => handlePortal('payment_method_update')}
+              disabled={busy !== null}
+              className="rounded-lg border px-3.5 py-2 text-sm font-medium transition-colors disabled:opacity-50"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', backgroundColor: 'var(--color-bg)' }}
+            >
+              {busy === 'portal_payment' ? t.billingRedirecting : t.billingUpdatePaymentButton}
+            </button>
+          )}
+        </div>
+      </BillingSection>
+
+      {/* DANGER ZONE (Pro only, admin only, not already cancelled) */}
+      {onPro && isAdmin && !billing.cancel_at_period_end && (
+        <details
+          className="group rounded-xl border p-4 transition-colors"
+          style={{ borderColor: 'rgba(239, 68, 68, 0.4)', backgroundColor: 'rgba(239, 68, 68, 0.04)' }}
         >
-          <rect x="2" y="5" width="20" height="14" rx="2" />
-          <line x1="2" y1="10" x2="22" y2="10" />
-        </svg>
-        <h2 className="mb-1 text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
-          {t.billingComingSoonTitle}
-        </h2>
-        <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>
-          {t.billingComingSoonDesc}
+          <summary className="flex cursor-pointer items-center justify-between text-sm font-semibold" style={{ color: '#ef4444' }}>
+            <span className="flex items-center gap-2">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                <line x1="12" y1="9" x2="12" y2="13" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+              {t.billingDangerSection} · {t.billingDangerSubtitle}
+            </span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="transition-transform group-open:rotate-180">
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </summary>
+          <div className="mt-4">
+            <p className="mb-3 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+              {t.billingDangerWarning}
+            </p>
+            <button
+              type="button"
+              onClick={() => handlePortal('subscription_cancel')}
+              disabled={busy !== null}
+              className="rounded-lg px-3.5 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+              style={{ backgroundColor: '#ef4444' }}
+            >
+              {busy === 'portal_cancel' ? t.billingRedirecting : t.billingCancelButton}
+            </button>
+          </div>
+        </details>
+      )}
+
+      {error && (
+        <p className="text-sm" style={{ color: 'var(--color-error)' }}>{error}</p>
+      )}
+
+      {!isAdmin && (
+        <p className="text-center text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+          {t.billingAdminOnlyNote}
         </p>
-      </div>
+      )}
+
+      {showUpgrade && (
+        <UpgradeModal
+          t={t}
+          initialSeats={Math.max(employeeCount, PRO_MIN_SEATS)}
+          cancelReturnPath="/settings?tab=billing"
+          onClose={() => setShowUpgrade(false)}
+        />
+      )}
+
+      {showAdjust && (
+        <UpgradeModal
+          t={t}
+          mode="adjust"
+          initialSeats={billableSeats}
+          minSeats={billableSeats}
+          cancelReturnPath="/settings?tab=billing"
+          onClose={() => setShowAdjust(false)}
+          onAdjusted={() => setRefreshKey(k => k + 1)}
+        />
+      )}
     </section>
   )
 }
+
+// Pretty-print Stripe's card.brand strings ("visa", "mastercard", "amex",
+// "jcb", "discover", "diners", "unionpay", "unknown"). Stripe uses lowercase
+// machine names; we want title-case for display, with a couple of acronyms.
+function formatCardBrand(brand: string): string {
+  const acronyms: Record<string, string> = {
+    amex: 'Amex',
+    jcb: 'JCB',
+    unionpay: 'UnionPay',
+  }
+  if (acronyms[brand]) return acronyms[brand]
+  return brand.charAt(0).toUpperCase() + brand.slice(1)
+}
+
+function BillingSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-tertiary)' }}>
+        {title}
+      </h3>
+      <div className="rounded-xl border p-5" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }}>
+        {children}
+      </div>
+    </div>
+  )
+}
+
 
 // Small shared switch used inside the Badges tab. Renders a pill-style
 // toggle that calls onChange(next) when clicked.

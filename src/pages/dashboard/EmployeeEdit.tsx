@@ -12,6 +12,9 @@ import { useBreadcrumbTrailing } from '../../contexts/BreadcrumbContext'
 import { AchievementsSection } from '../../components/employee/AchievementsSection'
 import { CompensationOverview } from '../../components/employee/CompensationOverview'
 import { EmployeeActivityLog } from '../../components/employee/EmployeeActivityLog'
+import { isPro, syncSeats } from '../../lib/billing'
+import { FREE_EMPLOYEE_LIMIT } from '../../lib/pricing'
+import { useBilling } from '../../contexts/BillingContext'
 import type { User, Employee, Organization, Contract } from '../../types/aliases'
 
 const MAX_AVATAR_SIZE = 2 * 1024 * 1024 // 2 MB
@@ -21,6 +24,7 @@ export function EmployeeEdit({ user }: { user: User }) {
   const { t } = useLang()
   const { id: employeeId } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { canWrite } = useBilling()
 
   type Tab = 'profile' | 'documents' | 'compensation' | 'achievements'
   const [tab, setTab] = useState<Tab>('profile')
@@ -199,6 +203,18 @@ export function EmployeeEdit({ user }: { user: User }) {
 
   async function handleDuplicate() {
     if (!employee || !org) return
+
+    if (!isPro(org)) {
+      const { count } = await supabase
+        .from('employees')
+        .select('*', { count: 'exact', head: true })
+        .eq('org_id', org.id)
+      if ((count ?? 0) >= FREE_EMPLOYEE_LIMIT) {
+        alert(t.freeLimitBody.replace('{limit}', String(FREE_EMPLOYEE_LIMIT)))
+        return
+      }
+    }
+
     const newName = prompt(t.promptDuplicateName, t.copyOfName(employee.name))
     if (!newName) return
     const newPhone = prompt(t.promptDuplicatePhone)
@@ -245,6 +261,10 @@ export function EmployeeEdit({ user }: { user: User }) {
       })
     }
 
+    if (org && isPro(org)) {
+      syncSeats().catch(err => console.error('sync-seats failed after duplicate:', err))
+    }
+
     goBack()
   }
 
@@ -252,6 +272,9 @@ export function EmployeeEdit({ user }: { user: User }) {
     if (!employee) return
     if (!confirm(t.deleteEmployeeConfirm(employee.name))) return
     await supabase.from('employees').delete().eq('id', employee.id)
+    if (org && isPro(org)) {
+      syncSeats().catch(err => console.error('sync-seats failed after delete:', err))
+    }
     goBack()
   }
 
@@ -371,7 +394,9 @@ export function EmployeeEdit({ user }: { user: User }) {
           <button
             type="button"
             onClick={handleDuplicate}
-            className="rounded-lg px-3 py-2 text-sm"
+            disabled={!canWrite}
+            title={!canWrite ? t.dunningWriteBlocked : undefined}
+            className="rounded-lg px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-40"
             style={{ color: 'var(--color-text-secondary)' }}
           >
             {t.duplicate}
@@ -379,7 +404,9 @@ export function EmployeeEdit({ user }: { user: User }) {
           <button
             type="button"
             onClick={handleDelete}
-            className="rounded-lg px-3 py-2 text-sm"
+            disabled={!canWrite}
+            title={!canWrite ? t.dunningWriteBlocked : undefined}
+            className="rounded-lg px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-40"
             style={{ color: 'var(--color-danger)' }}
           >
             {t.delete}
@@ -396,8 +423,9 @@ export function EmployeeEdit({ user }: { user: User }) {
             <button
               type="submit"
               form="employee-edit-form"
-              disabled={saving || !hasChanges}
-              className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+              disabled={saving || !canWrite || !hasChanges}
+              title={!canWrite ? t.dunningWriteBlocked : undefined}
+              className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
               style={{ backgroundColor: 'var(--color-primary)' }}
             >
               {saving ? t.saving : t.save}

@@ -6,6 +6,7 @@ import { Modal } from '../../components/Modal'
 import { getAvatarGradient } from '../../lib/avatar'
 import { creditToIdr, formatIdr } from '../../lib/credits'
 import { BadgeGlyph } from '../../components/BadgeGlyph'
+import { useBilling } from '../../contexts/BillingContext'
 import type { User, AchievementDefinition } from '../../types/aliases'
 
 type RosterRow = {
@@ -38,6 +39,7 @@ const inputStyle: React.CSSProperties = {
 export function Performance({ user }: { user: User }) {
   const { t, lang } = useLang()
   const { isAdmin } = useRole(user)
+  const { canWrite } = useBilling()
   const [roster, setRoster] = useState<Roster | null>(null)
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<Tab>('credits')
@@ -202,7 +204,9 @@ export function Performance({ user }: { user: User }) {
                       <button
                         type="button"
                         onClick={() => setCreditAction({ row, mode: 'award' })}
-                        className="flex h-9 w-9 items-center justify-center rounded-lg text-white"
+                        disabled={!canWrite}
+                        title={!canWrite ? t.dunningWriteBlocked : undefined}
+                        className="flex h-9 w-9 items-center justify-center rounded-lg text-white disabled:cursor-not-allowed disabled:opacity-40"
                         style={{ backgroundColor: 'var(--color-success, #16a34a)' }}
                         aria-label={t.performanceAwardAction}
                       >
@@ -211,7 +215,9 @@ export function Performance({ user }: { user: User }) {
                       <button
                         type="button"
                         onClick={() => setCreditAction({ row, mode: 'deduct' })}
-                        className="flex h-9 w-9 items-center justify-center rounded-lg border"
+                        disabled={!canWrite}
+                        title={!canWrite ? t.dunningWriteBlocked : undefined}
+                        className="flex h-9 w-9 items-center justify-center rounded-lg border disabled:cursor-not-allowed disabled:opacity-40"
                         style={{ borderColor: 'var(--color-border)', color: 'var(--color-danger)' }}
                         aria-label={t.performanceDeductAction}
                       >
@@ -223,7 +229,9 @@ export function Performance({ user }: { user: User }) {
                     <button
                       type="button"
                       onClick={() => setBadgeAction(row)}
-                      className="flex h-9 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-white"
+                      disabled={!canWrite}
+                      title={!canWrite ? t.dunningWriteBlocked : undefined}
+                      className="flex h-9 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
                       style={{ backgroundColor: 'var(--color-primary)' }}
                     >
                       🏅

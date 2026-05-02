@@ -168,27 +168,27 @@ const PLANS: ReactNode = (
     <Bullets
       items={[
         <><strong>Free</strong> — Up to 2 employees, with 1 SOP and 1 contract per employee. No AI features or integrations. Forever free, no card required.</>,
-        <><strong>Pro</strong> — Per-seat pricing, 3-employee minimum. Unlimited SOPs and contracts, AI drafting and translation included, e-signatures, performance reviews, and all integrations (Fireflies, Slack, Google Workspace).</>,
+        <><strong>Pro</strong> — Per-employee pricing, 3-employee minimum. Unlimited SOPs and contracts, AI drafting and translation included, e-signatures, performance reviews, plus Fireflies and Asana integrations.</>,
       ]}
     />
 
     <H3 id="how-pro-pricing-works">How Pro pricing works</H3>
     <P>
-      Pro uses graduated per-seat pricing — like income-tax brackets. Each seat
-      is priced based on which bracket it falls into, so the total cost only
-      ever goes up as you add seats:
+      Pro uses graduated per-employee pricing — like income-tax brackets. Each
+      employee is priced based on which bracket they fall into, so the total
+      cost only ever goes up as you add employees:
     </P>
     <Bullets
       items={[
-        <><strong>Seats 1–15</strong> — Rp 80.000 per seat / month</>,
-        <><strong>Seats 16–40</strong> — Rp 50.000 per seat / month</>,
-        <><strong>Seats 41+</strong> — Rp 30.000 per seat / month</>,
+        <><strong>Employees 1–15</strong> — Rp 100,000 per employee / month</>,
+        <><strong>Employees 16–40</strong> — Rp 70,000 per employee / month</>,
+        <><strong>Employees 41+</strong> — Rp 50,000 per employee / month</>,
       ]}
     />
     <P>
-      A 10-employee team pays Rp 800.000/month. A 30-employee team pays
-      Rp 1.950.000/month (15 × 80k + 15 × 50k). A 100-employee team pays
-      Rp 4.250.000/month (15 × 80k + 25 × 50k + 60 × 30k). Drag the slider on
+      A 10-employee team pays Rp 1,000,000/month. A 30-employee team pays
+      Rp 2,550,000/month (15 × 100k + 15 × 70k). A 100-employee team pays
+      Rp 6,250,000/month (15 × 100k + 25 × 70k + 60 × 50k). Drag the slider on
       our <Link to="/pricing">pricing page</Link> to see your exact bill.
     </P>
 
@@ -1286,7 +1286,7 @@ export const faqGroups: FAQGroup[] = [
       },
       {
         q: 'Is there a free plan?',
-        a: <P>Yes — the Free plan covers organizations of up to 2 employees forever, with 1 SOP and 1 contract per employee plus the public portal. Beyond that you'll need Pro, which uses graduated per-seat pricing starting at Rp 240.000/month for 3 employees.</P>,
+        a: <P>Yes — the Free plan covers organizations of up to 2 employees forever, with 1 SOP and 1 contract per employee plus the public portal. Beyond that you'll need Pro, which uses graduated per-employee pricing starting at Rp 300,000/month for 3 employees.</P>,
       },
     ],
   },

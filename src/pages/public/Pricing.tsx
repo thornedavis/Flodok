@@ -3,7 +3,9 @@ import { Link } from 'react-router-dom'
 import { PricingCalculator } from '../../components/PricingCalculator'
 import {
   FREE_EMPLOYEE_LIMIT,
+  FREE_FEATURES,
   PRO_BRACKETS,
+  PRO_FEATURES,
   PRO_MIN_SEATS,
   calculateProMonthlyIdr,
   formatIdr,
@@ -94,13 +96,7 @@ function PricingTiers() {
           </Link>
 
           <ul className="space-y-2.5">
-            {[
-              `Up to ${FREE_EMPLOYEE_LIMIT} employees`,
-              '1 SOP and 1 contract per employee',
-              'Public employee portal',
-              'Bahasa & English UI · in-app translation',
-              'Community support',
-            ].map(f => (
+            {FREE_FEATURES.map(f => (
               <li
                 key={f}
                 className="flex items-start gap-2.5 text-sm"
@@ -154,7 +150,7 @@ function PricingTiers() {
             </span>
           </div>
           <p className="mb-6 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-            Per-seat pricing. Get cheaper per seat as your team grows.
+            Per-employee pricing. Cheaper per employee as your team grows.
             Minimum {PRO_MIN_SEATS} employees.
           </p>
 
@@ -163,18 +159,11 @@ function PricingTiers() {
             className="mb-6 block rounded-lg px-4 py-2 text-center text-sm font-semibold text-white transition-opacity hover:opacity-90"
             style={{ backgroundColor: 'var(--color-primary)' }}
           >
-            Start free trial
+            Start free
           </Link>
 
           <ul className="space-y-2.5">
-            {[
-              'Unlimited SOPs & contracts',
-              'AI-assisted drafting & translation, included',
-              'Contracts & e-signatures',
-              'Performance reviews · awards · 1:1s',
-              'All integrations (Fireflies, Slack, Google)',
-              'Priority email support',
-            ].map(f => (
+            {PRO_FEATURES.map(f => (
               <li
                 key={f}
                 className="flex items-start gap-2.5 text-sm"
@@ -253,9 +242,9 @@ function CalculatorSection() {
             See exactly what you'd pay.
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-base" style={{ color: 'var(--color-text-secondary)' }}>
-            Drag the slider — your bill is the sum of seats in each bracket,
-            like income-tax brackets. Adding a seat never makes your total
-            cheaper.
+            Drag the slider — your bill is the sum of employees in each
+            bracket, like income-tax brackets. Adding an employee never
+            makes your total cheaper.
           </p>
         </div>
 
@@ -266,8 +255,8 @@ function CalculatorSection() {
             const prevCap = i === 0 ? 0 : (PRO_BRACKETS[i - 1].upTo ?? 0)
             const label =
               bracket.upTo === null
-                ? `Seats ${prevCap + 1}+`
-                : `Seats ${prevCap + 1}–${bracket.upTo}`
+                ? `Employees ${prevCap + 1}+`
+                : `Employees ${prevCap + 1}–${bracket.upTo}`
             return (
               <div
                 key={label}
@@ -284,7 +273,7 @@ function CalculatorSection() {
                   {formatIdr(bracket.pricePerSeat)}
                 </div>
                 <div className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                  per seat / month
+                  per employee / month
                 </div>
               </div>
             )
@@ -302,7 +291,7 @@ function ComparisonTable() {
     {
       name: 'Core',
       rows: [
-        { feature: 'Employees', values: [`Up to ${FREE_EMPLOYEE_LIMIT}`, 'Per seat — graduated'] },
+        { feature: 'Employees', values: [`Up to ${FREE_EMPLOYEE_LIMIT}`, 'Per employee — graduated'] },
         { feature: 'SOPs', values: [`${FREE_EMPLOYEE_LIMIT} max (1 per employee)`, 'Unlimited'] },
         { feature: 'Contracts', values: [`${FREE_EMPLOYEE_LIMIT} max (1 per employee)`, 'Unlimited'] },
         { feature: 'Public employee portal', values: [true, true] },
@@ -342,9 +331,8 @@ function ComparisonTable() {
     {
       name: 'Integrations',
       rows: [
-        { feature: 'Fireflies (meeting notes)', values: [false, true] },
-        { feature: 'Slack notifications', values: [false, true] },
-        { feature: 'Google Workspace SSO', values: [false, true] },
+        { feature: 'Fireflies (meeting notes → SOP updates)', values: [false, true] },
+        { feature: 'Asana (transcript → task assignment)', values: [false, true] },
         { feature: 'SAML SSO', values: [false, 'Custom plan'] },
         { feature: 'Webhook API', values: [false, 'Custom plan'] },
       ],
@@ -352,8 +340,8 @@ function ComparisonTable() {
     {
       name: 'Support',
       rows: [
-        { feature: 'Community support', values: [true, true] },
-        { feature: 'Email support', values: [false, true] },
+        { feature: 'Email support', values: [true, true] },
+        { feature: 'Priority WhatsApp support', values: [false, true] },
         { feature: 'Priority response (< 4h)', values: [false, true] },
         { feature: 'Onboarding & training', values: [false, 'Self-serve · paid white-glove'] },
       ],
@@ -444,17 +432,17 @@ function AddOns() {
   const items = [
     {
       title: 'Onboarding & migration',
-      price: 'From Rp 4.900.000',
+      price: 'From Rp 4,900,000',
       body: 'Our team imports your existing SOPs, contracts, and employee data — and trains your admins. One-time fee.',
     },
     {
       title: 'Custom integration',
-      price: 'From Rp 12.000.000',
+      price: 'From Rp 12,000,000',
       body: 'Build a connection to your payroll, HRIS, or internal tools. Scoped, quoted, delivered in weeks.',
     },
     {
       title: 'On-site training',
-      price: 'From Rp 6.500.000 / day',
+      price: 'From Rp 6,500,000 / day',
       body: 'A Flodok specialist runs your team through the product in person, in Bahasa or English.',
     },
   ]
@@ -506,8 +494,8 @@ function AddOns() {
 function PricingFAQ() {
   const items = [
     {
-      q: 'How does per-seat pricing actually work?',
-      a: `We use graduated brackets, like income-tax brackets. Seats 1–15 are always Rp ${(80_000).toLocaleString('id-ID')} each. Seats 16–40 are always Rp ${(50_000).toLocaleString('id-ID')} each. Seats 41+ are always Rp ${(30_000).toLocaleString('id-ID')} each. Your monthly bill is the sum across the brackets your team fills. Adding a seat never makes your total cheaper.`,
+      q: 'How does per-employee pricing actually work?',
+      a: `We use graduated brackets, like income-tax brackets. Employees 1–15 are always ${formatIdr(PRO_BRACKETS[0].pricePerSeat)} each. Employees 16–40 are always ${formatIdr(PRO_BRACKETS[1].pricePerSeat)} each. Employees 41+ are always ${formatIdr(PRO_BRACKETS[2].pricePerSeat)} each. Your monthly bill is the sum across the brackets your team fills. Adding an employee never makes your total cheaper.`,
     },
     {
       q: 'What happens when I add or remove an employee mid-cycle?',
@@ -519,7 +507,7 @@ function PricingFAQ() {
     },
     {
       q: 'Why is there a 3-employee minimum on Pro?',
-      a: `The Free plan covers solo founders and 2-person teams forever — that's its job. Pro is built for teams large enough to justify contracts, performance reviews, and integrations, so it starts at ${PRO_MIN_SEATS} seats. If you only have ${FREE_EMPLOYEE_LIMIT} people, Free almost certainly does what you need.`,
+      a: `The Free plan covers solo founders and 2-person teams forever — that's its job. Pro is built for teams large enough to justify contracts, performance reviews, and integrations, so it starts at ${PRO_MIN_SEATS} employees. If you only have ${FREE_EMPLOYEE_LIMIT} people, Free almost certainly does what you need.`,
     },
     {
       q: 'How is my AI usage billed?',

@@ -105,7 +105,7 @@ function empById(id: string): DemoEmployee | undefined {
 }
 
 function formatIdr(n: number): string {
-  return 'Rp ' + n.toLocaleString('id-ID')
+  return 'Rp ' + n.toLocaleString('en-US')
 }
 
 function detailLabelFor(page: DemoPage, id: string | null): string | null {
@@ -1898,7 +1898,7 @@ function BillingPanel() {
         <div>
           <div className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--color-text-tertiary)' }}>Current plan</div>
           <div className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Pro · monthly</div>
-          <div className="text-[10px]" style={{ color: 'var(--color-text-tertiary)' }}>{HEADCOUNT} seats · graduated per-seat pricing</div>
+          <div className="text-[10px]" style={{ color: 'var(--color-text-tertiary)' }}>{HEADCOUNT} employees · graduated per-employee pricing</div>
         </div>
         <div className="text-right">
           <div className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>{formatIdr(calculateProMonthlyIdr(HEADCOUNT))}</div>

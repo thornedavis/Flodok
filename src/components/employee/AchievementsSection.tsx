@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { Modal } from '../Modal'
 import { useLang } from '../../contexts/LanguageContext'
 import { useRole } from '../../hooks/useRole'
+import { useBilling } from '../../contexts/BillingContext'
 import type { AchievementDefinition, AchievementUnlock, Contract, Employee, User } from '../../types/aliases'
 import { displayBadgeIcon } from '../../lib/badgeIcon'
 
@@ -30,6 +31,7 @@ export function AchievementsSection({
 }) {
   const { t, lang } = useLang()
   const { isAdmin } = useRole(user)
+  const { canWrite } = useBilling()
   const [definitions, setDefinitions] = useState<AchievementDefinition[]>([])
   const [unlocks, setUnlocks] = useState<UnlockRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -147,7 +149,9 @@ export function AchievementsSection({
               <button
                 type="button"
                 onClick={openModal}
-                className="rounded-lg px-3 py-1.5 text-sm font-medium text-white"
+                disabled={!canWrite}
+                title={!canWrite ? t.dunningWriteBlocked : undefined}
+                className="rounded-lg px-3 py-1.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
                 style={{ backgroundColor: 'var(--color-primary)' }}
               >
                 {t.awardAchievement}

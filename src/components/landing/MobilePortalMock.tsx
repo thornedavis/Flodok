@@ -71,7 +71,7 @@ const RECENT = [
 // ─── Helpers ────────────────────────────────────────────
 
 function formatIdr(n: number): string {
-  return 'Rp ' + n.toLocaleString('id-ID')
+  return 'Rp ' + n.toLocaleString('en-US')
 }
 
 function formatCompactIdr(n: number): string {

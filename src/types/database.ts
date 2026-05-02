@@ -904,9 +904,11 @@ export type Database = {
           address_street: string | null
           badges_enabled: boolean
           bonuses_enabled: boolean
+          cancel_at_period_end: boolean
           created_at: string
           credits_divisor: number
           credits_enabled: boolean
+          current_period_end: string | null
           default_country_code: string
           display_name: string | null
           id: string
@@ -914,9 +916,15 @@ export type Database = {
           max_bonus_idr: number | null
           max_credit_per_award: number | null
           name: string
+          past_due_since: string | null
           pay_day_of_month: number
           phone: string | null
+          plan_tier: string
           review_mode: boolean
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
+          subscription_quantity: number | null
+          subscription_status: string | null
           timezone: string
         }
         Insert: {
@@ -927,9 +935,11 @@ export type Database = {
           address_street?: string | null
           badges_enabled?: boolean
           bonuses_enabled?: boolean
+          cancel_at_period_end?: boolean
           created_at?: string
           credits_divisor?: number
           credits_enabled?: boolean
+          current_period_end?: string | null
           default_country_code?: string
           display_name?: string | null
           id?: string
@@ -937,9 +947,15 @@ export type Database = {
           max_bonus_idr?: number | null
           max_credit_per_award?: number | null
           name: string
+          past_due_since?: string | null
           pay_day_of_month?: number
           phone?: string | null
+          plan_tier?: string
           review_mode?: boolean
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          subscription_quantity?: number | null
+          subscription_status?: string | null
           timezone?: string
         }
         Update: {
@@ -950,9 +966,11 @@ export type Database = {
           address_street?: string | null
           badges_enabled?: boolean
           bonuses_enabled?: boolean
+          cancel_at_period_end?: boolean
           created_at?: string
           credits_divisor?: number
           credits_enabled?: boolean
+          current_period_end?: string | null
           default_country_code?: string
           display_name?: string | null
           id?: string
@@ -960,9 +978,15 @@ export type Database = {
           max_bonus_idr?: number | null
           max_credit_per_award?: number | null
           name?: string
+          past_due_since?: string | null
           pay_day_of_month?: number
           phone?: string | null
+          plan_tier?: string
           review_mode?: boolean
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          subscription_quantity?: number | null
+          subscription_status?: string | null
           timezone?: string
         }
         Relationships: []
@@ -1381,14 +1405,14 @@ export type Database = {
           effective_until: string | null
           id: string
           image_url: string | null
+          last_republished_at: string | null
           link_label: string | null
           link_url: string | null
           org_id: string
           posted_as_kind: string
-          last_republished_at: string | null
-          republish_count: number
           priority: string
           published_at: string | null
+          republish_count: number
           requires_acknowledgement: boolean
           status: string
           target_departments: string[]
@@ -1675,6 +1699,10 @@ export type Database = {
         Args: { emp_slug: string; emp_token: string }
         Returns: Json
       }
+      portal_documents: {
+        Args: { emp_slug: string; emp_token: string }
+        Returns: Json
+      }
       portal_home:
         | { Args: { emp_slug: string; emp_token: string }; Returns: Json }
         | {
@@ -1700,30 +1728,26 @@ export type Database = {
       portal_spotlight_posts: {
         Args: { emp_slug: string; emp_token: string }
         Returns: {
-          acknowledged_at: string | null
+          acknowledged_at: string
           author_name: string
-          dismissed_at: string | null
+          dismissed_at: string
           display_mode: string
-          effective_from: string | null
-          effective_until: string | null
-          first_seen_at: string | null
+          effective_from: string
+          effective_until: string
+          first_seen_at: string
           id: string
-          image_url: string | null
-          link_label: string | null
-          link_url: string | null
+          image_url: string
+          link_label: string
+          link_url: string
           priority: string
-          published_at: string | null
+          published_at: string
           republish_count: number
           requires_acknowledgement: boolean
           title: string
           what_happened: string
           what_to_do_instead: string
-          who_applies_note: string | null
+          who_applies_note: string
         }[]
-      }
-      republish_spotlight_post: {
-        Args: { p_post_id: string }
-        Returns: undefined
       }
       portal_spotlight_seen: {
         Args: { emp_slug: string; emp_token: string; p_post_id: string }
@@ -1751,6 +1775,10 @@ export type Database = {
           unlocked_at: string
         }[]
       }
+      republish_spotlight_post: {
+        Args: { p_post_id: string }
+        Returns: undefined
+      }
       run_daily_achievements: {
         Args: never
         Returns: {
@@ -1768,6 +1796,10 @@ export type Database = {
       seed_v1_achievement_definitions: {
         Args: { p_org_id: string }
         Returns: undefined
+      }
+      spotlight_target_employee_ids: {
+        Args: { p_post_id: string }
+        Returns: string[]
       }
       take_monthly_leaderboard_snapshot: {
         Args: { p_period_start: string }

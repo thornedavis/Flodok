@@ -3,12 +3,14 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useTheme } from '../hooks/useTheme'
 import { useLang } from '../contexts/LanguageContext'
 import { BreadcrumbProvider, useBreadcrumb } from '../contexts/BreadcrumbContext'
+import { BillingProvider } from '../contexts/BillingContext'
 import { useRole } from '../hooks/useRole'
 import { getAvatarGradient } from '../lib/avatar'
 import { supabase } from '../lib/supabase'
 import type { Translations } from '../lib/translations'
 import type { Organization, User } from '../types/aliases'
 import { Wordmark } from './Brand'
+import { DunningBanner } from './DunningBanner'
 
 type NavKey = 'navOverview' | 'navEmployees' | 'navSops' | 'navContracts' | 'navPerformance' | 'navSpotlight' | 'navPending' | 'navSettings'
 
@@ -84,19 +86,22 @@ export function DashboardLayout({ user, onSignOut }: { user: User; onSignOut: ()
 
   return (
     <BreadcrumbProvider>
-      <div className="flex min-h-screen" style={{ backgroundColor: 'var(--color-bg)' }}>
-        <Sidebar user={user} mobileOpen={mobileOpen} onCloseMobile={() => setMobileOpen(false)} />
+      <BillingProvider orgId={user.org_id}>
+        <div className="flex min-h-screen" style={{ backgroundColor: 'var(--color-bg)' }}>
+          <Sidebar user={user} mobileOpen={mobileOpen} onCloseMobile={() => setMobileOpen(false)} />
 
-        <div className="flex min-w-0 flex-1 flex-col">
-          <Header user={user} org={org} onSignOut={onSignOut} onOpenMenu={() => setMobileOpen(true)} />
+          <div className="flex min-w-0 flex-1 flex-col">
+            <Header user={user} org={org} onSignOut={onSignOut} onOpenMenu={() => setMobileOpen(true)} />
 
-          <main className="flex-1 px-6 py-8 md:px-10">
-            <div className="mx-auto max-w-6xl">
-              <Outlet context={{ org } satisfies DashboardOutletContext} />
-            </div>
-          </main>
+            <main className="flex-1 px-6 py-8 md:px-10">
+              <div className="mx-auto max-w-6xl">
+                <DunningBanner user={user} />
+                <Outlet context={{ org } satisfies DashboardOutletContext} />
+              </div>
+            </main>
+          </div>
         </div>
-      </div>
+      </BillingProvider>
     </BreadcrumbProvider>
   )
 }

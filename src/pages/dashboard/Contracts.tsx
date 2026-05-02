@@ -9,6 +9,7 @@ import { FilterPill, FilterPanel, FilterSearchInput } from '../../components/Fil
 import type { FilterPanelSection } from '../../components/FilterControls'
 import { ManageDepartmentsModal } from '../../components/ManageDepartmentsModal'
 import { DateTimePicker } from '../../components/DateTimePicker'
+import { useBilling } from '../../contexts/BillingContext'
 import type { User, Contract, Employee, Tag } from '../../types/aliases'
 
 type ContractWithEmployee = Contract & { employee: Employee | null; tagIds: string[] }
@@ -16,6 +17,7 @@ type ContractWithEmployee = Contract & { employee: Employee | null; tagIds: stri
 export function Contracts({ user }: { user: User }) {
   const navigate = useNavigate()
   const { t } = useLang()
+  const { canWrite, visibleItemLimit, state: dunning } = useBilling()
   const [contracts, setContracts] = useState<ContractWithEmployee[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
   const [allTags, setAllTags] = useState<Tag[]>([])
@@ -117,7 +119,11 @@ export function Contracts({ user }: { user: User }) {
       return (b.updated_at || b.created_at).localeCompare(a.updated_at || a.created_at)
     })
 
+  const visibleFiltered = visibleItemLimit !== null ? filtered.slice(0, visibleItemLimit) : filtered
+  const hiddenCount = filtered.length - visibleFiltered.length
+
   async function handleDuplicate(contract: ContractWithEmployee) {
+    if (!canWrite) return
     const { data, error } = await supabase
       .from('contracts')
       .insert({
@@ -136,6 +142,7 @@ export function Contracts({ user }: { user: User }) {
   }
 
   async function handleDelete(contract: ContractWithEmployee) {
+    if (!canWrite) return
     if (!confirm(t.deleteContractConfirm(contract.title))) return
     const { error } = await supabase.from('contracts').delete().eq('id', contract.id)
     if (error) { alert(error.message); return }
@@ -199,12 +206,23 @@ export function Contracts({ user }: { user: User }) {
         <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.contractsTitle}</h1>
         <button
           onClick={() => setShowCreateModal(true)}
-          className="shrink-0 rounded-lg px-4 py-2 text-sm font-medium text-white"
+          disabled={!canWrite}
+          title={!canWrite ? t.dunningWriteBlocked : undefined}
+          className="shrink-0 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
           style={{ backgroundColor: 'var(--color-primary)' }}
         >
           {t.createContract}
         </button>
       </div>
+
+      {hiddenCount > 0 && dunning === 'free_frozen' && (
+        <div
+          className="mb-4 rounded-lg border px-3 py-2 text-xs"
+          style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}
+        >
+          {t.dunningHiddenItemsNotice.replace('{count}', String(hiddenCount))}
+        </div>
+      )}
 
       {/* Filter bar */}
       <div className="mb-5 flex flex-wrap items-center gap-2">
@@ -246,7 +264,7 @@ export function Contracts({ user }: { user: User }) {
       </div>
 
       <div>
-        {filtered.length === 0 ? (
+        {visibleFiltered.length === 0 ? (
           <p className="py-12 text-center text-sm" style={{ color: 'var(--color-text-secondary)' }}>
             {contracts.length === 0
               ? t.noContractsYet
@@ -254,7 +272,7 @@ export function Contracts({ user }: { user: User }) {
           </p>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {filtered.map(contract => (
+            {visibleFiltered.map(contract => (
               <div
                 key={contract.id}
                 className="group relative cursor-pointer rounded-xl border p-5 transition-all"

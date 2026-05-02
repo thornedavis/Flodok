@@ -12,16 +12,22 @@ import { ManageDepartmentsModal } from '../../components/ManageDepartmentsModal'
 import { useLang } from '../../contexts/LanguageContext'
 import { getEmployeeDepts } from '../../lib/employee'
 import { getSopStarterTemplate } from '../../lib/templates'
+import { isPro, syncSeats } from '../../lib/billing'
+import { FREE_EMPLOYEE_LIMIT, PRO_MIN_SEATS } from '../../lib/pricing'
+import { UpgradeModal } from '../../components/UpgradeModal'
+import { useBilling } from '../../contexts/BillingContext'
 import type { Translations } from '../../lib/translations'
 import type { User, Employee, Organization } from '../../types/aliases'
 
 export function Employees({ user }: { user: User }) {
   const { t } = useLang()
   const navigate = useNavigate()
+  const { canWrite, visibleItemLimit, state: dunning } = useBilling()
   const [employees, setEmployees] = useState<Employee[]>([])
   const [org, setOrg] = useState<Organization | null>(null)
   const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
+  const [showUpgrade, setShowUpgrade] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [activeDepartments, setActiveDepartments] = useState<Set<string>>(new Set())
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'trial' | 'suspended' | 'terminated' | 'archived'>('all')
@@ -46,6 +52,11 @@ export function Employees({ user }: { user: User }) {
   }
 
   async function handleDuplicate(emp: Employee) {
+    if (!canWrite) return
+    if (org && !isPro(org) && employees.length >= FREE_EMPLOYEE_LIMIT) {
+      setShowUpgrade(true)
+      return
+    }
     const newName = prompt(t.promptDuplicateName, t.copyOfName(emp.name))
     if (!newName) return
     const newPhone = prompt(t.promptDuplicatePhone)
@@ -92,13 +103,34 @@ export function Employees({ user }: { user: User }) {
       })
     }
 
+    if (org && isPro(org)) {
+      syncSeats().catch(err => console.error('sync-seats failed after duplicate:', err))
+    }
+
     loadData()
   }
 
   async function handleDelete(emp: Employee) {
+    if (!canWrite) return
     if (!confirm(t.deleteEmployeeConfirm(emp.name))) return
     await supabase.from('employees').delete().eq('id', emp.id)
+    if (org && isPro(org)) {
+      syncSeats().catch(err => console.error('sync-seats failed after delete:', err))
+    }
     loadData()
+  }
+
+  function handleAddClick() {
+    if (!org) return
+    if (!canWrite) {
+      // Read-only or frozen — no add at all. Banner already explains why.
+      return
+    }
+    if (!isPro(org) && employees.length >= FREE_EMPLOYEE_LIMIT) {
+      setShowUpgrade(true)
+      return
+    }
+    setShowAdd(true)
   }
 
   // Derive departments — collect from each employee's array, falling back to legacy
@@ -132,8 +164,12 @@ export function Employees({ user }: { user: User }) {
     return employees.filter(e => e.status === status).length
   }
 
-  const empTotalPages = Math.max(1, Math.ceil(filtered.length / empPageSize))
-  const paginatedEmployees = filtered.slice((empCurrentPage - 1) * empPageSize, empCurrentPage * empPageSize)
+  // Frozen-Free orgs (was Pro, sub canceled) only see the first N items.
+  // Hidden items are preserved server-side and reappear on resume.
+  const visibleFiltered = visibleItemLimit !== null ? filtered.slice(0, visibleItemLimit) : filtered
+  const hiddenCount = filtered.length - visibleFiltered.length
+  const empTotalPages = Math.max(1, Math.ceil(visibleFiltered.length / empPageSize))
+  const paginatedEmployees = visibleFiltered.slice((empCurrentPage - 1) * empPageSize, empCurrentPage * empPageSize)
 
   // Reset page when filters change
   useEffect(() => { setEmpCurrentPage(1) }, [searchQuery, activeDepartments, empPageSize])
@@ -181,13 +217,24 @@ export function Employees({ user }: { user: User }) {
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.employeesTitle}</h1>
         <button
-          onClick={() => setShowAdd(true)}
-          className="shrink-0 rounded-lg px-4 py-2 text-sm font-medium text-white"
+          onClick={handleAddClick}
+          disabled={!canWrite}
+          title={!canWrite ? t.dunningWriteBlocked : undefined}
+          className="shrink-0 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
           style={{ backgroundColor: 'var(--color-primary)' }}
         >
           {t.addEmployee}
         </button>
       </div>
+
+      {hiddenCount > 0 && dunning === 'free_frozen' && (
+        <div
+          className="mb-4 rounded-lg border px-3 py-2 text-xs"
+          style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}
+        >
+          {t.dunningHiddenItemsNotice.replace('{count}', String(hiddenCount))}
+        </div>
+      )}
 
       {/* Filter bar */}
       <div className="mb-5 flex flex-wrap items-center gap-2">
@@ -300,8 +347,18 @@ export function Employees({ user }: { user: User }) {
           orgId={user.org_id}
           countryCode={org?.default_country_code || '+62'}
           departments={departments}
+          isPro={!!org && isPro(org)}
           onDone={() => { setShowAdd(false); loadData() }}
           onCancel={() => setShowAdd(false)}
+        />
+      )}
+
+      {showUpgrade && (
+        <UpgradeModal
+          t={t}
+          initialSeats={Math.max(employees.length + 1, PRO_MIN_SEATS)}
+          cancelReturnPath="/employees"
+          onClose={() => setShowUpgrade(false)}
         />
       )}
     </div>
@@ -485,10 +542,11 @@ function EmployeeCard({ emp, t, onDuplicate, onDelete, onEdit }: {
 const MAX_AVATAR_SIZE = 2 * 1024 * 1024 // 2 MB
 const ALLOWED_AVATAR_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 
-function AddEmployeeForm({ orgId, countryCode, departments, onDone, onCancel }: {
+function AddEmployeeForm({ orgId, countryCode, departments, isPro: orgIsPro, onDone, onCancel }: {
   orgId: string
   countryCode: string
   departments: string[]
+  isPro: boolean
   onDone: () => void
   onCancel: () => void
 }) {
@@ -587,6 +645,10 @@ function AddEmployeeForm({ orgId, countryCode, departments, onDone, onCancel }: 
       content_markdown: getSopStarterTemplate(),
       status: 'draft',
     })
+
+    if (orgIsPro) {
+      syncSeats().catch(err => console.error('sync-seats failed after add:', err))
+    }
 
     if (avatarPreview) URL.revokeObjectURL(avatarPreview)
     setSaving(false)

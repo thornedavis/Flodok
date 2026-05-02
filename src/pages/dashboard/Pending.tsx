@@ -5,6 +5,7 @@ import { Avatar } from '../../components/Avatar'
 import { DiffPanel } from '../../components/DiffPanel'
 import { useLang } from '../../contexts/LanguageContext'
 import { writeSnapshot } from '../../lib/snapshotApi'
+import { useBilling } from '../../contexts/BillingContext'
 import type { User, PendingUpdate, Employee, Sop } from '../../types/aliases'
 
 type Change = { section?: string; summary?: string; content_markdown?: string; change_type?: string }
@@ -55,6 +56,7 @@ const ROUTER_URL = 'https://flodok-router.thorne-davis.workers.dev'
 
 export function Pending({ user }: { user: User }) {
   const { t } = useLang()
+  const { canWrite } = useBilling()
   const [updates, setUpdates] = useState<EnrichedUpdate[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
   const [loading, setLoading] = useState(true)
@@ -583,14 +585,18 @@ export function Pending({ user }: { user: User }) {
                     <div className="flex gap-2">
                       <button
                         onClick={() => handleApprove(update)}
-                        className="rounded-lg px-4 py-2 text-sm font-medium text-white"
+                        disabled={!canWrite}
+                        title={!canWrite ? t.dunningWriteBlocked : undefined}
+                        className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
                         style={{ backgroundColor: 'var(--color-success)' }}
                       >
                         {t.approve}
                       </button>
                       <button
                         onClick={() => handleReject(update)}
-                        className="rounded-lg px-4 py-2 text-sm font-medium"
+                        disabled={!canWrite}
+                        title={!canWrite ? t.dunningWriteBlocked : undefined}
+                        className="rounded-lg px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-40"
                         style={{ color: 'var(--color-danger)' }}
                       >
                         {t.reject}

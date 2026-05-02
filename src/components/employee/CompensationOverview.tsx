@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
 import { useRole } from '../../hooks/useRole'
+import { useBilling } from '../../contexts/BillingContext'
 import { Modal } from '../Modal'
 import { InfoTooltip } from '../InfoTooltip'
 import { currentPeriodMonth, formatIdr, allowanceGradientColor, creditToIdr } from '../../lib/credits'
@@ -79,6 +80,7 @@ export function CompensationOverview({
 }) {
   const { t, lang } = useLang()
   const { isAdmin } = useRole(user)
+  const { canWrite } = useBilling()
   const [creditNet, setCreditNet] = useState(0)
   const [creditFrozen, setCreditFrozen] = useState(false)
   const [bonusSum, setBonusSum] = useState(0)
@@ -256,8 +258,10 @@ export function CompensationOverview({
                     <button
                       type="button"
                       onClick={() => setCreditAction('award')}
+                      disabled={!canWrite}
+                      title={!canWrite ? t.dunningWriteBlocked : undefined}
                       aria-label={t.awardCredits}
-                      className="flex h-7 w-7 items-center justify-center rounded-md text-white"
+                      className="flex h-7 w-7 items-center justify-center rounded-md text-white disabled:cursor-not-allowed disabled:opacity-40"
                       style={{ backgroundColor: 'var(--color-success, #16a34a)' }}
                     >
                       <PlusIcon />
@@ -265,8 +269,10 @@ export function CompensationOverview({
                     <button
                       type="button"
                       onClick={() => setCreditAction('deduct')}
+                      disabled={!canWrite}
+                      title={!canWrite ? t.dunningWriteBlocked : undefined}
                       aria-label={t.deductCredits}
-                      className="flex h-7 w-7 items-center justify-center rounded-md border"
+                      className="flex h-7 w-7 items-center justify-center rounded-md border disabled:cursor-not-allowed disabled:opacity-40"
                       style={{ borderColor: 'var(--color-danger)', color: 'var(--color-danger)' }}
                     >
                       <MinusIcon />
@@ -284,8 +290,10 @@ export function CompensationOverview({
                   <button
                     type="button"
                     onClick={() => setBonusModalOpen(true)}
+                    disabled={!canWrite}
+                    title={!canWrite ? t.dunningWriteBlocked : undefined}
                     aria-label={t.bonusAward}
-                    className="flex h-7 w-7 items-center justify-center rounded-md text-white"
+                    className="flex h-7 w-7 items-center justify-center rounded-md text-white disabled:cursor-not-allowed disabled:opacity-40"
                     style={{ backgroundColor: 'var(--color-success, #16a34a)' }}
                   >
                     <PlusIcon />

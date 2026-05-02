@@ -7,6 +7,7 @@ import { getSopStarterTemplate } from '../../lib/templates'
 import { FilterPill, FilterPanel, FilterSearchInput } from '../../components/FilterControls'
 import type { FilterPanelSection } from '../../components/FilterControls'
 import { ManageDepartmentsModal } from '../../components/ManageDepartmentsModal'
+import { useBilling } from '../../contexts/BillingContext'
 import type { User, Sop, Employee, Tag } from '../../types/aliases'
 
 type SopWithEmployee = Sop & { employee: Employee | null; tagIds: string[] }
@@ -14,6 +15,7 @@ type SopWithEmployee = Sop & { employee: Employee | null; tagIds: string[] }
 export function SOPs({ user }: { user: User }) {
   const navigate = useNavigate()
   const { t } = useLang()
+  const { canWrite, visibleItemLimit, state: dunning } = useBilling()
   const [sops, setSOPs] = useState<SopWithEmployee[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
   const [allTags, setAllTags] = useState<Tag[]>([])
@@ -121,7 +123,12 @@ export function SOPs({ user }: { user: User }) {
       return (b.updated_at || b.created_at).localeCompare(a.updated_at || a.created_at)
     })
 
+  // Frozen-Free orgs only see the first N items.
+  const visibleFiltered = visibleItemLimit !== null ? filtered.slice(0, visibleItemLimit) : filtered
+  const hiddenCount = filtered.length - visibleFiltered.length
+
   async function handleDuplicate(sop: SopWithEmployee) {
+    if (!canWrite) return
     const { data, error } = await supabase
       .from('sops')
       .insert({
@@ -140,6 +147,7 @@ export function SOPs({ user }: { user: User }) {
   }
 
   async function handleDelete(sop: SopWithEmployee) {
+    if (!canWrite) return
     if (!confirm(t.deleteSopConfirm(sop.title))) return
     const { error } = await supabase.from('sops').delete().eq('id', sop.id)
     if (error) { alert(error.message); return }
@@ -203,7 +211,9 @@ export function SOPs({ user }: { user: User }) {
         <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.sopsTitle}</h1>
         <button
           onClick={() => setShowCreateModal(true)}
-          className="shrink-0 rounded-lg px-4 py-2 text-sm font-medium text-white"
+          disabled={!canWrite}
+          title={!canWrite ? t.dunningWriteBlocked : undefined}
+          className="shrink-0 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
           style={{ backgroundColor: 'var(--color-primary)' }}
         >
           {t.createSop}
@@ -249,8 +259,17 @@ export function SOPs({ user }: { user: User }) {
         </div>
       </div>
 
+      {hiddenCount > 0 && dunning === 'free_frozen' && (
+        <div
+          className="mb-4 rounded-lg border px-3 py-2 text-xs"
+          style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}
+        >
+          {t.dunningHiddenItemsNotice.replace('{count}', String(hiddenCount))}
+        </div>
+      )}
+
       <div>
-        {filtered.length === 0 ? (
+        {visibleFiltered.length === 0 ? (
           <p className="py-12 text-center text-sm" style={{ color: 'var(--color-text-secondary)' }}>
             {sops.length === 0
               ? t.noSopsYet
@@ -258,7 +277,7 @@ export function SOPs({ user }: { user: User }) {
           </p>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {filtered.map(sop => (
+            {visibleFiltered.map(sop => (
               <div
                 key={sop.id}
                 className="group relative cursor-pointer rounded-xl border p-5 transition-all"
