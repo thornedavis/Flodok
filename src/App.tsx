@@ -18,6 +18,7 @@ import { Performance } from './pages/dashboard/Performance'
 import { Spotlight } from './pages/dashboard/Spotlight'
 import { SpotlightEdit } from './pages/dashboard/SpotlightEdit'
 import { Pending } from './pages/dashboard/Pending'
+import { Inbox } from './pages/dashboard/Inbox'
 import { Settings } from './pages/dashboard/Settings'
 import { Portal } from './pages/public/Portal'
 import { Landing } from './pages/public/Landing'
@@ -115,6 +116,7 @@ function AppRoutes() {
             <Route path="/dashboard/spotlight/new" element={<SpotlightEdit user={user} />} />
             <Route path="/dashboard/spotlight/:id/edit" element={<SpotlightEdit user={user} />} />
             <Route path="/dashboard/pending" element={<Pending user={user} />} />
+            <Route path="/dashboard/inbox" element={<Inbox user={user} />} />
             <Route path="/dashboard/settings" element={<Settings user={user} />} />
           </Route>
 

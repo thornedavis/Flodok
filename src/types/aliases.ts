@@ -28,6 +28,7 @@ export type EmployeeFormalEducation = Database['public']['Tables']['employee_for
 export type EmployeeInformalEducation = Database['public']['Tables']['employee_informal_education']['Row']
 export type EmployeeWorkingExperience = Database['public']['Tables']['employee_working_experience']['Row']
 export type EmployeeCustomField = Database['public']['Tables']['employee_custom_fields']['Row']
+export type InboxDismissal = Database['public']['Tables']['inbox_dismissals']['Row']
 export type AllowanceAdjustment = {
   id: string
   org_id: string

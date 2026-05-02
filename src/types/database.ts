@@ -907,6 +907,54 @@ export type Database = {
           },
         ]
       }
+      inbox_dismissals: {
+        Row: {
+          created_at: string
+          dedupe_key: string
+          dismissed_at: string | null
+          id: string
+          org_id: string
+          snoozed_until: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          dedupe_key: string
+          dismissed_at?: string | null
+          id?: string
+          org_id: string
+          snoozed_until?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          dedupe_key?: string
+          dismissed_at?: string | null
+          id?: string
+          org_id?: string
+          snoozed_until?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inbox_dismissals_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inbox_dismissals_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employee_emergency_contacts: {
         Row: {
           created_at: string

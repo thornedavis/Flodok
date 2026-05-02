@@ -1,0 +1,44 @@
+// Loads the data for client-side inbox derivation. Used by both the
+// /dashboard/inbox page and the topbar NotificationBell so they stay
+// perfectly in sync. Refetched on `refreshKey` change.
+
+import { useEffect, useState } from 'react'
+import { supabase } from '../lib/supabase'
+import { deriveInboxItems } from '../lib/inbox'
+import type { InboxItem } from '../lib/inbox'
+
+export function useInboxItems(orgId: string, userId: string, refreshKey = 0) {
+  const [items, setItems] = useState<InboxItem[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      setLoading(true)
+      const [c, s, e, pu, cs, ss, d] = await Promise.all([
+        supabase.from('contracts').select('*').eq('org_id', orgId),
+        supabase.from('sops').select('*').eq('org_id', orgId),
+        supabase.from('employees').select('*').eq('org_id', orgId),
+        supabase.from('pending_updates').select('*').eq('org_id', orgId).eq('status', 'pending'),
+        supabase.from('contract_signatures').select('*'),
+        supabase.from('sop_signatures').select('*'),
+        supabase.from('inbox_dismissals').select('*').eq('user_id', userId),
+      ])
+      if (cancelled) return
+      setItems(deriveInboxItems({
+        contracts: c.data || [],
+        sops: s.data || [],
+        employees: e.data || [],
+        pendingUpdates: pu.data || [],
+        contractSignatures: cs.data || [],
+        sopSignatures: ss.data || [],
+        dismissals: d.data || [],
+      }))
+      setLoading(false)
+    }
+    load()
+    return () => { cancelled = true }
+  }, [orgId, userId, refreshKey])
+
+  return { items, loading }
+}

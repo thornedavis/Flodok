@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { normalizePhone, isValidE164, formatPhone } from '../../lib/phone'
 import { generateSlug, generateAccessToken } from '../../lib/slug'
@@ -20,12 +20,14 @@ import type { User, Employee, Organization } from '../../types/aliases'
 export function Employees({ user }: { user: User }) {
   const { t } = useLang()
   const navigate = useNavigate()
+  const location = useLocation()
+  const seedQuery = (location.state as { q?: string } | null)?.q ?? ''
   const { canWrite, visibleItemLimit, state: dunning } = useBilling()
   const [employees, setEmployees] = useState<Employee[]>([])
   const [org, setOrg] = useState<Organization | null>(null)
   const [loading, setLoading] = useState(true)
   const [showUpgrade, setShowUpgrade] = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
+  const [searchQuery, setSearchQuery] = useState(seedQuery)
   const [activeDepartments, setActiveDepartments] = useState<Set<string>>(new Set())
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'probation' | 'suspended' | 'terminated' | 'archived'>('all')
   const [sortBy, setSortBy] = useState<'name' | 'recently_added'>('name')

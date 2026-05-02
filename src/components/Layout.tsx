@@ -9,10 +9,12 @@ import { getAvatarGradient } from '../lib/avatar'
 import { supabase } from '../lib/supabase'
 import type { Translations } from '../lib/translations'
 import type { Organization, User } from '../types/aliases'
-import { Wordmark } from './Brand'
+import { Wordmark, Imagemark } from './Brand'
 import { DunningBanner } from './DunningBanner'
+import { NotificationBell } from './NotificationBell'
+import { FilterSearchInput } from './FilterControls'
 
-type NavKey = 'navOverview' | 'navEmployees' | 'navSops' | 'navContracts' | 'navPerformance' | 'navSpotlight' | 'navPending' | 'navSettings'
+type NavKey = 'navOverview' | 'navInbox' | 'navEmployees' | 'navSops' | 'navContracts' | 'navPerformance' | 'navSpotlight' | 'navPending' | 'navSettings'
 
 interface NavItemDef {
   path: string
@@ -27,6 +29,11 @@ const navItems: NavItemDef[] = [
     labelKey: 'navOverview',
     exact: true,
     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg>,
+  },
+  {
+    path: '/dashboard/inbox',
+    labelKey: 'navInbox',
+    icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12" /><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" /></svg>,
   },
   {
     path: '/dashboard/employees',
@@ -113,6 +120,8 @@ export function PublicLayout() {
 
 // ─── Sidebar ────────────────────────────────────────────
 
+const SIDEBAR_COLLAPSED_KEY = 'flodok:sidebarCollapsed'
+
 function Sidebar({ user, mobileOpen, onCloseMobile }: {
   user: User
   mobileOpen: boolean
@@ -123,6 +132,15 @@ function Sidebar({ user, mobileOpen, onCloseMobile }: {
   const location = useLocation()
   const navigate = useNavigate()
   const [userCount, setUserCount] = useState<number | null>(null)
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false
+    return window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1'
+  })
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? '1' : '0')
+  }, [collapsed])
 
   useEffect(() => {
     if (!isAdmin) return
@@ -137,7 +155,11 @@ function Sidebar({ user, mobileOpen, onCloseMobile }: {
     return () => { cancelled = true }
   }, [isAdmin, user.org_id])
 
-  const showInviteCard = isAdmin && userCount !== null && userCount <= 2
+  // Mobile drawer always shows the full expanded layout, regardless of the
+  // desktop collapsed preference — the narrow icon-only mode would be hard
+  // to tap on touch.
+  const isCollapsed = collapsed && !mobileOpen
+  const showInviteCard = isAdmin && userCount !== null && userCount <= 2 && !isCollapsed
 
   return (
     <>
@@ -152,21 +174,57 @@ function Sidebar({ user, mobileOpen, onCloseMobile }: {
       )}
 
       <aside
-        className={`no-print fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r transition-transform md:sticky md:top-0 md:h-screen md:translate-x-0 ${mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}
+        className={`no-print fixed inset-y-0 left-0 z-50 flex flex-col border-r transition-[width,transform] md:sticky md:top-0 md:h-screen md:translate-x-0 ${
+          isCollapsed ? 'w-16' : 'w-64'
+        } ${mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}
         style={{
           borderColor: 'var(--color-border)',
           backgroundColor: 'var(--color-bg-secondary)',
         }}
       >
-        {/* Top: logo */}
-        <div className="flex h-14 items-center px-5">
-          <Link
-            to="/dashboard"
-            aria-label="Flodok — dashboard"
-            className="inline-flex items-center"
-          >
-            <Wordmark height={22} />
-          </Link>
+        {/* Top: logo + collapse toggle. When collapsed the imagemark
+            doubles as the expand button — keeps the header to a single
+            row so nav items don't shift down. */}
+        <div className={`flex h-14 items-center ${isCollapsed ? 'justify-center px-2' : 'justify-between px-5'}`}>
+          {isCollapsed ? (
+            <button
+              type="button"
+              onClick={() => setCollapsed(false)}
+              className="inline-flex items-center justify-center rounded-md p-1 transition-colors hover:bg-[var(--color-bg-tertiary)]"
+              title={t.sidebarExpand}
+              aria-label={t.sidebarExpand}
+            >
+              <Imagemark size={22} />
+            </button>
+          ) : (
+            <>
+              <Link
+                to="/dashboard"
+                aria-label="Flodok — dashboard"
+                className="inline-flex items-center"
+              >
+                <Wordmark height={18} />
+              </Link>
+              <button
+                type="button"
+                onClick={() => setCollapsed(true)}
+                className="hidden h-6 w-6 items-center justify-center rounded-md border transition-colors hover:bg-[var(--color-bg-tertiary)] md:inline-flex"
+                style={{
+                  borderColor: 'var(--color-border)',
+                  color: 'var(--color-text-tertiary)',
+                }}
+                title={t.sidebarCollapse}
+                aria-label={t.sidebarCollapse}
+              >
+                <svg
+                  width="12" height="12" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                >
+                  <polyline points="15 18 9 12 15 6" />
+                </svg>
+              </button>
+            </>
+          )}
         </div>
 
         {/* Nav items */}
@@ -180,7 +238,10 @@ function Sidebar({ user, mobileOpen, onCloseMobile }: {
                 <li key={item.path}>
                   <Link
                     to={item.path}
-                    className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors"
+                    title={isCollapsed ? t[item.labelKey] : undefined}
+                    className={`flex items-center rounded-lg py-2 text-sm font-medium transition-colors ${
+                      isCollapsed ? 'justify-center px-2' : 'gap-3 px-3'
+                    }`}
                     style={{
                       color: isActive ? 'var(--color-text)' : 'var(--color-text-secondary)',
                       backgroundColor: isActive ? 'var(--color-bg-tertiary)' : 'transparent',
@@ -191,7 +252,7 @@ function Sidebar({ user, mobileOpen, onCloseMobile }: {
                     <span style={{ color: isActive ? 'var(--color-text)' : 'var(--color-text-tertiary)' }}>
                       {item.icon}
                     </span>
-                    {t[item.labelKey]}
+                    {!isCollapsed && t[item.labelKey]}
                   </Link>
                 </li>
               )
@@ -203,7 +264,10 @@ function Sidebar({ user, mobileOpen, onCloseMobile }: {
         <div className="border-t px-3 pt-3" style={{ borderColor: 'var(--color-border)' }}>
           <Link
             to="/help"
-            className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors"
+            title={isCollapsed ? t.helpCenter : undefined}
+            className={`flex items-center rounded-lg py-2 text-sm font-medium transition-colors ${
+              isCollapsed ? 'justify-center px-2' : 'gap-3 px-3'
+            }`}
             style={{ color: 'var(--color-text-secondary)' }}
             onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
             onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
@@ -215,7 +279,7 @@ function Sidebar({ user, mobileOpen, onCloseMobile }: {
                 <line x1="12" y1="17" x2="12.01" y2="17" />
               </svg>
             </span>
-            {t.helpCenter}
+            {!isCollapsed && t.helpCenter}
           </Link>
         </div>
 
@@ -227,9 +291,11 @@ function Sidebar({ user, mobileOpen, onCloseMobile }: {
         )}
 
         {/* Version footer */}
-        <p className="px-6 pb-3 pt-3 text-[10px]" style={{ color: 'var(--color-text-tertiary)' }}>
-          v{__APP_VERSION__}
-        </p>
+        {!isCollapsed && (
+          <p className="px-6 pb-3 pt-3 text-[10px]" style={{ color: 'var(--color-text-tertiary)' }}>
+            v{__APP_VERSION__}
+          </p>
+        )}
       </aside>
     </>
   )
@@ -295,6 +361,7 @@ function deriveBreadcrumbs(pathname: string, orgName: string, t: Translations, t
     performance: { label: t.navPerformance, href: '/dashboard/performance' },
     spotlight: { label: t.navSpotlight, href: '/dashboard/spotlight' },
     pending: { label: t.navPending, href: '/dashboard/pending' },
+    inbox: { label: t.navInbox, href: '/dashboard/inbox' },
     settings: { label: t.navSettings, href: '/dashboard/settings' },
   }
   const section = sectionMap[segments[1]]
@@ -376,8 +443,9 @@ function Header({ user, org, onSignOut, onOpenMenu }: {
         </nav>
       </div>
 
-      {/* Right: language · theme · avatar */}
-      <div className="flex shrink-0 items-center gap-1">
+      {/* Right: search · language · theme · bell · avatar */}
+      <div className="flex shrink-0 items-center gap-2">
+        <HeaderSearch />
         <button
           type="button"
           onClick={toggleLang}
@@ -412,17 +480,46 @@ function Header({ user, org, onSignOut, onOpenMenu }: {
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5" /><line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" /><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" /><line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" /><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" /></svg>
           )}
         </button>
+        <NotificationBell user={user} />
         <div className="ml-2">
-          <UserMenu user={user} onSignOut={onSignOut} />
+          <UserMenu user={user} org={org} onSignOut={onSignOut} />
         </div>
       </div>
     </div>
   )
 }
 
+// Visual placeholder for a future global command palette. Uses the same
+// FilterSearchInput primitive as the per-page search bars so it inherits
+// the brand styling. On Enter the query is forwarded to /dashboard/employees,
+// which prefills its own search box from `location.state.q`.
+function HeaderSearch() {
+  const navigate = useNavigate()
+  const { t } = useLang()
+  const [q, setQ] = useState('')
+  return (
+    <form
+      onSubmit={e => {
+        e.preventDefault()
+        const trimmed = q.trim()
+        if (!trimmed) return
+        navigate('/dashboard/employees', { state: { q: trimmed } })
+        setQ('')
+      }}
+      className="hidden w-56 md:block lg:w-72"
+    >
+      <FilterSearchInput
+        value={q}
+        onChange={setQ}
+        placeholder={t.headerSearchPlaceholder}
+      />
+    </form>
+  )
+}
+
 // ─── User menu ──────────────────────────────────────────
 
-function UserMenu({ user, onSignOut }: { user: User; onSignOut: () => void }) {
+function UserMenu({ user, org, onSignOut }: { user: User; org: Organization | null; onSignOut: () => void }) {
   const { t, lang, toggle: toggleLang } = useLang()
   const { theme, toggle: toggleTheme } = useTheme()
   const navigate = useNavigate()
@@ -450,23 +547,38 @@ function UserMenu({ user, onSignOut }: { user: User; onSignOut: () => void }) {
     navigate(path)
   }
 
+  const orgLabel = org?.display_name || org?.name || ''
+
   return (
     <div ref={menuRef} className="relative" style={{ position: 'relative' }}>
       <button
         onClick={() => setOpen(o => !o)}
-        className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full ring-offset-2 transition-all hover:ring-2"
-        style={{
-          background: user.photo_url ? 'var(--color-bg-tertiary)' : getAvatarGradient(user.id),
-          ['--tw-ring-color' as string]: 'var(--color-border-strong)',
-          ['--tw-ring-offset-color' as string]: 'var(--color-bg)',
-        } as React.CSSProperties}
+        className="flex items-center gap-2 rounded-full pl-1 pr-2 py-1 transition-colors hover:bg-[var(--color-bg-tertiary)]"
         aria-label={t.userMenuAria}
         aria-haspopup="menu"
         aria-expanded={open}
       >
-        {user.photo_url && (
-          <img src={user.photo_url} alt={user.name} className="h-full w-full object-cover" />
-        )}
+        <span
+          className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full"
+          style={{
+            background: user.photo_url ? 'var(--color-bg-tertiary)' : getAvatarGradient(user.id),
+          }}
+        >
+          {user.photo_url && (
+            <img src={user.photo_url} alt={user.name} className="h-full w-full object-cover" />
+          )}
+        </span>
+        {/* Name + org — hidden on narrow screens to keep the topbar compact */}
+        <div className="hidden min-w-0 max-w-[12rem] flex-col items-start leading-tight md:flex">
+          <span className="truncate text-xs font-semibold" style={{ color: 'var(--color-text)' }}>
+            {user.name}
+          </span>
+          {orgLabel && (
+            <span className="truncate text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>
+              {orgLabel}
+            </span>
+          )}
+        </div>
       </button>
 
       {open && (
