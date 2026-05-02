@@ -36,7 +36,7 @@ type DemoEmployee = {
   phone: string
   email: string
   joined: string
-  status: 'active' | 'trial'
+  status: 'active' | 'probation'
   baseWage: number
   allowance: number
   credits: number
@@ -53,7 +53,7 @@ const EMPLOYEES: DemoEmployee[] = [
   { id: 'e5', name: 'Putri Lestari',   role: 'Customer Success Lead', departments: ['Customer Success'],       phone: '+62 822-1122-3344', email: 'putri@acme.id',    joined: 'Feb 2024', status: 'active', baseWage: 11_000_000, allowance: 1_500_000, credits: 640,  badgeCount: 4 },
   { id: 'e6', name: 'Budi Santoso',    role: 'Warehouse Supervisor', departments: ['Operations'],              phone: '+62 815-4433-2211', email: 'budi@acme.id',     joined: 'Aug 2024', status: 'active', baseWage: 8_500_000,  allowance: 1_200_000, credits: 520,  badgeCount: 3 },
   { id: 'e7', name: 'Maya Indrawati',  role: 'People & Culture',    departments: ['People'],                   phone: '+62 819-5566-7788', email: 'maya@acme.id',     joined: 'Mar 2024', status: 'active', baseWage: 13_000_000, allowance: 1_700_000, credits: 480,  badgeCount: 4 },
-  { id: 'e8', name: 'Reza Maulana',    role: 'Software Engineer',   departments: ['Engineering'],              phone: '+62 838-9900-1122', email: 'reza@acme.id',     joined: 'Nov 2024', status: 'trial',  baseWage: 12_000_000, allowance: 1_500_000, credits: 210,  badgeCount: 2 },
+  { id: 'e8', name: 'Reza Maulana',    role: 'Software Engineer',   departments: ['Engineering'],              phone: '+62 838-9900-1122', email: 'reza@acme.id',     joined: 'Nov 2024', status: 'probation',  baseWage: 12_000_000, allowance: 1_500_000, credits: 210,  badgeCount: 2 },
 ]
 
 const HEADCOUNT = EMPLOYEES.length
@@ -1229,7 +1229,7 @@ function EmployeesView({ onOpen }: { onOpen: (id: string) => void }) {
         pills={[
           { label: 'All', count: HEADCOUNT, active: true },
           { label: 'Active', count: EMPLOYEES.filter(e => e.status === 'active').length, active: false },
-          { label: 'Trial', count: EMPLOYEES.filter(e => e.status === 'trial').length, active: false },
+          { label: 'Probation', count: EMPLOYEES.filter(e => e.status === 'probation').length, active: false },
         ]}
         searchPlaceholder="Search employees…"
       />
@@ -2305,7 +2305,7 @@ function EmployeeDetailView({ id }: { id: string }) {
               {emp.name}
             </h1>
             <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[10px]" style={{ color: 'var(--color-text-tertiary)' }}>
-              <StatusPill kind={emp.status === 'active' ? 'success' : 'info'}>{emp.status === 'active' ? 'Active' : 'Trial'}</StatusPill>
+              <StatusPill kind={emp.status === 'active' ? 'success' : 'info'}>{emp.status === 'active' ? 'Active' : 'Probation'}</StatusPill>
               <span>{emp.role}</span>
               <span>·</span>
               <span>Joined {emp.joined}</span>

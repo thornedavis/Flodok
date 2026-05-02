@@ -537,69 +537,486 @@ export type Database = {
         Row: {
           access_token: string
           address: string | null
+          blood_type: string | null
+          branch_name: string | null
+          citizen_id_address: string | null
+          class: string | null
           created_at: string
           date_of_birth: string | null
           department: string | null
           departments: string[]
           email: string | null
+          employee_code: string | null
+          employment_type: string | null
+          first_name: string | null
+          gender: string | null
+          grade: string | null
           id: string
+          job_level: string | null
+          job_position: string | null
+          join_date: string | null
           kk_photo_url: string | null
           ktp_nik: string | null
           ktp_photo_url: string | null
+          last_name: string | null
           last_notifications_seen_at: string | null
+          marital_status: string | null
           name: string
           notes: string | null
           org_id: string
+          passport_expiry: string | null
+          passport_number: string | null
           phone: string
           photo_url: string | null
+          place_of_birth: string | null
+          postal_code: string | null
+          probation_end_date: string | null
+          religion: string | null
+          resign_date: string | null
           slug: string
           status: string
         }
         Insert: {
           access_token: string
           address?: string | null
+          blood_type?: string | null
+          branch_name?: string | null
+          citizen_id_address?: string | null
+          class?: string | null
           created_at?: string
           date_of_birth?: string | null
           department?: string | null
           departments?: string[]
           email?: string | null
+          employee_code?: string | null
+          employment_type?: string | null
+          first_name?: string | null
+          gender?: string | null
+          grade?: string | null
           id?: string
+          job_level?: string | null
+          job_position?: string | null
+          join_date?: string | null
           kk_photo_url?: string | null
           ktp_nik?: string | null
           ktp_photo_url?: string | null
+          last_name?: string | null
           last_notifications_seen_at?: string | null
+          marital_status?: string | null
           name: string
           notes?: string | null
           org_id: string
+          passport_expiry?: string | null
+          passport_number?: string | null
           phone: string
           photo_url?: string | null
+          place_of_birth?: string | null
+          postal_code?: string | null
+          probation_end_date?: string | null
+          religion?: string | null
+          resign_date?: string | null
           slug: string
           status?: string
         }
         Update: {
           access_token?: string
           address?: string | null
+          blood_type?: string | null
+          branch_name?: string | null
+          citizen_id_address?: string | null
+          class?: string | null
           created_at?: string
           date_of_birth?: string | null
           department?: string | null
           departments?: string[]
           email?: string | null
+          employee_code?: string | null
+          employment_type?: string | null
+          first_name?: string | null
+          gender?: string | null
+          grade?: string | null
           id?: string
+          job_level?: string | null
+          job_position?: string | null
+          join_date?: string | null
           kk_photo_url?: string | null
           ktp_nik?: string | null
           ktp_photo_url?: string | null
+          last_name?: string | null
           last_notifications_seen_at?: string | null
+          marital_status?: string | null
           name?: string
           notes?: string | null
           org_id?: string
+          passport_expiry?: string | null
+          passport_number?: string | null
           phone?: string
           photo_url?: string | null
+          place_of_birth?: string | null
+          postal_code?: string | null
+          probation_end_date?: string | null
+          religion?: string | null
+          resign_date?: string | null
           slug?: string
           status?: string
         }
         Relationships: [
           {
             foreignKeyName: "employees_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      employee_formal_education: {
+        Row: {
+          activities: string | null
+          certificate_file_url: string | null
+          created_at: string
+          degree: string
+          employee_id: string
+          end_year: number | null
+          field_of_study: string | null
+          grade: string | null
+          has_certificate: boolean
+          id: string
+          institution: string
+          org_id: string
+          start_year: number | null
+          updated_at: string
+        }
+        Insert: {
+          activities?: string | null
+          certificate_file_url?: string | null
+          created_at?: string
+          degree: string
+          employee_id: string
+          end_year?: number | null
+          field_of_study?: string | null
+          grade?: string | null
+          has_certificate?: boolean
+          id?: string
+          institution: string
+          org_id: string
+          start_year?: number | null
+          updated_at?: string
+        }
+        Update: {
+          activities?: string | null
+          certificate_file_url?: string | null
+          created_at?: string
+          degree?: string
+          employee_id?: string
+          end_year?: number | null
+          field_of_study?: string | null
+          grade?: string | null
+          has_certificate?: boolean
+          id?: string
+          institution?: string
+          org_id?: string
+          start_year?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_formal_education_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_formal_education_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      employee_informal_education: {
+        Row: {
+          activities: string | null
+          certificate_file_url: string | null
+          created_at: string
+          duration: number | null
+          duration_type: string | null
+          education_name: string
+          employee_id: string
+          end_date: string | null
+          expired_date: string | null
+          fee_idr: number | null
+          has_certificate: boolean
+          held_by: string | null
+          id: string
+          org_id: string
+          start_date: string | null
+          updated_at: string
+        }
+        Insert: {
+          activities?: string | null
+          certificate_file_url?: string | null
+          created_at?: string
+          duration?: number | null
+          duration_type?: string | null
+          education_name: string
+          employee_id: string
+          end_date?: string | null
+          expired_date?: string | null
+          fee_idr?: number | null
+          has_certificate?: boolean
+          held_by?: string | null
+          id?: string
+          org_id: string
+          start_date?: string | null
+          updated_at?: string
+        }
+        Update: {
+          activities?: string | null
+          certificate_file_url?: string | null
+          created_at?: string
+          duration?: number | null
+          duration_type?: string | null
+          education_name?: string
+          employee_id?: string
+          end_date?: string | null
+          expired_date?: string | null
+          fee_idr?: number | null
+          has_certificate?: boolean
+          held_by?: string | null
+          id?: string
+          org_id?: string
+          start_date?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_informal_education_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_informal_education_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      employee_working_experience: {
+        Row: {
+          company: string
+          created_at: string
+          employee_id: string
+          from_date: string | null
+          id: string
+          job_position: string
+          org_id: string
+          to_date: string | null
+          updated_at: string
+        }
+        Insert: {
+          company: string
+          created_at?: string
+          employee_id: string
+          from_date?: string | null
+          id?: string
+          job_position: string
+          org_id: string
+          to_date?: string | null
+          updated_at?: string
+        }
+        Update: {
+          company?: string
+          created_at?: string
+          employee_id?: string
+          from_date?: string | null
+          id?: string
+          job_position?: string
+          org_id?: string
+          to_date?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_working_experience_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_working_experience_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      employee_custom_fields: {
+        Row: {
+          created_at: string
+          display_order: number
+          employee_id: string
+          id: string
+          label: string
+          org_id: string
+          updated_at: string
+          value: string | null
+        }
+        Insert: {
+          created_at?: string
+          display_order?: number
+          employee_id: string
+          id?: string
+          label: string
+          org_id: string
+          updated_at?: string
+          value?: string | null
+        }
+        Update: {
+          created_at?: string
+          display_order?: number
+          employee_id?: string
+          id?: string
+          label?: string
+          org_id?: string
+          updated_at?: string
+          value?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_custom_fields_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_custom_fields_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      employee_emergency_contacts: {
+        Row: {
+          created_at: string
+          employee_id: string
+          id: string
+          name: string
+          org_id: string
+          phone: string
+          relationship: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          employee_id: string
+          id?: string
+          name: string
+          org_id: string
+          phone: string
+          relationship: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          employee_id?: string
+          id?: string
+          name?: string
+          org_id?: string
+          phone?: string
+          relationship?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_emergency_contacts_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_emergency_contacts_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      employee_family_members: {
+        Row: {
+          address: string | null
+          birthdate: string | null
+          created_at: string
+          employee_id: string
+          full_name: string
+          gender: string | null
+          id: string
+          id_number: string | null
+          is_emergency_contact: boolean
+          job: string | null
+          marital_status: string | null
+          org_id: string
+          relationship: string
+          religion: string | null
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          birthdate?: string | null
+          created_at?: string
+          employee_id: string
+          full_name: string
+          gender?: string | null
+          id?: string
+          id_number?: string | null
+          is_emergency_contact?: boolean
+          job?: string | null
+          marital_status?: string | null
+          org_id: string
+          relationship: string
+          religion?: string | null
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          birthdate?: string | null
+          created_at?: string
+          employee_id?: string
+          full_name?: string
+          gender?: string | null
+          id?: string
+          id_number?: string | null
+          is_emergency_contact?: boolean
+          job?: string | null
+          marital_status?: string | null
+          org_id?: string
+          relationship?: string
+          religion?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_family_members_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_family_members_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"

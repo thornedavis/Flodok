@@ -64,6 +64,41 @@ function getValidationState(digits: string, country: CountryOption): 'empty' | '
   return 'valid'
 }
 
+/**
+ * Strict phone validation that enforces the local-digit length range
+ * for the country the number resolves to. Falls back to a generic E.164
+ * shape check if the country code isn't recognized.
+ */
+export function isValidPhone(e164: string): boolean {
+  if (!e164 || !e164.startsWith('+')) return false
+  const sorted = [...COUNTRIES].sort((a, b) => b.code.length - a.code.length)
+  for (const c of sorted) {
+    if (e164.startsWith(c.code)) {
+      const digits = e164.slice(c.code.length)
+      if (!/^\d+$/.test(digits)) return false
+      return digits.length >= c.minDigits && digits.length <= c.maxDigits
+    }
+  }
+  return /^\+[1-9]\d{6,14}$/.test(e164)
+}
+
+/**
+ * Per-country error message for a given E.164 number, or '' if valid/empty.
+ * Useful for surfacing why a save was blocked.
+ */
+export function describePhoneError(e164: string, t: Translations): string {
+  if (!e164 || !e164.startsWith('+')) return t.invalidPhone
+  const sorted = [...COUNTRIES].sort((a, b) => b.code.length - a.code.length)
+  for (const c of sorted) {
+    if (e164.startsWith(c.code)) {
+      const digits = e164.slice(c.code.length)
+      const state = getValidationState(digits, c)
+      return getValidationMessage(state === 'empty' ? 'short' : state, c, t)
+    }
+  }
+  return t.invalidPhone
+}
+
 function getValidationMessage(state: 'empty' | 'short' | 'valid' | 'long', country: CountryOption, t: Translations): string {
   const expected = country.minDigits === country.maxDigits
     ? t.digitsExact(country.minDigits)

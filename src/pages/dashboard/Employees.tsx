@@ -4,8 +4,6 @@ import { supabase } from '../../lib/supabase'
 import { normalizePhone, isValidE164, formatPhone } from '../../lib/phone'
 import { generateSlug, generateAccessToken } from '../../lib/slug'
 import { getAvatarGradient } from '../../lib/avatar'
-import { PhoneInput } from '../../components/PhoneInput'
-import { DepartmentsMultiSelect } from '../../components/DepartmentsMultiSelect'
 import { FilterPill, FilterPanel, FilterSearchInput } from '../../components/FilterControls'
 import type { FilterPanelSection } from '../../components/FilterControls'
 import { ManageDepartmentsModal } from '../../components/ManageDepartmentsModal'
@@ -26,11 +24,10 @@ export function Employees({ user }: { user: User }) {
   const [employees, setEmployees] = useState<Employee[]>([])
   const [org, setOrg] = useState<Organization | null>(null)
   const [loading, setLoading] = useState(true)
-  const [showAdd, setShowAdd] = useState(false)
   const [showUpgrade, setShowUpgrade] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [activeDepartments, setActiveDepartments] = useState<Set<string>>(new Set())
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'trial' | 'suspended' | 'terminated' | 'archived'>('all')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'probation' | 'suspended' | 'terminated' | 'archived'>('all')
   const [sortBy, setSortBy] = useState<'name' | 'recently_added'>('name')
   const [empPageSize, setEmpPageSize] = useState(12)
   const [empCurrentPage, setEmpCurrentPage] = useState(1)
@@ -120,7 +117,7 @@ export function Employees({ user }: { user: User }) {
     loadData()
   }
 
-  function handleAddClick() {
+  async function handleAddClick() {
     if (!org) return
     if (!canWrite) {
       // Read-only or frozen — no add at all. Banner already explains why.
@@ -130,7 +127,43 @@ export function Employees({ user }: { user: User }) {
       setShowUpgrade(true)
       return
     }
-    setShowAdd(true)
+
+    const placeholderName = t.empNewPlaceholderName
+    const slug = generateSlug(placeholderName)
+    const token = generateAccessToken()
+
+    const { data: emp, error } = await supabase
+      .from('employees')
+      .insert({
+        org_id: user.org_id,
+        name: placeholderName,
+        phone: '',
+        slug,
+        access_token: token,
+        status: 'probation',
+      })
+      .select()
+      .single()
+
+    if (error || !emp) {
+      alert(error?.message || 'Failed to create employee')
+      return
+    }
+
+    // Match the existing convention: every employee gets a draft starter SOP.
+    await supabase.from('sops').insert({
+      org_id: user.org_id,
+      employee_id: emp.id,
+      title: t.defaultSopTitle(placeholderName),
+      content_markdown: getSopStarterTemplate(),
+      status: 'draft',
+    })
+
+    if (isPro(org)) {
+      syncSeats().catch(err => console.error('sync-seats failed after add:', err))
+    }
+
+    navigate(`/dashboard/employees/${emp.id}/edit?new=1`)
   }
 
   // Derive departments — collect from each employee's array, falling back to legacy
@@ -160,7 +193,7 @@ export function Employees({ user }: { user: User }) {
       return a.name.localeCompare(b.name)
     })
 
-  function getStatusCount(status: 'active' | 'trial' | 'suspended' | 'terminated' | 'archived') {
+  function getStatusCount(status: 'active' | 'probation' | 'suspended' | 'terminated' | 'archived') {
     return employees.filter(e => e.status === status).length
   }
 
@@ -202,11 +235,11 @@ export function Employees({ user }: { user: User }) {
     },
   ]
 
-  type StatusKey = 'all' | 'active' | 'trial' | 'suspended' | 'terminated' | 'archived'
+  type StatusKey = 'all' | 'active' | 'probation' | 'suspended' | 'terminated' | 'archived'
   const statusPills: Array<{ key: StatusKey; label: string; count: number }> = [
     { key: 'all',        label: t.employeeStatusAll,        count: employees.length },
     { key: 'active',     label: t.employeeStatusActive,     count: getStatusCount('active') },
-    { key: 'trial',      label: t.employeeStatusTrial,      count: getStatusCount('trial') },
+    { key: 'probation',  label: t.employeeStatusProbation,  count: getStatusCount('probation') },
     { key: 'suspended',  label: t.employeeStatusSuspended,  count: getStatusCount('suspended') },
     { key: 'terminated', label: t.employeeStatusTerminated, count: getStatusCount('terminated') },
     { key: 'archived',   label: t.employeeStatusArchived,   count: getStatusCount('archived') },
@@ -341,17 +374,6 @@ export function Employees({ user }: { user: User }) {
         employees={employees}
         onChanged={() => { setActiveDepartments(new Set()); loadData() }}
       />
-
-      {showAdd && (
-        <AddEmployeeForm
-          orgId={user.org_id}
-          countryCode={org?.default_country_code || '+62'}
-          departments={departments}
-          isPro={!!org && isPro(org)}
-          onDone={() => { setShowAdd(false); loadData() }}
-          onCancel={() => setShowAdd(false)}
-        />
-      )}
 
       {showUpgrade && (
         <UpgradeModal
@@ -534,265 +556,6 @@ function EmployeeCard({ emp, t, onDuplicate, onDelete, onEdit }: {
             <CopyButton value={`${window.location.origin}/portal/${emp.slug}-${emp.access_token}`} />
           </div>
         </div>
-      </div>
-    </div>
-  )
-}
-
-const MAX_AVATAR_SIZE = 2 * 1024 * 1024 // 2 MB
-const ALLOWED_AVATAR_TYPES = ['image/jpeg', 'image/png', 'image/webp']
-
-function AddEmployeeForm({ orgId, countryCode, departments, isPro: orgIsPro, onDone, onCancel }: {
-  orgId: string
-  countryCode: string
-  departments: string[]
-  isPro: boolean
-  onDone: () => void
-  onCancel: () => void
-}) {
-  const { t } = useLang()
-  const [name, setName] = useState('')
-  const [phone, setPhone] = useState('')
-  const [email, setEmail] = useState('')
-  const [empDepartments, setEmpDepartments] = useState<string[]>([])
-  const [notes, setNotes] = useState('')
-  const [ktpNik, setKtpNik] = useState('')
-  const [address, setAddress] = useState('')
-  const [dateOfBirth, setDateOfBirth] = useState('')
-  const [avatarFile, setAvatarFile] = useState<File | null>(null)
-  const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
-  const [error, setError] = useState('')
-  const [saving, setSaving] = useState(false)
-
-  function handleAvatarSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    if (!ALLOWED_AVATAR_TYPES.includes(file.type)) {
-      setError(t.avatarInvalidType)
-      return
-    }
-    if (file.size > MAX_AVATAR_SIZE) {
-      setError(t.avatarTooLarge)
-      return
-    }
-
-    setError('')
-    setAvatarFile(file)
-    setAvatarPreview(URL.createObjectURL(file))
-  }
-
-  function handleRemoveAvatar() {
-    if (avatarPreview) URL.revokeObjectURL(avatarPreview)
-    setAvatarFile(null)
-    setAvatarPreview(null)
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setError('')
-
-    if (!isValidE164(phone)) {
-      setError(t.invalidPhone)
-      return
-    }
-
-    setSaving(true)
-    const slug = generateSlug(name)
-    const token = generateAccessToken()
-
-    const { data: emp, error: empError } = await supabase
-      .from('employees')
-      .insert({
-        org_id: orgId,
-        name,
-        phone,
-        email: email || null,
-        departments: empDepartments,
-        department: empDepartments[0] || null,
-        notes: notes || null,
-        ktp_nik: ktpNik || null,
-        address: address || null,
-        date_of_birth: dateOfBirth || null,
-        slug,
-        access_token: token,
-      })
-      .select()
-      .single()
-
-    if (empError) { setError(empError.message); setSaving(false); return }
-
-    // Upload avatar if selected
-    if (avatarFile && emp) {
-      const ext = avatarFile.name.split('.').pop()
-      const path = `${emp.id}.${ext}`
-
-      const { error: uploadError } = await supabase.storage
-        .from('avatars')
-        .upload(path, avatarFile, { upsert: true })
-
-      if (!uploadError) {
-        const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path)
-        const url = `${publicUrl}?t=${Date.now()}`
-        await supabase.from('employees').update({ photo_url: url }).eq('id', emp.id)
-      }
-    }
-
-    await supabase.from('sops').insert({
-      org_id: orgId,
-      employee_id: emp.id,
-      title: t.defaultSopTitle(name),
-      content_markdown: getSopStarterTemplate(),
-      status: 'draft',
-    })
-
-    if (orgIsPro) {
-      syncSeats().catch(err => console.error('sync-seats failed after add:', err))
-    }
-
-    if (avatarPreview) URL.revokeObjectURL(avatarPreview)
-    setSaving(false)
-    onDone()
-  }
-
-  const inputStyle = {
-    borderColor: 'var(--color-border)',
-    backgroundColor: 'var(--color-bg)',
-    color: 'var(--color-text)',
-  } as React.CSSProperties
-
-  // Close on Escape key
-  useEffect(() => {
-    function handleKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onCancel()
-    }
-    document.addEventListener('keydown', handleKey)
-    return () => document.removeEventListener('keydown', handleKey)
-  }, [onCancel])
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ backgroundColor: 'rgba(0, 0, 0, 0.6)', backdropFilter: 'blur(4px)' }}
-      onClick={e => { if (e.target === e.currentTarget) onCancel() }}
-    >
-      <div
-        className="relative w-full max-w-lg rounded-2xl border p-6"
-        style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-elevated, var(--color-bg))' }}
-      >
-        <button
-          type="button"
-          onClick={onCancel}
-          className="absolute right-4 top-4 rounded-lg p-1.5 transition-colors"
-          style={{ color: 'var(--color-text-tertiary)' }}
-          onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
-          onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="18" y1="6" x2="6" y2="18" />
-            <line x1="6" y1="6" x2="18" y2="18" />
-          </svg>
-        </button>
-
-        <h2 className="mb-5 text-xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.newEmployee}</h2>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {error && (
-            <div className="rounded-md px-3 py-2 text-sm" style={{ backgroundColor: 'var(--color-diff-remove)', color: 'var(--color-danger)' }}>
-              {error}
-            </div>
-          )}
-
-          {/* Avatar */}
-          <div>
-            <label className="mb-2 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.photoLabel}</label>
-            <div className="flex items-center gap-4">
-              <div
-                className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full"
-                style={{ background: avatarPreview ? 'var(--color-bg-tertiary)' : getAvatarGradient(name || 'new') }}
-              >
-                {avatarPreview && (
-                  <img src={avatarPreview} alt="Preview" className="h-full w-full object-cover" />
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <label
-                  className="cursor-pointer rounded-lg border px-3 py-1.5 text-sm transition-colors"
-                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
-                >
-                  {avatarPreview ? t.change : t.upload}
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    onChange={handleAvatarSelect}
-                    className="hidden"
-                  />
-                </label>
-                {avatarPreview && (
-                  <button
-                    type="button"
-                    onClick={handleRemoveAvatar}
-                    className="text-xs"
-                    style={{ color: 'var(--color-danger)' }}
-                  >
-                    {t.remove}
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.nameLabel} *</label>
-            <input type="text" value={name} onChange={e => setName(e.target.value)} required className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.phoneWhatsAppLabel} *</label>
-            <div className="relative">
-              <PhoneInput value={phone} onChange={setPhone} defaultCountryCode={countryCode} />
-            </div>
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.departmentsLabel}</label>
-            <DepartmentsMultiSelect value={empDepartments} onChange={setEmpDepartments} availableDepartments={departments} />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.emailOptionalLabel}</label>
-            <input type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.ktpNikOptionalLabel}</label>
-            <input type="text" value={ktpNik} onChange={e => setKtpNik(e.target.value)} placeholder="e.g. 5171234567890001" className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.dateOfBirthLabel}</label>
-            <input type="date" value={dateOfBirth} onChange={e => setDateOfBirth(e.target.value)} className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.addressOptionalLabel}</label>
-            <textarea value={address} onChange={e => setAddress(e.target.value)} placeholder={t.addressPlaceholder} rows={2} className="w-full resize-none rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.notesInternalLabel}</label>
-            <textarea
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              placeholder={t.notesPlaceholder}
-              rows={3}
-              className="w-full resize-none rounded-lg border px-3 py-2 text-sm"
-              style={inputStyle}
-            />
-          </div>
-
-          <div className="flex items-center gap-2 border-t pt-4" style={{ borderColor: 'var(--color-border)' }}>
-            <button type="submit" disabled={saving} className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50" style={{ backgroundColor: 'var(--color-primary)' }}>
-              {saving ? t.adding : t.addEmployee}
-            </button>
-            <button type="button" onClick={onCancel} className="rounded-lg border px-4 py-2 text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>
-              {t.cancel}
-            </button>
-          </div>
-        </form>
       </div>
     </div>
   )

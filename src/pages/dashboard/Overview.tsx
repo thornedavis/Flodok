@@ -977,7 +977,7 @@ function CompensationTotal({ orgId, t, lang }: { orgId: string; t: Translations;
           .from('employees')
           .select('id, status')
           .eq('org_id', orgId)
-          .in('status', ['trial', 'active']),
+          .in('status', ['probation', 'active']),
         supabase
           .from('contracts')
           .select('employee_id, base_wage_idr, allowance_idr')
