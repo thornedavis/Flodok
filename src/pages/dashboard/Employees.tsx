@@ -20,17 +20,155 @@ import type { User, Employee, Organization } from '../../types/aliases'
 
 type EmployeesView = 'list' | 'cards'
 type EmployeeStatus = 'active' | 'probation' | 'suspended' | 'terminated' | 'archived'
-type SortField = 'name' | 'created_at' | 'phone' | 'status'
+type SortField =
+  | 'name' | 'created_at' | 'phone' | 'status'
+  | 'employee_code' | 'email' | 'branch_name' | 'job_position' | 'job_level'
+  | 'class' | 'employment_type' | 'join_date'
 type SortDir = 'asc' | 'desc'
-type ColumnKey = 'departments' | 'phone' | 'status' | 'portal'
+type ColumnKey =
+  | 'employee_code' | 'email' | 'departments' | 'branch_name' | 'job_position'
+  | 'job_level' | 'class' | 'employment_type' | 'status' | 'phone'
+  | 'join_date' | 'probation_end_date' | 'resign_date'
+  | 'date_of_birth' | 'place_of_birth' | 'gender' | 'religion'
+  | 'marital_status' | 'blood_type' | 'ktp_nik'
+  | 'address' | 'postal_code' | 'citizen_id_address'
+  | 'passport_number' | 'passport_expiry' | 'notes'
+  | 'portal'
 
 const VIEW_STORAGE_KEY = 'flodok.employees.view'
 const COLUMNS_STORAGE_KEY = 'flodok.employees.columns'
 const STATUS_ORDER: EmployeeStatus[] = ['active', 'probation', 'suspended', 'terminated', 'archived']
-const COLUMN_ORDER: ColumnKey[] = ['departments', 'phone', 'status', 'portal']
+// Display order in the row + the order options appear in the Columns picker.
+const COLUMN_ORDER: ColumnKey[] = [
+  'employee_code', 'email', 'departments', 'branch_name', 'job_position',
+  'job_level', 'class', 'employment_type', 'status', 'phone',
+  'join_date', 'probation_end_date', 'resign_date',
+  'date_of_birth', 'place_of_birth', 'gender', 'religion',
+  'marital_status', 'blood_type', 'ktp_nik',
+  'address', 'postal_code', 'citizen_id_address',
+  'passport_number', 'passport_expiry', 'notes',
+  'portal',
+]
 const DEFAULT_VISIBLE_COLUMNS: ColumnKey[] = ['departments', 'phone', 'status', 'portal']
 const STATUS_SORT_RANK: Record<EmployeeStatus, number> = {
   active: 0, probation: 1, suspended: 2, terminated: 3, archived: 4,
+}
+
+// ───── List view column registry ─────────────────────────────────────
+//
+// Single source of truth for the list view: header label, body cell render,
+// width, sortability. Both ListHeader and EmployeeRow read this so adding a
+// column is a one-place change.
+
+interface ListColumn {
+  key: ColumnKey
+  label: (t: Translations) => string
+  /** Tailwind width class. */
+  width: string
+  sortField?: SortField
+  alignRight?: boolean
+  render: (ctx: { emp: Employee; t: Translations; statusLabels: Record<EmployeeStatus, string> }) => React.ReactNode
+}
+
+function emptyCell(): React.ReactNode {
+  return <span style={{ color: 'var(--color-text-tertiary)' }}>—</span>
+}
+
+function textCell(v: string | null | undefined): React.ReactNode {
+  const trimmed = v?.trim()
+  return trimmed ? trimmed : emptyCell()
+}
+
+const LIST_COLUMN_DEFS: Record<ColumnKey, ListColumn> = {
+  employee_code:   { key: 'employee_code',   label: t => t.empFieldEmployeeCode,    width: 'w-28', sortField: 'employee_code',   render: ({ emp }) => textCell(emp.employee_code) },
+  email:           { key: 'email',           label: t => t.empFieldEmail,           width: 'w-48', sortField: 'email',           render: ({ emp }) => textCell(emp.email) },
+  departments: {
+    key: 'departments',
+    label: t => t.departments,
+    width: 'w-56',
+    render: ({ emp }) => {
+      const depts = getEmployeeDepts(emp)
+      if (depts.length === 0) return emptyCell()
+      return (
+        <div className="flex flex-wrap gap-1">
+          {depts.map(d => (
+            <span
+              key={d}
+              className="inline-flex truncate rounded-full px-2 py-0.5 text-[10px] font-medium"
+              style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}
+            >
+              {d}
+            </span>
+          ))}
+        </div>
+      )
+    },
+  },
+  branch_name:     { key: 'branch_name',     label: t => t.empFieldBranchName,      width: 'w-36', sortField: 'branch_name',     render: ({ emp }) => textCell(emp.branch_name) },
+  job_position:    { key: 'job_position',    label: t => t.empFieldJobPosition,     width: 'w-40', sortField: 'job_position',    render: ({ emp }) => textCell(emp.job_position) },
+  job_level:       { key: 'job_level',       label: t => t.empFieldJobLevel,        width: 'w-32', sortField: 'job_level',       render: ({ emp }) => textCell(emp.job_level) },
+  class:           { key: 'class',           label: t => t.empFieldClass,           width: 'w-28', sortField: 'class',           render: ({ emp }) => textCell(emp.class) },
+  employment_type: { key: 'employment_type', label: t => t.empFieldEmploymentType,  width: 'w-32', sortField: 'employment_type', render: ({ emp }) => textCell(emp.employment_type) },
+  status: {
+    key: 'status', label: t => t.statusLabel, width: 'w-24', sortField: 'status', alignRight: true,
+    render: ({ emp, statusLabels }) => {
+      const s = (emp.status as EmployeeStatus) ?? 'active'
+      return <StatusBadge status={s} label={statusLabels[s] ?? emp.status} />
+    },
+  },
+  phone: {
+    key: 'phone', label: t => t.phoneWhatsAppLabel, width: 'w-36', sortField: 'phone', alignRight: true,
+    render: ({ emp }) => emp.phone ? formatPhone(emp.phone) : emptyCell(),
+  },
+  join_date:           { key: 'join_date',           label: t => t.empFieldJoinDate,            width: 'w-28', sortField: 'join_date', render: ({ emp }) => textCell(emp.join_date) },
+  probation_end_date:  { key: 'probation_end_date',  label: t => t.empFieldProbationEndDate,    width: 'w-32',                          render: ({ emp }) => textCell(emp.probation_end_date) },
+  resign_date:         { key: 'resign_date',         label: t => t.empFieldResignDate,          width: 'w-28',                          render: ({ emp }) => textCell(emp.resign_date) },
+  date_of_birth:       { key: 'date_of_birth',       label: t => t.empFieldDateOfBirth,         width: 'w-28',                          render: ({ emp }) => textCell(emp.date_of_birth) },
+  place_of_birth:      { key: 'place_of_birth',      label: t => t.empFieldPlaceOfBirth,        width: 'w-32',                          render: ({ emp }) => textCell(emp.place_of_birth) },
+  gender:              { key: 'gender',              label: t => t.empFieldGender,              width: 'w-24',                          render: ({ emp }) => textCell(emp.gender) },
+  religion:            { key: 'religion',            label: t => t.empFieldReligion,            width: 'w-28',                          render: ({ emp }) => textCell(emp.religion) },
+  marital_status:      { key: 'marital_status',      label: t => t.empFieldMaritalStatus,       width: 'w-28',                          render: ({ emp }) => textCell(emp.marital_status) },
+  blood_type:          { key: 'blood_type',          label: t => t.empFieldBloodType,           width: 'w-20',                          render: ({ emp }) => textCell(emp.blood_type) },
+  ktp_nik:             { key: 'ktp_nik',             label: t => t.empFieldKtpNik,              width: 'w-36',                          render: ({ emp }) => textCell(emp.ktp_nik) },
+  address:             { key: 'address',             label: t => t.empFieldResidentialAddress,  width: 'w-56',                          render: ({ emp }) => textCell(emp.address) },
+  postal_code:         { key: 'postal_code',         label: t => t.empFieldPostalCode,          width: 'w-24',                          render: ({ emp }) => textCell(emp.postal_code) },
+  citizen_id_address:  { key: 'citizen_id_address',  label: t => t.empFieldCitizenIdAddress,    width: 'w-56',                          render: ({ emp }) => textCell(emp.citizen_id_address) },
+  passport_number:     { key: 'passport_number',     label: t => t.empFieldPassportNumber,      width: 'w-32',                          render: ({ emp }) => textCell(emp.passport_number) },
+  passport_expiry:     { key: 'passport_expiry',     label: t => t.empFieldPassportExpiry,      width: 'w-28',                          render: ({ emp }) => textCell(emp.passport_expiry) },
+  notes:               { key: 'notes',               label: t => t.notesLabel,                  width: 'w-56',                          render: ({ emp }) => textCell(emp.notes) },
+  portal: {
+    key: 'portal', label: t => t.colPortalLink, width: 'w-10',
+    render: ({ emp }) => {
+      const portalUrl = `${window.location.origin}/portal/${emp.slug}-${emp.access_token}`
+      return (
+        <div onClick={e => e.stopPropagation()}>
+          <CopyButton value={portalUrl} />
+        </div>
+      )
+    },
+  },
+}
+
+function compareEmployees(a: Employee, b: Employee, field: SortField): number {
+  const lc = (s: string | null | undefined) => (s ?? '').toLocaleLowerCase()
+  switch (field) {
+    case 'name':            return a.name.localeCompare(b.name)
+    case 'created_at':      return a.created_at.localeCompare(b.created_at)
+    case 'phone':           return lc(a.phone).localeCompare(lc(b.phone))
+    case 'employee_code':   return lc(a.employee_code).localeCompare(lc(b.employee_code))
+    case 'email':           return lc(a.email).localeCompare(lc(b.email))
+    case 'branch_name':     return lc(a.branch_name).localeCompare(lc(b.branch_name))
+    case 'job_position':    return lc(a.job_position).localeCompare(lc(b.job_position))
+    case 'job_level':       return lc(a.job_level).localeCompare(lc(b.job_level))
+    case 'class':           return lc(a.class).localeCompare(lc(b.class))
+    case 'employment_type': return lc(a.employment_type).localeCompare(lc(b.employment_type))
+    case 'join_date':       return (a.join_date ?? '').localeCompare(b.join_date ?? '')
+    case 'status': {
+      const ra = STATUS_SORT_RANK[(a.status as EmployeeStatus)] ?? 99
+      const rb = STATUS_SORT_RANK[(b.status as EmployeeStatus)] ?? 99
+      return (ra - rb) || a.name.localeCompare(b.name)
+    }
+  }
 }
 
 export function Employees({ user }: { user: User }) {
@@ -234,19 +372,7 @@ export function Employees({ user }: { user: User }) {
     })
     .slice()
     .sort((a, b) => {
-      let cmp = 0
-      switch (sortField) {
-        case 'name':       cmp = a.name.localeCompare(b.name); break
-        case 'created_at': cmp = a.created_at.localeCompare(b.created_at); break
-        case 'phone':      cmp = (a.phone || '').localeCompare(b.phone || ''); break
-        case 'status': {
-          const ra = STATUS_SORT_RANK[(a.status as EmployeeStatus)] ?? 99
-          const rb = STATUS_SORT_RANK[(b.status as EmployeeStatus)] ?? 99
-          cmp = ra - rb
-          if (cmp === 0) cmp = a.name.localeCompare(b.name)
-          break
-        }
-      }
+      const cmp = compareEmployees(a, b, sortField)
       return sortDir === 'asc' ? cmp : -cmp
     })
 
@@ -404,12 +530,8 @@ export function Employees({ user }: { user: User }) {
             label={t.columnsButtonLabel}
             value={[...visibleColumns]}
             onChange={next => setVisibleColumns(new Set(next as ColumnKey[]))}
-            options={[
-              { id: 'departments', label: t.departments },
-              { id: 'phone',       label: t.phoneWhatsAppLabel },
-              { id: 'status',      label: t.statusLabel },
-              { id: 'portal',      label: t.colPortalLink },
-            ]}
+            options={COLUMN_ORDER.map(key => ({ id: key, label: LIST_COLUMN_DEFS[key].label(t) }))}
+            searchPlaceholder={t.searchEmployeesPlaceholder}
           />
         )}
         <div className="ml-auto w-full sm:w-64">
@@ -446,29 +568,31 @@ export function Employees({ user }: { user: User }) {
                 </div>
               ) : (
                 <div
-                  className="overflow-hidden rounded-xl border"
+                  className="overflow-x-auto rounded-xl border"
                   style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }}
                 >
-                  <ListHeader
-                    t={t}
-                    sortField={sortField}
-                    sortDir={sortDir}
-                    onToggle={toggleSort}
-                    visibleColumns={visibleColumns}
-                  />
-                  {paginatedEmployees.map((emp, idx) => (
-                    <EmployeeRow
-                      key={emp.id}
-                      emp={emp}
+                  <div className="min-w-max">
+                    <ListHeader
                       t={t}
-                      statusLabel={statusLabels[(emp.status as EmployeeStatus) ?? 'active'] ?? emp.status}
-                      isLast={idx === paginatedEmployees.length - 1}
+                      sortField={sortField}
+                      sortDir={sortDir}
+                      onToggle={toggleSort}
                       visibleColumns={visibleColumns}
-                      onDuplicate={() => handleDuplicate(emp)}
-                      onDelete={() => handleDelete(emp)}
-                      onEdit={() => navigate(`/dashboard/employees/${emp.id}/edit`)}
                     />
-                  ))}
+                    {paginatedEmployees.map((emp, idx) => (
+                      <EmployeeRow
+                        key={emp.id}
+                        emp={emp}
+                        t={t}
+                        statusLabels={statusLabels}
+                        isLast={idx === paginatedEmployees.length - 1}
+                        visibleColumns={visibleColumns}
+                        onDuplicate={() => handleDuplicate(emp)}
+                        onDelete={() => handleDelete(emp)}
+                        onEdit={() => navigate(`/dashboard/employees/${emp.id}/edit`)}
+                      />
+                    ))}
+                  </div>
                 </div>
               )}
 
@@ -840,10 +964,10 @@ function StatusBadge({ status, label }: { status: EmployeeStatus; label: string 
   )
 }
 
-function EmployeeRow({ emp, t, statusLabel, isLast, visibleColumns, onDuplicate, onDelete, onEdit }: {
+function EmployeeRow({ emp, t, statusLabels, isLast, visibleColumns, onDuplicate, onDelete, onEdit }: {
   emp: Employee
   t: Translations
-  statusLabel: string
+  statusLabels: Record<EmployeeStatus, string>
   isLast: boolean
   visibleColumns: Set<ColumnKey>
   onDuplicate: () => void
@@ -864,9 +988,9 @@ function EmployeeRow({ emp, t, statusLabel, isLast, visibleColumns, onDuplicate,
     return () => document.removeEventListener('mousedown', handleClick)
   }, [menuOpen])
 
-  const depts = getEmployeeDepts(emp)
-  const portalUrl = `${window.location.origin}/portal/${emp.slug}-${emp.access_token}`
-  const status = (emp.status as EmployeeStatus) ?? 'active'
+  const visibleDefs = COLUMN_ORDER
+    .filter(k => visibleColumns.has(k))
+    .map(k => LIST_COLUMN_DEFS[k])
 
   return (
     <div
@@ -886,54 +1010,21 @@ function EmployeeRow({ emp, t, statusLabel, isLast, visibleColumns, onDuplicate,
         {emp.photo_url && <img src={emp.photo_url} alt={emp.name} className="h-full w-full object-cover" />}
       </div>
 
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>
-          {emp.name}
-        </div>
-        {visibleColumns.has('departments') && depts.length > 0 && (
-          <div className="mt-0.5 truncate text-xs lg:hidden" style={{ color: 'var(--color-text-tertiary)' }}>
-            {depts.join(' · ')}
-          </div>
-        )}
+      <div className="min-w-[12rem] shrink-0 flex-1 truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+        {emp.name}
       </div>
 
-      {visibleColumns.has('departments') && (
-        <div className="hidden min-w-0 flex-1 lg:flex lg:flex-wrap lg:gap-1">
-          {depts.length === 0 ? (
-            <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>—</span>
-          ) : (
-            depts.map(dept => (
-              <span
-                key={dept}
-                className="inline-flex truncate rounded-full px-2 py-0.5 text-[10px] font-medium"
-                style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}
-              >
-                {dept}
-              </span>
-            ))
-          )}
+      {visibleDefs.map(col => (
+        <div
+          key={col.key}
+          className={`${col.width} shrink-0 truncate text-xs ${col.alignRight ? 'text-right' : ''}`}
+          style={{ color: 'var(--color-text-secondary)' }}
+        >
+          {col.render({ emp, t, statusLabels })}
         </div>
-      )}
+      ))}
 
-      {visibleColumns.has('phone') && (
-        <div className="hidden w-36 shrink-0 truncate text-right text-xs md:block" style={{ color: 'var(--color-text-secondary)' }}>
-          {formatPhone(emp.phone)}
-        </div>
-      )}
-
-      {visibleColumns.has('status') && (
-        <div className="w-20 shrink-0 text-right">
-          <StatusBadge status={status} label={statusLabel} />
-        </div>
-      )}
-
-      {visibleColumns.has('portal') && (
-        <div onClick={e => e.stopPropagation()} className="hidden md:block">
-          <CopyButton value={portalUrl} />
-        </div>
-      )}
-
-      <div ref={menuRef} className="relative">
+      <div ref={menuRef} className="relative ml-auto shrink-0">
         <button
           onClick={e => { e.preventDefault(); e.stopPropagation(); setMenuOpen(!menuOpen) }}
           className="rounded-md p-1.5 transition-colors"
@@ -984,6 +1075,10 @@ function ListHeader({ t, sortField, sortDir, onToggle, visibleColumns }: {
   onToggle: (field: SortField) => void
   visibleColumns: Set<ColumnKey>
 }) {
+  const visibleDefs = COLUMN_ORDER
+    .filter(k => visibleColumns.has(k))
+    .map(k => LIST_COLUMN_DEFS[k])
+
   return (
     <div
       className="flex items-center gap-3 px-4 py-2 text-[10px] font-semibold uppercase tracking-wider"
@@ -1000,37 +1095,28 @@ function ListHeader({ t, sortField, sortDir, onToggle, visibleColumns }: {
         currentField={sortField}
         currentDir={sortDir}
         onClick={() => onToggle('name')}
-        className="min-w-0 flex-1"
+        className="min-w-[12rem] shrink-0 flex-1"
       />
-      {visibleColumns.has('departments') && (
-        <div className="hidden min-w-0 flex-1 lg:block">{t.departments}</div>
-      )}
-      {visibleColumns.has('phone') && (
+      {visibleDefs.map(col => col.sortField ? (
         <SortableHeader
-          label={t.phoneWhatsAppLabel}
-          field="phone"
+          key={col.key}
+          label={col.label(t)}
+          field={col.sortField}
           currentField={sortField}
           currentDir={sortDir}
-          onClick={() => onToggle('phone')}
-          align="right"
-          className="hidden w-36 shrink-0 md:block"
+          onClick={() => onToggle(col.sortField!)}
+          align={col.alignRight ? 'right' : 'left'}
+          className={`${col.width} shrink-0`}
         />
-      )}
-      {visibleColumns.has('status') && (
-        <SortableHeader
-          label={t.statusLabel}
-          field="status"
-          currentField={sortField}
-          currentDir={sortDir}
-          onClick={() => onToggle('status')}
-          align="right"
-          className="w-20 shrink-0"
-        />
-      )}
-      {visibleColumns.has('portal') && (
-        <div className="hidden w-[22px] shrink-0 md:block" aria-hidden="true" />
-      )}
-      <div className="w-7 shrink-0" aria-hidden="true" />
+      ) : (
+        <div
+          key={col.key}
+          className={`${col.width} shrink-0 truncate ${col.alignRight ? 'text-right' : ''}`}
+        >
+          {col.label(t)}
+        </div>
+      ))}
+      <div className="ml-auto w-7 shrink-0" aria-hidden="true" />
     </div>
   )
 }
