@@ -190,6 +190,8 @@ export function Employees({ user }: { user: User }) {
   const [empCurrentPage, setEmpCurrentPage] = useState(1)
   const [showImport, setShowImport] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkDeleting, setBulkDeleting] = useState(false)
   const [view, setView] = useState<EmployeesView>(() => {
     if (typeof window === 'undefined') return 'list'
     const saved = window.localStorage.getItem(VIEW_STORAGE_KEY)
@@ -395,8 +397,58 @@ export function Employees({ user }: { user: User }) {
   const empTotalPages = Math.max(1, Math.ceil(visibleFiltered.length / empPageSize))
   const paginatedEmployees = visibleFiltered.slice((empCurrentPage - 1) * empPageSize, empCurrentPage * empPageSize)
 
-  // Reset page when filters change
-  useEffect(() => { setEmpCurrentPage(1) }, [searchQuery, activeDepartments, statusFilter, empPageSize])
+  // Sticky-left "name" column width — sized to the longest name on the current
+  // page within sensible min/max bounds. Header and rows share this so columns
+  // line up. Approximation, not measureText, to keep the render path cheap.
+  const nameColumnPx = (() => {
+    const longest = paginatedEmployees.reduce((max, e) => Math.max(max, e.name?.length ?? 0), 0)
+    const AVATAR = 36
+    const GAP = 12
+    const PX_PER_CHAR = 8.5
+    const PADDING = 32
+    return Math.max(176, Math.min(320, AVATAR + GAP + Math.ceil(longest * PX_PER_CHAR) + PADDING))
+  })()
+
+  // Reset page when filters change. Selection clears too — keeping it across
+  // filter changes leads to confusing "deleted hidden things" outcomes.
+  useEffect(() => { setEmpCurrentPage(1); setSelectedIds(new Set()) }, [searchQuery, activeDepartments, statusFilter, empPageSize])
+
+  function toggleRowSelected(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  function toggleAllOnPage() {
+    setSelectedIds(prev => {
+      const allSelected = paginatedEmployees.length > 0 && paginatedEmployees.every(e => prev.has(e.id))
+      const next = new Set(prev)
+      for (const e of paginatedEmployees) {
+        if (allSelected) next.delete(e.id); else next.add(e.id)
+      }
+      return next
+    })
+  }
+
+  async function handleBulkDelete() {
+    if (selectedIds.size === 0 || !canWrite || bulkDeleting) return
+    if (!confirm(t.bulkDeleteConfirm(selectedIds.size))) return
+    setBulkDeleting(true)
+    try {
+      const ids = [...selectedIds]
+      const { error } = await supabase.from('employees').delete().in('id', ids)
+      if (error) { alert(error.message); return }
+      if (org && isPro(org)) {
+        syncSeats().catch(err => console.error('sync-seats failed after bulk delete:', err))
+      }
+      setSelectedIds(new Set())
+      loadData()
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
 
   if (loading) return <div style={{ color: 'var(--color-text-secondary)' }}>{t.loading}</div>
 
@@ -543,6 +595,39 @@ export function Employees({ user }: { user: User }) {
         </div>
       </div>
 
+      {selectedIds.size > 0 && view === 'list' && (
+        <div
+          className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2"
+          style={{
+            borderColor: 'var(--color-primary)',
+            backgroundColor: 'color-mix(in srgb, var(--color-primary) 8%, transparent)',
+          }}
+        >
+          <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+            {t.bulkSelectedCount(selectedIds.size)}
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setSelectedIds(new Set())}
+              className="rounded-lg border px-3 py-1 text-xs font-medium transition-colors"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', backgroundColor: 'var(--color-bg)' }}
+            >
+              {t.bulkClear}
+            </button>
+            <button
+              type="button"
+              onClick={handleBulkDelete}
+              disabled={!canWrite || bulkDeleting}
+              className="rounded-lg px-3 py-1 text-xs font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+              style={{ backgroundColor: 'var(--color-danger)' }}
+            >
+              {t.bulkDelete}
+            </button>
+          </div>
+        </div>
+      )}
+
       <div>
         <div>
           {filtered.length === 0 ? (
@@ -578,6 +663,10 @@ export function Employees({ user }: { user: User }) {
                       sortDir={sortDir}
                       onToggle={toggleSort}
                       visibleColumns={visibleColumns}
+                      nameColumnPx={nameColumnPx}
+                      pageEmployees={paginatedEmployees}
+                      selectedIds={selectedIds}
+                      onToggleAll={toggleAllOnPage}
                     />
                     {paginatedEmployees.map((emp, idx) => (
                       <EmployeeRow
@@ -587,6 +676,9 @@ export function Employees({ user }: { user: User }) {
                         statusLabels={statusLabels}
                         isLast={idx === paginatedEmployees.length - 1}
                         visibleColumns={visibleColumns}
+                        nameColumnPx={nameColumnPx}
+                        selected={selectedIds.has(emp.id)}
+                        onToggleSelected={() => toggleRowSelected(emp.id)}
                         onDuplicate={() => handleDuplicate(emp)}
                         onDelete={() => handleDelete(emp)}
                         onEdit={() => navigate(`/dashboard/employees/${emp.id}/edit`)}
@@ -964,12 +1056,15 @@ function StatusBadge({ status, label }: { status: EmployeeStatus; label: string 
   )
 }
 
-function EmployeeRow({ emp, t, statusLabels, isLast, visibleColumns, onDuplicate, onDelete, onEdit }: {
+function EmployeeRow({ emp, t, statusLabels, isLast, visibleColumns, nameColumnPx, selected, onToggleSelected, onDuplicate, onDelete, onEdit }: {
   emp: Employee
   t: Translations
   statusLabels: Record<EmployeeStatus, string>
   isLast: boolean
   visibleColumns: Set<ColumnKey>
+  nameColumnPx: number
+  selected: boolean
+  onToggleSelected: () => void
   onDuplicate: () => void
   onDelete: () => void
   onEdit: () => void
@@ -998,10 +1093,26 @@ function EmployeeRow({ emp, t, statusLabels, isLast, visibleColumns, onDuplicate
       className="group flex cursor-pointer items-center py-2.5 transition-colors hover:bg-[var(--color-bg-tertiary)]"
       style={{ borderBottom: isLast ? 'none' : '1px solid var(--color-border)' }}
     >
-      {/* Sticky left: avatar + name */}
+      {/* Sticky checkbox */}
       <div
-        className={STICKY_LEFT_CELL_BODY}
-        style={{ backgroundColor: 'var(--color-bg)' }}
+        onClick={e => e.stopPropagation()}
+        className="sticky left-0 z-20 flex shrink-0 items-center justify-center group-hover:bg-[var(--color-bg-tertiary)]"
+        style={{ width: `${CHECKBOX_COL_PX}px`, backgroundColor: 'var(--color-bg)' }}
+      >
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={onToggleSelected}
+          aria-label={t.bulkSelectRowAriaLabel(emp.name)}
+          className="h-4 w-4 cursor-pointer"
+          style={{ accentColor: 'var(--color-primary)' }}
+        />
+      </div>
+
+      {/* Sticky avatar + name */}
+      <div
+        className="sticky z-20 flex shrink-0 items-center gap-3 pr-3 group-hover:bg-[var(--color-bg-tertiary)]"
+        style={{ left: `${CHECKBOX_COL_PX}px`, width: `${nameColumnPx}px`, backgroundColor: 'var(--color-bg)' }}
       >
         <div
           className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full"
@@ -1086,24 +1197,35 @@ function EmployeeRow({ emp, t, statusLabels, isLast, visibleColumns, onDuplicate
   )
 }
 
-// Shared className strings for sticky cells. The `group-hover:` background
-// matches the row's hover background so the sticky cells don't visibly fall
-// out of the row when scrolling horizontally.
-const STICKY_LEFT_CELL_BODY =
-  'sticky left-0 z-20 flex w-64 shrink-0 items-center gap-3 px-4 group-hover:bg-[var(--color-bg-tertiary)]'
+// Sticky cell className for the right-anchored Actions column. The
+// `group-hover:` background matches the row's hover background so it doesn't
+// visibly fall out of the row during horizontal scroll.
 const STICKY_RIGHT_CELL_BODY =
   'sticky right-0 z-20 ml-auto flex w-28 shrink-0 items-center justify-end px-4 group-hover:bg-[var(--color-bg-tertiary)]'
 
-function ListHeader({ t, sortField, sortDir, onToggle, visibleColumns }: {
+const CHECKBOX_COL_PX = 44
+
+function ListHeader({ t, sortField, sortDir, onToggle, visibleColumns, nameColumnPx, pageEmployees, selectedIds, onToggleAll }: {
   t: Translations
   sortField: SortField
   sortDir: SortDir
   onToggle: (field: SortField) => void
   visibleColumns: Set<ColumnKey>
+  nameColumnPx: number
+  pageEmployees: Employee[]
+  selectedIds: Set<string>
+  onToggleAll: () => void
 }) {
   const visibleDefs = COLUMN_ORDER
     .filter(k => visibleColumns.has(k))
     .map(k => LIST_COLUMN_DEFS[k])
+
+  const headerCheckRef = useRef<HTMLInputElement>(null)
+  const allSelected = pageEmployees.length > 0 && pageEmployees.every(e => selectedIds.has(e.id))
+  const someSelected = pageEmployees.some(e => selectedIds.has(e.id))
+  useEffect(() => {
+    if (headerCheckRef.current) headerCheckRef.current.indeterminate = !allSelected && someSelected
+  }, [allSelected, someSelected])
 
   return (
     <div
@@ -1114,10 +1236,26 @@ function ListHeader({ t, sortField, sortDir, onToggle, visibleColumns }: {
         color: 'var(--color-text-tertiary)',
       }}
     >
-      {/* Sticky left: avatar spacer + Name sort header */}
+      {/* Sticky checkbox cell */}
       <div
-        className="sticky left-0 z-20 flex w-64 shrink-0 items-center gap-3 px-4"
-        style={{ backgroundColor: 'var(--color-bg-tertiary)' }}
+        className="sticky left-0 z-20 flex shrink-0 items-center justify-center"
+        style={{ width: `${CHECKBOX_COL_PX}px`, backgroundColor: 'var(--color-bg-tertiary)' }}
+      >
+        <input
+          ref={headerCheckRef}
+          type="checkbox"
+          checked={allSelected}
+          onChange={onToggleAll}
+          aria-label={t.bulkSelectAllAriaLabel}
+          className="h-4 w-4 cursor-pointer"
+          style={{ accentColor: 'var(--color-primary)' }}
+        />
+      </div>
+
+      {/* Sticky avatar spacer + Name sort header */}
+      <div
+        className="sticky z-20 flex shrink-0 items-center gap-3 pr-3"
+        style={{ left: `${CHECKBOX_COL_PX}px`, width: `${nameColumnPx}px`, backgroundColor: 'var(--color-bg-tertiary)' }}
       >
         <div className="h-9 w-9 shrink-0" aria-hidden="true" />
         <SortableHeader

@@ -1124,6 +1124,13 @@ export const translations = {
     // Add-employee split button + import / export modal
     actionsLabel: 'Actions',
     empViewInfo: 'View employee info',
+    bulkSelectedCount: (n: number) => `${n} selected`,
+    bulkDelete: 'Delete',
+    bulkClear: 'Clear selection',
+    bulkDeleteConfirm: (n: number) =>
+      `Delete ${n} ${n === 1 ? 'employee' : 'employees'}? This can't be undone.`,
+    bulkSelectAllAriaLabel: 'Select all rows on this page',
+    bulkSelectRowAriaLabel: (name: string) => `Select ${name}`,
     addEmployeeMenuAdd: 'Add employee',
     addEmployeeMenuImport: 'Import from file',
     exportEmployees: 'Export',
@@ -2543,6 +2550,13 @@ export const translations = {
     // Add-employee split button + import / export modal
     actionsLabel: 'Tindakan',
     empViewInfo: 'Lihat info karyawan',
+    bulkSelectedCount: (n: number) => `${n} dipilih`,
+    bulkDelete: 'Hapus',
+    bulkClear: 'Hapus pilihan',
+    bulkDeleteConfirm: (n: number) =>
+      `Hapus ${n} karyawan? Tindakan ini tidak dapat dibatalkan.`,
+    bulkSelectAllAriaLabel: 'Pilih semua baris di halaman ini',
+    bulkSelectRowAriaLabel: (name: string) => `Pilih ${name}`,
     addEmployeeMenuAdd: 'Tambah karyawan',
     addEmployeeMenuImport: 'Impor dari file',
     exportEmployees: 'Ekspor',
