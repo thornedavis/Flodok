@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { normalizePhone, isValidE164, formatPhone } from '../../lib/phone'
@@ -1069,18 +1070,42 @@ function EmployeeRow({ emp, t, statusLabels, isLast, visibleColumns, nameColumnP
   onDelete: () => void
   onEdit: () => void
 }) {
+  // The actions menu renders via portal to <body> with fixed positioning.
+  // Reason: the row sits inside an `overflow-x-auto` ancestor, which the CSS
+  // spec auto-promotes to `overflow-y: auto` too — meaning a normally-positioned
+  // dropdown gets clipped at the bottom of the row. Portal + getBoundingClientRect
+  // sidesteps that entirely.
   const [menuOpen, setMenuOpen] = useState(false)
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
+
+  function openMenu() {
+    const rect = buttonRef.current?.getBoundingClientRect()
+    if (!rect) return
+    setMenuPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right })
+    setMenuOpen(true)
+  }
 
   useEffect(() => {
     if (!menuOpen) return
     function handleClick(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false)
-      }
+      const target = e.target as Node
+      if (buttonRef.current?.contains(target)) return
+      if (menuRef.current?.contains(target)) return
+      setMenuOpen(false)
     }
+    function handleClose() { setMenuOpen(false) }
     document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
+    // The button moves when any scrolling ancestor scrolls (page, table). Close
+    // the menu rather than try to track — simpler and the fixed pos goes stale fast.
+    window.addEventListener('scroll', handleClose, true)
+    window.addEventListener('resize', handleClose)
+    return () => {
+      document.removeEventListener('mousedown', handleClick)
+      window.removeEventListener('scroll', handleClose, true)
+      window.removeEventListener('resize', handleClose)
+    }
   }, [menuOpen])
 
   const visibleDefs = COLUMN_ORDER
@@ -1138,14 +1163,14 @@ function EmployeeRow({ emp, t, statusLabels, isLast, visibleColumns, nameColumnP
 
       {/* Sticky right: actions */}
       <div
-        ref={menuRef}
         onClick={e => e.stopPropagation()}
         className={STICKY_RIGHT_CELL_BODY}
         style={{ backgroundColor: 'var(--color-bg)' }}
       >
         <button
+          ref={buttonRef}
           type="button"
-          onClick={() => setMenuOpen(o => !o)}
+          onClick={() => menuOpen ? setMenuOpen(false) : openMenu()}
           aria-haspopup="menu"
           aria-expanded={menuOpen}
           className="inline-flex items-center gap-1 rounded-lg border px-3 py-1 text-xs font-medium transition-colors"
@@ -1160,11 +1185,17 @@ function EmployeeRow({ emp, t, statusLabels, isLast, visibleColumns, nameColumnP
             <polyline points="6 9 12 15 18 9" />
           </svg>
         </button>
-        {menuOpen && (
+        {menuOpen && menuPos && createPortal(
           <div
+            ref={menuRef}
             role="menu"
-            className="absolute right-0 top-9 z-30 min-w-[160px] overflow-hidden rounded-lg border py-1 shadow-lg"
-            style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-elevated, var(--color-bg))' }}
+            className="fixed z-50 min-w-[160px] overflow-hidden rounded-lg border py-1 shadow-lg"
+            style={{
+              top: `${menuPos.top}px`,
+              right: `${menuPos.right}px`,
+              borderColor: 'var(--color-border)',
+              backgroundColor: 'var(--color-bg-elevated, var(--color-bg))',
+            }}
           >
             <button
               role="menuitem"
@@ -1190,7 +1221,8 @@ function EmployeeRow({ emp, t, statusLabels, isLast, visibleColumns, nameColumnP
             >
               {t.delete}
             </button>
-          </div>
+          </div>,
+          document.body,
         )}
       </div>
     </div>
