@@ -38,6 +38,9 @@ export type IconKey =
   | 'eye'
   | 'sparkles'
   | 'workflow'
+  | 'briefcase'
+  | 'handshake'
+  | 'door-out'
 
 // ─── Reusable doc-body building blocks ──────────────────
 
@@ -143,12 +146,25 @@ const QUICKSTART: ReactNode = (
       immediately on their portal.
     </P>
 
+    <H3 id="hiring">5. Bring on your first hire</H3>
+    <P>
+      When you're ready to interview candidates, head to{' '}
+      <strong>Hiring</strong>. You can add candidates in seconds (just a
+      name + phone), make decisions through the funnel (Prospective →
+      Shortlisted → Offered), and once you click <strong>Make offer</strong>{' '}
+      Flodok auto-creates a draft contract from your{' '}
+      <Link to="/help/docs/contract-templates">position template</Link>{' '}
+      and a portal link the candidate uses to e-sign and submit their
+      personal info.
+    </P>
+
     <H3 id="next">What to do next</H3>
     <Bullets
       items={[
+        <Link to="/help/docs/hiring-funnel">Learn the hiring funnel</Link>,
+        <Link to="/help/docs/contract-templates">Define a contract template per job position</Link>,
         <Link to="/help/docs/sop-versioning">Understand how SOP versioning works</Link>,
-        <Link to="/help/docs/employee-portal">Set up your employee portal</Link>,
-        <Link to="/help/docs/contracts">Send your first contract</Link>,
+        <Link to="/help/docs/portal-about">Set up your employee portal</Link>,
         <Link to="/help/docs/plans">Compare plans when you're ready to upgrade</Link>,
       ]}
     />
@@ -428,43 +444,348 @@ const SOP_IMPORT: ReactNode = (
   </>
 )
 
+// ─── Hiring ──────────────────────────────────────────────
+
+const HIRING_FUNNEL: ReactNode = (
+  <>
+    <P>
+      Flodok models hiring as a single funnel that lives alongside your
+      employee directory — candidates are stored in the same table as your
+      active staff, surfaced on a different page, and graduate over to the
+      Employees list automatically once they start. No transfer step, no
+      duplicate entry.
+    </P>
+
+    <H3 id="stages">The five stages</H3>
+    <P>
+      Every candidate sits in one of these <strong>lifecycle stages</strong>.
+      The stage drives where they appear in the app and which actions are
+      available on them.
+    </P>
+    <Bullets
+      items={[
+        <><strong>Prospective</strong> — you've met them or added their info; no decision yet.</>,
+        <><strong>Shortlisted</strong> — interviewer says yes, awaiting final sign-off from a higher-up. Skip this stage if you don't have multi-stakeholder hiring.</>,
+        <><strong>Offered</strong> — final yes, draft contract created and waiting for you to finish.</>,
+        <><strong>Signed</strong> — candidate has e-signed the contract; awaiting their start date.</>,
+        <><strong>Talent pool</strong> — declined for now but worth keeping in touch with. Lives outside the main funnel.</>,
+      ]}
+    />
+
+    <H3 id="auto-graduate">Auto-graduation to Employees</H3>
+    <P>
+      The moment a Signed candidate's <strong>start date</strong> arrives, they
+      flip to <strong>Active</strong> and disappear from Hiring, reappearing in
+      the Employees directory. This happens lazily — on the next Hiring page
+      load and on the next time the candidate opens their portal — so
+      there's no nightly job to wait for. If you set the start date for next
+      Monday and they sign on Friday, Monday morning they're an employee.
+    </P>
+
+    <H3 id="filters">Tabs, filters, and inline status changes</H3>
+    <Bullets
+      items={[
+        <>The tabs at the top of <strong>Hiring</strong> are quick filters with live counts. The <strong>Stage</strong> dropdown next to search is multi-select for combining stages (e.g. Shortlisted + Offered).</>,
+        <>The status badge in each row is a <em>dropdown</em> — click it to switch a candidate's stage in one tap. Use the row's <strong>Actions</strong> menu for stage transitions that have side effects (Make offer creates a contract; Delete is destructive).</>,
+        <>The WhatsApp icon on every row opens <code>wa.me/&lt;phone&gt;</code> in a new tab — handy for pinging the candidate before or after the interview.</>,
+      ]}
+    />
+
+    <Callout type="note">
+      Hiring stages and the <strong>Active / Probation / Separated</strong>{' '}
+      badge you see in Employees are computed from the same data — there's
+      no editable status dropdown. Probation flips to Active automatically
+      when the probation end date passes; you don't need to remember to
+      change it.
+    </Callout>
+  </>
+)
+
+const HIRING_CANDIDATES: ReactNode = (
+  <>
+    <P>
+      The Hiring page is designed for the actual rhythm of running interviews:
+      add a candidate in 10 seconds, deal with details later.
+    </P>
+
+    <H3 id="add">Adding a candidate</H3>
+    <P>
+      Click <strong>Add candidate</strong> on the Hiring page. The minimum
+      is just a name; phone, position, department, photo, and notes are
+      optional. The candidate is saved as <strong>Prospective</strong> and
+      shows up immediately on the list.
+    </P>
+    <Bullets
+      items={[
+        <><strong>Job position</strong> and <strong>Department</strong> are dropdowns sourced from your <Link to="/dashboard/company?tab=structure">Company → Structure</Link> lists. Each field has a <strong>Manage →</strong> link if you need to add a value first.</>,
+        <><strong>Photo</strong> uploads after the candidate row exists, so you can pick one when adding or come back later via the Edit modal.</>,
+        <><strong>Notes</strong> is a free-text scratchpad — anything worth remembering for the next conversation.</>,
+      ]}
+    />
+
+    <H3 id="edit">Editing later</H3>
+    <P>
+      Click any row to reopen the same modal in edit mode and update fields,
+      photo, or notes. Stage changes happen via the badge dropdown or the
+      Actions menu — not from inside the modal.
+    </P>
+
+    <H3 id="shortlist">Shortlisting</H3>
+    <P>
+      For organizations where the front-line interviewer recommends but a
+      higher-up decides, use the <strong>Shortlist</strong> action on a
+      Prospective candidate. Shortlisted candidates are amber-badged and
+      live in their own tab. From Shortlisted, the next step is{' '}
+      <strong>Make offer</strong> (the final yes) or back to Prospective if
+      the conversation reopens.
+    </P>
+    <Callout type="tip">
+      If you're a one-person operation, skip Shortlisted and go straight
+      from Prospective → Make offer. The stage is optional and only useful
+      when there's a real review step.
+    </Callout>
+
+    <H3 id="reject">Talent pool vs delete</H3>
+    <P>
+      For candidates you're saying no to:
+    </P>
+    <Bullets
+      items={[
+        <><strong>Move to talent pool</strong> — soft no. Keeps the candidate (with their notes and photo) accessible from the Talent pool tab so you can re-engage later. From there, <strong>Reconsider</strong> brings them back to Prospective.</>,
+        <><strong>Delete</strong> — hard no. Destructive, no undo. Use this only when the record genuinely shouldn't exist (typo, duplicate).</>,
+      ]}
+    />
+  </>
+)
+
+const HIRING_OFFERS: ReactNode = (
+  <>
+    <P>
+      Making an offer in Flodok does two things in one click: flips the
+      candidate to <strong>Offered</strong> and creates a draft contract
+      already linked to them. If you've set up a contract template for
+      their job position, the draft is auto-filled from it; otherwise it
+      starts blank.
+    </P>
+
+    <H3 id="flow">The flow</H3>
+    <Steps
+      items={[
+        <>On the candidate row (Prospective or Shortlisted), open <strong>Actions → Make offer</strong>. The Make offer modal shows the candidate's job position and looks up the matching template.</>,
+        <>The modal tells you what'll happen: <em>"Will use 'Kitchen Staff PKWTT'"</em> if a template is set, or <em>"No template for this position. We'll create a blank draft contract."</em> if not.</>,
+        <>Click <strong>Make offer & create draft</strong>. The candidate flips to Offered, a draft contract is created, and the modal switches to a success view.</>,
+        <>Click <strong>Edit contract now</strong> to fill in any candidate-specific details (start date, salary tweak, etc.) and Activate & sign when ready. Or click <strong>Done</strong> to come back to it later.</>,
+      ]}
+    />
+
+    <H3 id="batch">Why this is the workflow</H3>
+    <P>
+      The two-step split — flip stage now, finish contract later — is
+      deliberate. When you're running a series of interviews, you want to
+      make fast yes/no calls and not get stuck in contract editing. The
+      Offered tab becomes your "needs contract finalized" queue: work
+      through it in a batch, share the portal link with each candidate
+      once their contract is ready.
+    </P>
+
+    <Callout type="tip">
+      Rolling back is easy. From an Offered candidate, the Actions menu
+      has <strong>Withdraw offer</strong> (back to Shortlisted, preserving
+      the prior decision) or <strong>Move to talent pool</strong>. The
+      draft contract stays attached to them — useful if the offer comes
+      back on, awkward if you wanted it gone, so delete it manually from
+      the Contracts page if needed.
+    </Callout>
+
+    <H3 id="templates-link">Setting up templates first</H3>
+    <P>
+      Auto-filled offers only work if you've defined a template for the
+      job position. See{' '}
+      <Link to="/help/docs/contract-templates">Contract templates</Link>{' '}
+      for how to create one. The <strong>Manage templates →</strong> link
+      inside the Make offer modal jumps straight to the Contracts page so
+      you can set one up if you don't have one yet.
+    </P>
+  </>
+)
+
+const HIRING_SEPARATION: ReactNode = (
+  <>
+    <P>
+      When an employee leaves, Flodok records why — voluntary
+      (resignation) or involuntary (termination) — along with their last
+      working day and an optional reason. The employee stays in the
+      directory under the <strong>Separated</strong> tab; nothing is
+      deleted.
+    </P>
+
+    <H3 id="record">Recording a separation</H3>
+    <P>
+      Open the employee's profile from <strong>Employees</strong>. On the
+      sidebar, below the navigation, you'll see two action buttons:
+    </P>
+    <Bullets
+      items={[
+        <><strong>Mark as resigned</strong> — voluntary departure. Captures last working day + an optional reason ("better opportunity", etc.).</>,
+        <><strong>Terminate employment</strong> — involuntary separation. Same fields, distinct record.</>,
+      ]}
+    />
+    <P>
+      Both flip the employee's lifecycle stage to <strong>Separated</strong>{' '}
+      and stamp the resign date. The status badge changes immediately;
+      there's no separate "deactivate" step. The buttons are hidden when
+      they don't apply (already separated, or still in a hiring stage).
+    </P>
+
+    <H3 id="why">Why two buttons instead of a dropdown</H3>
+    <P>
+      Resignation and termination have different downstream meanings —
+      legally, for severance calculations, and for reporting. Storing them
+      as different <code>separation_type</code> values now means later
+      payroll integrations can compute pesangon correctly without you
+      re-entering anything.
+    </P>
+
+    <H3 id="separated-view">Where separated employees live</H3>
+    <P>
+      The Employees directory still shows separated employees — they appear
+      in the <strong>Separated</strong> filter (and in <strong>All</strong>{' '}
+      by default no, but you can multi-select). Their portal link still
+      works in read-only mode so they can pull their final payslip and
+      reference letter when those features ship.
+    </P>
+
+    <Callout type="warn">
+      <strong>Delete</strong> on the sidebar is destructive and permanent —
+      it removes the employee row and any contracts/SOPs orphan back to no
+      employee. Reserve it for genuine mistakes (duplicate row, test data).
+      For real exits, always use Resign or Terminate.
+    </Callout>
+  </>
+)
+
 // ─── Contracts ───────────────────────────────────────────
 
 const CONTRACTS_CREATE: ReactNode = (
   <>
     <P>
-      Flodok handles employment contracts, NDAs, and consultancy agreements end
-      to end: draft, send for signature, store, and renew.
+      Flodok handles employment contracts end to end: draft, e-sign, store,
+      and version. Two ways to create one.
     </P>
 
-    <H3 id="from-scratch">Starting from scratch</H3>
+    <H3 id="from-candidate">From a candidate (recommended)</H3>
     <P>
-      <strong>Contracts → New contract</strong>. Pick a template (PKWT, PKWTT,
-      NDA, Consultancy) or start blank. Templates come pre-filled with standard
-      Indonesian employment language and required clauses under{' '}
-      <em>UU Cipta Kerja</em>.
+      Most contracts get created automatically when you click{' '}
+      <strong>Make offer</strong> on a Hiring candidate — the contract is
+      drafted from your{' '}
+      <Link to="/help/docs/contract-templates">position template</Link>{' '}
+      (if you have one) and linked to that candidate. See{' '}
+      <Link to="/help/docs/hiring-offers">Making an offer</Link> for the
+      full flow.
     </P>
+
+    <H3 id="from-scratch">From scratch on the Contracts page</H3>
+    <P>
+      <strong>Contracts → Create Contract</strong>. Pick a contract type
+      (<strong>PKWT</strong> fixed-term or <strong>PKWTT</strong> permanent),
+      enter the basics (employee, salary, dates), and Flodok generates a
+      starter markdown contract with the standard Indonesian clauses for
+      that type. From there you edit it like any other contract.
+    </P>
+    <Bullets
+      items={[
+        <><strong>PKWT</strong> (Perjanjian Kerja Waktu Tertentu) — fixed-term, requires an end date, no probation period under <em>UU Cipta Kerja</em>.</>,
+        <><strong>PKWTT</strong> (Perjanjian Kerja Waktu Tidak Tertentu) — permanent, may include up to 3 months probation.</>,
+      ]}
+    />
 
     <H3 id="merge-fields">Merge fields</H3>
     <P>
-      Contracts support merge fields for employee name, position, salary, start
-      date, and supervisor. Type <code>{`{{`}</code> in the editor to insert one.
-      When you assign the contract to an employee, fields auto-populate from
-      their record.
+      Contracts (and templates) support merge tags that resolve against the
+      linked employee, your organization, and the contract's own structured
+      fields. Type the token directly in the markdown editor — it'll resolve
+      when the contract is rendered for the employee.
     </P>
+    <Bullets
+      items={[
+        <>Employee context: <code>{'{{employee_name}}'}</code>, <code>{'{{employee_phone}}'}</code>, <code>{'{{employee_address}}'}</code>, <code>{'{{employee_ktp_nik}}'}</code>, <code>{'{{employee_date_of_birth}}'}</code>, <code>{'{{employee_departments}}'}</code></>,
+        <>Organization: <code>{'{{org_name}}'}</code>, <code>{'{{org_address}}'}</code></>,
+        <>Contract: <code>{'{{contract_start_date}}'}</code>, <code>{'{{contract_end_date}}'}</code>, <code>{'{{base_wage_idr}}'}</code>, <code>{'{{allowance_idr}}'}</code>, <code>{'{{hours_per_day}}'}</code>, <code>{'{{days_per_week}}'}</code></>,
+        <>Signatures: <code>{'{{employee_signature}}'}</code>, <code>{'{{employee_sign_date}}'}</code>, <code>{'{{employer_name}}'}</code>, <code>{'{{employer_signature}}'}</code></>,
+      ]}
+    />
 
-    <H3 id="send">Sending for signature</H3>
+    <H3 id="activate">Activating &amp; sending to the employee</H3>
     <P>
-      Click <strong>Send for signature</strong>, choose the recipient, and add
-      a personal note. They get an email with a secure link to read and sign —
-      no Flodok account required. Once signed, both parties get a PDF copy and
-      the contract status flips to <strong>Active</strong>.
+      A contract is <strong>Draft</strong> until the employer signs it via{' '}
+      <strong>Activate &amp; sign</strong> in the editor. That action records
+      your signature, flips the contract to <strong>Active</strong>, and is
+      what makes it visible to the linked employee in their portal.
+    </P>
+    <P>
+      Flodok does <strong>not</strong> send sign-request emails. Once the
+      contract is Active, share the employee's portal link with them
+      (WhatsApp is what most teams use). They open the link, see the
+      contract, and e-sign in the portal — see{' '}
+      <Link to="/help/docs/contracts-sign">E-signatures</Link>.
     </P>
 
     <Callout type="tip">
-      Set up auto-renewal reminders at <strong>Contracts → [contract] → Renewal</strong>.
-      Flodok will email both you and the employee 30 days before the contract
-      expires.
+      Save effort across hires by defining a{' '}
+      <Link to="/help/docs/contract-templates">contract template</Link>{' '}
+      per job position. A new offer for that position auto-fills 90%
+      of the contract; you only set start date and any candidate-specific
+      tweaks.
+    </Callout>
+  </>
+)
+
+const CONTRACT_TEMPLATES: ReactNode = (
+  <>
+    <P>
+      Contract templates are reusable contract drafts tied to a job
+      position. When you click <strong>Make offer</strong> on a candidate
+      whose position matches a template, Flodok instantiates the template
+      into a fresh draft contract linked to them — start date, name, and
+      any candidate-specific bits are typically all that's left to fill in.
+    </P>
+    <P>
+      Templates live alongside contracts (same editor, same merge tags,
+      same versioning) — they're just contracts marked as templates with
+      no employee attached.
+    </P>
+
+    <H3 id="create">Creating a template</H3>
+    <Steps
+      items={[
+        <>Go to <strong>Contracts</strong> and click the <strong>Templates</strong> tab.</>,
+        <>Click <strong>New template</strong>. Give it a recognisable title (e.g. "Kitchen Staff PKWTT") and pick the <strong>job position</strong> it auto-fills for. The position dropdown is sourced from <Link to="/dashboard/company?tab=structure">Company → Structure</Link>; the <strong>Manage →</strong> link gets you there if you need to add a position first.</>,
+        <>Click <strong>Add</strong> — you land in the contract editor, with a "Template" badge in place of the usual status pill.</>,
+        <>Write the contract once, using merge tags (<code>{'{{employee_name}}'}</code>, <code>{'{{contract_start_date}}'}</code>, <code>{'{{base_wage_idr}}'}</code>, etc.) for everything that varies per candidate.</>,
+        <>Save. The template is now ready to be picked up the next time you make an offer to a candidate with that position.</>,
+      ]}
+    />
+
+    <H3 id="lookup">How the lookup works</H3>
+    <P>
+      Templates match by exact <strong>job position</strong> on the
+      candidate. If a candidate has no position set, no template is
+      matched and the offer creates a blank draft. If multiple templates
+      exist for the same position, the most recently updated one wins —
+      so cleaning up old templates as you iterate is worth the few seconds.
+    </P>
+
+    <H3 id="any-position">"Any position" templates</H3>
+    <P>
+      Leaving the position blank on a template marks it as a general
+      template (no auto-match). It still appears in the Templates tab and
+      you can duplicate from it manually, but Make offer won't pick it up.
+    </P>
+
+    <Callout type="note">
+      Templates are not signed and don't have a status — they live as
+      drafts forever. Don't worry about "activating" a template; it's
+      ready to use the moment you save.
     </Callout>
   </>
 )
@@ -472,42 +793,54 @@ const CONTRACTS_CREATE: ReactNode = (
 const CONTRACTS_SIGN: ReactNode = (
   <>
     <P>
-      Flodok's e-signature is legally enforceable in Indonesia under{' '}
-      <em>UU 11/2008 (ITE)</em> as amended by <em>UU 19/2016</em>, and complies
-      with PP 71/2019 on data residency.
+      Flodok's e-signatures are recognised under <em>UU 11/2008 (ITE)</em>{' '}
+      as amended by <em>UU 19/2016</em>, and Flodok stores Customer Data
+      under PP 71/2019. Each signature carries a structured audit trail
+      sufficient for non-disputed cases.
     </P>
 
     <H3 id="how">How signing works</H3>
     <Steps
       items={[
-        <>You send the contract from Flodok. The signer gets a unique, expiring link by email.</>,
-        <>They open the link, read the contract, and click <strong>Sign</strong>.</>,
-        <>They draw or type their signature, optionally upload a KTP/identity scan, and submit.</>,
-        <>Both parties receive a signed PDF with audit trail (IP, timestamp, hash).</>,
+        <>The employer signs the contract in the dashboard via <strong>Activate &amp; sign</strong>. The contract flips from Draft to Active.</>,
+        <>You share the employee's portal link with them (WhatsApp is most common). New hires walk through a guided onboarding that includes contract review &amp; sign — see <Link to="/help/docs/portal-candidate-onboarding">Candidate onboarding</Link>. Existing employees see the contract in their portal and can sign there.</>,
+        <>The employee types their name, picks a signature font, and ticks a consent checkbox before signing.</>,
+        <>Both signatures render inline in the rendered contract via merge fields.</>,
       ]}
     />
 
-    <H3 id="audit">Audit trail</H3>
+    <H3 id="audit">What the audit trail captures</H3>
     <P>
-      Every signed contract carries a tamper-evident audit log: who viewed it,
-      from where (IP + city), when they signed, and a SHA-256 hash of the
-      signed document. Visible at <strong>Contracts → [contract] → Audit</strong>.
+      Every signature row records, at the moment of signing:
     </P>
+    <Bullets
+      items={[
+        <><strong>Typed name + signature font</strong> — what the signer entered.</>,
+        <><strong>Signer role</strong> — employer or employee.</>,
+        <><strong>Document hash</strong> — SHA-256 of the contract content (versioned), so any tampering after-the-fact is detectable by re-hashing.</>,
+        <><strong>Consent text</strong> — the exact wording the signer agreed to, snapshotted. If you change the wording later, the historical signature still records what <em>they</em> agreed to.</>,
+        <><strong>User agent</strong> — the signer's browser and OS string.</>,
+        <><strong>IP address</strong> — captured server-side via Cloudflare's <code>CF-Connecting-IP</code> header (best-effort; one-shot, can't be re-stamped).</>,
+        <><strong>Signer email + phone</strong> — the verified contact channels on the signer's record at sign time.</>,
+        <><strong>Version number</strong> — pinned to the contract version they actually saw, so amendments don't retroactively claim signatures.</>,
+      ]}
+    />
 
-    <H3 id="invalid">When e-signature isn't enough</H3>
-    <P>
-      Some documents — typically anything notarised or registered with a
-      government office — still need physical wet ink. Flodok will export a
-      print-ready PDF in those cases.
-    </P>
+    <Callout type="note">
+      For documents that need stronger evidentiary weight (notarised
+      agreements, registered legal filings) you'll still want a certified
+      provider like Privy or VIDA, or wet-ink signing. Flodok's e-signature
+      is built for the everyday employment-contract case.
+    </Callout>
   </>
 )
 
 const CONTRACTS_HISTORY: ReactNode = (
   <>
     <P>
-      Like SOPs, contracts are versioned automatically. Every save and
-      every signature creates a new snapshot.
+      Like SOPs, contracts are versioned automatically. Every meaningful
+      save creates a new snapshot with the structured fields (wage, hours,
+      dates) frozen alongside the markdown.
     </P>
 
     <H3 id="view">Viewing history</H3>
@@ -517,17 +850,23 @@ const CONTRACTS_HISTORY: ReactNode = (
       preview it; click <strong>Compare</strong> to diff against another.
     </P>
 
-    <H3 id="amend">Amending an active contract</H3>
+    <H3 id="signatures-pin">Signatures are version-pinned</H3>
     <P>
-      Once signed, the original is locked. To make changes, click{' '}
-      <strong>Create amendment</strong> — this generates a linked addendum that
-      gets its own signature flow. The original and the amendment travel
-      together in your records.
+      Each <code>contract_signatures</code> row is tied to the version
+      number that was current when the signature happened. When you edit
+      an active contract and save (which bumps the version), prior
+      signatures remain attached to the version they were given against —
+      they don't auto-apply to the new version, and the history viewer
+      shows you exactly who signed what version.
     </P>
 
     <Callout type="warn">
-      Editing contract content after signing is intentionally impossible. If
-      you need to fix a typo, use an amendment with a one-line correction.
+      There is no formal "amendment" workflow yet. Editing a signed
+      contract creates a new version but does not invalidate prior
+      signatures or auto-trigger a re-sign — that's on you to manage.
+      For material changes that warrant a fresh signature, the cleanest
+      path today is to create a new contract referencing the original
+      and have it signed.
     </Callout>
   </>
 )
@@ -643,38 +982,108 @@ const RECOGNITION: ReactNode = (
 const PORTAL_ABOUT: ReactNode = (
   <>
     <P>
-      The employee portal is a public, read-only mirror of your team's content
-      — SOPs, announcements, awards, and contracts they've signed. Each
-      organization gets a unique URL like{' '}
-      <code>flodok.com/portal/your-org</code>.
+      The employee portal is each employee's private home in Flodok — their
+      contract, payslips, SOPs, badges, and announcements. Each employee
+      has their own URL of the form{' '}
+      <code>flodok.com/portal/&lt;name-slug&gt;-&lt;token&gt;</code>, generated
+      when they're added. The URL works without a login; it acts as the
+      access credential.
     </P>
 
     <H3 id="who-it-is-for">Who it's for</H3>
     <P>
-      Frontline staff who don't need a full Flodok account: warehouse, retail,
-      kitchen, drivers, contractors. Anyone you'd otherwise share a Google
-      Drive folder with.
+      Every employee — including frontline staff (warehouse, retail, kitchen,
+      drivers) who would never need a full Flodok account, and new candidates
+      whose first interaction with the company is reviewing and signing
+      their contract.
     </P>
 
     <H3 id="what-they-see">What they see</H3>
     <Bullets
       items={[
-        'SOPs assigned to them or their department',
-        'Contracts they have signed (read-only)',
-        'Their badges and any awards they have received',
-        'Announcements you broadcast to the team',
+        'SOPs assigned to them or their department, with read-and-understood signing',
+        'Their contracts (active and past versions)',
+        'Their badges, credits, achievements, and any awards received',
+        'Announcements (Spotlight posts) targeted at them or their department',
       ]}
     />
 
     <H3 id="what-they-dont">What they cannot see</H3>
     <Bullets
       items={[
-        "Other employees' contracts or compensation",
-        'Performance reviews (theirs or others)',
-        'Internal-only SOPs (toggle per SOP)',
+        "Other employees' profiles, contracts, or compensation",
+        'Internal-only documents not assigned to them',
         'Anything in Settings, Integrations, or Billing',
       ]}
     />
+
+    <H3 id="onboarding-mode">Onboarding mode for new hires</H3>
+    <P>
+      When a candidate's <code>lifecycle_stage</code> is{' '}
+      <strong>offered</strong> or <strong>signed</strong> (and they
+      haven't reached their start date), the portal renders a guided
+      onboarding flow instead of the regular dashboard — see{' '}
+      <Link to="/help/docs/portal-candidate-onboarding">Candidate onboarding</Link>.
+      It auto-steps aside the moment their start date arrives.
+    </P>
+  </>
+)
+
+const PORTAL_CANDIDATE_ONBOARDING: ReactNode = (
+  <>
+    <P>
+      When a new hire opens their portal link before their start date,
+      they're walked through a guided onboarding flow before getting
+      the regular portal. Six steps, one screen at a time, mobile-first.
+    </P>
+
+    <H3 id="when">When the flow appears</H3>
+    <P>
+      The portal detects the candidate's <strong>lifecycle stage</strong> on
+      load. If they're <strong>Offered</strong> or <strong>Signed</strong>{' '}
+      and haven't dismissed the flow this session, the onboarding takes
+      over. The moment their <strong>start date</strong> passes (or they
+      click <strong>Enter your portal</strong> on the Done screen), the
+      regular portal renders instead.
+    </P>
+
+    <H3 id="steps">The six steps</H3>
+    <Bullets
+      items={[
+        <><strong>1. Welcome</strong> — branded greeting with the org name; one-button start.</>,
+        <><strong>2. Sign your contract</strong> — embedded contract with merge tags resolved; the signer must scroll to the bottom before the sign button enables. Type their name, pick a signature font (4 options), tick the consent checkbox, sign. On signing, their lifecycle flips from Offered to Signed.</>,
+        <><strong>3. A bit about you</strong> — KTP NIK, date of birth, place of birth, current address, postal code.</>,
+        <><strong>4. Tax &amp; banking</strong> — NPWP (15 or 16 digit), bank name, account number, account holder. Skip-friendly.</>,
+        <><strong>5. Emergency contact</strong> — one contact: name, relationship, phone. Editable later via <strong>Employees → [employee] → Personal</strong>. Skip-friendly (all-blank submit advances).</>,
+        <><strong>6. Upload your documents</strong> — KTP photo + Surat KK photo. Each upload persists immediately. <strong>Skip for now</strong> available to defer.</>,
+      ]}
+    />
+
+    <H3 id="resume">Resuming mid-flow</H3>
+    <P>
+      If a candidate closes the tab and comes back, the flow remembers
+      where to start: signed candidates skip the contract step, and the
+      personal-info / docs steps are pre-filled with whatever's already
+      on their record (so re-entering only changes things they re-type).
+    </P>
+
+    <H3 id="missing-contract">If the contract isn't ready yet</H3>
+    <P>
+      If the candidate opens their portal between getting the link and HR
+      finishing the contract, the contract step shows{' '}
+      <em>"Your contract is being prepared, please check back shortly"</em>{' '}
+      instead of erroring. Avoid sharing the portal link before the
+      contract is Active for the smoothest experience — finish the
+      contract first, share the link second.
+    </P>
+
+    <Callout type="note">
+      The signature captured here carries the same audit trail as the
+      employer-side signature: document hash, consent text, user agent,
+      IP, signer email/phone. See{' '}
+      <Link to="/help/docs/contracts-sign">E-signatures</Link> for
+      details.
+    </Callout>
   </>
 )
 
@@ -1056,6 +1465,41 @@ export const sections: DocSection[] = [
     ],
   },
   {
+    id: 'hiring',
+    title: 'Hiring',
+    description: 'The candidate-to-employee funnel — interview decisions, offers, and onboarding.',
+    topics: [
+      {
+        slug: 'hiring-funnel',
+        title: 'The hiring funnel',
+        description: 'How lifecycle stages work, what each one means, and how candidates auto-graduate to employees.',
+        iconKey: 'workflow',
+        body: HIRING_FUNNEL,
+      },
+      {
+        slug: 'hiring-candidates',
+        title: 'Adding & managing candidates',
+        description: 'Adding candidates fast, shortlisting, the talent pool, and inline status changes.',
+        iconKey: 'users',
+        body: HIRING_CANDIDATES,
+      },
+      {
+        slug: 'hiring-offers',
+        title: 'Making an offer',
+        description: 'How Make offer creates a draft contract from your position template and links it to the candidate.',
+        iconKey: 'handshake',
+        body: HIRING_OFFERS,
+      },
+      {
+        slug: 'hiring-separation',
+        title: 'Resignations & terminations',
+        description: 'Recording an employee leaving — voluntary vs involuntary — and where their record goes.',
+        iconKey: 'door-out',
+        body: HIRING_SEPARATION,
+      },
+    ],
+  },
+  {
     id: 'sops',
     title: 'SOPs',
     description: 'Standard Operating Procedures — write, version, publish, and import.',
@@ -1086,26 +1530,33 @@ export const sections: DocSection[] = [
   {
     id: 'contracts',
     title: 'Contracts',
-    description: 'Draft, send, sign, and store employment and consultancy agreements.',
+    description: 'Draft, sign, and store Indonesian employment contracts (PKWT and PKWTT) — with reusable templates.',
     topics: [
       {
         slug: 'contracts-create',
         title: 'Creating Contracts',
-        description: 'Templates, merge fields, and the basics of drafting in Flodok.',
+        description: 'PKWT vs PKWTT, merge fields, and how the candidate flow auto-creates contracts.',
         iconKey: 'file',
         body: CONTRACTS_CREATE,
       },
       {
+        slug: 'contract-templates',
+        title: 'Contract Templates',
+        description: 'Define a reusable contract per job position so new offers auto-fill in seconds.',
+        iconKey: 'briefcase',
+        body: CONTRACT_TEMPLATES,
+      },
+      {
         slug: 'contracts-sign',
         title: 'E-signatures',
-        description: "Legally enforceable e-signing under UU 11/2008 (ITE), with audit trail.",
+        description: "Legally enforceable e-signing under UU 11/2008 (ITE), with structured audit trail.",
         iconKey: 'pen',
         body: CONTRACTS_SIGN,
       },
       {
         slug: 'contracts-history',
         title: 'Contract History',
-        description: 'Versioning, amendments, and how Flodok keeps signed contracts immutable.',
+        description: 'Versioning and signature pinning for signed contracts.',
         iconKey: 'history',
         body: CONTRACTS_HISTORY,
       },
@@ -1147,14 +1598,21 @@ export const sections: DocSection[] = [
       {
         slug: 'portal-about',
         title: 'About the Portal',
-        description: 'What the public employee portal is, who it is for, and what it shows.',
+        description: "What the employee portal is, who it's for, and what each employee sees.",
         iconKey: 'globe',
         body: PORTAL_ABOUT,
       },
       {
+        slug: 'portal-candidate-onboarding',
+        title: 'Candidate onboarding',
+        description: "The guided flow new hires walk through before their start date — contract review, sign, personal info, documents.",
+        iconKey: 'sparkles',
+        body: PORTAL_CANDIDATE_ONBOARDING,
+      },
+      {
         slug: 'portal-share',
         title: 'Sharing the Portal',
-        description: 'Distribute your unique portal link via WhatsApp, QR code, or print.',
+        description: 'Distribute employee portal links via WhatsApp, QR code, or print.',
         iconKey: 'eye',
         body: PORTAL_SHARE,
       },
@@ -1331,6 +1789,36 @@ export const faqGroups: FAQGroup[] = [
       {
         q: 'Are e-signatures legally binding?',
         a: <P>Yes, under UU 11/2008 (ITE) and UU 19/2016. Every signed contract carries an audit trail with IP, timestamp, and a tamper-evident hash. See <Link to="/help/docs/contracts-sign">E-signatures</Link>.</P>,
+      },
+    ],
+  },
+  {
+    id: 'hiring',
+    title: 'Hiring',
+    items: [
+      {
+        q: 'How does hiring work in Flodok?',
+        a: <P>Candidates and employees live in the same database — what changes is their <em>lifecycle stage</em>. Add a candidate, move them through Prospective → Shortlisted → Offered → Signed → Active. The Hiring page surfaces the funnel; once a candidate's start date arrives they auto-graduate to the Employees directory. See <Link to="/help/docs/hiring-funnel">The hiring funnel</Link>.</P>,
+      },
+      {
+        q: 'Do I need to fill out a contract for every offer on the spot?',
+        a: <P>No. Click <strong>Make offer</strong> and Flodok creates a draft contract from your <Link to="/help/docs/contract-templates">job-position template</Link>. The candidate flips to Offered immediately so you keep moving through interviews; come back later to finalise the contract in a batch and share their portal link when ready.</P>,
+      },
+      {
+        q: "What if I haven't set up a contract template?",
+        a: <P>Make offer still works — it just creates a blank draft. You'll spend a few minutes filling in standard clauses. The next offer for the same position is the right time to save your work as a template so future offers auto-fill.</P>,
+      },
+      {
+        q: 'How does the candidate sign the contract?',
+        a: <P>Once you Activate the contract, share the candidate's portal link (most teams use WhatsApp). They open the link, walk through the onboarding flow — contract review → typed signature → personal info → upload KTP/KK — and they're set for day one. See <Link to="/help/docs/portal-candidate-onboarding">Candidate onboarding</Link>.</P>,
+      },
+      {
+        q: "What about candidates we don't hire?",
+        a: <P>Two options: <strong>Move to talent pool</strong> keeps them as a soft no — searchable, re-engageable later. <strong>Delete</strong> removes the record permanently. Most teams use the talent pool generously and reserve delete for typos.</P>,
+      },
+      {
+        q: 'How do I record an employee leaving?',
+        a: <P>Open the employee's profile and use <strong>Mark as resigned</strong> (voluntary) or <strong>Terminate employment</strong> (involuntary) on the sidebar. Both capture last working day + an optional reason. The employee moves to the Separated tab; nothing is deleted.</P>,
       },
     ],
   },
