@@ -995,69 +995,87 @@ function EmployeeRow({ emp, t, statusLabels, isLast, visibleColumns, onDuplicate
   return (
     <div
       onClick={onEdit}
-      className="group flex cursor-pointer items-center gap-3 px-4 py-2.5 transition-colors"
-      style={{
-        borderBottom: isLast ? 'none' : '1px solid var(--color-border)',
-        backgroundColor: 'transparent',
-      }}
-      onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
-      onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
+      className="group flex cursor-pointer items-center py-2.5 transition-colors hover:bg-[var(--color-bg-tertiary)]"
+      style={{ borderBottom: isLast ? 'none' : '1px solid var(--color-border)' }}
     >
+      {/* Sticky left: avatar + name */}
       <div
-        className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full"
-        style={{ background: emp.photo_url ? 'var(--color-bg-tertiary)' : getAvatarGradient(emp.id) }}
+        className={STICKY_LEFT_CELL_BODY}
+        style={{ backgroundColor: 'var(--color-bg)' }}
       >
-        {emp.photo_url && <img src={emp.photo_url} alt={emp.name} className="h-full w-full object-cover" />}
+        <div
+          className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full"
+          style={{ background: emp.photo_url ? 'var(--color-bg-tertiary)' : getAvatarGradient(emp.id) }}
+        >
+          {emp.photo_url && <img src={emp.photo_url} alt={emp.name} className="h-full w-full object-cover" />}
+        </div>
+        <div className="min-w-0 flex-1 truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+          {emp.name}
+        </div>
       </div>
 
-      <div className="min-w-[12rem] shrink-0 flex-1 truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>
-        {emp.name}
-      </div>
-
+      {/* Scrolling middle columns */}
       {visibleDefs.map(col => (
         <div
           key={col.key}
-          className={`${col.width} shrink-0 truncate text-xs ${col.alignRight ? 'text-right' : ''}`}
+          className={`${col.width} shrink-0 truncate px-3 text-xs ${col.alignRight ? 'text-right' : ''}`}
           style={{ color: 'var(--color-text-secondary)' }}
         >
           {col.render({ emp, t, statusLabels })}
         </div>
       ))}
 
-      <div ref={menuRef} className="relative ml-auto shrink-0">
+      {/* Sticky right: actions */}
+      <div
+        ref={menuRef}
+        onClick={e => e.stopPropagation()}
+        className={STICKY_RIGHT_CELL_BODY}
+        style={{ backgroundColor: 'var(--color-bg)' }}
+      >
         <button
-          onClick={e => { e.preventDefault(); e.stopPropagation(); setMenuOpen(!menuOpen) }}
-          className="rounded-md p-1.5 transition-colors"
-          style={{ color: 'var(--color-text-secondary)' }}
-          onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg)' }}
-          onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
+          type="button"
+          onClick={() => setMenuOpen(o => !o)}
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          className="inline-flex items-center gap-1 rounded-lg border px-3 py-1 text-xs font-medium transition-colors"
+          style={{
+            borderColor: 'var(--color-border)',
+            color: 'var(--color-primary)',
+            backgroundColor: 'var(--color-bg)',
+          }}
         >
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-            <circle cx="8" cy="3" r="1.5" />
-            <circle cx="8" cy="8" r="1.5" />
-            <circle cx="8" cy="13" r="1.5" />
+          <span>{t.actionsLabel}</span>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="6 9 12 15 18 9" />
           </svg>
         </button>
         {menuOpen && (
           <div
-            className="absolute right-0 top-8 z-10 min-w-[140px] rounded-lg border py-1 shadow-lg"
-            style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }}
+            role="menu"
+            className="absolute right-0 top-9 z-30 min-w-[160px] overflow-hidden rounded-lg border py-1 shadow-lg"
+            style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-elevated, var(--color-bg))' }}
           >
             <button
-              onClick={e => { e.preventDefault(); e.stopPropagation(); setMenuOpen(false); onDuplicate() }}
-              className="flex w-full items-center px-3 py-2 text-sm transition-colors"
+              role="menuitem"
+              onClick={() => { setMenuOpen(false); onEdit() }}
+              className="flex w-full items-center px-3 py-2 text-left text-sm transition-colors hover:bg-[var(--color-bg-tertiary)]"
               style={{ color: 'var(--color-text)' }}
-              onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
-              onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
+            >
+              {t.empViewInfo}
+            </button>
+            <button
+              role="menuitem"
+              onClick={() => { setMenuOpen(false); onDuplicate() }}
+              className="flex w-full items-center px-3 py-2 text-left text-sm transition-colors hover:bg-[var(--color-bg-tertiary)]"
+              style={{ color: 'var(--color-text)' }}
             >
               {t.duplicate}
             </button>
             <button
-              onClick={e => { e.preventDefault(); e.stopPropagation(); setMenuOpen(false); onDelete() }}
-              className="flex w-full items-center px-3 py-2 text-sm transition-colors"
+              role="menuitem"
+              onClick={() => { setMenuOpen(false); onDelete() }}
+              className="flex w-full items-center px-3 py-2 text-left text-sm transition-colors hover:bg-[var(--color-bg-tertiary)]"
               style={{ color: 'var(--color-danger)' }}
-              onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
-              onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
             >
               {t.delete}
             </button>
@@ -1067,6 +1085,14 @@ function EmployeeRow({ emp, t, statusLabels, isLast, visibleColumns, onDuplicate
     </div>
   )
 }
+
+// Shared className strings for sticky cells. The `group-hover:` background
+// matches the row's hover background so the sticky cells don't visibly fall
+// out of the row when scrolling horizontally.
+const STICKY_LEFT_CELL_BODY =
+  'sticky left-0 z-20 flex w-64 shrink-0 items-center gap-3 px-4 group-hover:bg-[var(--color-bg-tertiary)]'
+const STICKY_RIGHT_CELL_BODY =
+  'sticky right-0 z-20 ml-auto flex w-28 shrink-0 items-center justify-end px-4 group-hover:bg-[var(--color-bg-tertiary)]'
 
 function ListHeader({ t, sortField, sortDir, onToggle, visibleColumns }: {
   t: Translations
@@ -1081,22 +1107,30 @@ function ListHeader({ t, sortField, sortDir, onToggle, visibleColumns }: {
 
   return (
     <div
-      className="flex items-center gap-3 px-4 py-2 text-[10px] font-semibold uppercase tracking-wider"
+      className="flex items-center py-2 text-[10px] font-semibold uppercase tracking-wider"
       style={{
         borderBottom: '1px solid var(--color-border)',
         backgroundColor: 'var(--color-bg-tertiary)',
         color: 'var(--color-text-tertiary)',
       }}
     >
-      <div className="h-9 w-9 shrink-0" aria-hidden="true" />
-      <SortableHeader
-        label={t.nameLabel}
-        field="name"
-        currentField={sortField}
-        currentDir={sortDir}
-        onClick={() => onToggle('name')}
-        className="min-w-[12rem] shrink-0 flex-1"
-      />
+      {/* Sticky left: avatar spacer + Name sort header */}
+      <div
+        className="sticky left-0 z-20 flex w-64 shrink-0 items-center gap-3 px-4"
+        style={{ backgroundColor: 'var(--color-bg-tertiary)' }}
+      >
+        <div className="h-9 w-9 shrink-0" aria-hidden="true" />
+        <SortableHeader
+          label={t.nameLabel}
+          field="name"
+          currentField={sortField}
+          currentDir={sortDir}
+          onClick={() => onToggle('name')}
+          className="min-w-0 flex-1"
+        />
+      </div>
+
+      {/* Scrolling columns */}
       {visibleDefs.map(col => col.sortField ? (
         <SortableHeader
           key={col.key}
@@ -1106,17 +1140,23 @@ function ListHeader({ t, sortField, sortDir, onToggle, visibleColumns }: {
           currentDir={sortDir}
           onClick={() => onToggle(col.sortField!)}
           align={col.alignRight ? 'right' : 'left'}
-          className={`${col.width} shrink-0`}
+          className={`${col.width} shrink-0 px-3`}
         />
       ) : (
         <div
           key={col.key}
-          className={`${col.width} shrink-0 truncate ${col.alignRight ? 'text-right' : ''}`}
+          className={`${col.width} shrink-0 truncate px-3 ${col.alignRight ? 'text-right' : ''}`}
         >
           {col.label(t)}
         </div>
       ))}
-      <div className="ml-auto w-7 shrink-0" aria-hidden="true" />
+
+      {/* Sticky right: spacer matching the Actions column width */}
+      <div
+        className="sticky right-0 z-20 ml-auto w-28 shrink-0 px-4"
+        style={{ backgroundColor: 'var(--color-bg-tertiary)' }}
+        aria-hidden="true"
+      />
     </div>
   )
 }

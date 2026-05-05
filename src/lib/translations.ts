@@ -1122,6 +1122,8 @@ export const translations = {
     importErrDuplicateCodeExisting: 'An employee with this Employee ID already exists.',
 
     // Add-employee split button + import / export modal
+    actionsLabel: 'Actions',
+    empViewInfo: 'View employee info',
     addEmployeeMenuAdd: 'Add employee',
     addEmployeeMenuImport: 'Import from file',
     exportEmployees: 'Export',
@@ -2539,6 +2541,8 @@ export const translations = {
     importErrDuplicateCodeExisting: 'Karyawan dengan ID ini sudah ada.',
 
     // Add-employee split button + import / export modal
+    actionsLabel: 'Tindakan',
+    empViewInfo: 'Lihat info karyawan',
     addEmployeeMenuAdd: 'Tambah karyawan',
     addEmployeeMenuImport: 'Impor dari file',
     exportEmployees: 'Ekspor',
