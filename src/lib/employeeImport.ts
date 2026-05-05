@@ -16,6 +16,8 @@
 
 import ExcelJS from 'exceljs'
 import { normalizePhone, isValidE164 } from './phone'
+import { isPro } from './billing'
+import { FREE_EMPLOYEE_LIMIT, PRO_MIN_SEATS } from './pricing'
 import type { Translations } from './translations'
 import type { Employee } from '../types/aliases'
 
@@ -536,6 +538,48 @@ function finalize(draft: EmployeeImportInput): EmployeeImportInput {
   // Default status to 'probation' (matches the existing single-add flow).
   if (!draft.status) draft.status = 'probation'
   return draft
+}
+
+// ───── Seat / plan capacity check ──────────────────────────────────────
+
+export type CapacityReason = 'free_over' | 'pro_over'
+
+export interface CapacityCheck {
+  ok: boolean
+  /** Total employees the plan covers right now. */
+  cap: number
+  /** Employees currently in the org. */
+  current: number
+  /** Rows the user is trying to import. */
+  importing: number
+  reason: CapacityReason | null
+}
+
+export function checkImportCapacity(opts: {
+  org: { plan_tier: string; subscription_status: string | null; subscription_quantity: number | null }
+  currentEmployeeCount: number
+  importRowCount: number
+}): CapacityCheck {
+  const { org, currentEmployeeCount, importRowCount } = opts
+  const total = currentEmployeeCount + importRowCount
+  if (isPro(org)) {
+    const cap = org.subscription_quantity ?? PRO_MIN_SEATS
+    return {
+      ok: total <= cap,
+      cap,
+      current: currentEmployeeCount,
+      importing: importRowCount,
+      reason: total <= cap ? null : 'pro_over',
+    }
+  }
+  const cap = FREE_EMPLOYEE_LIMIT
+  return {
+    ok: total <= cap,
+    cap,
+    current: currentEmployeeCount,
+    importing: importRowCount,
+    reason: total <= cap ? null : 'free_over',
+  }
 }
 
 // ───── Export ──────────────────────────────────────────────────────────

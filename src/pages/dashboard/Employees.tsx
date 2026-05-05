@@ -12,6 +12,8 @@ import { getSopStarterTemplate } from '../../lib/templates'
 import { isPro, syncSeats } from '../../lib/billing'
 import { FREE_EMPLOYEE_LIMIT, PRO_MIN_SEATS } from '../../lib/pricing'
 import { UpgradeModal } from '../../components/UpgradeModal'
+import { ImportEmployeesModal } from '../../components/ImportEmployeesModal'
+import { buildExportFile } from '../../lib/employeeImport'
 import { useBilling } from '../../contexts/BillingContext'
 import type { Translations } from '../../lib/translations'
 import type { User, Employee, Organization } from '../../types/aliases'
@@ -48,6 +50,8 @@ export function Employees({ user }: { user: User }) {
   const [sortDir, setSortDir] = useState<SortDir>('asc')
   const [empPageSize, setEmpPageSize] = useState(12)
   const [empCurrentPage, setEmpCurrentPage] = useState(1)
+  const [showImport, setShowImport] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const [view, setView] = useState<EmployeesView>(() => {
     if (typeof window === 'undefined') return 'list'
     const saved = window.localStorage.getItem(VIEW_STORAGE_KEY)
@@ -310,6 +314,30 @@ export function Employees({ user }: { user: User }) {
     },
   ]
 
+  async function handleExport() {
+    if (exporting) return
+    setExporting(true)
+    try {
+      const blob = await buildExportFile({
+        orgName: org?.name ?? 'employees',
+        employees: visibleFiltered,
+        t,
+      })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${(org?.name ?? 'employees').replace(/[^\w-]+/g, '-')}-employees.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err))
+    } finally {
+      setExporting(false)
+    }
+  }
+
   function toggleSort(field: SortField) {
     if (sortField === field) {
       setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
@@ -323,15 +351,30 @@ export function Employees({ user }: { user: User }) {
     <div>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.employeesTitle}</h1>
-        <button
-          onClick={handleAddClick}
-          disabled={!canWrite}
-          title={!canWrite ? t.dunningWriteBlocked : undefined}
-          className="shrink-0 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
-          style={{ backgroundColor: 'var(--color-primary)' }}
-        >
-          {t.addEmployee}
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={handleExport}
+            disabled={exporting || employees.length === 0}
+            className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', backgroundColor: 'var(--color-bg)' }}
+            title={t.exportEmployees}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+            <span>{t.exportEmployees}</span>
+          </button>
+          <AddEmployeeMenu
+            t={t}
+            disabled={!canWrite}
+            disabledTitle={!canWrite ? t.dunningWriteBlocked : undefined}
+            onAdd={handleAddClick}
+            onImport={() => setShowImport(true)}
+          />
+        </div>
       </div>
 
       {hiddenCount > 0 && dunning === 'free_frozen' && (
@@ -451,6 +494,92 @@ export function Employees({ user }: { user: User }) {
           cancelReturnPath="/employees"
           onClose={() => setShowUpgrade(false)}
         />
+      )}
+
+      {showImport && org && (
+        <ImportEmployeesModal
+          user={user}
+          org={org}
+          currentEmployees={employees}
+          t={t}
+          onClose={() => setShowImport(false)}
+          onImported={() => { setShowImport(false); loadData() }}
+        />
+      )}
+    </div>
+  )
+}
+
+function AddEmployeeMenu({ t, disabled, disabledTitle, onAdd, onImport }: {
+  t: Translations
+  disabled: boolean
+  disabledTitle?: string
+  onAdd: () => void
+  onImport: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function handleClick(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    function handleKey(e: KeyboardEvent) { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', handleClick)
+    document.addEventListener('keydown', handleKey)
+    return () => {
+      document.removeEventListener('mousedown', handleClick)
+      document.removeEventListener('keydown', handleKey)
+    }
+  }, [open])
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        onClick={() => !disabled && setOpen(o => !o)}
+        disabled={disabled}
+        title={disabledTitle}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
+        style={{ backgroundColor: 'var(--color-primary)' }}
+      >
+        <span>{t.addEmployee}</span>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+      {open && (
+        <div
+          role="menu"
+          className="absolute right-0 top-full z-30 mt-1 min-w-[200px] overflow-hidden rounded-lg border py-1 shadow-lg"
+          style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-elevated, var(--color-bg))' }}
+        >
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => { setOpen(false); onAdd() }}
+            className="flex w-full items-center px-3 py-2 text-left text-sm transition-colors"
+            style={{ color: 'var(--color-text)' }}
+            onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
+            onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
+          >
+            {t.addEmployeeMenuAdd}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => { setOpen(false); onImport() }}
+            className="flex w-full items-center px-3 py-2 text-left text-sm transition-colors"
+            style={{ color: 'var(--color-text)' }}
+            onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
+            onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
+          >
+            {t.addEmployeeMenuImport}
+          </button>
+        </div>
       )}
     </div>
   )
