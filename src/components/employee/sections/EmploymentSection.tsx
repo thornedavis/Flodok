@@ -11,6 +11,10 @@ interface EmploymentSectionProps {
   saveFields: (partial: Partial<Employee>) => Promise<{ error?: string }>
   activeContract: Contract | null
   contractSignedAt: string | null
+  branchOptions: string[]
+  jobPositionOptions: string[]
+  jobLevelOptions: string[]
+  employeeClassOptions: string[]
 }
 
 export function EmploymentSection({
@@ -20,6 +24,10 @@ export function EmploymentSection({
   saveFields,
   activeContract,
   contractSignedAt,
+  branchOptions,
+  jobPositionOptions,
+  jobLevelOptions,
+  employeeClassOptions,
 }: EmploymentSectionProps) {
   const { t } = useLang()
   return (
@@ -31,6 +39,10 @@ export function EmploymentSection({
           canWrite={canWrite}
           writeDisabledTitle={writeDisabledTitle}
           saveFields={saveFields}
+          branchOptions={branchOptions}
+          jobPositionOptions={jobPositionOptions}
+          jobLevelOptions={jobLevelOptions}
+          employeeClassOptions={employeeClassOptions}
         />
         <EmploymentDatesPanel
           employee={employee}

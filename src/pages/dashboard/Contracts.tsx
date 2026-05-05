@@ -4,13 +4,15 @@ import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
 import { getEmployeeDepts, primaryDept, deptsJoined } from '../../lib/employee'
 import { formatIdrDigits as formatCurrency } from '../../lib/credits'
+import { bucketReferenceValues, referenceNames } from '../../lib/companyReference'
 import { InfoTooltip } from '../../components/InfoTooltip'
 import { FilterPill, FilterPanel, FilterSearchInput } from '../../components/FilterControls'
 import type { FilterPanelSection } from '../../components/FilterControls'
-import { ManageDepartmentsModal } from '../../components/ManageDepartmentsModal'
 import { DateTimePicker } from '../../components/DateTimePicker'
 import { useBilling } from '../../contexts/BillingContext'
 import type { User, Contract, Employee, Tag } from '../../types/aliases'
+
+type ContractsView = 'contracts' | 'templates'
 
 type ContractWithEmployee = Contract & { employee: Employee | null; tagIds: string[] }
 
@@ -27,32 +29,26 @@ export function Contracts({ user }: { user: User }) {
   const [activeStatuses, setActiveStatuses] = useState<Set<string>>(new Set())
   const [activeTags, setActiveTags] = useState<Set<string>>(new Set())
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showCreateTemplate, setShowCreateTemplate] = useState(false)
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
-  const [manageOpen, setManageOpen] = useState(false)
   const [sortBy, setSortBy] = useState<'last_edited' | 'newest' | 'oldest'>('last_edited')
-
-  async function reload() {
-    const [contractResult, empResult] = await Promise.all([
-      supabase.from('contracts').select('*').eq('org_id', user.org_id).order('updated_at', { ascending: false }),
-      supabase.from('employees').select('*').eq('org_id', user.org_id).order('name'),
-    ])
-    const empMap = new Map((empResult.data || []).map(e => [e.id, e]))
-    setEmployees(empResult.data || [])
-    setContracts(prev => (contractResult.data || []).map(c => ({
-      ...c,
-      employee: c.employee_id ? empMap.get(c.employee_id) || null : null,
-      tagIds: prev.find(p => p.id === c.id)?.tagIds || [],
-    })))
-  }
+  const [view, setView] = useState<ContractsView>('contracts')
+  const [jobPositions, setJobPositions] = useState<string[]>([])
 
   useEffect(() => {
     async function load() {
-      const [contractResult, empResult, tagsResult, contractTagsResult] = await Promise.all([
+      const [contractResult, empResult, tagsResult, contractTagsResult, refResult] = await Promise.all([
         supabase.from('contracts').select('*').eq('org_id', user.org_id).order('updated_at', { ascending: false }),
         supabase.from('employees').select('*').eq('org_id', user.org_id).order('name'),
         supabase.from('tags').select('*').eq('org_id', user.org_id).order('name'),
         supabase.from('contract_tags').select('*'),
+        supabase.from('company_reference_values').select('*').eq('org_id', user.org_id).order('display_order').order('name'),
       ])
+
+      if (refResult.data) {
+        const buckets = bucketReferenceValues(refResult.data)
+        setJobPositions(referenceNames(buckets.job_position))
+      }
 
       const empMap = new Map((empResult.data || []).map(e => [e.id, e]))
 
@@ -101,14 +97,17 @@ export function Contracts({ user }: { user: User }) {
 
   const filtered = contracts
     .filter(c => {
+      const isTemplate = !!c.is_template
+      if (view === 'templates' ? !isTemplate : isTemplate) return false
       const empDepts = c.employee ? getEmployeeDepts(c.employee) : []
       const matchesDept = activeDepartments.size === 0 || empDepts.some(d => activeDepartments.has(d))
-      const matchesStatus = activeStatuses.size === 0 || activeStatuses.has(c.status)
+      const matchesStatus = view === 'templates' || activeStatuses.size === 0 || activeStatuses.has(c.status)
       const matchesTags = activeTags.size === 0 || c.tagIds.some(tid => activeTags.has(tid))
       const q = searchQuery.trim().toLowerCase()
       const matchesSearch = !q ||
         c.title.toLowerCase().includes(q) ||
         c.employee?.name.toLowerCase().includes(q) ||
+        (c.template_for_position || '').toLowerCase().includes(q) ||
         empDepts.some(d => d.toLowerCase().includes(q))
       return matchesDept && matchesStatus && matchesTags && matchesSearch
     })
@@ -175,7 +174,7 @@ export function Contracts({ user }: { user: User }) {
       value: [...activeDepartments],
       options: departmentOptions,
       onChange: (next: string[]) => setActiveDepartments(new Set(next)),
-      footerAction: { label: t.manageDepartments, onClick: () => setManageOpen(true) },
+      footerAction: { label: t.manageDepartments, onClick: () => navigate('/dashboard/company') },
     }] : []),
     ...(allTags.length > 0 ? [{
       type: 'multiselect' as const,
@@ -205,14 +204,25 @@ export function Contracts({ user }: { user: User }) {
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.contractsTitle}</h1>
         <button
-          onClick={() => setShowCreateModal(true)}
+          onClick={() => view === 'templates' ? setShowCreateTemplate(true) : setShowCreateModal(true)}
           disabled={!canWrite}
           title={!canWrite ? t.dunningWriteBlocked : undefined}
           className="shrink-0 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
           style={{ backgroundColor: 'var(--color-primary)' }}
         >
-          {t.createContract}
+          {view === 'templates' ? t.createTemplate : t.createContract}
         </button>
+      </div>
+
+      <div className="mb-5 flex gap-1 border-b" style={{ borderColor: 'var(--color-border)' }}>
+        <ViewTab active={view === 'contracts'} onClick={() => setView('contracts')}>
+          {t.contractsTabContracts}
+          <span className="ml-2 rounded-full px-1.5 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}>{contracts.filter(c => !c.is_template).length}</span>
+        </ViewTab>
+        <ViewTab active={view === 'templates'} onClick={() => setView('templates')}>
+          {t.contractsTabTemplates}
+          <span className="ml-2 rounded-full px-1.5 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}>{contracts.filter(c => c.is_template).length}</span>
+        </ViewTab>
       </div>
 
       {hiddenCount > 0 && dunning === 'free_frozen' && (
@@ -226,23 +236,27 @@ export function Contracts({ user }: { user: User }) {
 
       {/* Filter bar */}
       <div className="mb-5 flex flex-wrap items-center gap-2">
-        <FilterPill
-          active={activeStatuses.size === 0}
-          onClick={() => setActiveStatuses(new Set())}
-          count={contracts.length}
-        >
-          {t.filterAll}
-        </FilterPill>
-        {(['active', 'draft', 'archived'] as const).map(status => (
-          <FilterPill
-            key={status}
-            active={activeStatuses.has(status)}
-            onClick={() => toggleStatus(status)}
-            count={getStatusCount(status)}
-          >
-            {statusLabels[status]}
-          </FilterPill>
-        ))}
+        {view === 'contracts' && (
+          <>
+            <FilterPill
+              active={activeStatuses.size === 0}
+              onClick={() => setActiveStatuses(new Set())}
+              count={contracts.filter(c => !c.is_template).length}
+            >
+              {t.filterAll}
+            </FilterPill>
+            {(['active', 'draft', 'archived'] as const).map(status => (
+              <FilterPill
+                key={status}
+                active={activeStatuses.has(status)}
+                onClick={() => toggleStatus(status)}
+                count={getStatusCount(status)}
+              >
+                {statusLabels[status]}
+              </FilterPill>
+            ))}
+          </>
+        )}
         <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
           <div className="flex-1 sm:w-64 sm:flex-none">
             <FilterSearchInput
@@ -266,9 +280,11 @@ export function Contracts({ user }: { user: User }) {
       <div>
         {visibleFiltered.length === 0 ? (
           <p className="py-12 text-center text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-            {contracts.length === 0
-              ? t.noContractsYet
-              : t.noContractsMatchFilters}
+            {view === 'templates'
+              ? t.noTemplatesYet
+              : contracts.filter(c => !c.is_template).length === 0
+                ? t.noContractsYet
+                : t.noContractsMatchFilters}
           </p>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -344,7 +360,24 @@ export function Contracts({ user }: { user: User }) {
                   )}
                 </div>
 
-                {contract.employee && getEmployeeDepts(contract.employee).length > 0 && (
+                {contract.is_template ? (
+                  <div className="mb-3 flex flex-wrap gap-1">
+                    <span
+                      className="inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium"
+                      style={{ backgroundColor: 'color-mix(in srgb, var(--color-primary) 14%, transparent)', color: 'var(--color-primary)' }}
+                    >
+                      {t.contractTemplateBadge}
+                    </span>
+                    {contract.template_for_position && (
+                      <span
+                        className="inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium"
+                        style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}
+                      >
+                        {contract.template_for_position}
+                      </span>
+                    )}
+                  </div>
+                ) : contract.employee && getEmployeeDepts(contract.employee).length > 0 && (
                   <div className="mb-3 flex flex-wrap gap-1">
                     {getEmployeeDepts(contract.employee).map(d => (
                       <span
@@ -362,7 +395,13 @@ export function Contracts({ user }: { user: User }) {
                   {contract.title}
                 </h3>
 
-                {contract.employee && (
+                {contract.is_template ? (
+                  !contract.template_for_position && (
+                    <p className="mt-1.5 text-xs leading-relaxed" style={{ color: 'var(--color-text-tertiary)' }}>
+                      {t.contractTemplateUnused}
+                    </p>
+                  )
+                ) : contract.employee && (
                   <p className="mt-1.5 text-xs leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>
                     {contract.employee.name}
                   </p>
@@ -387,11 +426,15 @@ export function Contracts({ user }: { user: User }) {
                 )}
 
                 <div className="mt-3 flex items-center gap-2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                  <span className="inline-flex items-center gap-1" style={{ color: statusColors[contract.status] }}>
-                    <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: statusColors[contract.status] }} />
-                    {statusLabels[contract.status] || contract.status}
-                  </span>
-                  <span>&middot;</span>
+                  {!contract.is_template && (
+                    <>
+                      <span className="inline-flex items-center gap-1" style={{ color: statusColors[contract.status] }}>
+                        <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: statusColors[contract.status] }} />
+                        {statusLabels[contract.status] || contract.status}
+                      </span>
+                      <span>&middot;</span>
+                    </>
+                  )}
                   <span>v{contract.current_version}</span>
                   <span>&middot;</span>
                   <span>{new Date(contract.updated_at).toLocaleDateString()}</span>
@@ -411,13 +454,131 @@ export function Contracts({ user }: { user: User }) {
         />
       )}
 
-      <ManageDepartmentsModal
-        open={manageOpen}
-        onClose={() => setManageOpen(false)}
-        departments={departments}
-        employees={employees}
-        onChanged={() => { setActiveDepartments(new Set()); reload() }}
-      />
+      {showCreateTemplate && (
+        <NewTemplateModal
+          orgId={user.org_id}
+          jobPositions={jobPositions}
+          onClose={() => setShowCreateTemplate(false)}
+          onCreated={(id) => navigate(`/dashboard/contracts/${id}/edit`)}
+          onManagePositions={() => { setShowCreateTemplate(false); navigate('/dashboard/company?tab=structure') }}
+        />
+      )}
+    </div>
+  )
+}
+
+function ViewTab({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="relative px-4 py-2 text-sm font-medium transition-colors"
+      style={{ color: active ? 'var(--color-text)' : 'var(--color-text-tertiary)' }}
+    >
+      {children}
+      {active && <span className="absolute -bottom-px left-0 right-0 h-0.5" style={{ backgroundColor: 'var(--color-primary)' }} />}
+    </button>
+  )
+}
+
+function NewTemplateModal({ orgId, jobPositions, onClose, onCreated, onManagePositions }: {
+  orgId: string
+  jobPositions: string[]
+  onClose: () => void
+  onCreated: (id: string) => void
+  onManagePositions: () => void
+}) {
+  const { t } = useLang()
+  const [title, setTitle] = useState('')
+  const [position, setPosition] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!title.trim() || saving) return
+    setSaving(true)
+    setError('')
+    const { data, error: insertError } = await supabase
+      .from('contracts')
+      .insert({
+        org_id: orgId,
+        title: title.trim(),
+        content_markdown: '',
+        status: 'draft',
+        is_template: true,
+        template_for_position: position || null,
+      })
+      .select()
+      .single()
+    setSaving(false)
+    if (insertError || !data) {
+      setError(insertError?.message || 'Could not create template.')
+      return
+    }
+    onCreated(data.id)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div
+        className="w-full max-w-md rounded-lg border p-5 shadow-xl"
+        style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }}
+        onClick={e => e.stopPropagation()}
+      >
+        <h2 className="mb-4 text-lg font-semibold" style={{ color: 'var(--color-text)' }}>{t.newTemplateTitle}</h2>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+              {t.contractsTabTemplates}<span style={{ color: 'var(--color-danger)' }}> *</span>
+            </label>
+            <input
+              type="text"
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              autoFocus
+              required
+              placeholder={t.newTemplateTitlePlaceholder}
+              className="w-full rounded-lg border px-3 py-2 text-sm"
+              style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+            />
+          </div>
+          <div>
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <label className="block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.newTemplatePositionLabel}</label>
+              <button
+                type="button"
+                onClick={onManagePositions}
+                className="text-xs font-medium hover:underline"
+                style={{ color: 'var(--color-primary)' }}
+              >
+                {t.hiringFieldManage} →
+              </button>
+            </div>
+            <select
+              value={position}
+              onChange={e => setPosition(e.target.value)}
+              className="w-full rounded-lg border px-3 py-2 text-sm"
+              style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+            >
+              <option value="">{t.newTemplatePositionAny}</option>
+              {jobPositions.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+            <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+              {t.contractTemplateForPositionHelp}
+            </p>
+          </div>
+          {error && <p className="text-sm" style={{ color: 'var(--color-danger)' }}>{error}</p>}
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={onClose} className="rounded-lg border px-4 py-2 text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>
+              {t.cancel}
+            </button>
+            <button type="submit" disabled={!title.trim() || saving} className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50" style={{ backgroundColor: 'var(--color-primary)' }}>
+              {saving ? t.saving : t.add}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   )
 }

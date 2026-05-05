@@ -7,6 +7,8 @@ import { AchievementsSection } from '../../components/employee/AchievementsSecti
 import { CompensationOverview } from '../../components/employee/CompensationOverview'
 import { EmployeeActivityLog } from '../../components/employee/EmployeeActivityLog'
 import { EmployeeSidebar, type EmployeeSectionKey } from '../../components/employee/EmployeeSidebar'
+import { SeparationModal } from '../../components/employee/SeparationModal'
+import { deriveEmployeeStatus, type SeparationType } from '../../lib/employeeStatus'
 import { SectionHeader } from '../../components/employee/SectionHeader'
 import { PersonalSection } from '../../components/employee/sections/PersonalSection'
 import { EmploymentSection } from '../../components/employee/sections/EmploymentSection'
@@ -14,13 +16,12 @@ import { EducationSection } from '../../components/employee/sections/EducationSe
 import { ExperienceSection } from '../../components/employee/sections/ExperienceSection'
 import { AdditionalInfoSection } from '../../components/employee/sections/AdditionalInfoSection'
 import { isPro, syncSeats } from '../../lib/billing'
+import { bucketReferenceValues, referenceNames } from '../../lib/companyReference'
 import { useBilling } from '../../contexts/BillingContext'
 import type { User, Employee, Organization, Contract } from '../../types/aliases'
 
 const MAX_AVATAR_SIZE = 2 * 1024 * 1024 // 2 MB
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp']
-
-type EmployeeStatus = 'probation' | 'active' | 'suspended' | 'terminated'
 
 export function EmployeeEdit({ user }: { user: User }) {
   const { t } = useLang()
@@ -35,11 +36,16 @@ export function EmployeeEdit({ user }: { user: User }) {
   const [activeContract, setActiveContract] = useState<Contract | null>(null)
   const [contractSignedAt, setContractSignedAt] = useState<string | null>(null)
   const [orgDepartments, setOrgDepartments] = useState<string[]>([])
+  const [orgBranches, setOrgBranches] = useState<string[]>([])
+  const [orgJobPositions, setOrgJobPositions] = useState<string[]>([])
+  const [orgJobLevels, setOrgJobLevels] = useState<string[]>([])
+  const [orgEmployeeClasses, setOrgEmployeeClasses] = useState<string[]>([])
   const [allowanceRefreshKey, setAllowanceRefreshKey] = useState(0)
   const [activeSection, setActiveSection] = useState<EmployeeSectionKey>('personal')
 
   const [uploading, setUploading] = useState(false)
   const [topError, setTopError] = useState('')
+  const [separationType, setSeparationType] = useState<SeparationType | null>(null)
 
   useBreadcrumbTrailing(employee?.name ?? null)
 
@@ -47,10 +53,11 @@ export function EmployeeEdit({ user }: { user: User }) {
     if (!employeeId) return
     const id = employeeId
     async function load() {
-      const [empResult, orgResult, allEmpsResult, contractResult] = await Promise.all([
+      const [empResult, orgResult, referenceResult, branchResult, contractResult] = await Promise.all([
         supabase.from('employees').select('*').eq('id', id).single(),
         supabase.from('organizations').select('*').eq('id', user.org_id).single(),
-        supabase.from('employees').select('department, departments').eq('org_id', user.org_id),
+        supabase.from('company_reference_values').select('*').eq('org_id', user.org_id).order('display_order').order('name'),
+        supabase.from('company_branches').select('name').eq('org_id', user.org_id).eq('is_active', true).order('name'),
         supabase
           .from('contracts')
           .select('*')
@@ -79,13 +86,15 @@ export function EmployeeEdit({ user }: { user: User }) {
 
       if (empResult.data) setEmployee(empResult.data)
       setOrg(orgResult.data)
-      if (allEmpsResult.data) {
-        const all = new Set<string>()
-        for (const e of allEmpsResult.data) {
-          if (e.department) all.add(e.department)
-          for (const d of e.departments || []) all.add(d)
-        }
-        setOrgDepartments([...all].sort())
+      if (referenceResult.data) {
+        const buckets = bucketReferenceValues(referenceResult.data)
+        setOrgDepartments(referenceNames(buckets.department))
+        setOrgJobPositions(referenceNames(buckets.job_position))
+        setOrgJobLevels(referenceNames(buckets.job_level))
+        setOrgEmployeeClasses(referenceNames(buckets.employee_class))
+      }
+      if (branchResult.data) {
+        setOrgBranches(branchResult.data.map(b => b.name))
       }
     }
     load()
@@ -177,9 +186,20 @@ export function EmployeeEdit({ user }: { user: User }) {
     if (result.error) setTopError(result.error)
   }
 
-  async function handleStatusChange(next: EmployeeStatus) {
-    const result = await saveFields({ status: next })
-    if (result.error) setTopError(result.error)
+  async function handleSeparationConfirm(type: SeparationType, lastDay: string, reason: string) {
+    const result = await saveFields({
+      lifecycle_stage: 'separated',
+      resign_date: lastDay,
+      separation_type: type,
+      separation_reason: reason || null,
+      // Keep the legacy status column in sync so existing list filters
+      // (terminated tab) continue to surface separated employees.
+      status: 'terminated',
+    })
+    if (result.error) {
+      throw new Error(result.error)
+    }
+    setSeparationType(null)
   }
 
   async function handleDelete() {
@@ -198,8 +218,7 @@ export function EmployeeEdit({ user }: { user: User }) {
 
   const portalUrl = `${window.location.origin}/portal/${employee.slug}-${employee.access_token}`
   const writeDisabledTitle = !canWrite ? t.dunningWriteBlocked : undefined
-  const status: EmployeeStatus =
-    (employee.status === 'archived' ? 'terminated' : (employee.status as EmployeeStatus | null)) || 'probation'
+  const status = deriveEmployeeStatus(employee)
 
   function renderSection() {
     if (!employee || !employeeId) return null
@@ -226,6 +245,10 @@ export function EmployeeEdit({ user }: { user: User }) {
             saveFields={saveFields}
             activeContract={activeContract}
             contractSignedAt={contractSignedAt}
+            branchOptions={orgBranches}
+            jobPositionOptions={orgJobPositions}
+            jobLevelOptions={orgJobLevels}
+            employeeClassOptions={orgEmployeeClasses}
           />
         )
       case 'education':
@@ -307,13 +330,23 @@ export function EmployeeEdit({ user }: { user: User }) {
           onRemove={handleRemoveAvatar}
           active={activeSection}
           onSelect={setActiveSection}
-          onStatusChange={handleStatusChange}
+          onResign={() => setSeparationType('resigned')}
+          onTerminate={() => setSeparationType('terminated')}
           onDelete={handleDelete}
           canWrite={canWrite}
           writeDisabledTitle={writeDisabledTitle}
         />
         <main className="min-w-0 flex-1">{renderSection()}</main>
       </div>
+
+      {separationType && (
+        <SeparationModal
+          type={separationType}
+          employeeName={employee.name}
+          onCancel={() => setSeparationType(null)}
+          onConfirm={(lastDay, reason) => handleSeparationConfirm(separationType, lastDay, reason)}
+        />
+      )}
     </div>
   )
 }

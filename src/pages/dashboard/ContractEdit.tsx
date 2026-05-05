@@ -4,10 +4,12 @@ import { supabase } from '../../lib/supabase'
 import { SOPEditor } from '../../components/Editor'
 import { useLang } from '../../contexts/LanguageContext'
 import { primaryDept, deptsJoined } from '../../lib/employee'
+import { bucketReferenceValues, referenceNames } from '../../lib/companyReference'
 import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning'
 import { formatIdrDigits } from '../../lib/credits'
 import { InfoTooltip } from '../../components/InfoTooltip'
 import { writeSnapshot } from '../../lib/snapshotApi'
+import { buildContractDocumentHash, captureSignatureIp, currentAuthToken, getUserAgent } from '../../lib/signatureFingerprint'
 import { SIGNATURE_FONTS, ensureSignatureFontsLoaded } from '../../lib/signatureFonts'
 import { DateTimePicker } from '../../components/DateTimePicker'
 import { useBilling } from '../../contexts/BillingContext'
@@ -58,6 +60,8 @@ export function ContractEdit({ user }: { user: User }) {
   const [daysPerWeek, setDaysPerWeek] = useState<string>('')
   const [startDate, setStartDate] = useState<string>('')
   const [endDate, setEndDate] = useState<string>('')
+  const [templateForPosition, setTemplateForPosition] = useState<string>('')
+  const [jobPositions, setJobPositions] = useState<string[]>([])
   const [changeSummary] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -82,16 +86,21 @@ export function ContractEdit({ user }: { user: User }) {
 
   useEffect(() => {
     async function load() {
-      const [contractResult, tagsResult, contractTagsResult, empsResult, orgResult] = await Promise.all([
+      const [contractResult, tagsResult, contractTagsResult, empsResult, orgResult, refResult] = await Promise.all([
         supabase.from('contracts').select('*').eq('id', id!).single(),
         supabase.from('tags').select('*').eq('org_id', user.org_id).order('name'),
         supabase.from('contract_tags').select('tag_id').eq('contract_id', id!),
         supabase.from('employees').select('*').eq('org_id', user.org_id).order('name'),
         supabase.from('organizations').select('*').eq('id', user.org_id).single(),
+        supabase.from('company_reference_values').select('*').eq('org_id', user.org_id).order('display_order').order('name'),
       ])
 
       setAllEmployees(empsResult.data || [])
       setOrganization(orgResult.data)
+      if (refResult.data) {
+        const buckets = bucketReferenceValues(refResult.data)
+        setJobPositions(referenceNames(buckets.job_position))
+      }
 
       if (contractResult.data) {
         setContract(contractResult.data)
@@ -106,6 +115,7 @@ export function ContractEdit({ user }: { user: User }) {
         setDaysPerWeek(contractResult.data.days_per_week?.toString() ?? '')
         setStartDate(contractResult.data.start_date ?? '')
         setEndDate(contractResult.data.end_date ?? '')
+        setTemplateForPosition(contractResult.data.template_for_position ?? '')
 
         if (contractResult.data.employee_id) {
           const emp = (empsResult.data || []).find(e => e.id === contractResult.data.employee_id)
@@ -301,6 +311,7 @@ export function ContractEdit({ user }: { user: User }) {
         status: nextStatus,
         start_date: startDate || null,
         end_date: endDate || null,
+        template_for_position: contract.is_template ? (templateForPosition || null) : contract.template_for_position,
         updated_at: new Date().toISOString(),
       })
       .eq('id', contract.id)
@@ -410,7 +421,8 @@ export function ContractEdit({ user }: { user: User }) {
     setSigning(true)
     setError('')
 
-    const { error: sigError } = await supabase
+    const documentHash = await buildContractDocumentHash(content, contract.current_version)
+    const { data: sigRow, error: sigError } = await supabase
       .from('contract_signatures')
       .insert({
         contract_id: contract.id,
@@ -420,9 +432,19 @@ export function ContractEdit({ user }: { user: User }) {
         signer_title: signerTitle.trim() || null,
         typed_name: signerName.trim(),
         signature_font: signerFont,
+        consent_text: t.contractEmployerSignConsent,
+        document_hash: documentHash,
+        user_agent: getUserAgent(),
+        signer_email: user.email || null,
       })
+      .select()
+      .single()
 
-    if (sigError) { setError(sigError.message); setSigning(false); return }
+    if (sigError || !sigRow) { setError(sigError?.message || 'sign failed'); setSigning(false); return }
+
+    // Best-effort: stamp the signer's public IP server-side.
+    const token = await currentAuthToken()
+    if (token) captureSignatureIp(sigRow.id, { type: 'jwt', token })
 
     const { error: statusError } = await supabase
       .from('contracts')
@@ -459,11 +481,20 @@ export function ContractEdit({ user }: { user: User }) {
           {/* Read-only status pill — replaces the old dropdown. Status now
               advances via the explicit "Activate & sign" action below; the
               dropdown lied because flipping to active didn't actually sign. */}
-          <span className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium"
-            style={{ borderColor: 'var(--color-border)', color: statusColors[status], backgroundColor: 'var(--color-bg-secondary, var(--color-bg))' }}>
-            <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: statusColors[status] }} />
-            {status === 'active' ? t.statusActive : status === 'archived' ? t.statusArchived : t.statusDraft}
-          </span>
+          {contract.is_template ? (
+            <span
+              className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium"
+              style={{ backgroundColor: 'color-mix(in srgb, var(--color-primary) 14%, transparent)', color: 'var(--color-primary)' }}
+            >
+              {t.contractTemplateBadge}
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium"
+              style={{ borderColor: 'var(--color-border)', color: statusColors[status], backgroundColor: 'var(--color-bg-secondary, var(--color-bg))' }}>
+              <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: statusColors[status] }} />
+              {status === 'active' ? t.statusActive : status === 'archived' ? t.statusArchived : t.statusDraft}
+            </span>
+          )}
           {status === 'active' && hasChanges && (
             <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
               {t.editingActiveWillBumpVersion}
@@ -500,29 +531,50 @@ export function ContractEdit({ user }: { user: User }) {
             <input type="text" value={title} onChange={e => setTitle(e.target.value)} className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
           </div>
 
-          <div>
-            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.employeeLabel}</label>
-            <div className="relative">
-              <select
-                value={employeeId || ''}
-                onChange={e => {
-                  const val = e.target.value
-                  setEmployeeId(val || null)
-                  setEmployee(allEmployees.find(emp => emp.id === val) || null)
-                }}
-                className="w-full appearance-none rounded-lg border px-3 py-2 pr-8 text-sm"
-                style={inputStyle}
-              >
-                <option value="">{t.noEmployeeLinked}</option>
-                {allEmployees.map(emp => (
-                  <option key={emp.id} value={emp.id}>{emp.name}{primaryDept(emp) ? ` (${primaryDept(emp)})` : ''}</option>
-                ))}
-              </select>
-              <svg className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-text-tertiary)' }}>
-                <polyline points="6 9 12 15 18 9" />
-              </svg>
+          {contract?.is_template ? (
+            <div>
+              <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.contractTemplateForPositionLabel}</label>
+              <div className="relative">
+                <select
+                  value={templateForPosition}
+                  onChange={e => setTemplateForPosition(e.target.value)}
+                  className="w-full appearance-none rounded-lg border px-3 py-2 pr-8 text-sm"
+                  style={inputStyle}
+                >
+                  <option value="">{t.contractTemplateNoneForPosition}</option>
+                  {jobPositions.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+                <svg className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-text-tertiary)' }}>
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </div>
+              <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.contractTemplateForPositionHelp}</p>
             </div>
-          </div>
+          ) : (
+            <div>
+              <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.employeeLabel}</label>
+              <div className="relative">
+                <select
+                  value={employeeId || ''}
+                  onChange={e => {
+                    const val = e.target.value
+                    setEmployeeId(val || null)
+                    setEmployee(allEmployees.find(emp => emp.id === val) || null)
+                  }}
+                  className="w-full appearance-none rounded-lg border px-3 py-2 pr-8 text-sm"
+                  style={inputStyle}
+                >
+                  <option value="">{t.noEmployeeLinked}</option>
+                  {allEmployees.map(emp => (
+                    <option key={emp.id} value={emp.id}>{emp.name}{primaryDept(emp) ? ` (${primaryDept(emp)})` : ''}</option>
+                  ))}
+                </select>
+                <svg className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-text-tertiary)' }}>
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </div>
+            </div>
+          )}
 
           <div>
             <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.tagsLabel}</label>

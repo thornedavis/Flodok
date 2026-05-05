@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { normalizePhone, isValidE164, formatPhone } from '../../lib/phone'
-import { generateSlug, generateAccessToken } from '../../lib/slug'
+import { generateUniqueSlug, generateAccessToken } from '../../lib/slug'
 import { getAvatarGradient } from '../../lib/avatar'
 import { FilterPanel, FilterSearchInput, MultiSelectDropdown } from '../../components/FilterControls'
 import type { FilterPanelSection } from '../../components/FilterControls'
@@ -16,11 +16,15 @@ import { UpgradeModal } from '../../components/UpgradeModal'
 import { ImportEmployeesModal } from '../../components/ImportEmployeesModal'
 import { buildExportFile } from '../../lib/employeeImport'
 import { useBilling } from '../../contexts/BillingContext'
+import { deriveEmployeeStatus, type DerivedStatus } from '../../lib/employeeStatus'
 import type { Translations } from '../../lib/translations'
 import type { User, Employee, Organization } from '../../types/aliases'
 
 type EmployeesView = 'list' | 'cards'
-type EmployeeStatus = 'active' | 'probation' | 'suspended' | 'terminated' | 'archived'
+// Filter values now mirror the derived status — hiring stages live on the
+// Hiring page (filtered out at the query level) so only these three states
+// are reachable for an employee in the directory.
+type EmployeeStatus = 'active' | 'probation' | 'separated'
 type SortField =
   | 'name' | 'created_at' | 'phone' | 'status'
   | 'employee_code' | 'email' | 'branch_name' | 'job_position' | 'job_level'
@@ -38,7 +42,7 @@ type ColumnKey =
 
 const VIEW_STORAGE_KEY = 'flodok.employees.view'
 const COLUMNS_STORAGE_KEY = 'flodok.employees.columns'
-const STATUS_ORDER: EmployeeStatus[] = ['active', 'probation', 'suspended', 'terminated', 'archived']
+const STATUS_ORDER: EmployeeStatus[] = ['active', 'probation', 'separated']
 // Display order in the row + the order options appear in the Columns picker.
 const COLUMN_ORDER: ColumnKey[] = [
   'employee_code', 'email', 'departments', 'branch_name', 'job_position',
@@ -52,7 +56,7 @@ const COLUMN_ORDER: ColumnKey[] = [
 ]
 const DEFAULT_VISIBLE_COLUMNS: ColumnKey[] = ['departments', 'phone', 'status', 'portal']
 const STATUS_SORT_RANK: Record<EmployeeStatus, number> = {
-  active: 0, probation: 1, suspended: 2, terminated: 3, archived: 4,
+  active: 0, probation: 1, separated: 2,
 }
 
 // ───── List view column registry ─────────────────────────────────────
@@ -112,9 +116,9 @@ const LIST_COLUMN_DEFS: Record<ColumnKey, ListColumn> = {
   employment_type: { key: 'employment_type', label: t => t.empFieldEmploymentType,  width: 'w-32', sortField: 'employment_type', render: ({ emp }) => textCell(emp.employment_type) },
   status: {
     key: 'status', label: t => t.statusLabel, width: 'w-24', sortField: 'status', alignRight: true,
-    render: ({ emp, statusLabels }) => {
-      const s = (emp.status as EmployeeStatus) ?? 'active'
-      return <StatusBadge status={s} label={statusLabels[s] ?? emp.status} />
+    render: ({ emp, t }) => {
+      const derived = deriveEmployeeStatus(emp)
+      return <DerivedStatusBadge status={derived} label={derivedStatusLabel(derived, t)} />
     },
   },
   phone: {
@@ -165,8 +169,8 @@ function compareEmployees(a: Employee, b: Employee, field: SortField): number {
     case 'employment_type': return lc(a.employment_type).localeCompare(lc(b.employment_type))
     case 'join_date':       return (a.join_date ?? '').localeCompare(b.join_date ?? '')
     case 'status': {
-      const ra = STATUS_SORT_RANK[(a.status as EmployeeStatus)] ?? 99
-      const rb = STATUS_SORT_RANK[(b.status as EmployeeStatus)] ?? 99
+      const ra = STATUS_SORT_RANK[deriveEmployeeStatus(a) as EmployeeStatus] ?? 99
+      const rb = STATUS_SORT_RANK[deriveEmployeeStatus(b) as EmployeeStatus] ?? 99
       return (ra - rb) || a.name.localeCompare(b.name)
     }
   }
@@ -226,7 +230,11 @@ export function Employees({ user }: { user: User }) {
 
   async function loadData() {
     const [empResult, orgResult] = await Promise.all([
-      supabase.from('employees').select('*').eq('org_id', user.org_id).order('name'),
+      supabase.from('employees')
+        .select('*')
+        .eq('org_id', user.org_id)
+        .in('lifecycle_stage', ['active', 'separated'])
+        .order('name'),
       supabase.from('organizations').select('*').eq('id', user.org_id).single(),
     ])
     setEmployees(empResult.data || [])
@@ -251,7 +259,7 @@ export function Employees({ user }: { user: User }) {
       return
     }
 
-    const slug = generateSlug(newName)
+    const slug = generateUniqueSlug(newName)
     const token = generateAccessToken()
 
     const { data: newEmp, error } = await supabase
@@ -315,7 +323,7 @@ export function Employees({ user }: { user: User }) {
     }
 
     const placeholderName = t.empNewPlaceholderName
-    const slug = generateSlug(placeholderName)
+    const slug = generateUniqueSlug(placeholderName)
     const token = generateAccessToken()
 
     const { data: emp, error } = await supabase
@@ -363,7 +371,7 @@ export function Employees({ user }: { user: User }) {
   const filtered = employees
     .filter(e => {
       const empDepts = getEmployeeDepts(e)
-      const matchesStatus = statusFilter.size === 0 || statusFilter.has(e.status as EmployeeStatus)
+      const matchesStatus = statusFilter.size === 0 || statusFilter.has(deriveEmployeeStatus(e) as EmployeeStatus)
       const matchesDept = activeDepartments.size === 0 || empDepts.some(d => activeDepartments.has(d))
       const q = searchQuery.trim().toLowerCase()
       const matchesSearch = !q ||
@@ -380,15 +388,13 @@ export function Employees({ user }: { user: User }) {
     })
 
   function getStatusCount(status: EmployeeStatus) {
-    return employees.filter(e => e.status === status).length
+    return employees.filter(e => deriveEmployeeStatus(e) === status).length
   }
 
   const statusLabels: Record<EmployeeStatus, string> = {
-    active: t.employeeStatusActive,
-    probation: t.employeeStatusProbation,
-    suspended: t.employeeStatusSuspended,
-    terminated: t.employeeStatusTerminated,
-    archived: t.employeeStatusArchived,
+    active: t.derivedStatusActive,
+    probation: t.derivedStatusProbation,
+    separated: t.derivedStatusSeparated,
   }
 
   // Frozen-Free orgs (was Pro, sub canceled) only see the first N items.
@@ -1038,23 +1044,37 @@ function ViewToggle({ view, onChange, t }: {
   )
 }
 
-function StatusBadge({ status, label }: { status: EmployeeStatus; label: string }) {
-  const tone: Record<EmployeeStatus, { bg: string; fg: string }> = {
-    active:     { bg: 'color-mix(in srgb, var(--color-success, #16a34a) 14%, transparent)', fg: 'var(--color-success, #16a34a)' },
-    probation:  { bg: 'color-mix(in srgb, var(--color-primary) 12%, transparent)',          fg: 'var(--color-primary)' },
-    suspended:  { bg: 'color-mix(in srgb, var(--color-warning, #d97706) 14%, transparent)', fg: 'var(--color-warning, #d97706)' },
-    terminated: { bg: 'color-mix(in srgb, var(--color-danger, #dc2626) 12%, transparent)',  fg: 'var(--color-danger, #dc2626)' },
-    archived:   { bg: 'var(--color-bg-tertiary)',                                            fg: 'var(--color-text-tertiary)' },
+function DerivedStatusBadge({ status, label }: { status: DerivedStatus; label: string }) {
+  const tone: Record<DerivedStatus, { bg: string; fg: string }> = {
+    prospective: { bg: 'color-mix(in srgb, var(--color-text-tertiary) 14%, transparent)',  fg: 'var(--color-text-secondary)' },
+    offered:     { bg: 'color-mix(in srgb, var(--color-primary) 14%, transparent)',         fg: 'var(--color-primary)' },
+    onboarding:  { bg: 'color-mix(in srgb, var(--color-primary) 14%, transparent)',         fg: 'var(--color-primary)' },
+    probation:   { bg: 'color-mix(in srgb, var(--color-warning, #d97706) 14%, transparent)', fg: 'var(--color-warning, #d97706)' },
+    active:      { bg: 'color-mix(in srgb, var(--color-success, #16a34a) 14%, transparent)', fg: 'var(--color-success, #16a34a)' },
+    separated:   { bg: 'color-mix(in srgb, var(--color-danger, #dc2626) 14%, transparent)',  fg: 'var(--color-danger, #dc2626)' },
+    talent_pool: { bg: 'var(--color-bg-tertiary)',                                            fg: 'var(--color-text-tertiary)' },
   }
-  const t = tone[status] ?? tone.archived
+  const c = tone[status]
   return (
     <span
       className="inline-flex shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium"
-      style={{ backgroundColor: t.bg, color: t.fg }}
+      style={{ backgroundColor: c.bg, color: c.fg }}
     >
       {label}
     </span>
   )
+}
+
+function derivedStatusLabel(status: DerivedStatus, t: Translations): string {
+  switch (status) {
+    case 'prospective': return t.derivedStatusProspective
+    case 'offered': return t.derivedStatusOffered
+    case 'onboarding': return t.derivedStatusOnboarding
+    case 'probation': return t.derivedStatusProbation
+    case 'active': return t.derivedStatusActive
+    case 'separated': return t.derivedStatusSeparated
+    case 'talent_pool': return t.derivedStatusTalentPool
+  }
 }
 
 function EmployeeRow({ emp, t, statusLabels, isLast, visibleColumns, nameColumnPx, selected, onToggleSelected, onDuplicate, onDelete, onEdit }: {

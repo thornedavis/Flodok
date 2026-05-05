@@ -136,6 +136,9 @@ type LeaderboardData = {
 }
 
 import { SIGNATURE_FONTS, ensureSignatureFontsLoaded } from '../../lib/signatureFonts'
+import { buildContractDocumentHash, captureSignatureIp, getUserAgent } from '../../lib/signatureFingerprint'
+import { advanceSignedToActive } from '../../lib/lifecycleAdvance'
+import { CandidateOnboarding } from '../../components/portal/CandidateOnboarding'
 
 ensureSignatureFontsLoaded()
 
@@ -330,7 +333,11 @@ export function Portal() {
         .single()
 
       if (!emp) { setNotFound(true); return }
-      setEmployee(emp)
+      // If the candidate has signed and their start date has arrived, flip
+      // them to 'active' before rendering so the onboarding flow steps
+      // aside and the regular portal takes over.
+      const advanced = await advanceSignedToActive(emp.id, emp.join_date, emp.lifecycle_stage)
+      setEmployee(advanced ? { ...emp, lifecycle_stage: 'active' } : emp)
 
       const [docsResult, unreadResult, recentResult] = await Promise.all([
         (supabase.rpc as unknown as PortalDocumentsRpc)('portal_documents', { emp_slug: slug, emp_token: token }),
@@ -611,6 +618,7 @@ export function Portal() {
     if (!activeContract || !employee) return
     setSigning(true)
 
+    const documentHash = await buildContractDocumentHash(activeContract.content_markdown, activeContract.current_version)
     const { data, error: sigError } = await supabase
       .from('contract_signatures')
       .insert({
@@ -619,12 +627,21 @@ export function Portal() {
         employee_id: employee.id,
         typed_name: employee.name,
         signature_font: selectedFont,
+        signer_role: 'employee',
+        consent_text: s.portalSignConsent,
+        document_hash: documentHash,
+        user_agent: getUserAgent(),
+        signer_email: employee.email || null,
+        signer_phone: employee.phone || null,
       })
       .select()
       .single()
 
     if (sigError) { setError(sigError.message); setSigning(false); return }
     setContractSignatures(prev => ({ ...prev, [activeContract.id]: data }))
+
+    // Best-effort: stamp the signer's public IP server-side.
+    captureSignatureIp(data.id, { type: 'portal', slug: employee.slug, accessToken: employee.access_token })
 
     await supabase.from('feed_events').insert({
       org_id: employee.org_id,
@@ -790,6 +807,32 @@ export function Portal() {
       <div className="flex min-h-screen items-center justify-center" style={{ backgroundColor: 'var(--color-bg)' }}>
         <p style={{ color: 'var(--color-text-secondary)' }}>{s.loading}</p>
       </div>
+    )
+  }
+
+  // ─── Candidate onboarding flow ───
+  // When an employee is still in the hiring funnel (offered or just-signed),
+  // bypass the full portal and walk them through the onboarding typeform:
+  // welcome → review & sign contract → personal details → upload documents.
+  // Once they hit "Done" we set a one-shot dismiss flag in sessionStorage so
+  // they can re-enter the regular portal without being looped back.
+  const onboardingDismissedKey = `flodok.onboarding.dismissed.${employee.id}`
+  const onboardingDismissed = typeof window !== 'undefined' && sessionStorage.getItem(onboardingDismissedKey) === '1'
+  const inHiringFunnel = employee.lifecycle_stage === 'offered' || employee.lifecycle_stage === 'signed'
+  if (inHiringFunnel && !onboardingDismissed) {
+    return (
+      <CandidateOnboarding
+        employee={employee}
+        organization={org}
+        activeContract={activeContract}
+        employerSignature={activeContract ? contractEmployerSignatures[activeContract.id] ?? null : null}
+        employeeSignature={activeContract ? contractSignatures[activeContract.id] ?? null : null}
+        onCompleted={() => {
+          sessionStorage.setItem(onboardingDismissedKey, '1')
+          // Force a re-render by updating any state — easiest: refresh the page.
+          window.location.reload()
+        }}
+      />
     )
   }
 

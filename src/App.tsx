@@ -8,6 +8,8 @@ import { ResetPassword } from './pages/auth/ResetPassword'
 import { Overview } from './pages/dashboard/Overview'
 import { Employees } from './pages/dashboard/Employees'
 import { EmployeeEdit } from './pages/dashboard/EmployeeEdit'
+import { Hiring } from './pages/dashboard/Hiring'
+import { Company } from './pages/dashboard/Company'
 import { SOPs } from './pages/dashboard/SOPs'
 import { SOPEdit } from './pages/dashboard/SOPEdit'
 import { SOPHistory } from './pages/dashboard/SOPHistory'
@@ -104,6 +106,8 @@ function AppRoutes() {
             <Route path="/dashboard" element={<Overview user={user} />} />
             <Route path="/dashboard/employees" element={<Employees user={user} />} />
             <Route path="/dashboard/employees/:id/edit" element={<EmployeeEdit user={user} />} />
+            <Route path="/dashboard/hiring" element={<Hiring user={user} />} />
+            <Route path="/dashboard/company" element={<Company user={user} />} />
 
             <Route path="/dashboard/sops" element={<SOPs user={user} />} />
             <Route path="/dashboard/sops/:id/edit" element={<SOPEdit user={user} />} />

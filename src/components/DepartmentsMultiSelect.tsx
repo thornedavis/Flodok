@@ -42,11 +42,6 @@ export function DepartmentsMultiSelect({ value, onChange, availableDepartments, 
     return d.toLowerCase().includes(trimmedSearch.toLowerCase())
   })
 
-  const canCreateNew =
-    trimmedSearch.length > 0 &&
-    !selectedSet.has(trimmedSearch.toLowerCase()) &&
-    !availableDepartments.some(d => d.toLowerCase() === trimmedSearch.toLowerCase())
-
   function addDepartment(dept: string) {
     const normalized = dept.trim()
     if (!normalized) return
@@ -105,7 +100,8 @@ export function DepartmentsMultiSelect({ value, onChange, availableDepartments, 
             onKeyDown={e => {
               if (e.key === 'Enter' && trimmedSearch) {
                 e.preventDefault()
-                addDepartment(trimmedSearch)
+                const exact = suggestions.find(d => d.toLowerCase() === trimmedSearch.toLowerCase())
+                if (exact) addDepartment(exact)
               }
               if (e.key === 'Backspace' && !search && value.length > 0) {
                 removeDepartment(value[value.length - 1])
@@ -118,7 +114,7 @@ export function DepartmentsMultiSelect({ value, onChange, availableDepartments, 
         )}
       </div>
 
-      {open && !disabled && (suggestions.length > 0 || canCreateNew) && (
+      {open && !disabled && suggestions.length > 0 && (
         <div
           className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-lg border shadow-lg"
           style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-elevated, var(--color-bg))' }}
@@ -146,24 +142,6 @@ export function DepartmentsMultiSelect({ value, onChange, availableDepartments, 
               </button>
             ))}
           </div>
-          {canCreateNew && (
-            <div className="border-t" style={{ borderColor: 'var(--color-border)' }}>
-              <button
-                type="button"
-                onClick={() => addDepartment(trimmedSearch)}
-                className="flex w-full items-center gap-2 px-3 py-2 text-sm transition-colors"
-                style={{ color: 'var(--color-primary)' }}
-                onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
-                onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="12" y1="5" x2="12" y2="19" />
-                  <line x1="5" y1="12" x2="19" y2="12" />
-                </svg>
-                {t.createDepartment} "{trimmedSearch}"
-              </button>
-            </div>
-          )}
         </div>
       )}
     </div>

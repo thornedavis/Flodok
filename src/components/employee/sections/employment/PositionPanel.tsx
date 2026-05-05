@@ -14,6 +14,10 @@ interface PositionPanelProps {
   canWrite: boolean
   writeDisabledTitle?: string
   saveFields: (partial: Partial<Employee>) => Promise<{ error?: string }>
+  branchOptions: string[]
+  jobPositionOptions: string[]
+  jobLevelOptions: string[]
+  employeeClassOptions: string[]
 }
 
 function Label({ children, required = false }: { children: React.ReactNode; required?: boolean }) {
@@ -30,6 +34,10 @@ export function PositionPanel({
   canWrite,
   writeDisabledTitle,
   saveFields,
+  branchOptions,
+  jobPositionOptions,
+  jobLevelOptions,
+  employeeClassOptions,
 }: PositionPanelProps) {
   const { t } = useLang()
   const [editing, setEditing] = useState(false)
@@ -112,11 +120,11 @@ export function PositionPanel({
           </div>
           <div>
             <Label required>{t.empFieldJobPosition}</Label>
-            <input type="text" value={jobPosition} onChange={e => setJobPosition(e.target.value)} className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
+            <ReferenceSelect value={jobPosition} onChange={setJobPosition} options={jobPositionOptions} />
           </div>
           <div>
             <Label required>{t.empFieldJobLevel}</Label>
-            <input type="text" value={jobLevel} onChange={e => setJobLevel(e.target.value)} className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
+            <ReferenceSelect value={jobLevel} onChange={setJobLevel} options={jobLevelOptions} />
           </div>
           <div>
             <Label>{t.empFieldGrade}</Label>
@@ -124,11 +132,11 @@ export function PositionPanel({
           </div>
           <div>
             <Label>{t.empFieldClass}</Label>
-            <input type="text" value={klass} onChange={e => setKlass(e.target.value)} className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
+            <ReferenceSelect value={klass} onChange={setKlass} options={employeeClassOptions} />
           </div>
           <div>
             <Label>{t.empFieldBranchName}</Label>
-            <input type="text" value={branchName} onChange={e => setBranchName(e.target.value)} className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
+            <ReferenceSelect value={branchName} onChange={setBranchName} options={branchOptions} />
           </div>
         </div>
       ) : (
@@ -143,4 +151,27 @@ export function PositionPanel({
       )}
     </SectionPanel>
   )
+}
+
+function ReferenceSelect({ value, onChange, options }: {
+  value: string
+  onChange: (value: string) => void
+  options: string[]
+}) {
+  const { t } = useLang()
+  const allOptions = withCurrentOption(options, value)
+  return (
+    <select value={value} onChange={e => onChange(e.target.value)} className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle}>
+      <option value="">{t.empOptionUnset}</option>
+      {allOptions.map(option => <option key={option} value={option}>{option}</option>)}
+    </select>
+  )
+}
+
+function withCurrentOption(options: string[], value: string) {
+  const clean = value.trim()
+  if (!clean) return options
+  return options.some(option => option.toLowerCase() === clean.toLowerCase())
+    ? options
+    : [clean, ...options]
 }

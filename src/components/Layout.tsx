@@ -14,7 +14,7 @@ import { DunningBanner } from './DunningBanner'
 import { NotificationBell } from './NotificationBell'
 import { FilterSearchInput } from './FilterControls'
 
-type NavKey = 'navOverview' | 'navInbox' | 'navEmployees' | 'navSops' | 'navContracts' | 'navPerformance' | 'navSpotlight' | 'navPending' | 'navSettings'
+type NavKey = 'navOverview' | 'navInbox' | 'navEmployees' | 'navHiring' | 'navCompany' | 'navSops' | 'navContracts' | 'navPerformance' | 'navSpotlight' | 'navPending' | 'navSettings'
 
 interface NavItemDef {
   path: string
@@ -39,6 +39,16 @@ const navItems: NavItemDef[] = [
     path: '/dashboard/employees',
     labelKey: 'navEmployees',
     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>,
+  },
+  {
+    path: '/dashboard/hiring',
+    labelKey: 'navHiring',
+    icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="8" r="4" /><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" /><line x1="19" y1="8" x2="19" y2="14" /><line x1="16" y1="11" x2="22" y2="11" /></svg>,
+  },
+  {
+    path: '/dashboard/company',
+    labelKey: 'navCompany',
+    icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 21h18" /><path d="M5 21V7l8-4v18" /><path d="M19 21V11l-6-4" /><path d="M9 9h1" /><path d="M9 13h1" /><path d="M9 17h1" /><path d="M15 13h1" /><path d="M15 17h1" /></svg>,
   },
   {
     path: '/dashboard/sops',
@@ -356,6 +366,7 @@ function deriveBreadcrumbs(pathname: string, orgName: string, t: Translations, t
 
   const sectionMap: Record<string, { label: string; href: string }> = {
     employees: { label: t.navEmployees, href: '/dashboard/employees' },
+    company: { label: t.navCompany, href: '/dashboard/company' },
     sops: { label: t.navSops, href: '/dashboard/sops' },
     contracts: { label: t.navContracts, href: '/dashboard/contracts' },
     performance: { label: t.navPerformance, href: '/dashboard/performance' },

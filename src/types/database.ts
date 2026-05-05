@@ -236,39 +236,57 @@ export type Database = {
       }
       contract_signatures: {
         Row: {
+          consent_text: string | null
           contract_id: string
+          document_hash: string | null
           employee_id: string | null
           id: string
+          ip_address: string | null
           signature_font: string | null
           signed_at: string
+          signer_email: string | null
+          signer_phone: string | null
           signer_role: string
           signer_title: string | null
           signer_user_id: string | null
           typed_name: string
+          user_agent: string | null
           version_number: number
         }
         Insert: {
+          consent_text?: string | null
           contract_id: string
+          document_hash?: string | null
           employee_id?: string | null
           id?: string
+          ip_address?: string | null
           signature_font?: string | null
           signed_at?: string
+          signer_email?: string | null
+          signer_phone?: string | null
           signer_role?: string
           signer_title?: string | null
           signer_user_id?: string | null
           typed_name: string
+          user_agent?: string | null
           version_number: number
         }
         Update: {
+          consent_text?: string | null
           contract_id?: string
+          document_hash?: string | null
           employee_id?: string | null
           id?: string
+          ip_address?: string | null
           signature_font?: string | null
           signed_at?: string
+          signer_email?: string | null
+          signer_phone?: string | null
           signer_role?: string
           signer_title?: string | null
           signer_user_id?: string | null
           typed_name?: string
+          user_agent?: string | null
           version_number?: number
         }
         Relationships: [
@@ -413,9 +431,11 @@ export type Database = {
           end_date: string | null
           hours_per_day: number | null
           id: string
+          is_template: boolean
           org_id: string
           start_date: string | null
           status: string
+          template_for_position: string | null
           title: string
           updated_at: string
         }
@@ -431,9 +451,11 @@ export type Database = {
           end_date?: string | null
           hours_per_day?: number | null
           id?: string
+          is_template?: boolean
           org_id: string
           start_date?: string | null
           status?: string
+          template_for_position?: string | null
           title: string
           updated_at?: string
         }
@@ -449,9 +471,11 @@ export type Database = {
           end_date?: string | null
           hours_per_day?: number | null
           id?: string
+          is_template?: boolean
           org_id?: string
           start_date?: string | null
           status?: string
+          template_for_position?: string | null
           title?: string
           updated_at?: string
         }
@@ -533,10 +557,120 @@ export type Database = {
           },
         ]
       }
+      company_reference_values: {
+        Row: {
+          created_at: string
+          display_order: number
+          id: string
+          kind: string
+          name: string
+          org_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          display_order?: number
+          id?: string
+          kind: string
+          name: string
+          org_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          display_order?: number
+          id?: string
+          kind?: string
+          name?: string
+          org_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_reference_values_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      company_branches: {
+        Row: {
+          address_city: string | null
+          address_country: string
+          address_postal_code: string | null
+          address_province: string | null
+          address_street: string | null
+          code: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          is_headquarters: boolean
+          name: string
+          org_id: string
+          parent_branch_id: string | null
+          phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          address_city?: string | null
+          address_country?: string
+          address_postal_code?: string | null
+          address_province?: string | null
+          address_street?: string | null
+          code?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_headquarters?: boolean
+          name: string
+          org_id: string
+          parent_branch_id?: string | null
+          phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          address_city?: string | null
+          address_country?: string
+          address_postal_code?: string | null
+          address_province?: string | null
+          address_street?: string | null
+          code?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_headquarters?: boolean
+          name?: string
+          org_id?: string
+          parent_branch_id?: string | null
+          phone?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_branches_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "company_branches_parent_branch_id_fkey"
+            columns: ["parent_branch_id"]
+            isOneToOne: false
+            referencedRelation: "company_branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employees: {
         Row: {
           access_token: string
           address: string | null
+          bank_account_holder: string | null
+          bank_account_number: string | null
+          bank_name: string | null
           blood_type: string | null
           branch_name: string | null
           citizen_id_address: string | null
@@ -560,9 +694,11 @@ export type Database = {
           ktp_photo_url: string | null
           last_name: string | null
           last_notifications_seen_at: string | null
+          lifecycle_stage: string
           marital_status: string | null
           name: string
           notes: string | null
+          npwp: string | null
           org_id: string
           passport_expiry: string | null
           passport_number: string | null
@@ -573,12 +709,17 @@ export type Database = {
           probation_end_date: string | null
           religion: string | null
           resign_date: string | null
+          separation_reason: string | null
+          separation_type: string | null
           slug: string
           status: string
         }
         Insert: {
           access_token: string
           address?: string | null
+          bank_account_holder?: string | null
+          bank_account_number?: string | null
+          bank_name?: string | null
           blood_type?: string | null
           branch_name?: string | null
           citizen_id_address?: string | null
@@ -602,9 +743,11 @@ export type Database = {
           ktp_photo_url?: string | null
           last_name?: string | null
           last_notifications_seen_at?: string | null
+          lifecycle_stage?: string
           marital_status?: string | null
           name: string
           notes?: string | null
+          npwp?: string | null
           org_id: string
           passport_expiry?: string | null
           passport_number?: string | null
@@ -615,12 +758,17 @@ export type Database = {
           probation_end_date?: string | null
           religion?: string | null
           resign_date?: string | null
+          separation_reason?: string | null
+          separation_type?: string | null
           slug: string
           status?: string
         }
         Update: {
           access_token?: string
           address?: string | null
+          bank_account_holder?: string | null
+          bank_account_number?: string | null
+          bank_name?: string | null
           blood_type?: string | null
           branch_name?: string | null
           citizen_id_address?: string | null
@@ -644,9 +792,11 @@ export type Database = {
           ktp_photo_url?: string | null
           last_name?: string | null
           last_notifications_seen_at?: string | null
+          lifecycle_stage?: string
           marital_status?: string | null
           name?: string
           notes?: string | null
+          npwp?: string | null
           org_id?: string
           passport_expiry?: string | null
           passport_number?: string | null
@@ -657,6 +807,8 @@ export type Database = {
           probation_end_date?: string | null
           religion?: string | null
           resign_date?: string | null
+          separation_reason?: string | null
+          separation_type?: string | null
           slug?: string
           status?: string
         }
@@ -1370,6 +1522,11 @@ export type Database = {
           badges_enabled: boolean
           bonuses_enabled: boolean
           cancel_at_period_end: boolean
+          bpjs_ketenagakerjaan_number: string | null
+          business_license_number: string | null
+          company_email: string | null
+          company_registration_number: string | null
+          company_size_range: string | null
           created_at: string
           credits_divisor: number
           credits_enabled: boolean
@@ -1377,10 +1534,16 @@ export type Database = {
           default_country_code: string
           display_name: string | null
           id: string
+          industry: string | null
+          jkk_rate: string | null
+          klu_code: string | null
           logo_url: string | null
           max_bonus_idr: number | null
           max_credit_per_award: number | null
           name: string
+          nitku: string | null
+          npwp_15: string | null
+          npwp_16: string | null
           past_due_since: string | null
           pay_day_of_month: number
           phone: string | null
@@ -1390,7 +1553,12 @@ export type Database = {
           stripe_subscription_id: string | null
           subscription_quantity: number | null
           subscription_status: string | null
+          taxable_date: string | null
+          tax_person_name: string | null
+          tax_person_npwp_15: string | null
+          tax_person_npwp_16: string | null
           timezone: string
+          website_url: string | null
         }
         Insert: {
           address_city?: string | null
@@ -1401,6 +1569,11 @@ export type Database = {
           badges_enabled?: boolean
           bonuses_enabled?: boolean
           cancel_at_period_end?: boolean
+          bpjs_ketenagakerjaan_number?: string | null
+          business_license_number?: string | null
+          company_email?: string | null
+          company_registration_number?: string | null
+          company_size_range?: string | null
           created_at?: string
           credits_divisor?: number
           credits_enabled?: boolean
@@ -1408,10 +1581,16 @@ export type Database = {
           default_country_code?: string
           display_name?: string | null
           id?: string
+          industry?: string | null
+          jkk_rate?: string | null
+          klu_code?: string | null
           logo_url?: string | null
           max_bonus_idr?: number | null
           max_credit_per_award?: number | null
           name: string
+          nitku?: string | null
+          npwp_15?: string | null
+          npwp_16?: string | null
           past_due_since?: string | null
           pay_day_of_month?: number
           phone?: string | null
@@ -1421,7 +1600,12 @@ export type Database = {
           stripe_subscription_id?: string | null
           subscription_quantity?: number | null
           subscription_status?: string | null
+          taxable_date?: string | null
+          tax_person_name?: string | null
+          tax_person_npwp_15?: string | null
+          tax_person_npwp_16?: string | null
           timezone?: string
+          website_url?: string | null
         }
         Update: {
           address_city?: string | null
@@ -1432,6 +1616,11 @@ export type Database = {
           badges_enabled?: boolean
           bonuses_enabled?: boolean
           cancel_at_period_end?: boolean
+          bpjs_ketenagakerjaan_number?: string | null
+          business_license_number?: string | null
+          company_email?: string | null
+          company_registration_number?: string | null
+          company_size_range?: string | null
           created_at?: string
           credits_divisor?: number
           credits_enabled?: boolean
@@ -1439,10 +1628,16 @@ export type Database = {
           default_country_code?: string
           display_name?: string | null
           id?: string
+          industry?: string | null
+          jkk_rate?: string | null
+          klu_code?: string | null
           logo_url?: string | null
           max_bonus_idr?: number | null
           max_credit_per_award?: number | null
           name?: string
+          nitku?: string | null
+          npwp_15?: string | null
+          npwp_16?: string | null
           past_due_since?: string | null
           pay_day_of_month?: number
           phone?: string | null
@@ -1452,7 +1647,12 @@ export type Database = {
           stripe_subscription_id?: string | null
           subscription_quantity?: number | null
           subscription_status?: string | null
+          taxable_date?: string | null
+          tax_person_name?: string | null
+          tax_person_npwp_15?: string | null
+          tax_person_npwp_16?: string | null
           timezone?: string
+          website_url?: string | null
         }
         Relationships: []
       }

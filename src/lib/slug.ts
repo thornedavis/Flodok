@@ -12,6 +12,20 @@ export function generateSlug(name: string): string {
 }
 
 /**
+ * Generate a slug with a random suffix to satisfy the global
+ * unique constraint on employees.slug.
+ */
+export function generateUniqueSlug(name: string): string {
+  const base = generateSlug(name) || 'employee'
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
+  const array = new Uint8Array(4)
+  crypto.getRandomValues(array)
+  let suffix = ''
+  for (const byte of array) suffix += chars[byte % chars.length]
+  return `${base}-${suffix}`
+}
+
+/**
  * Generate a random access token (6 alphanumeric chars).
  */
 export function generateAccessToken(): string {

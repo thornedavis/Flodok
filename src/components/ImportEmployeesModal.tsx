@@ -4,7 +4,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { generateSlug, generateAccessToken } from '../lib/slug'
+import { generateUniqueSlug, generateAccessToken } from '../lib/slug'
 import { isPro, syncSeats } from '../lib/billing'
 import { PRO_MIN_SEATS } from '../lib/pricing'
 import {
@@ -466,7 +466,7 @@ export function ImportEmployeesModal({
 // ───── Helpers ─────────────────────────────────────────────────────────
 
 function buildInsertPayload(row: EmployeeImportInput, orgId: string) {
-  const slug = generateSlug(row.name) || 'employee'
+  const slug = generateUniqueSlug(row.name)
   const access_token = generateAccessToken()
   return {
     org_id: orgId,

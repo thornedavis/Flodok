@@ -10,6 +10,8 @@ import type { Database } from './database'
 export type Organization = Database['public']['Tables']['organizations']['Row']
 export type User = Database['public']['Tables']['users']['Row']
 export type Employee = Database['public']['Tables']['employees']['Row']
+export type CompanyReferenceValue = Database['public']['Tables']['company_reference_values']['Row']
+export type CompanyBranch = Database['public']['Tables']['company_branches']['Row']
 export type SopCategory = Database['public']['Tables']['sop_categories']['Row']
 export type Sop = Database['public']['Tables']['sops']['Row']
 export type SopVersion = Database['public']['Tables']['sop_versions']['Row']

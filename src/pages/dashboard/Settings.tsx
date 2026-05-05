@@ -9,7 +9,6 @@ import { BadgePicker } from '../../components/BadgePicker'
 import { formatIdrDigits } from '../../lib/credits'
 import { AvatarUpload } from '../../components/AvatarUpload'
 import { PhoneInput } from '../../components/PhoneInput'
-import { AddressFields, type AddressValue } from '../../components/AddressFields'
 import { isValidE164 } from '../../lib/phone'
 import type { Translations } from '../../lib/translations'
 import type { User, Organization, OrgInvitation } from '../../types/aliases'
@@ -32,42 +31,12 @@ import { useBilling } from '../../contexts/BillingContext'
 
 ensureSignatureFontsLoaded()
 
-type Tab = 'account' | 'organization' | 'team' | 'integrations' | 'credits' | 'bonuses' | 'achievements' | 'billing'
+type Tab = 'account' | 'team' | 'integrations' | 'credits' | 'bonuses' | 'achievements' | 'billing'
 
 const inputStyle: React.CSSProperties = {
   borderColor: 'var(--color-border)',
   backgroundColor: 'var(--color-bg)',
   color: 'var(--color-text)',
-}
-
-function ordinal(n: number): string {
-  const s = ['th', 'st', 'nd', 'rd']
-  const v = n % 100
-  return n + (s[(v - 20) % 10] || s[v] || s[0])
-}
-
-function todayInWIB(): Date {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Jakarta',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(new Date())
-  const y = Number(parts.find(p => p.type === 'year')!.value)
-  const m = Number(parts.find(p => p.type === 'month')!.value)
-  const d = Number(parts.find(p => p.type === 'day')!.value)
-  return new Date(y, m - 1, d)
-}
-
-function nextCloseDate(payDay: number, today: Date): Date {
-  if (payDay === 0) {
-    const lastOfCurrent = new Date(today.getFullYear(), today.getMonth() + 1, 0)
-    if (lastOfCurrent < today) return new Date(today.getFullYear(), today.getMonth() + 2, 0)
-    return lastOfCurrent
-  }
-  const thisMonth = new Date(today.getFullYear(), today.getMonth(), payDay)
-  if (thisMonth >= today) return thisMonth
-  return new Date(today.getFullYear(), today.getMonth() + 1, payDay)
 }
 
 export function Settings({ user }: { user: User }) {
@@ -77,7 +46,7 @@ export function Settings({ user }: { user: User }) {
   const rawTab = params.get('tab')
 
   let tab: Tab = 'account'
-  if (rawTab === 'organization' || rawTab === 'team' || rawTab === 'billing') tab = rawTab
+  if (rawTab === 'team' || rawTab === 'billing') tab = rawTab
   else if (rawTab === 'integrations' && isAdmin) tab = 'integrations'
   else if (rawTab === 'achievements' && isAdmin) tab = 'achievements'
   else if (rawTab === 'credits' && isAdmin) tab = 'credits'
@@ -93,7 +62,6 @@ export function Settings({ user }: { user: User }) {
 
       <div className="mb-6 flex gap-1 border-b" style={{ borderColor: 'var(--color-border)' }}>
         <TabButton active={tab === 'account'} onClick={() => setTab('account')}>{t.settingsAccountTab}</TabButton>
-        <TabButton active={tab === 'organization'} onClick={() => setTab('organization')}>{t.settingsOrganizationTab}</TabButton>
         <TabButton active={tab === 'team'} onClick={() => setTab('team')}>{t.settingsTeamTab}</TabButton>
         {isAdmin && (
           <TabButton active={tab === 'integrations'} onClick={() => setTab('integrations')}>{t.settingsIntegrationsTab}</TabButton>
@@ -111,7 +79,6 @@ export function Settings({ user }: { user: User }) {
       </div>
 
       {tab === 'account' && <AccountTab user={user} t={t} />}
-      {tab === 'organization' && <OrganizationTab user={user} t={t} />}
       {tab === 'team' && <TeamMembersSection user={user} t={t} />}
       {tab === 'integrations' && isAdmin && <IntegrationsTab user={user} t={t} />}
       {tab === 'credits' && isAdmin && <CreditsTab user={user} t={t} />}
@@ -399,270 +366,6 @@ function PasswordResetRow({ email, t }: { email: string; t: Translations }) {
 }
 
 // ─── Organization tab ───────────────────────────────────
-
-const EMPTY_ADDRESS: AddressValue = { street: '', city: '', province: '', postal_code: '', country: 'ID' }
-
-function OrganizationTab({ user, t }: { user: User; t: Translations }) {
-  const { lang } = useLang()
-  const { isAdmin } = useRole(user)
-  const { canWrite: billingCanWrite } = useBilling()
-  const [org, setOrg] = useState<Organization | null>(null)
-  const [orgName, setOrgName] = useState('')
-  const [orgPhone, setOrgPhone] = useState('')
-  const [logoUrl, setLogoUrl] = useState<string | null>(null)
-  const [address, setAddress] = useState<AddressValue>(EMPTY_ADDRESS)
-  const [payDayOfMonth, setPayDayOfMonth] = useState<string>('1')
-  const [timezone, setTimezone] = useState<string>('Asia/Jakarta')
-  const [displayName, setDisplayName] = useState<string>('')
-  const [saving, setSaving] = useState(false)
-
-  useEffect(() => { loadData() }, [user.org_id])
-
-  async function loadData() {
-    const { data } = await supabase.from('organizations').select('*').eq('id', user.org_id).single()
-    if (data) {
-      setOrg(data)
-      setOrgName(data.name)
-      setOrgPhone(data.phone || '')
-      setLogoUrl(data.logo_url)
-      setAddress({
-        street: data.address_street || '',
-        city: data.address_city || '',
-        province: data.address_province || '',
-        postal_code: data.address_postal_code || '',
-        country: data.address_country || 'ID',
-      })
-      setPayDayOfMonth(String(data.pay_day_of_month ?? 1))
-      setTimezone(data.timezone || 'Asia/Jakarta')
-      setDisplayName(data.display_name || '')
-    }
-  }
-
-  async function handleLogoChange(url: string | null) {
-    const previous = logoUrl
-    setLogoUrl(url)
-    const { data, error: updateError } = await supabase
-      .from('organizations')
-      .update({ logo_url: url })
-      .eq('id', user.org_id)
-      .select()
-      .single()
-    if (updateError || !data) {
-      console.error('Failed to save logo_url', updateError)
-      alert(updateError?.message || 'Could not save organization logo — please try again.')
-      setLogoUrl(previous)
-      return
-    }
-    setOrg(data)
-  }
-
-  const phoneValid = !orgPhone || isValidE164(orgPhone)
-  const addressDirty = !!org && (
-    address.street !== (org.address_street || '') ||
-    address.city !== (org.address_city || '') ||
-    address.province !== (org.address_province || '') ||
-    address.postal_code !== (org.address_postal_code || '') ||
-    address.country !== (org.address_country || 'ID')
-  )
-  const parsedPayDay = Number(payDayOfMonth)
-  const payDayValid = Number.isFinite(parsedPayDay) && Number.isInteger(parsedPayDay) && parsedPayDay >= 0 && parsedPayDay <= 28
-  const payDayDirty = !!org && payDayValid && parsedPayDay !== org.pay_day_of_month
-  const timezoneDirty = !!org && timezone !== (org.timezone || 'Asia/Jakarta')
-  const displayNameDirty = !!org && (displayName.trim() || null) !== (org.display_name || null)
-  const dirty = !!org && (
-    orgName.trim() !== org.name ||
-    displayNameDirty ||
-    (orgPhone || null) !== (org.phone || null) ||
-    addressDirty ||
-    payDayDirty ||
-    timezoneDirty
-  ) && orgName.trim().length > 0 && phoneValid && payDayValid
-
-  async function handleSaveOrg(e: React.FormEvent) {
-    e.preventDefault()
-    if (!dirty) return
-    setSaving(true)
-    const { data } = await supabase.from('organizations').update({
-      name: orgName.trim(),
-      phone: orgPhone || null,
-      address_street: address.street.trim() || null,
-      address_city: address.city.trim() || null,
-      address_province: address.province.trim() || null,
-      address_postal_code: address.postal_code.trim() || null,
-      address_country: address.country,
-      pay_day_of_month: parsedPayDay,
-      timezone,
-      display_name: displayName.trim() || null,
-    }).eq('id', user.org_id).select().single()
-    if (data) setOrg(data)
-    setSaving(false)
-  }
-
-  function handleCancelOrg() {
-    if (!org) return
-    setOrgName(org.name)
-    setOrgPhone(org.phone || '')
-    setAddress({
-      street: org.address_street || '',
-      city: org.address_city || '',
-      province: org.address_province || '',
-      postal_code: org.address_postal_code || '',
-      country: org.address_country || 'ID',
-    })
-    setPayDayOfMonth(String(org.pay_day_of_month ?? 1))
-    setTimezone(org.timezone || 'Asia/Jakarta')
-    setDisplayName(org.display_name || '')
-  }
-
-  if (!org) return <div style={{ color: 'var(--color-text-secondary)' }}>{t.loading}</div>
-
-  return (
-    <div className="space-y-10">
-      {/* Org details */}
-      <section className="space-y-5">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>{t.organizationSection}</h2>
-          {isAdmin && (
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleCancelOrg}
-                disabled={saving || !dirty}
-                className="rounded-lg border px-4 py-2 text-sm disabled:opacity-50"
-                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
-              >
-                {t.cancel}
-              </button>
-              <button
-                type="submit"
-                form="org-edit-form"
-                disabled={saving || !billingCanWrite || !dirty}
-                title={!billingCanWrite ? t.dunningWriteBlocked : undefined}
-                className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
-                style={{ backgroundColor: 'var(--color-primary)' }}
-              >
-                {saving ? t.saving : t.save}
-              </button>
-            </div>
-          )}
-        </div>
-        {!isAdmin && (
-          <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.adminOnlyHint}</p>
-        )}
-        <form id="org-edit-form" onSubmit={handleSaveOrg} className="space-y-5">
-          <div>
-            <label className="mb-2 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.organizationLogoLabel}</label>
-            <AvatarUpload
-              id={user.org_id}
-              storagePrefix="org"
-              photoUrl={logoUrl}
-              label={orgName || org?.name || ''}
-              disabled={!isAdmin}
-              onChange={handleLogoChange}
-            />
-          </div>
-
-          <div className="grid gap-5 md:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.organizationLegalName}</label>
-              <input
-                type="text"
-                value={orgName}
-                onChange={e => setOrgName(e.target.value)}
-                required
-                readOnly={!isAdmin}
-                className="w-full rounded-lg border px-3 py-2 text-sm"
-                style={isAdmin ? inputStyle : { ...inputStyle, backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}
-              />
-              <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.organizationLegalNameHelp}</p>
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.organizationDisplayName}</label>
-              <input
-                type="text"
-                value={displayName}
-                onChange={e => setDisplayName(e.target.value)}
-                placeholder={orgName}
-                readOnly={!isAdmin}
-                className="w-full rounded-lg border px-3 py-2 text-sm"
-                style={isAdmin ? inputStyle : { ...inputStyle, backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}
-              />
-              <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.organizationDisplayNameHelp}</p>
-            </div>
-          </div>
-
-          <div>
-            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.organizationPhoneLabel}</label>
-            {isAdmin ? (
-              <PhoneInput value={orgPhone} onChange={setOrgPhone} defaultCountryCode={org?.default_country_code} />
-            ) : (
-              <input
-                type="text"
-                value={orgPhone}
-                readOnly
-                className="w-full rounded-lg border px-3 py-2 text-sm"
-                style={{ ...inputStyle, backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}
-              />
-            )}
-          </div>
-
-          <div>
-            <label className="mb-2 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.organizationAddressLabel}</label>
-            <AddressFields value={address} onChange={setAddress} disabled={!isAdmin} />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.payDayLabel}</label>
-            <select
-              value={payDayOfMonth}
-              onChange={e => setPayDayOfMonth(e.target.value)}
-              disabled={!isAdmin}
-              className="w-full rounded-lg border px-3 py-2 text-sm md:w-48"
-              style={isAdmin ? inputStyle : { ...inputStyle, backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}
-            >
-              {Array.from({ length: 28 }, (_, i) => i + 1).map(day => (
-                <option key={day} value={String(day)}>
-                  {lang === 'id' ? `Tanggal ${day}` : ordinal(day)}
-                </option>
-              ))}
-              <option value="0">{t.payDayOptionLast}</option>
-            </select>
-            <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.payDayHelp}</p>
-            {payDayValid && (
-              <p className="mt-1 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-                {t.payDayPreview.replace(
-                  '{date}',
-                  new Intl.DateTimeFormat(lang === 'id' ? 'id-ID' : 'en-US', {
-                    day: 'numeric',
-                    month: 'long',
-                    year: 'numeric',
-                  }).format(nextCloseDate(parsedPayDay, todayInWIB())),
-                )}
-              </p>
-            )}
-          </div>
-
-          <div>
-            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.timezoneLabel}</label>
-            <select
-              value={timezone}
-              onChange={e => setTimezone(e.target.value)}
-              disabled={!isAdmin}
-              className="w-full rounded-lg border px-3 py-2 text-sm md:w-96"
-              style={isAdmin ? inputStyle : { ...inputStyle, backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}
-            >
-              <option value="Asia/Jakarta">{t.timezoneWib}</option>
-              <option value="Asia/Makassar">{t.timezoneWita}</option>
-              <option value="Asia/Jayapura">{t.timezoneWit}</option>
-            </select>
-            <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.timezoneHelp}</p>
-          </div>
-
-        </form>
-      </section>
-    </div>
-  )
-}
 
 // ─── Team members + invites ─────────────────────────────
 

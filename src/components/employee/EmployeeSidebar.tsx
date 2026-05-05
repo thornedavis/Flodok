@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useLang } from '../../contexts/LanguageContext'
 import { getAvatarGradient } from '../../lib/avatar'
+import type { DerivedStatus } from '../../lib/employeeStatus'
+import type { Translations } from '../../lib/translations'
 
 export type EmployeeSectionKey =
   | 'personal'
@@ -11,46 +13,72 @@ export type EmployeeSectionKey =
   | 'compensation'
   | 'achievements'
 
-export type EmployeeStatus = 'probation' | 'active' | 'suspended' | 'terminated'
-
 interface EmployeeSidebarProps {
   employeeId: string
   name: string
   photoUrl: string | null
-  status: EmployeeStatus
+  status: DerivedStatus
   portalUrl?: string
   uploading: boolean
   onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void
   onRemove: () => void
   active: EmployeeSectionKey
   onSelect: (key: EmployeeSectionKey) => void
-  onStatusChange: (status: EmployeeStatus) => void
+  onResign: () => void
+  onTerminate: () => void
   onDelete: () => void
   canWrite: boolean
   writeDisabledTitle?: string
 }
 
-const statusColors: Record<EmployeeStatus, { dot: string; bg: string; text: string }> = {
+const statusColors: Record<DerivedStatus, { dot: string; bg: string; text: string }> = {
+  prospective: {
+    dot: 'var(--color-text-tertiary)',
+    bg: 'color-mix(in srgb, var(--color-text-tertiary) 14%, transparent)',
+    text: 'var(--color-text-secondary)',
+  },
+  offered: {
+    dot: 'var(--color-primary)',
+    bg: 'color-mix(in srgb, var(--color-primary) 14%, transparent)',
+    text: 'var(--color-primary)',
+  },
+  onboarding: {
+    dot: 'var(--color-primary)',
+    bg: 'color-mix(in srgb, var(--color-primary) 14%, transparent)',
+    text: 'var(--color-primary)',
+  },
   probation: {
     dot: 'var(--color-warning)',
-    bg: 'color-mix(in srgb, var(--color-warning) 12%, transparent)',
+    bg: 'color-mix(in srgb, var(--color-warning) 14%, transparent)',
     text: 'var(--color-warning)',
   },
   active: {
     dot: 'var(--color-success)',
-    bg: 'color-mix(in srgb, var(--color-success) 12%, transparent)',
+    bg: 'color-mix(in srgb, var(--color-success) 14%, transparent)',
     text: 'var(--color-success)',
   },
-  suspended: {
-    dot: 'var(--color-text-tertiary)',
-    bg: 'var(--color-bg-tertiary)',
-    text: 'var(--color-text-tertiary)',
-  },
-  terminated: {
+  separated: {
     dot: 'var(--color-danger)',
-    bg: 'color-mix(in srgb, var(--color-danger) 12%, transparent)',
+    bg: 'color-mix(in srgb, var(--color-danger) 14%, transparent)',
     text: 'var(--color-danger)',
   },
+  talent_pool: {
+    dot: 'var(--color-text-tertiary)',
+    bg: 'color-mix(in srgb, var(--color-text-tertiary) 10%, transparent)',
+    text: 'var(--color-text-tertiary)',
+  },
+}
+
+function statusLabel(s: DerivedStatus, t: Translations): string {
+  switch (s) {
+    case 'prospective': return t.derivedStatusProspective
+    case 'offered': return t.derivedStatusOffered
+    case 'onboarding': return t.derivedStatusOnboarding
+    case 'probation': return t.derivedStatusProbation
+    case 'active': return t.derivedStatusActive
+    case 'separated': return t.derivedStatusSeparated
+    case 'talent_pool': return t.derivedStatusTalentPool
+  }
 }
 
 function CameraIcon() {
@@ -73,7 +101,8 @@ export function EmployeeSidebar({
   onRemove,
   active,
   onSelect,
-  onStatusChange,
+  onResign,
+  onTerminate,
   onDelete,
   canWrite,
   writeDisabledTitle,
@@ -97,13 +126,9 @@ export function EmployeeSidebar({
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const statusLabel: Record<EmployeeStatus, string> = {
-    probation: t.employeeStatusProbation,
-    active: t.employeeStatusActive,
-    suspended: t.employeeStatusSuspended,
-    terminated: t.employeeStatusTerminated,
-  }
   const colors = statusColors[status]
+  const isSeparated = status === 'separated'
+  const canSeparate = canWrite && !isSeparated && status !== 'prospective' && status !== 'offered' && status !== 'talent_pool'
 
   const groups: { label: string; items: { key: EmployeeSectionKey; label: string }[] }[] = [
     {
@@ -168,34 +193,14 @@ export function EmployeeSidebar({
           )}
         </div>
 
-        <div
-          className="relative mt-3 flex w-full items-center"
-          title={!canWrite ? writeDisabledTitle : t.employeeStatusHelp}
-        >
+        <div className="mt-3 flex w-full justify-center" title={t.derivedStatusHelp}>
           <span
-            className="pointer-events-none absolute left-3 inline-block h-1.5 w-1.5 rounded-full"
-            style={{ backgroundColor: colors.dot }}
-          />
-          <select
-            value={status}
-            onChange={e => onStatusChange(e.target.value as EmployeeStatus)}
-            disabled={!canWrite}
-            aria-label={t.employeeStatusLabel}
-            className="w-full appearance-none rounded-lg py-1.5 pl-6 pr-7 text-center text-xs font-medium disabled:cursor-not-allowed disabled:opacity-60"
-            style={{ backgroundColor: colors.bg, color: colors.text, border: 'none' }}
+            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium"
+            style={{ backgroundColor: colors.bg, color: colors.text }}
           >
-            <option value="probation">{statusLabel.probation}</option>
-            <option value="active">{statusLabel.active}</option>
-            <option value="suspended">{statusLabel.suspended}</option>
-            <option value="terminated">{statusLabel.terminated}</option>
-          </select>
-          <svg
-            className="pointer-events-none absolute right-2.5"
-            width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-            style={{ color: colors.text }}
-          >
-            <polyline points="6 9 12 15 18 9" />
-          </svg>
+            <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: colors.dot }} />
+            {statusLabel(status, t)}
+          </span>
         </div>
 
         {portalUrl && (
@@ -273,9 +278,29 @@ export function EmployeeSidebar({
         </nav>
 
         <div
-          className="mt-6 border-t pt-4"
+          className="mt-6 space-y-1 border-t pt-4"
           style={{ borderColor: 'var(--color-border)' }}
         >
+          {canSeparate && (
+            <>
+              <button
+                type="button"
+                onClick={onResign}
+                className="block w-full rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors hover:bg-[var(--color-bg-tertiary)]"
+                style={{ color: 'var(--color-text-secondary)' }}
+              >
+                {t.empSidebarResign}
+              </button>
+              <button
+                type="button"
+                onClick={onTerminate}
+                className="block w-full rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors hover:bg-[color-mix(in_srgb,var(--color-warning)_8%,transparent)]"
+                style={{ color: 'var(--color-warning)' }}
+              >
+                {t.empSidebarTerminate}
+              </button>
+            </>
+          )}
           <button
             type="button"
             onClick={onDelete}
