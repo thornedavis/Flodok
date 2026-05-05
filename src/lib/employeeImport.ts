@@ -170,9 +170,11 @@ export async function buildImportTemplate(opts: {
   wb.creator = 'Flodok'
   wb.created = new Date()
 
-  // ── Reference sheet (hidden) ─────────────────────────────────────────
-  // One column per list. Used as the source for dropdowns on the data sheet.
-  const refSheet = wb.addWorksheet(REF_SHEET_NAME, { state: 'hidden' })
+  // ── Reference sheet ──────────────────────────────────────────────────
+  // One column per list. Used as the source for dropdowns on the data sheet
+  // AND as a visible cheat-sheet for the user (they're explicitly told in the
+  // tips to check this sheet for allowed values).
+  const refSheet = wb.addWorksheet(REF_SHEET_NAME)
   const refLists: Array<{ key: string; values: readonly string[] }> = [
     { key: 'departments',  values: refs.departments },
     { key: 'branches',     values: refs.branches },
@@ -191,6 +193,8 @@ export async function buildImportTemplate(opts: {
     col.values = [list.key, ...list.values]
     col.width = 20
   })
+  refSheet.getRow(1).font = { bold: true }
+  refSheet.views = [{ state: 'frozen', ySplit: 1 }]
 
   // Helper: build the formula range string for a list (e.g. 'Reference!$A$2:$A$50').
   function rangeForList(listKey: string): string | null {
