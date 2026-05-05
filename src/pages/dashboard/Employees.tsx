@@ -1314,7 +1314,6 @@ function SortableHeader({ label, field, currentField, currentDir, onClick, align
       type="button"
       onClick={onClick}
       className={`flex items-center gap-1 truncate uppercase tracking-wider transition-colors hover:text-[var(--color-text)] ${align === 'right' ? 'justify-end' : ''} ${className}`}
-      style={{ color: active ? 'var(--color-text)' : undefined }}
       aria-sort={active ? (currentDir === 'asc' ? 'ascending' : 'descending') : 'none'}
     >
       <span className="truncate">{label}</span>
