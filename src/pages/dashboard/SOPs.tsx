@@ -164,7 +164,7 @@ export function SOPs({ user }: { user: User }) {
       value: [...activeDepartments],
       options: departmentOptions,
       onChange: (next: string[]) => setActiveDepartments(new Set(next)),
-      footerAction: { label: t.manageDepartments, onClick: () => navigate('/dashboard/company') },
+      headerAction: { label: t.hiringFieldManage, onClick: () => navigate('/dashboard/company?tab=structure') },
     }] : []),
     ...(allTags.length > 0 ? [{
       type: 'multiselect' as const,

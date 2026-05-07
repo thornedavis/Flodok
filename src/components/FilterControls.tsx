@@ -79,6 +79,7 @@ export function MultiSelectDropdown({
   const containerRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const [placement, setPlacement] = useState<'below' | 'above'>('below')
+  const [hAlign, setHAlign] = useState<'right' | 'left'>('right')
   const selected = new Set(value)
 
   useLayoutEffect(() => {
@@ -88,6 +89,15 @@ export function MultiSelectDropdown({
     const estHeight = Math.min(280, Math.max(120, options.length * 32 + 60))
     const spaceBelow = window.innerHeight - rect.bottom
     setPlacement(spaceBelow < estHeight && rect.top > spaceBelow ? 'above' : 'below')
+    // Boundary the panel against the closest <main> if present (the content
+    // area sits to the right of any fixed sidebar); otherwise fall back to the
+    // viewport. Right-anchoring is preferred unless it would push the panel's
+    // left edge past that boundary.
+    const panelWidth = 240
+    const margin = 8
+    const mainEl = triggerRef.current?.closest('main')
+    const safeLeft = (mainEl?.getBoundingClientRect().left ?? 0) + margin
+    setHAlign(rect.right - panelWidth < safeLeft ? 'left' : 'right')
   }, [open, options.length])
 
   useEffect(() => {
@@ -151,9 +161,9 @@ export function MultiSelectDropdown({
       {open && (
         <div
           role="listbox"
-          className={`absolute right-0 z-40 w-[240px] overflow-hidden rounded-lg border shadow-lg ${
-            placement === 'below' ? 'top-full mt-1' : 'bottom-full mb-1'
-          }`}
+          className={`absolute z-40 w-[240px] overflow-hidden rounded-lg border shadow-lg ${
+            hAlign === 'right' ? 'right-0' : 'left-0'
+          } ${placement === 'below' ? 'top-full mt-1' : 'bottom-full mb-1'}`}
           style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-elevated, var(--color-bg))' }}
         >
           {options.length > 6 && (
@@ -268,6 +278,8 @@ export type FilterPanelSection =
       options: MultiSelectOption[]
       onChange: (next: string[]) => void
       footerAction?: { label: string; onClick: () => void }
+      /** Small inline action rendered in the section header (e.g. "Manage →"). */
+      headerAction?: { label: string; onClick: () => void }
     }
   | {
       type: 'select'
@@ -279,6 +291,7 @@ export type FilterPanelSection =
       defaultValue?: string
       options: { id: string; label: string }[]
       onChange: (next: string) => void
+      headerAction?: { label: string; onClick: () => void }
     }
 
 export function FilterPanel({
@@ -293,6 +306,7 @@ export function FilterPanel({
   const containerRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const [placement, setPlacement] = useState<'below' | 'above'>('below')
+  const [hAlign, setHAlign] = useState<'right' | 'left'>('right')
 
   // Active-count: selected options across multiselect sections, plus +1 for
   // each select section whose value differs from its declared default. Select
@@ -312,6 +326,15 @@ export function FilterPanel({
     const estHeight = 360
     const spaceBelow = window.innerHeight - rect.bottom
     setPlacement(spaceBelow < estHeight && rect.top > spaceBelow ? 'above' : 'below')
+    // Boundary against the closest <main> so the panel respects the content
+    // area, not just the viewport (a fixed sidebar sits inside the viewport
+    // but outside <main>). Right-anchoring is preferred unless it would push
+    // the panel's left edge past that boundary.
+    const panelWidth = 280
+    const margin = 8
+    const mainEl = triggerRef.current?.closest('main')
+    const safeLeft = (mainEl?.getBoundingClientRect().left ?? 0) + margin
+    setHAlign(rect.right - panelWidth < safeLeft ? 'left' : 'right')
   }, [open])
 
   useEffect(() => {
@@ -367,9 +390,9 @@ export function FilterPanel({
       {open && (
         <div
           role="dialog"
-          className={`absolute right-0 z-40 w-[280px] overflow-hidden rounded-lg border shadow-lg ${
-            placement === 'below' ? 'top-full mt-1' : 'bottom-full mb-1'
-          }`}
+          className={`absolute z-40 w-[280px] overflow-hidden rounded-lg border shadow-lg ${
+            hAlign === 'right' ? 'right-0' : 'left-0'
+          } ${placement === 'below' ? 'top-full mt-1' : 'bottom-full mb-1'}`}
           style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-elevated, var(--color-bg))' }}
         >
           <div className="max-h-[60vh] overflow-y-auto">
@@ -377,23 +400,42 @@ export function FilterPanel({
               const isCollapsed = collapsed[section.key]
               return (
                 <div key={section.key} className={idx > 0 ? 'border-t' : ''} style={{ borderColor: 'var(--color-border)' }}>
-                  <button
-                    type="button"
-                    onClick={() => toggleCollapsed(section.key)}
-                    className="flex w-full items-center justify-between px-3 py-2.5 text-left text-sm font-semibold"
-                    style={{ color: 'var(--color-text)' }}
-                  >
-                    <span className="flex items-center gap-2">
-                      {section.icon && <span style={{ color: 'var(--color-text-tertiary)' }}>{section.icon}</span>}
-                      {section.label}
-                    </span>
-                    <svg
-                      width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-                      style={{ color: 'var(--color-text-tertiary)', transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}
+                  <div className="flex items-center">
+                    <button
+                      type="button"
+                      onClick={() => toggleCollapsed(section.key)}
+                      className="flex flex-1 items-center gap-2 px-3 py-2.5 text-left text-sm font-semibold"
+                      style={{ color: 'var(--color-text)' }}
                     >
-                      <polyline points="6 9 12 15 18 9" />
-                    </svg>
-                  </button>
+                      {section.icon && <span style={{ color: 'var(--color-text-tertiary)' }}>{section.icon}</span>}
+                      <span>{section.label}</span>
+                    </button>
+                    <div className="flex items-center gap-2 pr-3">
+                      {section.headerAction && (
+                        <button
+                          type="button"
+                          onClick={e => { e.stopPropagation(); section.headerAction!.onClick() }}
+                          className="text-[11px] font-medium hover:underline"
+                          style={{ color: 'var(--color-primary)' }}
+                        >
+                          {section.headerAction.label}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => toggleCollapsed(section.key)}
+                        aria-label={section.label}
+                        className="-mr-1 p-1"
+                      >
+                        <svg
+                          width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                          style={{ color: 'var(--color-text-tertiary)', transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}
+                        >
+                          <polyline points="6 9 12 15 18 9" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
                   {!isCollapsed && (
                     <div className="px-2 pb-2">
                       {section.type === 'multiselect'

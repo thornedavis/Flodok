@@ -142,11 +142,12 @@ const LIST_COLUMN_DEFS: Record<ColumnKey, ListColumn> = {
   passport_expiry:     { key: 'passport_expiry',     label: t => t.empFieldPassportExpiry,      width: 'w-28',                          render: ({ emp }) => textCell(emp.passport_expiry) },
   notes:               { key: 'notes',               label: t => t.notesLabel,                  width: 'w-56',                          render: ({ emp }) => textCell(emp.notes) },
   portal: {
-    key: 'portal', label: t => t.colPortalLink, width: 'w-10',
+    key: 'portal', label: t => t.colPortalLink, width: 'w-72',
     render: ({ emp }) => {
       const portalUrl = `${window.location.origin}/portal/${emp.slug}-${emp.access_token}`
       return (
-        <div onClick={e => e.stopPropagation()}>
+        <div onClick={e => e.stopPropagation()} className="flex items-center gap-1.5 min-w-0">
+          <CopyableText value={portalUrl} />
           <CopyButton value={portalUrl} />
         </div>
       )
@@ -188,6 +189,9 @@ export function Employees({ user }: { user: User }) {
   const [showUpgrade, setShowUpgrade] = useState(false)
   const [searchQuery, setSearchQuery] = useState(seedQuery)
   const [activeDepartments, setActiveDepartments] = useState<Set<string>>(new Set())
+  const [activeJobPositions, setActiveJobPositions] = useState<Set<string>>(new Set())
+  const [activeJobLevels, setActiveJobLevels] = useState<Set<string>>(new Set())
+  const [activeClasses, setActiveClasses] = useState<Set<string>>(new Set())
   const [statusFilter, setStatusFilter] = useState<Set<EmployeeStatus>>(() => new Set(['active']))
   const [sortField, setSortField] = useState<SortField>('name')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
@@ -373,13 +377,16 @@ export function Employees({ user }: { user: User }) {
       const empDepts = getEmployeeDepts(e)
       const matchesStatus = statusFilter.size === 0 || statusFilter.has(deriveEmployeeStatus(e) as EmployeeStatus)
       const matchesDept = activeDepartments.size === 0 || empDepts.some(d => activeDepartments.has(d))
+      const matchesJobPos = activeJobPositions.size === 0 || (e.job_position ? activeJobPositions.has(e.job_position) : false)
+      const matchesJobLevel = activeJobLevels.size === 0 || (e.job_level ? activeJobLevels.has(e.job_level) : false)
+      const matchesClass = activeClasses.size === 0 || (e.class ? activeClasses.has(e.class) : false)
       const q = searchQuery.trim().toLowerCase()
       const matchesSearch = !q ||
         e.name.toLowerCase().includes(q) ||
         e.phone.includes(q) ||
         empDepts.some(d => d.toLowerCase().includes(q)) ||
         e.email?.toLowerCase().includes(q)
-      return matchesStatus && matchesDept && matchesSearch
+      return matchesStatus && matchesDept && matchesJobPos && matchesJobLevel && matchesClass && matchesSearch
     })
     .slice()
     .sort((a, b) => {
@@ -418,7 +425,7 @@ export function Employees({ user }: { user: User }) {
 
   // Reset page when filters change. Selection clears too — keeping it across
   // filter changes leads to confusing "deleted hidden things" outcomes.
-  useEffect(() => { setEmpCurrentPage(1); setSelectedIds(new Set()) }, [searchQuery, activeDepartments, statusFilter, empPageSize])
+  useEffect(() => { setEmpCurrentPage(1); setSelectedIds(new Set()) }, [searchQuery, activeDepartments, activeJobPositions, activeJobLevels, activeClasses, statusFilter, empPageSize])
 
   function toggleRowSelected(id: string) {
     setSelectedIds(prev => {
@@ -461,6 +468,14 @@ export function Employees({ user }: { user: User }) {
 
   const departmentOptions = departments.map(d => ({ id: d, label: d, count: getDepartmentCount(d) }))
 
+  const jobPositions = [...new Set(employees.map(e => e.job_position).filter((v): v is string => !!v))].sort()
+  const jobLevels = [...new Set(employees.map(e => e.job_level).filter((v): v is string => !!v))].sort()
+  const employeeClasses = [...new Set(employees.map(e => e.class).filter((v): v is string => !!v))].sort()
+  const countBy = (field: 'job_position' | 'job_level' | 'class', value: string) =>
+    employees.filter(e => e[field] === value).length
+
+  const goManageStructure = () => navigate('/dashboard/company?tab=structure')
+
   const filterSections: FilterPanelSection[] = [
     {
       type: 'multiselect' as const,
@@ -477,7 +492,34 @@ export function Employees({ user }: { user: User }) {
       value: [...activeDepartments],
       options: departmentOptions,
       onChange: (next: string[]) => setActiveDepartments(new Set(next)),
-      footerAction: { label: t.manageDepartments, onClick: () => navigate('/dashboard/company') },
+      headerAction: { label: t.hiringFieldManage, onClick: goManageStructure },
+    }] : []),
+    ...(jobPositions.length > 0 ? [{
+      type: 'multiselect' as const,
+      key: 'job_position',
+      label: t.empFieldJobPosition,
+      value: [...activeJobPositions],
+      options: jobPositions.map(p => ({ id: p, label: p, count: countBy('job_position', p) })),
+      onChange: (next: string[]) => setActiveJobPositions(new Set(next)),
+      headerAction: { label: t.hiringFieldManage, onClick: goManageStructure },
+    }] : []),
+    ...(jobLevels.length > 0 ? [{
+      type: 'multiselect' as const,
+      key: 'job_level',
+      label: t.empFieldJobLevel,
+      value: [...activeJobLevels],
+      options: jobLevels.map(l => ({ id: l, label: l, count: countBy('job_level', l) })),
+      onChange: (next: string[]) => setActiveJobLevels(new Set(next)),
+      headerAction: { label: t.hiringFieldManage, onClick: goManageStructure },
+    }] : []),
+    ...(employeeClasses.length > 0 ? [{
+      type: 'multiselect' as const,
+      key: 'class',
+      label: t.empFieldClass,
+      value: [...activeClasses],
+      options: employeeClasses.map(c => ({ id: c, label: c, count: countBy('class', c) })),
+      onChange: (next: string[]) => setActiveClasses(new Set(next)),
+      headerAction: { label: t.hiringFieldManage, onClick: goManageStructure },
     }] : []),
     {
       type: 'select' as const,
@@ -579,6 +621,9 @@ export function Employees({ user }: { user: User }) {
           sections={filterSections}
           onReset={() => {
             setActiveDepartments(new Set())
+            setActiveJobPositions(new Set())
+            setActiveJobLevels(new Set())
+            setActiveClasses(new Set())
             setStatusFilter(new Set(['active']))
             setSortField('name')
             setSortDir('asc')
@@ -805,6 +850,37 @@ function AddEmployeeMenu({ t, disabled, disabledTitle, onAdd, onImport }: {
         </div>
       )}
     </div>
+  )
+}
+
+function CopyableText({ value }: { value: string }) {
+  const { t } = useLang()
+
+  async function handleCopy(e: React.MouseEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    try {
+      await navigator.clipboard.writeText(value)
+    } catch {
+      const textarea = document.createElement('textarea')
+      textarea.value = value
+      document.body.appendChild(textarea)
+      textarea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textarea)
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      title={`${value} — ${t.copy}`}
+      className="block min-w-0 flex-1 truncate rounded text-left text-xs transition-colors hover:underline"
+      style={{ color: 'var(--color-text-secondary)' }}
+    >
+      {value}
+    </button>
   )
 }
 
