@@ -400,6 +400,14 @@ export const translations = {
     contractsTabTemplates: 'Templates',
     contractCount: (n: number) => `${n} ${n === 1 ? 'Contract' : 'Contracts'}`,
     createContract: 'Create Contract',
+    createContractFromScratch: 'Create new',
+    createContractFromTemplate: 'Create from template',
+    pickTemplateTitle: 'Pick a template',
+    pickTemplateEmpty: 'No templates yet — create one first.',
+    pickTemplateSearchPlaceholder: 'Search templates or position…',
+    pickTemplateNoMatches: 'No templates match your search.',
+    pickTemplateNoPositionGroup: 'Any position',
+    createContractFromThis: 'Create contract from this',
     createTemplate: 'New template',
     contractTemplateBadge: 'Template',
     contractTemplateForPositionLabel: 'For job position',
@@ -559,6 +567,8 @@ export const translations = {
 
     // Manager app — Contract Edit page
     editContractTitle: 'Edit Contract',
+    editTemplateTitle: 'Edit Template',
+    saveTemplate: 'Save template',
     aiContractPromptWithContent: 'e.g. "Add a non-compete clause" or "Update the probation period to 6 months"',
     aiContractPromptEmpty: (dept: string) => `e.g. "Generate an employment contract for a ${dept} position"`,
 
@@ -2022,6 +2032,14 @@ export const translations = {
     contractTemplateUnused: 'Belum terhubung dengan posisi.',
     contractCount: (n: number) => `${n} Kontrak`,
     createContract: 'Buat Kontrak',
+    createContractFromScratch: 'Buat baru',
+    createContractFromTemplate: 'Buat dari templat',
+    pickTemplateTitle: 'Pilih templat',
+    pickTemplateEmpty: 'Belum ada templat — buat satu dulu.',
+    pickTemplateSearchPlaceholder: 'Cari templat atau posisi…',
+    pickTemplateNoMatches: 'Tidak ada templat yang cocok.',
+    pickTemplateNoPositionGroup: 'Posisi apa pun',
+    createContractFromThis: 'Buat kontrak dari ini',
     noContractsYet: 'Belum ada kontrak. Klik "Buat Kontrak" untuk memulai.',
     noContractsMatchFilters: 'Tidak ada kontrak yang cocok dengan filter Anda.',
     searchContractsPlaceholder: 'Cari kontrak...',
@@ -2165,6 +2183,8 @@ export const translations = {
 
     // Manager app — Contract Edit page
     editContractTitle: 'Edit Kontrak',
+    editTemplateTitle: 'Edit Templat',
+    saveTemplate: 'Simpan templat',
     aiContractPromptWithContent: 'mis. "Tambahkan klausa non-kompetisi" atau "Perbarui masa percobaan menjadi 6 bulan"',
     aiContractPromptEmpty: (dept: string) => `mis. "Buat kontrak kerja untuk posisi ${dept}"`,
 

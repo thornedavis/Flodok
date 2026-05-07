@@ -477,7 +477,7 @@ export function ContractEdit({ user }: { user: User }) {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.editContractTitle}</h1>
+          <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{contract.is_template ? t.editTemplateTitle : t.editContractTitle}</h1>
           {/* Read-only status pill — replaces the old dropdown. Status now
               advances via the explicit "Activate & sign" action below; the
               dropdown lied because flipping to active didn't actually sign. */}
@@ -504,19 +504,30 @@ export function ContractEdit({ user }: { user: User }) {
         <div className="flex items-center gap-3">
           <Link to={`/dashboard/contracts/${contract.id}/history`} className="rounded-lg border px-4 py-2 text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>{t.historyLinkLabel}</Link>
           <button onClick={() => navigate('/dashboard/contracts')} className="rounded-lg border px-4 py-2 text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>{t.cancel}</button>
-          <button onClick={handleSaveAsDraft} disabled={saving || !canWrite || (!hasChanges && status === 'draft')} title={!canWrite ? t.dunningWriteBlocked : undefined}
-            className="flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium disabled:opacity-50"
-            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-            {saving ? (
-              <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>{translating ? t.savingTranslating : t.saving}</>
-            ) : t.saveAsDraft}
-          </button>
-          <button onClick={handleActivateAndSign} disabled={saving || signing || !canWrite} title={!canWrite ? t.dunningWriteBlocked : undefined}
-            className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50" style={{ backgroundColor: 'var(--color-primary)' }}>
-            {saving ? (
-              <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>{translating ? t.savingTranslating : t.saving}</>
-            ) : t.activateAndSign}
-          </button>
+          {contract.is_template ? (
+            <button onClick={handleSaveAsDraft} disabled={saving || !canWrite || !hasChanges} title={!canWrite ? t.dunningWriteBlocked : undefined}
+              className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50" style={{ backgroundColor: 'var(--color-primary)' }}>
+              {saving ? (
+                <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>{translating ? t.savingTranslating : t.saving}</>
+              ) : t.saveTemplate}
+            </button>
+          ) : (
+            <>
+              <button onClick={handleSaveAsDraft} disabled={saving || !canWrite || (!hasChanges && status === 'draft')} title={!canWrite ? t.dunningWriteBlocked : undefined}
+                className="flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium disabled:opacity-50"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                {saving ? (
+                  <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>{translating ? t.savingTranslating : t.saving}</>
+                ) : t.saveAsDraft}
+              </button>
+              <button onClick={handleActivateAndSign} disabled={saving || signing || !canWrite} title={!canWrite ? t.dunningWriteBlocked : undefined}
+                className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50" style={{ backgroundColor: 'var(--color-primary)' }}>
+                {saving ? (
+                  <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>{translating ? t.savingTranslating : t.saving}</>
+                ) : t.activateAndSign}
+              </button>
+            </>
+          )}
         </div>
       </div>
 

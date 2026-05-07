@@ -30,6 +30,7 @@ export function Contracts({ user }: { user: User }) {
   const [activeTags, setActiveTags] = useState<Set<string>>(new Set())
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showCreateTemplate, setShowCreateTemplate] = useState(false)
+  const [showPickTemplate, setShowPickTemplate] = useState(false)
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
   const [sortBy, setSortBy] = useState<'last_edited' | 'newest' | 'oldest'>('last_edited')
   const [view, setView] = useState<ContractsView>('contracts')
@@ -120,6 +121,32 @@ export function Contracts({ user }: { user: User }) {
 
   const visibleFiltered = visibleItemLimit !== null ? filtered.slice(0, visibleItemLimit) : filtered
   const hiddenCount = filtered.length - visibleFiltered.length
+  const templates = contracts.filter(c => c.is_template)
+
+  async function handleCreateFromTemplate(template: ContractWithEmployee) {
+    if (!canWrite) return
+    const { data, error } = await supabase
+      .from('contracts')
+      .insert({
+        org_id: user.org_id,
+        employee_id: null,
+        title: template.title,
+        content_markdown: template.content_markdown,
+        content_markdown_id: template.content_markdown_id,
+        base_wage_idr: template.base_wage_idr,
+        allowance_idr: template.allowance_idr,
+        hours_per_day: template.hours_per_day,
+        days_per_week: template.days_per_week,
+        start_date: template.start_date,
+        end_date: template.end_date,
+        status: 'draft' as const,
+        is_template: false,
+      })
+      .select()
+      .single()
+    if (error) { alert(error.message); return }
+    if (data) navigate(`/dashboard/contracts/${data.id}/edit`)
+  }
 
   async function handleDuplicate(contract: ContractWithEmployee) {
     if (!canWrite) return
@@ -174,7 +201,7 @@ export function Contracts({ user }: { user: User }) {
       value: [...activeDepartments],
       options: departmentOptions,
       onChange: (next: string[]) => setActiveDepartments(new Set(next)),
-      footerAction: { label: t.manageDepartments, onClick: () => navigate('/dashboard/company') },
+      headerAction: { label: t.hiringFieldManage, onClick: () => navigate('/dashboard/company?tab=structure') },
     }] : []),
     ...(allTags.length > 0 ? [{
       type: 'multiselect' as const,
@@ -203,15 +230,24 @@ export function Contracts({ user }: { user: User }) {
     <div>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.contractsTitle}</h1>
-        <button
-          onClick={() => view === 'templates' ? setShowCreateTemplate(true) : setShowCreateModal(true)}
-          disabled={!canWrite}
-          title={!canWrite ? t.dunningWriteBlocked : undefined}
-          className="shrink-0 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
-          style={{ backgroundColor: 'var(--color-primary)' }}
-        >
-          {view === 'templates' ? t.createTemplate : t.createContract}
-        </button>
+        {view === 'templates' || templates.length === 0 ? (
+          <button
+            onClick={() => view === 'templates' ? setShowCreateTemplate(true) : setShowCreateModal(true)}
+            disabled={!canWrite}
+            title={!canWrite ? t.dunningWriteBlocked : undefined}
+            className="shrink-0 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
+            style={{ backgroundColor: 'var(--color-primary)' }}
+          >
+            {view === 'templates' ? t.createTemplate : t.createContract}
+          </button>
+        ) : (
+          <CreateContractButton
+            disabled={!canWrite}
+            disabledTitle={!canWrite ? t.dunningWriteBlocked : undefined}
+            onFromScratch={() => setShowCreateModal(true)}
+            onFromTemplate={() => setShowPickTemplate(true)}
+          />
+        )}
       </div>
 
       <div className="mb-5 flex gap-1 border-b" style={{ borderColor: 'var(--color-border)' }}>
@@ -324,9 +360,26 @@ export function Contracts({ user }: { user: User }) {
                     <>
                       <div className="fixed inset-0 z-10" onClick={e => { e.stopPropagation(); setMenuOpenId(null) }} />
                       <div
-                        className="absolute right-0 z-20 mt-1 w-36 rounded-lg border py-1 shadow-lg"
+                        className="absolute right-0 z-20 mt-1 w-56 rounded-lg border py-1 shadow-lg"
                         style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }}
                       >
+                        {contract.is_template && (
+                          <button
+                            onClick={e => { e.stopPropagation(); setMenuOpenId(null); handleCreateFromTemplate(contract) }}
+                            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors"
+                            style={{ color: 'var(--color-text)' }}
+                            onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
+                            onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                              <polyline points="14 2 14 8 20 8" />
+                              <line x1="12" y1="18" x2="12" y2="12" />
+                              <line x1="9" y1="15" x2="15" y2="15" />
+                            </svg>
+                            {t.createContractFromThis}
+                          </button>
+                        )}
                         <button
                           onClick={e => { e.stopPropagation(); handleDuplicate(contract) }}
                           className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors"
@@ -461,6 +514,14 @@ export function Contracts({ user }: { user: User }) {
           onClose={() => setShowCreateTemplate(false)}
           onCreated={(id) => navigate(`/dashboard/contracts/${id}/edit`)}
           onManagePositions={() => { setShowCreateTemplate(false); navigate('/dashboard/company?tab=structure') }}
+        />
+      )}
+
+      {showPickTemplate && (
+        <PickTemplateModal
+          templates={templates}
+          onClose={() => setShowPickTemplate(false)}
+          onPick={(tpl) => { setShowPickTemplate(false); handleCreateFromTemplate(tpl) }}
         />
       )}
     </div>
@@ -1102,6 +1163,188 @@ function CreateContractModal({ orgId, employees, onClose, onCreated }: {
             </button>
             <button onClick={onClose} className="rounded-lg border px-4 py-2 text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>{t.cancel}</button>
           </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function CreateContractButton({ disabled, disabledTitle, onFromScratch, onFromTemplate }: {
+  disabled: boolean
+  disabledTitle?: string
+  onFromScratch: () => void
+  onFromTemplate: () => void
+}) {
+  const { t } = useLang()
+  const [open, setOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function handleClick(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    function handleKey(e: KeyboardEvent) { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', handleClick)
+    document.addEventListener('keydown', handleKey)
+    return () => {
+      document.removeEventListener('mousedown', handleClick)
+      document.removeEventListener('keydown', handleKey)
+    }
+  }, [open])
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        onClick={() => !disabled && setOpen(o => !o)}
+        disabled={disabled}
+        title={disabledTitle}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
+        style={{ backgroundColor: 'var(--color-primary)' }}
+      >
+        <span>{t.createContract}</span>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+      {open && (
+        <div
+          role="menu"
+          className="absolute right-0 top-full z-30 mt-1 min-w-[200px] overflow-hidden rounded-lg border py-1 shadow-lg"
+          style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-elevated, var(--color-bg))' }}
+        >
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => { setOpen(false); onFromScratch() }}
+            className="flex w-full items-center px-3 py-2 text-left text-sm transition-colors"
+            style={{ color: 'var(--color-text)' }}
+            onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
+            onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
+          >
+            {t.createContractFromScratch}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => { setOpen(false); onFromTemplate() }}
+            className="flex w-full items-center px-3 py-2 text-left text-sm transition-colors"
+            style={{ color: 'var(--color-text)' }}
+            onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
+            onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
+          >
+            {t.createContractFromTemplate}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function PickTemplateModal({ templates, onClose, onPick }: {
+  templates: ContractWithEmployee[]
+  onClose: () => void
+  onPick: (template: ContractWithEmployee) => void
+}) {
+  const { t } = useLang()
+  const [query, setQuery] = useState('')
+
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', handleKey)
+    return () => document.removeEventListener('keydown', handleKey)
+  }, [onClose])
+
+  const q = query.trim().toLowerCase()
+  const filtered = q
+    ? templates.filter(tpl =>
+        tpl.title.toLowerCase().includes(q) ||
+        (tpl.template_for_position || '').toLowerCase().includes(q)
+      )
+    : templates
+
+  // Group by position. Templates with no position go in a final "Any position"
+  // group so they don't disappear in the noise. Position groups are sorted
+  // alphabetically; within each group, most-recently-edited first.
+  const groups = new Map<string, ContractWithEmployee[]>()
+  for (const tpl of filtered) {
+    const key = tpl.template_for_position || ''
+    const arr = groups.get(key) || []
+    arr.push(tpl)
+    groups.set(key, arr)
+  }
+  const positionedKeys = [...groups.keys()].filter(k => k !== '').sort((a, b) => a.localeCompare(b))
+  const orderedKeys = groups.has('') ? [...positionedKeys, ''] : positionedKeys
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div
+        className="flex max-h-[80vh] w-full max-w-md flex-col rounded-lg border shadow-xl"
+        style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="border-b px-5 pt-5 pb-3" style={{ borderColor: 'var(--color-border)' }}>
+          <h2 className="mb-3 text-lg font-semibold" style={{ color: 'var(--color-text)' }}>{t.pickTemplateTitle}</h2>
+          {templates.length > 0 && (
+            <input
+              type="text"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              autoFocus
+              placeholder={t.pickTemplateSearchPlaceholder}
+              className="w-full rounded-lg border px-3 py-2 text-sm"
+              style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+            />
+          )}
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-5 py-3">
+          {templates.length === 0 ? (
+            <p className="py-6 text-center text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{t.pickTemplateEmpty}</p>
+          ) : filtered.length === 0 ? (
+            <p className="py-6 text-center text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{t.pickTemplateNoMatches}</p>
+          ) : (
+            <div className="space-y-4">
+              {orderedKeys.map(key => {
+                const items = groups.get(key) || []
+                const label = key === '' ? t.pickTemplateNoPositionGroup : key
+                return (
+                  <div key={key || '__none__'}>
+                    <div
+                      className="mb-1.5 px-1 text-[11px] font-semibold uppercase tracking-wider"
+                      style={{ color: 'var(--color-text-tertiary)' }}
+                    >
+                      {label}
+                    </div>
+                    <div className="space-y-1.5">
+                      {items.map(tpl => (
+                        <button
+                          key={tpl.id}
+                          type="button"
+                          onClick={() => onPick(tpl)}
+                          className="flex w-full items-center justify-between gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors"
+                          style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }}
+                          onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
+                          onMouseOut={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg)' }}
+                        >
+                          <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{tpl.title}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="flex justify-end border-t px-5 py-3" style={{ borderColor: 'var(--color-border)' }}>
+          <button onClick={onClose} className="rounded-lg border px-4 py-2 text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>
+            {t.cancel}
+          </button>
         </div>
       </div>
     </div>
