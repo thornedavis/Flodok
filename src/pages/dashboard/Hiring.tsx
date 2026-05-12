@@ -8,6 +8,8 @@ import { normalizePhone, isValidE164 } from '../../lib/phone'
 import { generateUniqueSlug, generateAccessToken } from '../../lib/slug'
 import { getAvatarGradient } from '../../lib/avatar'
 import { bucketReferenceValues, referenceNames } from '../../lib/companyReference'
+import { setEmployeePrimaryDepartment, type DepartmentOption } from '../../lib/departments'
+import { primaryDept, type EmpDeptShape } from '../../lib/employee'
 import { findTemplateForPosition, buildContractFromTemplate } from '../../lib/contractTemplates'
 import { documentEditPath, documentsIndexPath } from '../../lib/documentTypes'
 import { docAsJson, emptyDocumentDoc } from '../../lib/documentDoc'
@@ -19,25 +21,29 @@ import type { Translations } from '../../lib/translations'
 
 type HiringStage = 'prospective' | 'shortlisted' | 'offered' | 'signed' | 'talent_pool'
 type HiringTab = 'all' | HiringStage
+type Candidate = Employee & EmpDeptShape
 
 const HIRING_STAGES: HiringStage[] = ['prospective', 'shortlisted', 'offered', 'signed', 'talent_pool']
 const MAX_PHOTO_SIZE = 2 * 1024 * 1024
 const ALLOWED_PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp']
+
+const CANDIDATE_WITH_DEPTS_SELECT =
+  '*, employee_departments(is_primary, department:company_departments(id, name))'
 
 export function Hiring({ user }: { user: User }) {
   const { t, lang } = useLang()
   const navigate = useNavigate()
   const { canWrite } = useBilling()
 
-  const [candidates, setCandidates] = useState<Employee[]>([])
+  const [candidates, setCandidates] = useState<Candidate[]>([])
   const [org, setOrg] = useState<Organization | null>(null)
   const [jobPositions, setJobPositions] = useState<string[]>([])
-  const [departments, setDepartments] = useState<string[]>([])
+  const [availableDepartments, setAvailableDepartments] = useState<DepartmentOption[]>([])
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<HiringTab>('all')
   const [search, setSearch] = useState('')
   const [stageFilter, setStageFilter] = useState<HiringStage[]>([])
-  const [modalCandidate, setModalCandidate] = useState<Employee | null>(null)
+  const [modalCandidate, setModalCandidate] = useState<Candidate | null>(null)
   const [makeOfferCandidate, setMakeOfferCandidate] = useState<Employee | null>(null)
   const [showAdd, setShowAdd] = useState(false)
 
@@ -48,9 +54,9 @@ export function Hiring({ user }: { user: User }) {
     // Graduate any 'signed' candidates whose start date has arrived before
     // we read — keeps the Hiring page consistent with reality.
     await advanceSignedToActiveForOrg(user.org_id)
-    const [empResult, orgResult, refResult] = await Promise.all([
+    const [empResult, orgResult, refResult, departmentsResult] = await Promise.all([
       supabase.from('employees')
-        .select('*')
+        .select(CANDIDATE_WITH_DEPTS_SELECT)
         .eq('org_id', user.org_id)
         .in('lifecycle_stage', HIRING_STAGES)
         .order('created_at', { ascending: false }),
@@ -60,13 +66,20 @@ export function Hiring({ user }: { user: User }) {
         .eq('org_id', user.org_id)
         .order('display_order')
         .order('name'),
+      supabase.from('company_departments')
+        .select('id, name')
+        .eq('org_id', user.org_id)
+        .order('display_order')
+        .order('name'),
     ])
-    setCandidates(empResult.data || [])
+    setCandidates((empResult.data || []) as Candidate[])
     setOrg(orgResult.data || null)
     if (refResult.data) {
       const buckets = bucketReferenceValues(refResult.data)
       setJobPositions(referenceNames(buckets.job_position))
-      setDepartments(referenceNames(buckets.department))
+    }
+    if (departmentsResult.data) {
+      setAvailableDepartments(departmentsResult.data)
     }
     setLoading(false)
   }
@@ -221,7 +234,8 @@ export function Hiring({ user }: { user: User }) {
           orgCountryCode={org?.default_country_code || '+62'}
           orgId={user.org_id}
           jobPositions={jobPositions}
-          departments={departments}
+          availableDepartments={availableDepartments}
+          onAvailableDepartmentsChange={setAvailableDepartments}
           onClose={() => { setShowAdd(false); setModalCandidate(null) }}
           onSaved={async () => { setShowAdd(false); setModalCandidate(null); await loadData() }}
           onManageReferences={() => {
@@ -566,13 +580,14 @@ function formatDate(iso: string, lang: 'en' | 'id'): string {
 
 type ModalMode = 'create' | 'edit'
 
-function CandidateModal({ mode, candidate, orgCountryCode, orgId, jobPositions, departments, onClose, onSaved, onManageReferences }: {
+function CandidateModal({ mode, candidate, orgCountryCode, orgId, jobPositions, availableDepartments, onAvailableDepartmentsChange, onClose, onSaved, onManageReferences }: {
   mode: ModalMode
-  candidate: Employee | null
+  candidate: Candidate | null
   orgCountryCode: string
   orgId: string
   jobPositions: string[]
-  departments: string[]
+  availableDepartments: DepartmentOption[]
+  onAvailableDepartmentsChange: (next: DepartmentOption[]) => void
   onClose: () => void
   onSaved: () => void
   onManageReferences: () => void
@@ -581,7 +596,8 @@ function CandidateModal({ mode, candidate, orgCountryCode, orgId, jobPositions, 
   const [name, setName] = useState(candidate?.name || '')
   const [phone, setPhone] = useState(candidate?.phone || '')
   const [position, setPosition] = useState(candidate?.job_position || '')
-  const [department, setDepartment] = useState(candidate?.department || (candidate?.departments?.[0] ?? ''))
+  const initialDepartment = candidate ? (primaryDept(candidate) ?? '') : ''
+  const [department, setDepartment] = useState(initialDepartment)
   const [notes, setNotes] = useState(candidate?.notes || '')
   const [photoUrl, setPhotoUrl] = useState<string | null>(candidate?.photo_url || null)
   const [pendingPhoto, setPendingPhoto] = useState<File | null>(null)
@@ -593,7 +609,8 @@ function CandidateModal({ mode, candidate, orgCountryCode, orgId, jobPositions, 
   const phoneValid = !phone || isValidE164(phoneNormalized)
   const canSubmit = name.trim().length > 0 && phoneValid && !saving
   const positionsEmpty = jobPositions.length === 0
-  const departmentsEmpty = departments.length === 0
+  const departmentsEmpty = availableDepartments.length === 0
+  const departmentNames = useMemo(() => availableDepartments.map(d => d.name), [availableDepartments])
 
   useEffect(() => () => {
     if (pendingPhotoPreview) URL.revokeObjectURL(pendingPhotoPreview)
@@ -666,43 +683,63 @@ function CandidateModal({ mode, candidate, orgCountryCode, orgId, jobPositions, 
       name: name.trim(),
       phone: phoneNormalized || '',
       job_position: position || null,
-      departments: department ? [department] : [],
-      department: department || null,
       notes: notes.trim() || null,
     }
 
+    let candidateId: string
     if (mode === 'edit' && candidate) {
       const { error: updateError } = await supabase.from('employees').update(payload).eq('id', candidate.id)
-      setSaving(false)
       if (updateError) {
+        setSaving(false)
         setError(updateError.message || t.hiringSaveError)
         return
       }
-      onSaved()
-      return
-    }
+      candidateId = candidate.id
+    } else {
+      const slug = generateUniqueSlug(name.trim())
+      const token = generateAccessToken()
+      const { data: newCandidate, error: insertError } = await supabase
+        .from('employees')
+        .insert({ ...payload, org_id: orgId, slug, access_token: token, lifecycle_stage: 'prospective' })
+        .select()
+        .single()
 
-    // Create mode: insert, then upload pending photo (if any) and patch.
-    const slug = generateUniqueSlug(name.trim())
-    const token = generateAccessToken()
-    const { data: newCandidate, error: insertError } = await supabase
-      .from('employees')
-      .insert({ ...payload, org_id: orgId, slug, access_token: token, lifecycle_stage: 'prospective' })
-      .select()
-      .single()
+      if (insertError || !newCandidate) {
+        setSaving(false)
+        setError(insertError?.message || t.hiringCreateError)
+        return
+      }
+      candidateId = newCandidate.id
 
-    if (insertError || !newCandidate) {
-      setSaving(false)
-      setError(insertError?.message || t.hiringCreateError)
-      return
-    }
-
-    if (pendingPhoto) {
-      const url = await uploadPhoto(newCandidate.id, pendingPhoto)
-      if (url) {
-        await supabase.from('employees').update({ photo_url: url }).eq('id', newCandidate.id)
+      if (pendingPhoto) {
+        const url = await uploadPhoto(newCandidate.id, pendingPhoto)
+        if (url) {
+          await supabase.from('employees').update({ photo_url: url }).eq('id', newCandidate.id)
+        }
       }
     }
+
+    // Department assignment lives in employee_departments; sync it after the
+    // employee row exists. Only write when the value has changed.
+    if (department.trim() !== initialDepartment) {
+      const result = await setEmployeePrimaryDepartment({
+        employeeId: candidateId,
+        orgId,
+        name: department.trim() || null,
+        available: availableDepartments,
+      })
+      if (result.error) {
+        setSaving(false)
+        setError(result.error)
+        return
+      }
+      if (result.created) {
+        onAvailableDepartmentsChange(
+          [...availableDepartments, result.created].sort((a, b) => a.name.localeCompare(b.name)),
+        )
+      }
+    }
+
     setSaving(false)
     onSaved()
   }
@@ -795,7 +832,7 @@ function CandidateModal({ mode, candidate, orgCountryCode, orgId, jobPositions, 
               style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
             >
               <option value="">{departmentsEmpty ? t.hiringDepartmentEmpty : t.hiringFieldDepartmentPlaceholder}</option>
-              {departments.map(d => <option key={d} value={d}>{d}</option>)}
+              {departmentNames.map(d => <option key={d} value={d}>{d}</option>)}
             </select>
           </Field>
           <Field label={t.hiringFieldNotes}>

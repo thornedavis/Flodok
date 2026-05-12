@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
-import { getEmployeeDepts, primaryDept } from '../../lib/employee'
+import { getEmployeeDepts, primaryDept, type EmpDeptShape } from '../../lib/employee'
 import { FilterPill, FilterPanel, FilterSearchInput } from '../../components/FilterControls'
 import type { FilterPanelSection } from '../../components/FilterControls'
 import { useBilling } from '../../contexts/BillingContext'
@@ -10,7 +10,12 @@ import { documentEditPath } from '../../lib/documentTypes'
 import { docAsJson, emptyDocumentDoc } from '../../lib/documentDoc'
 import type { User, Sop, Employee, Tag } from '../../types/aliases'
 
-type SopWithEmployee = Sop & { employee: Employee | null; tagIds: string[] }
+type EmployeeWithDepartments = Employee & EmpDeptShape
+
+type SopWithEmployee = Sop & { employee: EmployeeWithDepartments | null; tagIds: string[] }
+
+const EMPLOYEE_WITH_DEPTS_SELECT =
+  '*, employee_departments(is_primary, department:company_departments(id, name))'
 
 export function SOPs({ user, embedded = false }: { user: User; embedded?: boolean }) {
   const navigate = useNavigate()
@@ -18,7 +23,7 @@ export function SOPs({ user, embedded = false }: { user: User; embedded?: boolea
   const { t } = useLang()
   const { canWrite, visibleItemLimit, state: dunning } = useBilling()
   const [sops, setSOPs] = useState<SopWithEmployee[]>([])
-  const [employees, setEmployees] = useState<Employee[]>([])
+  const [employees, setEmployees] = useState<EmployeeWithDepartments[]>([])
   const [allTags, setAllTags] = useState<Tag[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
@@ -33,12 +38,13 @@ export function SOPs({ user, embedded = false }: { user: User; embedded?: boolea
     async function load() {
       const [sopResult, empResult, tagsResult, sopTagsResult] = await Promise.all([
         supabase.from('sops').select('*').eq('org_id', user.org_id).order('updated_at', { ascending: false }),
-        supabase.from('employees').select('*').eq('org_id', user.org_id).order('name'),
+        supabase.from('employees').select(EMPLOYEE_WITH_DEPTS_SELECT).eq('org_id', user.org_id).order('name'),
         supabase.from('tags').select('*').eq('org_id', user.org_id).order('name'),
         supabase.from('sop_tags').select('*'),
       ])
 
-      const empMap = new Map((empResult.data || []).map(e => [e.id, e]))
+      const empList = (empResult.data || []) as EmployeeWithDepartments[]
+      const empMap = new Map(empList.map(e => [e.id, e]))
 
       // Build a map of sop_id -> tag_ids
       const sopTagMap = new Map<string, string[]>()
@@ -48,7 +54,7 @@ export function SOPs({ user, embedded = false }: { user: User; embedded?: boolea
         sopTagMap.set(st.sop_id, arr)
       }
 
-      setEmployees(empResult.data || [])
+      setEmployees(empList)
       setSOPs((sopResult.data || []).map(s => ({
         ...s,
         employee: s.employee_id ? empMap.get(s.employee_id) || null : null,
@@ -435,7 +441,7 @@ export function SOPs({ user, embedded = false }: { user: User; embedded?: boolea
 
 function CreateSOPModal({ orgId, employees, onClose, onCreated }: {
   orgId: string
-  employees: Employee[]
+  employees: EmployeeWithDepartments[]
   onClose: () => void
   onCreated: (sopId: string) => void
 }) {

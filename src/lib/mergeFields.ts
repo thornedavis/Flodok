@@ -13,6 +13,8 @@
 // the document still renders cleanly and the gap is visible.
 
 import { formatIdr } from './credits'
+import { deptsJoined } from './employee'
+import type { EmpDeptShape } from './employee'
 import type { Employee, Organization, Contract } from '../types/aliases'
 
 export type Lang = 'en' | 'id'
@@ -35,7 +37,7 @@ export type EmployerSignatureSnapshot = SignatureSnapshot & {
 }
 
 export type MergeContext = {
-  employee?: Employee | null
+  employee?: (Employee & EmpDeptShape) | null
   organization?: Organization | null
   contract?: Contract | null
   today?: Date
@@ -139,15 +141,6 @@ function renderSignatureHtml(sig: SignatureSnapshot | null | undefined): string 
   return `<span class="signature-name" style="font-family: '${escapedFont}', cursive; font-size: 1.5em; line-height: 1; display: inline-block; min-width: 12em; border-bottom: 1px solid currentColor; padding-bottom: 2px;">${escapedName}</span>`
 }
 
-function joinDepartments(emp: Employee): string | null {
-  const list = emp.departments && emp.departments.length > 0
-    ? emp.departments
-    : emp.department
-      ? [emp.department]
-      : []
-  return list.length > 0 ? list.join(', ') : null
-}
-
 // ─── Field registry ─────────────────────────────────────────────────────────
 
 export const MERGE_FIELDS: Record<MergeFieldKey, MergeFieldDef> = {
@@ -198,7 +191,11 @@ export const MERGE_FIELDS: Record<MergeFieldKey, MergeFieldDef> = {
     scope: 'both',
     label: { en: 'Employee departments', id: 'Departemen karyawan' },
     description: { en: 'Departments the employee belongs to', id: 'Departemen tempat karyawan bekerja' },
-    resolve: ctx => ctx.employee ? joinDepartments(ctx.employee) : null,
+    resolve: ctx => {
+      if (!ctx.employee) return null
+      const joined = deptsJoined(ctx.employee)
+      return joined.length > 0 ? joined : null
+    },
   },
   org_name: {
     key: 'org_name',

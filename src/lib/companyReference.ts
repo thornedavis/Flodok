@@ -1,8 +1,9 @@
 import type { CompanyReferenceValue, Employee } from '../types/aliases'
 
+// Departments and branches are first-class tables (company_departments,
+// company_branches) and are NOT part of this polymorphic list. Anything left
+// here is a flat string-only lookup with no structural metadata.
 export const COMPANY_REFERENCE_KINDS = [
-  'department',
-  'branch',
   'job_position',
   'job_level',
   'employee_class',
@@ -13,8 +14,6 @@ export type CompanyReferenceKind = typeof COMPANY_REFERENCE_KINDS[number]
 export type ReferenceBuckets = Record<CompanyReferenceKind, CompanyReferenceValue[]>
 
 export const emptyReferenceBuckets = (): ReferenceBuckets => ({
-  department: [],
-  branch: [],
   job_position: [],
   job_level: [],
   employee_class: [],
@@ -46,16 +45,7 @@ export function getReferenceUsage(kind: CompanyReferenceKind, employees: Employe
   }
 
   for (const employee of employees) {
-    if (kind === 'department') {
-      const departments = employee.departments?.length
-        ? employee.departments
-        : employee.department
-        ? [employee.department]
-        : []
-      for (const dept of departments) add(dept)
-    } else if (kind === 'branch') {
-      add(employee.branch_name)
-    } else if (kind === 'job_position') {
+    if (kind === 'job_position') {
       add(employee.job_position)
     } else if (kind === 'job_level') {
       add(employee.job_level)

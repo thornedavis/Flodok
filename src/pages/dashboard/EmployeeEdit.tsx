@@ -18,7 +18,16 @@ import { AdditionalInfoSection } from '../../components/employee/sections/Additi
 import { isPro, syncSeats } from '../../lib/billing'
 import { bucketReferenceValues, referenceNames } from '../../lib/companyReference'
 import { useBilling } from '../../contexts/BillingContext'
+import { setEmployeePrimaryDepartment } from '../../lib/departments'
 import type { User, Employee, Organization, Contract } from '../../types/aliases'
+import type { EmpDeptShape } from '../../lib/employee'
+
+const EMPLOYEE_WITH_DEPTS_SELECT =
+  '*, employee_departments(is_primary, department:company_departments(id, name))'
+
+type EmployeeWithDepartments = Employee & EmpDeptShape
+
+type DepartmentOption = { id: string; name: string }
 
 const MAX_AVATAR_SIZE = 2 * 1024 * 1024 // 2 MB
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp']
@@ -31,11 +40,11 @@ export function EmployeeEdit({ user }: { user: User }) {
   const { canWrite } = useBilling()
   const isNew = searchParams.get('new') === '1'
 
-  const [employee, setEmployee] = useState<Employee | null>(null)
+  const [employee, setEmployee] = useState<EmployeeWithDepartments | null>(null)
   const [org, setOrg] = useState<Organization | null>(null)
   const [activeContract, setActiveContract] = useState<Contract | null>(null)
   const [contractSignedAt, setContractSignedAt] = useState<string | null>(null)
-  const [orgDepartments, setOrgDepartments] = useState<string[]>([])
+  const [availableDepartments, setAvailableDepartments] = useState<DepartmentOption[]>([])
   const [orgBranches, setOrgBranches] = useState<string[]>([])
   const [orgJobPositions, setOrgJobPositions] = useState<string[]>([])
   const [orgJobLevels, setOrgJobLevels] = useState<string[]>([])
@@ -53,10 +62,11 @@ export function EmployeeEdit({ user }: { user: User }) {
     if (!employeeId) return
     const id = employeeId
     async function load() {
-      const [empResult, orgResult, referenceResult, branchResult, contractResult] = await Promise.all([
-        supabase.from('employees').select('*').eq('id', id).single(),
+      const [empResult, orgResult, referenceResult, departmentsResult, branchResult, contractResult] = await Promise.all([
+        supabase.from('employees').select(EMPLOYEE_WITH_DEPTS_SELECT).eq('id', id).single(),
         supabase.from('organizations').select('*').eq('id', user.org_id).single(),
         supabase.from('company_reference_values').select('*').eq('org_id', user.org_id).order('display_order').order('name'),
+        supabase.from('company_departments').select('id, name').eq('org_id', user.org_id).order('display_order').order('name'),
         supabase.from('company_branches').select('name').eq('org_id', user.org_id).eq('is_active', true).order('name'),
         supabase
           .from('contracts')
@@ -84,14 +94,16 @@ export function EmployeeEdit({ user }: { user: User }) {
         setContractSignedAt(null)
       }
 
-      if (empResult.data) setEmployee(empResult.data)
+      if (empResult.data) setEmployee(empResult.data as EmployeeWithDepartments)
       setOrg(orgResult.data)
       if (referenceResult.data) {
         const buckets = bucketReferenceValues(referenceResult.data)
-        setOrgDepartments(referenceNames(buckets.department))
         setOrgJobPositions(referenceNames(buckets.job_position))
         setOrgJobLevels(referenceNames(buckets.job_level))
         setOrgEmployeeClasses(referenceNames(buckets.employee_class))
+      }
+      if (departmentsResult.data) {
+        setAvailableDepartments(departmentsResult.data)
       }
       if (branchResult.data) {
         setOrgBranches(branchResult.data.map(b => b.name))
@@ -100,20 +112,30 @@ export function EmployeeEdit({ user }: { user: User }) {
     load()
   }, [employeeId, user.org_id])
 
+  async function reloadEmployee() {
+    if (!employeeId) return
+    const { data } = await supabase
+      .from('employees')
+      .select(EMPLOYEE_WITH_DEPTS_SELECT)
+      .eq('id', employeeId)
+      .single()
+    if (data) setEmployee(data as EmployeeWithDepartments)
+  }
+
   function goBack() {
     navigate('/dashboard/employees')
   }
 
   async function saveFields(partial: Partial<Employee>): Promise<{ error?: string }> {
     if (!employeeId) return { error: 'No employee id' }
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('employees')
       .update(partial)
       .eq('id', employeeId)
-      .select()
-      .single()
     if (error) return { error: error.message }
-    if (data) setEmployee(data)
+    // Re-fetch with the department join so downstream readers always see
+    // a consistent shape after any update.
+    await reloadEmployee()
     // First successful save graduates this employee out of "new" state so
     // subsequent edits behave normally (no auto-edit, no discard-on-cancel).
     if (isNew) {
@@ -121,6 +143,24 @@ export function EmployeeEdit({ user }: { user: User }) {
       next.delete('new')
       setSearchParams(next, { replace: true })
     }
+    return {}
+  }
+
+  async function saveDepartmentByName(name: string | null): Promise<{ error?: string }> {
+    if (!employeeId) return { error: 'No employee id' }
+    const result = await setEmployeePrimaryDepartment({
+      employeeId,
+      orgId: user.org_id,
+      name,
+      available: availableDepartments,
+    })
+    if (result.error) return { error: result.error }
+    if (result.created) {
+      setAvailableDepartments(prev =>
+        [...prev, result.created!].sort((a, b) => a.name.localeCompare(b.name)),
+      )
+    }
+    await reloadEmployee()
     return {}
   }
 
@@ -228,10 +268,11 @@ export function EmployeeEdit({ user }: { user: User }) {
           <PersonalSection
             employee={employee}
             org={org}
-            orgDepartments={orgDepartments}
+            availableDepartments={availableDepartments}
             canWrite={canWrite}
             writeDisabledTitle={writeDisabledTitle}
             saveFields={saveFields}
+            saveDepartment={saveDepartmentByName}
             isNew={isNew}
             onDiscardNew={handleDiscardNew}
           />

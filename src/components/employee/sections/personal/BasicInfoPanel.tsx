@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react'
 import { useLang } from '../../../../contexts/LanguageContext'
 import { PhoneInput, isValidPhone, describePhoneError } from '../../../PhoneInput'
-import { DepartmentsMultiSelect } from '../../../DepartmentsMultiSelect'
+import { DepartmentSelect } from '../../../DepartmentSelect'
 import { DatePicker } from '../../../DatePicker'
 import { SectionPanel, FieldRow, FieldValue } from '../../SectionPanel'
+import { primaryDept } from '../../../../lib/employee'
 import {
   GENDER_VALUES, MARITAL_VALUES, BLOOD_TYPE_VALUES, RELIGION_VALUES,
   genderLabel, maritalLabel, bloodLabel, religionLabel,
 } from './enums'
 import type { Employee, Organization } from '../../../../types/aliases'
+import type { EmpDeptShape } from '../../../../lib/employee'
 
 const inputStyle: React.CSSProperties = {
   borderColor: 'var(--color-border)',
@@ -17,12 +19,13 @@ const inputStyle: React.CSSProperties = {
 }
 
 interface BasicInfoPanelProps {
-  employee: Employee
+  employee: Employee & EmpDeptShape
   org: Organization | null
-  orgDepartments: string[]
+  availableDepartments: { id: string; name: string }[]
   canWrite: boolean
   writeDisabledTitle?: string
   saveFields: (partial: Partial<Employee>) => Promise<{ error?: string }>
+  saveDepartment: (name: string | null) => Promise<{ error?: string }>
   /** True when the employee was just created via the "Add" button and the
    *  basic fields haven't been filled in yet. Auto-opens edit mode and treats
    *  Cancel as a discard. */
@@ -67,10 +70,11 @@ function composeName(first: string, last: string): string {
 export function BasicInfoPanel({
   employee,
   org,
-  orgDepartments,
+  availableDepartments,
   canWrite,
   writeDisabledTitle,
   saveFields,
+  saveDepartment,
   isNew = false,
   onDiscardNew,
 }: BasicInfoPanelProps) {
@@ -79,11 +83,7 @@ export function BasicInfoPanel({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  const initialDepartments = employee.departments && employee.departments.length > 0
-    ? employee.departments
-    : employee.department
-    ? [employee.department]
-    : []
+  const initialDepartment = primaryDept(employee) ?? ''
   const initialName = deriveNameParts(employee, isNew)
 
   const [firstName, setFirstName] = useState(initialName.first)
@@ -96,7 +96,7 @@ export function BasicInfoPanel({
   const [maritalStatus, setMaritalStatus] = useState(employee.marital_status || '')
   const [bloodType, setBloodType] = useState(employee.blood_type || '')
   const [religion, setReligion] = useState(employee.religion || '')
-  const [departments, setDepartments] = useState<string[]>(initialDepartments)
+  const [department, setDepartment] = useState<string>(initialDepartment)
 
   // Make sure edit mode opens once the employee record has loaded for a new
   // employee (in case the panel mounted before the load finished).
@@ -116,7 +116,7 @@ export function BasicInfoPanel({
     setMaritalStatus(employee.marital_status || '')
     setBloodType(employee.blood_type || '')
     setReligion(employee.religion || '')
-    setDepartments(initialDepartments)
+    setDepartment(initialDepartment)
     setError('')
   }
 
@@ -163,18 +163,27 @@ export function BasicInfoPanel({
       marital_status: maritalStatus || null,
       blood_type: bloodType || null,
       religion: religion || null,
-      departments,
-      department: departments[0] || null,
     })
-    setSaving(false)
     if (result.error) {
+      setSaving(false)
       setError(result.error)
       return
     }
+    // Persist the department assignment separately — it lives in
+    // employee_departments, not on the employees row.
+    if (department.trim() !== initialDepartment) {
+      const deptResult = await saveDepartment(department.trim() || null)
+      if (deptResult.error) {
+        setSaving(false)
+        setError(deptResult.error)
+        return
+      }
+    }
+    setSaving(false)
     setEditing(false)
   }
 
-  const displayDepartments = initialDepartments.length > 0 ? initialDepartments.join(', ') : null
+  const displayDepartments = initialDepartment || null
   const displayName = deriveNameParts(employee, false)
 
   return (
@@ -256,7 +265,11 @@ export function BasicInfoPanel({
           </div>
           <div className="md:col-span-2">
             <Label>{t.departmentsLabel}</Label>
-            <DepartmentsMultiSelect value={departments} onChange={setDepartments} availableDepartments={orgDepartments} />
+            <DepartmentSelect
+              value={department}
+              onChange={setDepartment}
+              departments={availableDepartments.map(d => d.name)}
+            />
           </div>
         </div>
       ) : (

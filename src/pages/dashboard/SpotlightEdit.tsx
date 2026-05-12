@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { DepartmentsMultiSelect } from '../../components/DepartmentsMultiSelect'
 import { DateTimePicker } from '../../components/DateTimePicker'
 import { useLang } from '../../contexts/LanguageContext'
-import { getEmployeeDepts } from '../../lib/employee'
+import { getEmployeeDepts, type EmpDeptShape } from '../../lib/employee'
 import { useOutletContext } from 'react-router-dom'
 import type { DashboardOutletContext } from '../../components/Layout'
 import { useBilling } from '../../contexts/BillingContext'
@@ -56,7 +56,7 @@ export function SpotlightEdit({ user }: { user: User }) {
   const isNew = !id
 
   const [form, setForm] = useState<FormState>(DEFAULT_FORM)
-  const [employees, setEmployees] = useState<Employee[]>([])
+  const [employees, setEmployees] = useState<(Employee & EmpDeptShape)[]>([])
   const [loading, setLoading] = useState(!isNew)
   const [saving, setSaving] = useState(false)
   // Lazy-init: captures mount-time as datetime-local string so we can compare
@@ -71,11 +71,11 @@ export function SpotlightEdit({ user }: { user: User }) {
   useEffect(() => {
     let cancelled = false
     async function load() {
-      const empPromise = supabase.from('employees').select('*').eq('org_id', user.org_id).eq('status', 'active').order('name')
+      const empPromise = supabase.from('employees').select('*, employee_departments(is_primary, department:company_departments(id, name))').eq('org_id', user.org_id).eq('status', 'active').order('name')
       if (isNew) {
         const { data: emps } = await empPromise
         if (cancelled) return
-        setEmployees(emps || [])
+        setEmployees((emps || []) as (Employee & EmpDeptShape)[])
         return
       }
       const [{ data: post }, { data: emps }] = await Promise.all([
@@ -83,7 +83,7 @@ export function SpotlightEdit({ user }: { user: User }) {
         empPromise,
       ])
       if (cancelled) return
-      setEmployees(emps || [])
+      setEmployees((emps || []) as (Employee & EmpDeptShape)[])
       if (post) setForm(rowToForm(post))
       setLoading(false)
     }

@@ -7,16 +7,18 @@ import { IdentityDocumentsPanel } from './personal/IdentityDocumentsPanel'
 import { FamilyMembersPanel } from './personal/FamilyMembersPanel'
 import { EmergencyContactsPanel } from './personal/EmergencyContactsPanel'
 import type { Employee, Organization } from '../../../types/aliases'
+import type { EmpDeptShape } from '../../../lib/employee'
 
 type PersonalSubTab = 'basic' | 'family' | 'emergency'
 
 interface PersonalSectionProps {
-  employee: Employee
+  employee: Employee & EmpDeptShape
   org: Organization | null
-  orgDepartments: string[]
+  availableDepartments: { id: string; name: string }[]
   canWrite: boolean
   writeDisabledTitle?: string
   saveFields: (partial: Partial<Employee>) => Promise<{ error?: string }>
+  saveDepartment: (name: string | null) => Promise<{ error?: string }>
   isNew?: boolean
   onDiscardNew?: () => void
 }
@@ -24,10 +26,11 @@ interface PersonalSectionProps {
 export function PersonalSection({
   employee,
   org,
-  orgDepartments,
+  availableDepartments,
   canWrite,
   writeDisabledTitle,
   saveFields,
+  saveDepartment,
   isNew = false,
   onDiscardNew,
 }: PersonalSectionProps) {
@@ -54,10 +57,11 @@ export function PersonalSection({
           <BasicInfoPanel
             employee={employee}
             org={org}
-            orgDepartments={orgDepartments}
+            availableDepartments={availableDepartments}
             canWrite={canWrite}
             writeDisabledTitle={writeDisabledTitle}
             saveFields={saveFields}
+            saveDepartment={saveDepartment}
             isNew={isNew}
             onDiscardNew={onDiscardNew}
           />

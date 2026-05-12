@@ -4,7 +4,6 @@ import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
 import { useBilling } from '../../contexts/BillingContext'
 import { useRole } from '../../hooks/useRole'
-import { getEmployeeDepts } from '../../lib/employee'
 import { AvatarUpload } from '../../components/AvatarUpload'
 import { PhoneInput } from '../../components/PhoneInput'
 import { AddressFields, type AddressValue } from '../../components/AddressFields'
@@ -15,7 +14,7 @@ import {
   getReferenceUsage,
   type CompanyReferenceKind,
 } from '../../lib/companyReference'
-import type { CompanyBranch, CompanyReferenceValue, Employee, Organization, User } from '../../types/aliases'
+import type { CompanyBranch, CompanyDepartment, CompanyReferenceValue, Employee, Organization, User } from '../../types/aliases'
 
 const inputStyle: React.CSSProperties = {
   borderColor: 'var(--color-border)',
@@ -28,7 +27,7 @@ const EMPTY_ADDRESS: AddressValue = { street: '', city: '', province: '', postal
 type CompanyTab = 'profile' | 'structure' | 'assets' | 'activity'
 
 type KindConfig = {
-  kind: Exclude<CompanyReferenceKind, 'branch'>
+  kind: CompanyReferenceKind
   title: string
   description: string
 }
@@ -334,26 +333,29 @@ function CompanyProfileTab({ user }: { user: User }) {
   )
 }
 
+type DepartmentSection = 'departments' | 'branch_table'
+type SavingTarget = CompanyReferenceKind | DepartmentSection | null
+
 function CompanyStructureTab({ user }: { user: User }) {
   const { t } = useLang()
   const { canWrite } = useBilling()
   const [values, setValues] = useState<CompanyReferenceValue[]>([])
   const [branches, setBranches] = useState<CompanyBranch[]>([])
+  const [departments, setDepartments] = useState<CompanyDepartment[]>([])
+  const [departmentCounts, setDepartmentCounts] = useState<Map<string, number>>(new Map())
   const [employees, setEmployees] = useState<Employee[]>([])
   const [loading, setLoading] = useState(true)
-  const [savingKind, setSavingKind] = useState<CompanyReferenceKind | 'branch_table' | null>(null)
+  const [savingKind, setSavingKind] = useState<SavingTarget>(null)
   const [addNames, setAddNames] = useState<Record<CompanyReferenceKind, string>>({
-    department: '',
-    branch: '',
     job_position: '',
     job_level: '',
     employee_class: '',
   })
   const [branchName, setBranchName] = useState('')
+  const [departmentName, setDepartmentName] = useState('')
   const [message, setMessage] = useState('')
 
   const configs: KindConfig[] = useMemo(() => [
-    { kind: 'department', title: t.companyDepartmentsTitle, description: t.companyDepartmentsDesc },
     { kind: 'job_position', title: t.companyJobPositionsTitle, description: t.companyJobPositionsDesc },
     { kind: 'job_level', title: t.companyJobLevelsTitle, description: t.companyJobLevelsDesc },
     { kind: 'employee_class', title: t.companyEmployeeClassesTitle, description: t.companyEmployeeClassesDesc },
@@ -363,13 +365,21 @@ function CompanyStructureTab({ user }: { user: User }) {
 
   async function loadData() {
     setLoading(true)
-    const [valueResult, branchResult, employeeResult] = await Promise.all([
+    const [valueResult, branchResult, departmentResult, deptLinkResult, employeeResult] = await Promise.all([
       supabase.from('company_reference_values').select('*').eq('org_id', user.org_id).order('display_order').order('name'),
       supabase.from('company_branches').select('*').eq('org_id', user.org_id).order('name'),
+      supabase.from('company_departments').select('*').eq('org_id', user.org_id).order('display_order').order('name'),
+      supabase.from('employee_departments').select('department_id, employee_id, employee:employees!inner(org_id)').eq('employee.org_id', user.org_id),
       supabase.from('employees').select('*').eq('org_id', user.org_id),
     ])
     setValues(valueResult.data || [])
     setBranches(branchResult.data || [])
+    setDepartments(departmentResult.data || [])
+    const counts = new Map<string, number>()
+    for (const link of deptLinkResult.data || []) {
+      counts.set(link.department_id, (counts.get(link.department_id) ?? 0) + 1)
+    }
+    setDepartmentCounts(counts)
     setEmployees(employeeResult.data || [])
     setLoading(false)
   }
@@ -420,24 +430,6 @@ function CompanyStructureTab({ user }: { user: User }) {
   }
 
   async function updateEmployeeValues(kind: CompanyReferenceKind, oldName: string, nextName: string | null) {
-    if (kind === 'department') {
-      const updates = employees
-        .filter(emp => getEmployeeDepts(emp).some(d => sameName(d, oldName)))
-        .map(emp => {
-          const nextDepartments = dedupeNames(
-            getEmployeeDepts(emp)
-              .map(d => sameName(d, oldName) ? nextName : d)
-              .filter((d): d is string => Boolean(d?.trim())),
-          )
-          return supabase.from('employees').update({
-            departments: nextDepartments,
-            department: nextDepartments[0] || null,
-          }).eq('id', emp.id)
-        })
-      await Promise.all(updates)
-      return
-    }
-
     const column = employeeColumnForKind(kind)
     if (!column) return
     await supabase.from('employees').update({ [column]: nextName } as Partial<Employee>).eq('org_id', user.org_id).eq(column, oldName)
@@ -475,6 +467,71 @@ function CompanyStructureTab({ user }: { user: User }) {
     setSavingKind(kind)
     const { error } = await supabase.from('company_reference_values').delete().eq('id', value.id)
     if (!error) await updateEmployeeValues(kind, value.name, null)
+    setSavingKind(null)
+    if (error) {
+      alert(error.message)
+      return
+    }
+    setMessage(t.companyReferenceSaved)
+    loadData()
+  }
+
+  function departmentTaken(name: string, exceptId?: string) {
+    const clean = name.trim().toLowerCase()
+    return departments.some(d => d.id !== exceptId && d.name.trim().toLowerCase() === clean)
+  }
+
+  async function handleAddDepartment() {
+    if (!canWrite) return
+    const name = departmentName.trim()
+    if (!name) return
+    if (departmentTaken(name)) {
+      alert(t.companyReferenceTaken)
+      return
+    }
+    setSavingKind('departments')
+    const { error } = await supabase.from('company_departments').insert({
+      org_id: user.org_id,
+      name,
+      display_order: departments.length,
+    })
+    setSavingKind(null)
+    if (error) {
+      alert(error.message)
+      return
+    }
+    setDepartmentName('')
+    setMessage(t.companyReferenceSaved)
+    loadData()
+  }
+
+  async function handleRenameDepartment(dept: CompanyDepartment) {
+    if (!canWrite) return
+    const nextName = prompt(t.companyReferenceRenamePrompt(dept.name), dept.name)?.trim()
+    if (!nextName || nextName === dept.name) return
+    if (departmentTaken(nextName, dept.id)) {
+      alert(t.companyReferenceTaken)
+      return
+    }
+    setSavingKind('departments')
+    const { error } = await supabase.from('company_departments').update({ name: nextName }).eq('id', dept.id)
+    setSavingKind(null)
+    if (error) {
+      alert(error.message)
+      return
+    }
+    setMessage(t.companyReferenceSaved)
+    loadData()
+  }
+
+  async function handleDeleteDepartment(dept: CompanyDepartment) {
+    if (!canWrite) return
+    const usage = departmentCounts.get(dept.id) ?? 0
+    const ok = confirm(usage > 0 ? t.companyReferenceDeleteInUseConfirm(dept.name, usage) : t.companyReferenceDeleteConfirm(dept.name))
+    if (!ok) return
+    setSavingKind('departments')
+    // employee_departments has on-delete-cascade, so the join rows go with it.
+    const { error } = await supabase.from('company_departments').delete().eq('id', dept.id)
     setSavingKind(null)
     if (error) {
       alert(error.message)
@@ -556,6 +613,19 @@ function CompanyStructureTab({ user }: { user: User }) {
       )}
 
       <div className="grid gap-5 lg:grid-cols-2">
+        <DepartmentSection
+          departments={departments}
+          counts={departmentCounts}
+          addName={departmentName}
+          saving={savingKind === 'departments'}
+          disabled={!canWrite}
+          title={t.companyDepartmentsTitle}
+          description={t.companyDepartmentsDesc}
+          onAdd={handleAddDepartment}
+          onAddNameChange={setDepartmentName}
+          onRename={handleRenameDepartment}
+          onDelete={handleDeleteDepartment}
+        />
         <BranchSection
           branches={branches}
           employees={employees}
@@ -584,6 +654,60 @@ function CompanyStructureTab({ user }: { user: User }) {
         ))}
       </div>
     </div>
+  )
+}
+
+function DepartmentSection({
+  departments,
+  counts,
+  addName,
+  saving,
+  disabled,
+  title,
+  description,
+  onAdd,
+  onAddNameChange,
+  onRename,
+  onDelete,
+}: {
+  departments: CompanyDepartment[]
+  counts: Map<string, number>
+  addName: string
+  saving: boolean
+  disabled: boolean
+  title: string
+  description: string
+  onAdd: () => void
+  onAddNameChange: (name: string) => void
+  onRename: (dept: CompanyDepartment) => void
+  onDelete: (dept: CompanyDepartment) => void
+}) {
+  const { t } = useLang()
+  return (
+    <SimpleListSection
+      title={title}
+      description={description}
+      empty={t.companyReferenceEmpty}
+      addName={addName}
+      saving={saving}
+      disabled={disabled}
+      onAdd={onAdd}
+      onAddNameChange={onAddNameChange}
+    >
+      {departments.map(dept => {
+        const used = counts.get(dept.id) ?? 0
+        return (
+          <ValueRow
+            key={dept.id}
+            name={dept.name}
+            subtitle={used > 0 ? t.companyReferenceInUseCount(used) : t.companyReferenceUnused}
+            disabled={disabled}
+            onRename={() => onRename(dept)}
+            onDelete={() => onDelete(dept)}
+          />
+        )
+      })}
+    </SimpleListSection>
   )
 }
 
@@ -963,25 +1087,10 @@ function sameName(a: string, b: string) {
   return a.trim().toLowerCase() === b.trim().toLowerCase()
 }
 
-function dedupeNames(names: string[]) {
-  const seen = new Set<string>()
-  const result: string[] = []
-  for (const name of names) {
-    const clean = name.trim()
-    const key = clean.toLowerCase()
-    if (!clean || seen.has(key)) continue
-    seen.add(key)
-    result.push(clean)
-  }
-  return result
-}
-
 function employeeColumnForKind(kind: CompanyReferenceKind): keyof Employee | null {
   switch (kind) {
     case 'job_position': return 'job_position'
     case 'job_level': return 'job_level'
     case 'employee_class': return 'class'
-    case 'branch': return 'branch_name'
-    case 'department': return null
   }
 }

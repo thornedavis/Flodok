@@ -30,6 +30,7 @@ export function ImportEmployeesModal({
   onImported: (insertedCount: number) => void
 }) {
   const [refs, setRefs] = useState<ImportRefs | null>(null)
+  const [departmentRows, setDepartmentRows] = useState<{ id: string; name: string }[]>([])
   const [refsError, setRefsError] = useState<string | null>(null)
   const [downloading, setDownloading] = useState(false)
   const [parsing, setParsing] = useState(false)
@@ -48,10 +49,16 @@ export function ImportEmployeesModal({
     let cancelled = false
     ;(async () => {
       try {
-        const [refRes, branchRes] = await Promise.all([
+        const [refRes, deptRes, branchRes] = await Promise.all([
           supabase
             .from('company_reference_values')
             .select('kind, name')
+            .eq('org_id', user.org_id)
+            .order('display_order')
+            .order('name'),
+          supabase
+            .from('company_departments')
+            .select('id, name')
             .eq('org_id', user.org_id)
             .order('display_order')
             .order('name'),
@@ -64,16 +71,18 @@ export function ImportEmployeesModal({
         ])
         if (cancelled) return
         if (refRes.error) throw refRes.error
+        if (deptRes.error) throw deptRes.error
         if (branchRes.error) throw branchRes.error
         const byKind = (kind: string) =>
           (refRes.data ?? []).filter(r => r.kind === kind).map(r => r.name)
         setRefs({
-          departments:  byKind('department'),
+          departments:  (deptRes.data ?? []).map(d => d.name),
           branches:     (branchRes.data ?? []).map(b => b.name),
           jobPositions: byKind('job_position'),
           jobLevels:    byKind('job_level'),
           classes:      byKind('employee_class'),
         })
+        setDepartmentRows(deptRes.data ?? [])
       } catch (e) {
         if (!cancelled) setRefsError(e instanceof Error ? e.message : String(e))
       }
@@ -154,13 +163,39 @@ export function ImportEmployeesModal({
     setImporting(true)
     setImportError(null)
     try {
-      const payload = parseResult.rows.map(r => buildInsertPayload(r, user.org_id))
-      const { error } = await supabase.from('employees').insert(payload)
+      const rows = parseResult.rows
+      const payload = rows.map(r => buildInsertPayload(r, user.org_id))
+      const { data: inserted, error } = await supabase
+        .from('employees')
+        .insert(payload)
+        .select('id, name')
       if (error) throw error
+
+      // Map each inserted employee back to its source row's first department
+      // (single-select behaviour; rows with multi-dept CSV cells take the
+      // first). Names are already validated against the canonical list by
+      // the parser, so a lookup miss here is a programmer bug.
+      if (inserted && inserted.length === rows.length && departmentRows.length > 0) {
+        const deptByName = new Map(departmentRows.map(d => [d.name.toLowerCase(), d.id]))
+        const joinRows: { employee_id: string; department_id: string; is_primary: boolean }[] = []
+        for (let i = 0; i < inserted.length; i++) {
+          const firstDept = rows[i].departments[0]
+          if (!firstDept) continue
+          const deptId = deptByName.get(firstDept.toLowerCase())
+          if (deptId) {
+            joinRows.push({ employee_id: inserted[i].id, department_id: deptId, is_primary: true })
+          }
+        }
+        if (joinRows.length > 0) {
+          const { error: joinErr } = await supabase.from('employee_departments').insert(joinRows)
+          if (joinErr) throw joinErr
+        }
+      }
+
       if (orgIsPro) {
         syncSeats().catch(err => console.error('sync-seats failed after import:', err))
       }
-      onImported(parseResult.rows.length)
+      onImported(rows.length)
     } catch (e) {
       setImportError(e instanceof Error ? e.message : t.importFailureGeneric)
       setImporting(false)
@@ -479,8 +514,6 @@ function buildInsertPayload(row: EmployeeImportInput, orgId: string) {
     email: row.email,
     first_name: row.first_name,
     last_name: row.last_name,
-    departments: row.departments && row.departments.length > 0 ? row.departments : [],
-    department: row.departments && row.departments[0] ? row.departments[0] : null,
     branch_name: row.branch_name,
     job_position: row.job_position,
     job_level: row.job_level,

@@ -18,6 +18,7 @@ import ExcelJS from 'exceljs'
 import { normalizePhone, isValidE164 } from './phone'
 import { isPro } from './billing'
 import { FREE_EMPLOYEE_LIMIT, PRO_MIN_SEATS } from './pricing'
+import { getEmployeeDepts, type EmpDeptShape } from './employee'
 import type { Translations } from './translations'
 import type { Employee } from '../types/aliases'
 
@@ -590,7 +591,7 @@ export function checkImportCapacity(opts: {
 
 export async function buildExportFile(opts: {
   orgName: string
-  employees: Employee[]
+  employees: (Employee & EmpDeptShape)[]
   t: Translations
 }): Promise<Blob> {
   const { employees, t } = opts
@@ -614,8 +615,7 @@ export async function buildExportFile(opts: {
   for (const emp of employees) {
     const values = COLUMNS.map(c => {
       if (c.key === 'departments') {
-        const arr = emp.departments ?? (emp.department ? [emp.department] : [])
-        return arr.join(', ')
+        return getEmployeeDepts(emp).join(', ')
       }
       const value = (emp as unknown as Record<string, unknown>)[c.key]
       if (value === null || value === undefined) return ''

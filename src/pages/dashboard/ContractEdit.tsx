@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { DocumentEditor } from '../../components/editor/bilingual/DocumentEditor'
 import { useLang } from '../../contexts/LanguageContext'
-import { primaryDept } from '../../lib/employee'
+import { primaryDept, type EmpDeptShape } from '../../lib/employee'
 import { bucketReferenceValues, referenceNames } from '../../lib/companyReference'
 import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning'
 import { useDocumentViewPref } from '../../hooks/useDocumentViewPref'
@@ -19,6 +19,11 @@ import { useBilling } from '../../contexts/BillingContext'
 import { documentHistoryPath, documentsIndexPath } from '../../lib/documentTypes'
 import type { User, Contract, Tag, Employee, Organization } from '../../types/aliases'
 
+type EmployeeWithDepartments = Employee & EmpDeptShape
+
+const EMPLOYEE_WITH_DEPTS_SELECT =
+  '*, employee_departments(is_primary, department:company_departments(id, name))'
+
 ensureSignatureFontsLoaded()
 
 export function ContractEdit({ user }: { user: User }) {
@@ -29,8 +34,8 @@ export function ContractEdit({ user }: { user: User }) {
   const { view, setView } = useDocumentViewPref('contract', id ?? null)
   const [contract, setContract] = useState<Contract | null>(null)
   const [organization, setOrganization] = useState<Organization | null>(null)
-  const [, setEmployee] = useState<Employee | null>(null)
-  const [allEmployees, setAllEmployees] = useState<Employee[]>([])
+  const [, setEmployee] = useState<EmployeeWithDepartments | null>(null)
+  const [allEmployees, setAllEmployees] = useState<EmployeeWithDepartments[]>([])
   const [employeeId, setEmployeeId] = useState<string | null>(null)
   const [title, setTitle] = useState('')
   // Phase C source of truth: the full structured document. `contentDoc`
@@ -80,12 +85,12 @@ export function ContractEdit({ user }: { user: User }) {
         supabase.from('contracts').select('*').eq('id', id!).single(),
         supabase.from('tags').select('*').eq('org_id', user.org_id).order('name'),
         supabase.from('contract_tags').select('tag_id').eq('contract_id', id!),
-        supabase.from('employees').select('*').eq('org_id', user.org_id).order('name'),
+        supabase.from('employees').select(EMPLOYEE_WITH_DEPTS_SELECT).eq('org_id', user.org_id).order('name'),
         supabase.from('organizations').select('*').eq('id', user.org_id).single(),
         supabase.from('company_reference_values').select('*').eq('org_id', user.org_id).order('display_order').order('name'),
       ])
 
-      setAllEmployees(empsResult.data || [])
+      setAllEmployees((empsResult.data || []) as EmployeeWithDepartments[])
       setOrganization(orgResult.data)
       if (refResult.data) {
         const buckets = bucketReferenceValues(refResult.data)
@@ -109,7 +114,7 @@ export function ContractEdit({ user }: { user: User }) {
         setTemplateForPosition(contractResult.data.template_for_position ?? '')
 
         if (contractResult.data.employee_id) {
-          const emp = (empsResult.data || []).find(e => e.id === contractResult.data.employee_id)
+          const emp = ((empsResult.data || []) as EmployeeWithDepartments[]).find(e => e.id === contractResult.data.employee_id)
           if (emp) setEmployee(emp)
         }
       }

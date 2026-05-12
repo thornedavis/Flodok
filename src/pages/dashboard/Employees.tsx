@@ -8,7 +8,7 @@ import { getAvatarGradient } from '../../lib/avatar'
 import { FilterPanel, FilterSearchInput, MultiSelectDropdown } from '../../components/FilterControls'
 import type { FilterPanelSection } from '../../components/FilterControls'
 import { useLang } from '../../contexts/LanguageContext'
-import { getEmployeeDepts } from '../../lib/employee'
+import { getEmployeeDepts, type EmpDeptShape } from '../../lib/employee'
 import { docAsJson, emptyDocumentDoc } from '../../lib/documentDoc'
 import { isPro, syncSeats } from '../../lib/billing'
 import { FREE_EMPLOYEE_LIMIT, PRO_MIN_SEATS } from '../../lib/pricing'
@@ -19,6 +19,11 @@ import { useBilling } from '../../contexts/BillingContext'
 import { deriveEmployeeStatus, type DerivedStatus } from '../../lib/employeeStatus'
 import type { Translations } from '../../lib/translations'
 import type { User, Employee, Organization } from '../../types/aliases'
+
+type EmployeeWithDepartments = Employee & EmpDeptShape
+
+const EMPLOYEE_WITH_DEPTS_SELECT =
+  '*, employee_departments(is_primary, department:company_departments(id, name))'
 
 type EmployeesView = 'list' | 'cards'
 // Filter values now mirror the derived status — hiring stages live on the
@@ -72,7 +77,7 @@ interface ListColumn {
   width: string
   sortField?: SortField
   alignRight?: boolean
-  render: (ctx: { emp: Employee; t: Translations; statusLabels: Record<EmployeeStatus, string> }) => React.ReactNode
+  render: (ctx: { emp: EmployeeWithDepartments; t: Translations; statusLabels: Record<EmployeeStatus, string> }) => React.ReactNode
 }
 
 function emptyCell(): React.ReactNode {
@@ -183,7 +188,7 @@ export function Employees({ user }: { user: User }) {
   const location = useLocation()
   const seedQuery = (location.state as { q?: string } | null)?.q ?? ''
   const { canWrite, visibleItemLimit, state: dunning } = useBilling()
-  const [employees, setEmployees] = useState<Employee[]>([])
+  const [employees, setEmployees] = useState<EmployeeWithDepartments[]>([])
   const [org, setOrg] = useState<Organization | null>(null)
   const [loading, setLoading] = useState(true)
   const [showUpgrade, setShowUpgrade] = useState(false)
@@ -235,18 +240,18 @@ export function Employees({ user }: { user: User }) {
   async function loadData() {
     const [empResult, orgResult] = await Promise.all([
       supabase.from('employees')
-        .select('*')
+        .select(EMPLOYEE_WITH_DEPTS_SELECT)
         .eq('org_id', user.org_id)
         .in('lifecycle_stage', ['active', 'separated'])
         .order('name'),
       supabase.from('organizations').select('*').eq('id', user.org_id).single(),
     ])
-    setEmployees(empResult.data || [])
+    setEmployees((empResult.data || []) as EmployeeWithDepartments[])
     setOrg(orgResult.data)
     setLoading(false)
   }
 
-  async function handleDuplicate(emp: Employee) {
+  async function handleDuplicate(emp: EmployeeWithDepartments) {
     if (!canWrite) return
     if (org && !isPro(org) && employees.length >= FREE_EMPLOYEE_LIMIT) {
       setShowUpgrade(true)
@@ -272,8 +277,6 @@ export function Employees({ user }: { user: User }) {
         org_id: user.org_id,
         name: newName,
         phone,
-        departments: getEmployeeDepts(emp),
-        department: getEmployeeDepts(emp)[0] || null,
         slug,
         access_token: token,
       })
@@ -281,6 +284,18 @@ export function Employees({ user }: { user: User }) {
       .single()
 
     if (error) { alert(error.message); return }
+
+    // Copy the source employee's department assignments to the new row.
+    const sourceLinks = (emp.employee_departments ?? []).filter(l => l.department)
+    if (newEmp && sourceLinks.length > 0) {
+      await supabase.from('employee_departments').insert(
+        sourceLinks.map(l => ({
+          employee_id: newEmp.id,
+          department_id: l.department!.id,
+          is_primary: l.is_primary,
+        })),
+      )
+    }
 
     const { data: sop } = await supabase
       .from('sops')
@@ -305,7 +320,7 @@ export function Employees({ user }: { user: User }) {
     loadData()
   }
 
-  async function handleDelete(emp: Employee) {
+  async function handleDelete(emp: EmployeeWithDepartments) {
     if (!canWrite) return
     if (!confirm(t.deleteEmployeeConfirm(emp.name))) return
     await supabase.from('employees').delete().eq('id', emp.id)
@@ -931,7 +946,7 @@ function CopyButton({ value }: { value: string }) {
 }
 
 function EmployeeCard({ emp, t, onDuplicate, onDelete, onEdit }: {
-  emp: Employee
+  emp: EmployeeWithDepartments
   t: Translations
   onDuplicate: () => void
   onDelete: () => void
@@ -1157,7 +1172,7 @@ function derivedStatusLabel(status: DerivedStatus, t: Translations): string {
 }
 
 function EmployeeRow({ emp, t, statusLabels, isLast, visibleColumns, nameColumnPx, selected, onToggleSelected, onDuplicate, onDelete, onEdit }: {
-  emp: Employee
+  emp: EmployeeWithDepartments
   t: Translations
   statusLabels: Record<EmployeeStatus, string>
   isLast: boolean
@@ -1343,7 +1358,7 @@ function ListHeader({ t, sortField, sortDir, onToggle, visibleColumns, nameColum
   onToggle: (field: SortField) => void
   visibleColumns: Set<ColumnKey>
   nameColumnPx: number
-  pageEmployees: Employee[]
+  pageEmployees: EmployeeWithDepartments[]
   selectedIds: Set<string>
   onToggleAll: () => void
 }) {

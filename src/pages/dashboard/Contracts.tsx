@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
-import { getEmployeeDepts, primaryDept } from '../../lib/employee'
+import { getEmployeeDepts, primaryDept, type EmpDeptShape } from '../../lib/employee'
 import { formatIdrDigits as formatCurrency } from '../../lib/credits'
 import { bucketReferenceValues, referenceNames } from '../../lib/companyReference'
 import { InfoTooltip } from '../../components/InfoTooltip'
@@ -17,7 +17,12 @@ import type { User, Contract, Employee, Tag, DocumentTemplate } from '../../type
 
 type ContractsView = 'contracts' | 'templates'
 
-type ContractWithEmployee = Contract & { employee: Employee | null; tagIds: string[] }
+type EmployeeWithDepartments = Employee & EmpDeptShape
+
+type ContractWithEmployee = Contract & { employee: EmployeeWithDepartments | null; tagIds: string[] }
+
+const EMPLOYEE_WITH_DEPTS_SELECT =
+  '*, employee_departments(is_primary, department:company_departments(id, name))'
 
 export function Contracts({ user, embedded = false }: { user: User; embedded?: boolean }) {
   const navigate = useNavigate()
@@ -26,7 +31,7 @@ export function Contracts({ user, embedded = false }: { user: User; embedded?: b
   const { canWrite, visibleItemLimit, state: dunning } = useBilling()
   const [contracts, setContracts] = useState<ContractWithEmployee[]>([])
   const [templates, setTemplates] = useState<DocumentTemplate[]>([])
-  const [employees, setEmployees] = useState<Employee[]>([])
+  const [employees, setEmployees] = useState<EmployeeWithDepartments[]>([])
   const [allTags, setAllTags] = useState<Tag[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
@@ -50,7 +55,7 @@ export function Contracts({ user, embedded = false }: { user: User; embedded?: b
         // window (those rows get cleaned up in a later migration).
         supabase.from('contracts').select('*').eq('org_id', user.org_id).eq('is_template', false).order('updated_at', { ascending: false }),
         supabase.from('document_templates').select('*').eq('org_id', user.org_id).eq('type', 'contract').order('updated_at', { ascending: false }),
-        supabase.from('employees').select('*').eq('org_id', user.org_id).order('name'),
+        supabase.from('employees').select(EMPLOYEE_WITH_DEPTS_SELECT).eq('org_id', user.org_id).order('name'),
         supabase.from('tags').select('*').eq('org_id', user.org_id).order('name'),
         supabase.from('contract_tags').select('*'),
         supabase.from('company_reference_values').select('*').eq('org_id', user.org_id).order('display_order').order('name'),
@@ -61,7 +66,8 @@ export function Contracts({ user, embedded = false }: { user: User; embedded?: b
         setJobPositions(referenceNames(buckets.job_position))
       }
 
-      const empMap = new Map((empResult.data || []).map(e => [e.id, e]))
+      const empList = (empResult.data || []) as EmployeeWithDepartments[]
+      const empMap = new Map(empList.map(e => [e.id, e]))
 
       const tagMap = new Map<string, string[]>()
       for (const ct of contractTagsResult.data || []) {
@@ -70,7 +76,7 @@ export function Contracts({ user, embedded = false }: { user: User; embedded?: b
         tagMap.set(ct.contract_id, arr)
       }
 
-      setEmployees(empResult.data || [])
+      setEmployees(empList)
       setContracts((contractResult.data || []).map(c => ({
         ...c,
         employee: c.employee_id ? empMap.get(c.employee_id) || null : null,
@@ -820,7 +826,7 @@ type ContractType = 'pkwt' | 'pkwtt'
 
 function CreateContractModal({ orgId, employees, onClose, onCreated }: {
   orgId: string
-  employees: Employee[]
+  employees: EmployeeWithDepartments[]
   onClose: () => void
   onCreated: (id: string) => void
 }) {

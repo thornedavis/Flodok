@@ -8,7 +8,6 @@ import html2pdf from 'html2pdf.js'
 import { supabase } from '../../lib/supabase'
 import { useTheme } from '../../hooks/useTheme'
 import { useLang } from '../../contexts/LanguageContext'
-import { primaryDept } from '../../lib/employee'
 import { formatIdr, allowanceGradientColor } from '../../lib/credits'
 import { formatRelativeTime } from '../../lib/relativeTime'
 import { BadgeGlyph } from '../../components/BadgeGlyph'
@@ -874,9 +873,9 @@ export function Portal() {
               <span className="truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>
                 {employee.name}
               </span>
-              {primaryDept(employee) && (
+              {portal?.employee.department && (
                 <span className="hidden shrink-0 text-xs sm:inline" style={{ color: 'var(--color-text-tertiary)' }}>
-                  · {primaryDept(employee)}
+                  · {portal.employee.department}
                 </span>
               )}
             </div>

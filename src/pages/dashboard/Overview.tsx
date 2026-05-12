@@ -13,7 +13,7 @@ import {
 } from 'recharts'
 import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
-import { getEmployeeDepts } from '../../lib/employee'
+import { getEmployeeDepts, type EmployeeDepartmentRow } from '../../lib/employee'
 import { formatIdr } from '../../lib/credits'
 import { documentsIndexPath } from '../../lib/documentTypes'
 import { BadgeGlyph } from '../../components/BadgeGlyph'
@@ -34,8 +34,7 @@ interface EmployeeLite {
   id: string
   name: string
   photo_url: string | null
-  department: string | null
-  departments: string[]
+  employee_departments: EmployeeDepartmentRow[] | null
   date_of_birth: string | null
   created_at: string
 }
@@ -150,7 +149,7 @@ async function loadDashboard(orgId: string): Promise<DashboardData> {
   const windowStartIso = new Date(windowStartMs).toISOString()
 
   const [empResult, sopResult, contractResult, pendingResult, feedWindowResult, recentResult, sigResult, csigResult, orgResult] = await Promise.all([
-    supabase.from('employees').select('id, name, photo_url, department, departments, date_of_birth, created_at').eq('org_id', orgId),
+    supabase.from('employees').select('id, name, photo_url, date_of_birth, created_at, employee_departments(is_primary, department:company_departments(id, name))').eq('org_id', orgId),
     supabase.from('sops').select('id, status, current_version, employee_id').eq('org_id', orgId),
     supabase.from('contracts').select('id, status, current_version, employee_id').eq('org_id', orgId),
     supabase.from('pending_updates').select('id', { count: 'exact', head: true }).eq('org_id', orgId).eq('status', 'pending'),
@@ -161,7 +160,7 @@ async function loadDashboard(orgId: string): Promise<DashboardData> {
     supabase.from('organizations').select('badges_enabled').eq('id', orgId).single(),
   ])
 
-  const employees = (empResult.data || []) as EmployeeLite[]
+  const employees = (empResult.data || []) as unknown as EmployeeLite[]
   const sops = sopResult.data || []
   const contracts = contractResult.data || []
 
