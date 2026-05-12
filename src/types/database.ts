@@ -572,6 +572,65 @@ export type Database = {
           },
         ]
       }
+      document_templates: {
+        Row: {
+          allowance_idr: number | null
+          base_wage_idr: number | null
+          content_doc: Json | null
+          content_markdown: string
+          content_markdown_id: string | null
+          created_at: string
+          days_per_week: number | null
+          hours_per_day: number | null
+          id: string
+          org_id: string
+          template_for_position: string | null
+          title: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          allowance_idr?: number | null
+          base_wage_idr?: number | null
+          content_doc?: Json | null
+          content_markdown?: string
+          content_markdown_id?: string | null
+          created_at?: string
+          days_per_week?: number | null
+          hours_per_day?: number | null
+          id?: string
+          org_id: string
+          template_for_position?: string | null
+          title: string
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          allowance_idr?: number | null
+          base_wage_idr?: number | null
+          content_doc?: Json | null
+          content_markdown?: string
+          content_markdown_id?: string | null
+          created_at?: string
+          days_per_week?: number | null
+          hours_per_day?: number | null
+          id?: string
+          org_id?: string
+          template_for_position?: string | null
+          title?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_templates_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       document_view_prefs: {
         Row: {
           document_id: string

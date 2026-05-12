@@ -698,6 +698,7 @@ export function ContractEdit({ user }: { user: User }) {
                 signer: { name: user.name, title: user.title },
               }),
             }}
+            aiGenerate={{ docType: 'contract', title }}
           />
         </div>
 

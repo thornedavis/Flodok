@@ -1,6 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
-import { SOPEditor } from '../../components/Editor'
 import { Avatar } from '../../components/Avatar'
 import { DiffPanel } from '../../components/DiffPanel'
 import { useLang } from '../../contexts/LanguageContext'
@@ -569,15 +568,26 @@ export function Pending({ user }: { user: User }) {
                       />
                     </div>
 
-                    {/* Full SOP editor — editable final version */}
+                    {/* Final markdown — editable raw text before approval.
+                        The legacy rich SOPEditor was removed in Phase G.4;
+                        the bilingual structured editor used by SOPEdit
+                        isn't a fit here because pending updates arrive as
+                        markdown from the AI meeting-summary pipeline.
+                        Reviewers can tweak phrasing inline; the snapshot
+                        helper handles translation and content_doc
+                        derivation on approval. */}
                     <div className="mb-1 text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>
                       {t.finalVersionEditable}
                     </div>
                     <div className="mb-4">
-                      <SOPEditor
+                      <textarea
                         key={update.id}
-                        content={getFinalContent(update)}
-                        onChange={(val) => handleContentChange(update.id, val)}
+                        value={getFinalContent(update)}
+                        onChange={e => handleContentChange(update.id, e.target.value)}
+                        rows={16}
+                        spellCheck
+                        className="w-full rounded-lg border px-3 py-2 font-mono text-xs leading-relaxed outline-none"
+                        style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
                       />
                     </div>
 

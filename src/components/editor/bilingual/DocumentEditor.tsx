@@ -40,6 +40,7 @@ import { MergeFieldButton } from '../MergeFieldButton'
 import { MERGE_FIELD_STYLES } from '../MergeField'
 import { DOCUMENT_EDITOR_STYLES } from './styles'
 import { supabase } from '../../../lib/supabase'
+import { generateDocument } from '../../../lib/aiGenerate'
 import type { DocumentDoc } from '../../../lib/documentDoc'
 import type { MergeContext } from '../../../lib/mergeFields'
 
@@ -73,9 +74,17 @@ interface DocumentEditorProps {
   // Merge-fields integration. Omit for the sandbox / when not wiring
   // to a real document.
   mergeFields?: DocumentEditorMergeFields
+  // AI Generate integration (Phase G.3). When provided, the toolbar
+  // renders an "AI Generate" button that opens a prompt modal and
+  // replaces the editor's content with the generated structured doc.
+  // Omit to hide the button (e.g. on read-only surfaces).
+  aiGenerate?: {
+    docType: 'sop' | 'contract'
+    title?: string
+  }
 }
 
-export function DocumentEditor({ initialDoc, onChange, view = 'stacked', onViewChange, mergeFields }: DocumentEditorProps) {
+export function DocumentEditor({ initialDoc, onChange, view = 'stacked', onViewChange, mergeFields, aiGenerate }: DocumentEditorProps) {
   // Bind React NodeViews at editor-creation time rather than baking
   // JSX into nodes.ts — keeps the schema file framework-agnostic.
   const SectionWithView = SectionNode.extend({
@@ -92,6 +101,13 @@ export function DocumentEditor({ initialDoc, onChange, view = 'stacked', onViewC
   // State for the per-selection translate action. Tracks the in-flight
   // request so we can show a spinner on the BubbleMenu button.
   const [translating, setTranslating] = useState(false)
+
+  // AI Generate modal state. `generateOpen` toggles the prompt dialog;
+  // `generating` blocks the submit button while the model request is
+  // in flight. The dialog is only mounted when `aiGenerate` is set.
+  const [generateOpen, setGenerateOpen] = useState(false)
+  const [generating, setGenerating] = useState(false)
+  const [generateError, setGenerateError] = useState('')
 
   const editor = useEditor({
     extensions: [
@@ -287,6 +303,29 @@ export function DocumentEditor({ initialDoc, onChange, view = 'stacked', onViewC
     }
   }, [editor, translating])
 
+  // AI Generate submit. Calls the edge function with the user's prompt
+  // and replaces the editor's content with the returned DocumentDoc.
+  // Replace (not insert) because most prompts produce a complete doc;
+  // users wanting to augment can paste from the modal output later if
+  // we add that mode.
+  const runGenerate = useCallback(async (prompt: string) => {
+    if (!editor || !aiGenerate || generating) return
+    setGenerating(true)
+    setGenerateError('')
+    try {
+      const doc = await generateDocument({ prompt, docType: aiGenerate.docType, title: aiGenerate.title })
+      editor.commands.setContent(doc as unknown as Record<string, unknown>)
+      // setContent doesn't fire onUpdate, so push the change explicitly
+      // so the parent's saved-state tracker sees the new doc.
+      if (onChange) onChange(editor.getJSON() as unknown as DocumentDoc)
+      setGenerateOpen(false)
+    } catch (err) {
+      setGenerateError(err instanceof Error ? err.message : 'Generation failed')
+    } finally {
+      setGenerating(false)
+    }
+  }, [editor, aiGenerate, generating, onChange])
+
   if (!editor) return null
 
   return (
@@ -299,7 +338,17 @@ export function DocumentEditor({ initialDoc, onChange, view = 'stacked', onViewC
         mergeFields={mergeFields}
         view={view}
         onViewChange={onViewChange}
+        onGenerate={aiGenerate ? () => setGenerateOpen(true) : undefined}
       />
+      {aiGenerate && generateOpen && (
+        <GenerateModal
+          docType={aiGenerate.docType}
+          generating={generating}
+          error={generateError}
+          onClose={() => { if (!generating) setGenerateOpen(false) }}
+          onSubmit={runGenerate}
+        />
+      )}
       <BubbleMenu editor={editor}>
         <div
           className="flex items-center gap-0.5 rounded-lg border p-1 shadow-lg"
@@ -344,7 +393,7 @@ export function DocumentEditor({ initialDoc, onChange, view = 'stacked', onViewC
 
 // ─── Toolbar ──────────────────────────────────────────────────────
 
-function Toolbar({ editor, onSetLink, onAddBlock, onAddSection, mergeFields, view, onViewChange }: {
+function Toolbar({ editor, onSetLink, onAddBlock, onAddSection, mergeFields, view, onViewChange, onGenerate }: {
   editor: Editor
   onSetLink: () => void
   onAddBlock: () => void
@@ -352,6 +401,7 @@ function Toolbar({ editor, onSetLink, onAddBlock, onAddSection, mergeFields, vie
   mergeFields?: DocumentEditorMergeFields
   view: DocumentEditorView
   onViewChange?: (next: DocumentEditorView) => void
+  onGenerate?: () => void
 }) {
   return (
     <div
@@ -422,6 +472,23 @@ function Toolbar({ editor, onSetLink, onAddBlock, onAddSection, mergeFields, vie
               auto-localize per blockBody. We pass lang='en' as the
               picker's own UI language since the editor chrome is EN. */}
           <MergeFieldButton editor={editor} scope={mergeFields.scope} lang="en" />
+        </>
+      )}
+      {onGenerate && (
+        <>
+          <Divider />
+          <button
+            type="button"
+            onClick={onGenerate}
+            title="Generate a draft of this document from a prompt"
+            className="flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors"
+            style={{ color: 'var(--color-primary)' }}
+            onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
+            onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
+          >
+            <SparklesIcon />
+            <span>AI Generate</span>
+          </button>
         </>
       )}
       {onViewChange && (
@@ -516,3 +583,73 @@ function CodeBlockIcon() { return <svg {...s}><rect x="2" y="3" width="20" heigh
 function SideBySideIcon() { return <svg {...s}><rect x="3" y="4" width="8" height="16" rx="1"/><rect x="13" y="4" width="8" height="16" rx="1"/></svg> }
 function StackedIcon() { return <svg {...s}><rect x="3" y="3" width="18" height="8" rx="1"/><rect x="3" y="13" width="18" height="8" rx="1"/></svg> }
 function TranslateIcon() { return <svg {...s}><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg> }
+function SparklesIcon() { return <svg {...s}><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg> }
+
+// ─── AI Generate modal ─────────────────────────────────────────────
+
+function GenerateModal({ docType, generating, error, onClose, onSubmit }: {
+  docType: 'sop' | 'contract'
+  generating: boolean
+  error: string
+  onClose: () => void
+  onSubmit: (prompt: string) => void
+}) {
+  const [prompt, setPrompt] = useState('')
+  const placeholder = docType === 'contract'
+    ? 'e.g. PKWTT contract for a senior chef, 6-month probation, weekly off on Mondays'
+    : 'e.g. SOP for opening checklist at a coffee shop — covers cleaning, prep, register float'
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div
+        className="w-full max-w-lg rounded-lg border p-5 shadow-xl"
+        style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }}
+        onClick={e => e.stopPropagation()}
+      >
+        <h2 className="mb-1 text-lg font-semibold" style={{ color: 'var(--color-text)' }}>AI Generate</h2>
+        <p className="mb-4 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+          Describe what you want. The result replaces the current draft — both English and Bahasa Indonesia sides come back filled in.
+        </p>
+        <textarea
+          value={prompt}
+          onChange={e => setPrompt(e.target.value)}
+          rows={5}
+          autoFocus
+          disabled={generating}
+          placeholder={placeholder}
+          className="w-full resize-none rounded-lg border px-3 py-2 text-sm outline-none"
+          style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+        />
+        {error && (
+          <p className="mt-2 text-sm" style={{ color: 'var(--color-danger)' }}>{error}</p>
+        )}
+        <div className="mt-4 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={generating}
+            className="rounded-lg border px-4 py-2 text-sm disabled:opacity-50"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => onSubmit(prompt.trim())}
+            disabled={generating || !prompt.trim()}
+            className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+            style={{ backgroundColor: 'var(--color-primary)' }}
+          >
+            {generating ? (
+              <>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
+                  <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                </svg>
+                Generating…
+              </>
+            ) : 'Generate'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}

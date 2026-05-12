@@ -1,18 +1,21 @@
 // MergeField TipTap node — renders {{key}} tokens as inline pills inside the
-// editor and round-trips through markdown via @tiptap/markdown.
-//
-// Authoring model: structured fields are the source of truth. The editor
-// preserves the {{key}} token in markdown verbatim; the React node view
-// resolves and displays the *value* via a context getter passed in via
-// extension options. That way a contract template like
+// bilingual editor. The pill resolves and displays the *value* via a
+// context getter passed in via extension options. That way a contract
+// template like
 //
 //   "Wage: {{base_wage_idr}}"
 //
 // renders as a pill showing "Rp 3,400,000" while editing, and serializes
-// back to the same `{{base_wage_idr}}` token on save.
+// back to the same `{{base_wage_idr}}` token on save. The
+// BilingualMergeField extension in `./bilingual` extends this with
+// per-blockBody language resolution.
+//
+// (Pre-Phase-G this node also round-tripped through @tiptap/markdown.
+// That path was removed alongside the legacy markdown SOPEditor — the
+// bilingual editor stores content_doc directly, so no markdown
+// serialisation is needed inside the editor extension.)
 
 import { Node, mergeAttributes } from '@tiptap/core'
-import type { MarkdownToken } from '@tiptap/core'
 import { ReactNodeViewRenderer, NodeViewWrapper } from '@tiptap/react'
 import type { NodeViewProps } from '@tiptap/react'
 import {
@@ -97,41 +100,6 @@ export const MergeFieldExtension = Node.create<MergeFieldOptions>({
     }
   },
 
-  // ─── Markdown round-trip ──────────────────────────────────────────────────
-
-  markdownTokenName: 'mergeField',
-
-  markdownTokenizer: {
-    name: 'mergeField',
-    level: 'inline',
-    start: (src: string) => {
-      const i = src.indexOf('{{')
-      return i < 0 ? -1 : i
-    },
-    tokenize: (src: string) => {
-      const m = /^\{\{\s*([a-z_]+)\s*\}\}/.exec(src)
-      if (!m) return undefined
-      const key = m[1]
-      if (!isMergeFieldKey(key)) return undefined
-      return {
-        type: 'mergeField',
-        raw: m[0],
-        key,
-      } as MarkdownToken
-    },
-  },
-
-  parseMarkdown(token) {
-    return {
-      type: 'mergeField',
-      attrs: { key: (token as { key?: string }).key ?? '' },
-    }
-  },
-
-  renderMarkdown(node) {
-    const key = node.attrs?.key as string | undefined
-    return key ? `{{${key}}}` : ''
-  },
 })
 
 // ─── React node view ────────────────────────────────────────────────────────

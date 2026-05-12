@@ -474,6 +474,7 @@ export function SOPEdit({ user }: { user: User }) {
                 lang: 'en',
               }),
             }}
+            aiGenerate={{ docType: 'sop', title }}
           />
         </div>
       </div>

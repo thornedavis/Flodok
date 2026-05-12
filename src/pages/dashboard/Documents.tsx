@@ -272,7 +272,7 @@ function AllDocumentsView({ user }: { user: User }) {
           .eq('org_id', user.org_id),
         supabase
           .from('contracts')
-          .select('id, title, status, current_version, updated_at, created_at, is_template')
+          .select('id, title, status, current_version, updated_at, created_at')
           .eq('org_id', user.org_id)
           .eq('is_template', false),
       ])

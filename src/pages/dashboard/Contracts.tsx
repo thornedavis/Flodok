@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
-import { getEmployeeDepts, primaryDept, deptsJoined } from '../../lib/employee'
+import { getEmployeeDepts, primaryDept } from '../../lib/employee'
 import { formatIdrDigits as formatCurrency } from '../../lib/credits'
 import { bucketReferenceValues, referenceNames } from '../../lib/companyReference'
 import { InfoTooltip } from '../../components/InfoTooltip'
@@ -10,9 +10,10 @@ import { FilterPill, FilterPanel, FilterSearchInput } from '../../components/Fil
 import type { FilterPanelSection } from '../../components/FilterControls'
 import { DateTimePicker } from '../../components/DateTimePicker'
 import { useBilling } from '../../contexts/BillingContext'
-import { documentEditPath } from '../../lib/documentTypes'
+import { documentEditPath, documentTemplateEditPath } from '../../lib/documentTypes'
 import { docAsJson, emptyDocumentDoc } from '../../lib/documentDoc'
-import type { User, Contract, Employee, Tag } from '../../types/aliases'
+import { buildPkwtStarterDoc } from '../../lib/pkwtStarterDoc'
+import type { User, Contract, Employee, Tag, DocumentTemplate } from '../../types/aliases'
 
 type ContractsView = 'contracts' | 'templates'
 
@@ -24,6 +25,7 @@ export function Contracts({ user, embedded = false }: { user: User; embedded?: b
   const { t } = useLang()
   const { canWrite, visibleItemLimit, state: dunning } = useBilling()
   const [contracts, setContracts] = useState<ContractWithEmployee[]>([])
+  const [templates, setTemplates] = useState<DocumentTemplate[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
   const [allTags, setAllTags] = useState<Tag[]>([])
   const [loading, setLoading] = useState(true)
@@ -41,8 +43,13 @@ export function Contracts({ user, embedded = false }: { user: User; embedded?: b
 
   useEffect(() => {
     async function load() {
-      const [contractResult, empResult, tagsResult, contractTagsResult, refResult] = await Promise.all([
-        supabase.from('contracts').select('*').eq('org_id', user.org_id).order('updated_at', { ascending: false }),
+      const [contractResult, templateResult, empResult, tagsResult, contractTagsResult, refResult] = await Promise.all([
+        // Real contracts only — templates live in `document_templates`
+        // since Phase G.1. The legacy `is_template = true` rows are
+        // ignored here so they don't double-count during the rollout
+        // window (those rows get cleaned up in a later migration).
+        supabase.from('contracts').select('*').eq('org_id', user.org_id).eq('is_template', false).order('updated_at', { ascending: false }),
+        supabase.from('document_templates').select('*').eq('org_id', user.org_id).eq('type', 'contract').order('updated_at', { ascending: false }),
         supabase.from('employees').select('*').eq('org_id', user.org_id).order('name'),
         supabase.from('tags').select('*').eq('org_id', user.org_id).order('name'),
         supabase.from('contract_tags').select('*'),
@@ -69,6 +76,7 @@ export function Contracts({ user, embedded = false }: { user: User; embedded?: b
         employee: c.employee_id ? empMap.get(c.employee_id) || null : null,
         tagIds: tagMap.get(c.id) || [],
       })))
+      setTemplates(templateResult.data || [])
       setAllTags(tagsResult.data || [])
       setLoading(false)
     }
@@ -125,19 +133,16 @@ export function Contracts({ user, embedded = false }: { user: User; embedded?: b
 
   const tagNameMap = new Map(allTags.map(t => [t.id, t]))
 
-  const filtered = contracts
+  const filteredContracts = contracts
     .filter(c => {
-      const isTemplate = !!c.is_template
-      if (view === 'templates' ? !isTemplate : isTemplate) return false
       const empDepts = c.employee ? getEmployeeDepts(c.employee) : []
       const matchesDept = activeDepartments.size === 0 || empDepts.some(d => activeDepartments.has(d))
-      const matchesStatus = view === 'templates' || activeStatuses.size === 0 || activeStatuses.has(c.status)
+      const matchesStatus = activeStatuses.size === 0 || activeStatuses.has(c.status)
       const matchesTags = activeTags.size === 0 || c.tagIds.some(tid => activeTags.has(tid))
       const q = searchQuery.trim().toLowerCase()
       const matchesSearch = !q ||
         c.title.toLowerCase().includes(q) ||
         c.employee?.name.toLowerCase().includes(q) ||
-        (c.template_for_position || '').toLowerCase().includes(q) ||
         empDepts.some(d => d.toLowerCase().includes(q))
       return matchesDept && matchesStatus && matchesTags && matchesSearch
     })
@@ -148,11 +153,24 @@ export function Contracts({ user, embedded = false }: { user: User; embedded?: b
       return (b.updated_at || b.created_at).localeCompare(a.updated_at || a.created_at)
     })
 
-  const visibleFiltered = visibleItemLimit !== null ? filtered.slice(0, visibleItemLimit) : filtered
-  const hiddenCount = filtered.length - visibleFiltered.length
-  const templates = contracts.filter(c => c.is_template)
+  const filteredTemplates = templates
+    .filter(tpl => {
+      const q = searchQuery.trim().toLowerCase()
+      return !q ||
+        tpl.title.toLowerCase().includes(q) ||
+        (tpl.template_for_position || '').toLowerCase().includes(q)
+    })
+    .slice()
+    .sort((a, b) => {
+      if (sortBy === 'newest') return b.created_at.localeCompare(a.created_at)
+      if (sortBy === 'oldest') return a.created_at.localeCompare(b.created_at)
+      return (b.updated_at || b.created_at).localeCompare(a.updated_at || a.created_at)
+    })
 
-  async function handleCreateFromTemplate(template: ContractWithEmployee) {
+  const visibleFilteredContracts = visibleItemLimit !== null ? filteredContracts.slice(0, visibleItemLimit) : filteredContracts
+  const hiddenCount = filteredContracts.length - visibleFilteredContracts.length
+
+  async function handleCreateFromTemplate(template: DocumentTemplate) {
     if (!canWrite) return
     const { data, error } = await supabase
       .from('contracts')
@@ -165,8 +183,6 @@ export function Contracts({ user, embedded = false }: { user: User; embedded?: b
         allowance_idr: template.allowance_idr,
         hours_per_day: template.hours_per_day,
         days_per_week: template.days_per_week,
-        start_date: template.start_date,
-        end_date: template.end_date,
         status: 'draft' as const,
         is_template: false,
       })
@@ -200,6 +216,15 @@ export function Contracts({ user, embedded = false }: { user: User; embedded?: b
     const { error } = await supabase.from('contracts').delete().eq('id', contract.id)
     if (error) { alert(error.message); return }
     setContracts(prev => prev.filter(c => c.id !== contract.id))
+    setMenuOpenId(null)
+  }
+
+  async function handleDeleteTemplate(template: DocumentTemplate) {
+    if (!canWrite) return
+    if (!confirm(t.deleteContractConfirm(template.title))) return
+    const { error } = await supabase.from('document_templates').delete().eq('id', template.id)
+    if (error) { alert(error.message); return }
+    setTemplates(prev => prev.filter(t => t.id !== template.id))
     setMenuOpenId(null)
   }
 
@@ -302,11 +327,11 @@ export function Contracts({ user, embedded = false }: { user: User; embedded?: b
       <div className="mb-5 flex gap-1 border-b" style={{ borderColor: 'var(--color-border)' }}>
         <ViewTab active={view === 'contracts'} onClick={() => setView('contracts')}>
           {t.contractsTabContracts}
-          <span className="ml-2 rounded-full px-1.5 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}>{contracts.filter(c => !c.is_template).length}</span>
+          <span className="ml-2 rounded-full px-1.5 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}>{contracts.length}</span>
         </ViewTab>
         <ViewTab active={view === 'templates'} onClick={() => setView('templates')}>
           {t.contractsTabTemplates}
-          <span className="ml-2 rounded-full px-1.5 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}>{contracts.filter(c => c.is_template).length}</span>
+          <span className="ml-2 rounded-full px-1.5 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}>{templates.length}</span>
         </ViewTab>
       </div>
 
@@ -326,7 +351,7 @@ export function Contracts({ user, embedded = false }: { user: User; embedded?: b
             <FilterPill
               active={activeStatuses.size === 0}
               onClick={() => setActiveStatuses(new Set())}
-              count={contracts.filter(c => !c.is_template).length}
+              count={contracts.length}
             >
               {t.filterAll}
             </FilterPill>
@@ -363,17 +388,126 @@ export function Contracts({ user, embedded = false }: { user: User; embedded?: b
       </div>
 
       <div>
-        {visibleFiltered.length === 0 ? (
+        {view === 'templates' ? (
+          filteredTemplates.length === 0 ? (
+            <p className="py-12 text-center text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+              {templates.length === 0 ? t.noTemplatesYet : t.noContractsMatchFilters}
+            </p>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {filteredTemplates.map(template => (
+                <div
+                  key={template.id}
+                  className="group relative cursor-pointer rounded-xl border p-5 transition-all"
+                  style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }}
+                  onClick={() => navigate(documentTemplateEditPath(template.id))}
+                  onMouseOver={e => {
+                    e.currentTarget.style.borderColor = 'var(--color-border-strong)'
+                    e.currentTarget.style.transform = 'translateY(-1px)'
+                  }}
+                  onMouseOut={e => {
+                    e.currentTarget.style.borderColor = 'var(--color-border)'
+                    e.currentTarget.style.transform = 'none'
+                  }}
+                >
+                  <div className="absolute right-3 top-3">
+                    <button
+                      type="button"
+                      onClick={e => { e.stopPropagation(); setMenuOpenId(menuOpenId === template.id ? null : template.id) }}
+                      className="rounded-md p-1 opacity-0 transition-all group-hover:opacity-100"
+                      style={{ color: 'var(--color-text-tertiary)' }}
+                      onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
+                      onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <circle cx="12" cy="5" r="2" />
+                        <circle cx="12" cy="12" r="2" />
+                        <circle cx="12" cy="19" r="2" />
+                      </svg>
+                    </button>
+                    {menuOpenId === template.id && (
+                      <>
+                        <div className="fixed inset-0 z-10" onClick={e => { e.stopPropagation(); setMenuOpenId(null) }} />
+                        <div
+                          className="absolute right-0 z-20 mt-1 w-56 rounded-lg border py-1 shadow-lg"
+                          style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }}
+                        >
+                          <button
+                            onClick={e => { e.stopPropagation(); setMenuOpenId(null); handleCreateFromTemplate(template) }}
+                            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors"
+                            style={{ color: 'var(--color-text)' }}
+                            onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
+                            onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                              <polyline points="14 2 14 8 20 8" />
+                              <line x1="12" y1="18" x2="12" y2="12" />
+                              <line x1="9" y1="15" x2="15" y2="15" />
+                            </svg>
+                            {t.createContractFromThis}
+                          </button>
+                          <button
+                            onClick={e => { e.stopPropagation(); handleDeleteTemplate(template) }}
+                            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors"
+                            style={{ color: 'var(--color-danger)' }}
+                            onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
+                            onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="3 6 5 6 21 6" />
+                              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                              <path d="M10 11v6" />
+                              <path d="M14 11v6" />
+                            </svg>
+                            {t.delete}
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="mb-3 flex flex-wrap gap-1">
+                    <span
+                      className="inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium"
+                      style={{ backgroundColor: 'color-mix(in srgb, var(--color-primary) 14%, transparent)', color: 'var(--color-primary)' }}
+                    >
+                      {t.contractTemplateBadge}
+                    </span>
+                    {template.template_for_position && (
+                      <span
+                        className="inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium"
+                        style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}
+                      >
+                        {template.template_for_position}
+                      </span>
+                    )}
+                  </div>
+
+                  <h3 className="text-sm font-semibold leading-snug" style={{ color: 'var(--color-text)' }}>
+                    {template.title}
+                  </h3>
+
+                  {!template.template_for_position && (
+                    <p className="mt-1.5 text-xs leading-relaxed" style={{ color: 'var(--color-text-tertiary)' }}>
+                      {t.contractTemplateUnused}
+                    </p>
+                  )}
+
+                  <div className="mt-3 flex items-center gap-2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                    <span>{new Date(template.updated_at).toLocaleDateString()}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+        ) : visibleFilteredContracts.length === 0 ? (
           <p className="py-12 text-center text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-            {view === 'templates'
-              ? t.noTemplatesYet
-              : contracts.filter(c => !c.is_template).length === 0
-                ? t.noContractsYet
-                : t.noContractsMatchFilters}
+            {contracts.length === 0 ? t.noContractsYet : t.noContractsMatchFilters}
           </p>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {visibleFiltered.map(contract => (
+            {visibleFilteredContracts.map(contract => (
               <div
                 key={contract.id}
                 className="group relative cursor-pointer rounded-xl border p-5 transition-all"
@@ -412,23 +546,6 @@ export function Contracts({ user, embedded = false }: { user: User; embedded?: b
                         className="absolute right-0 z-20 mt-1 w-56 rounded-lg border py-1 shadow-lg"
                         style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }}
                       >
-                        {contract.is_template && (
-                          <button
-                            onClick={e => { e.stopPropagation(); setMenuOpenId(null); handleCreateFromTemplate(contract) }}
-                            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors"
-                            style={{ color: 'var(--color-text)' }}
-                            onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
-                            onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
-                          >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                              <polyline points="14 2 14 8 20 8" />
-                              <line x1="12" y1="18" x2="12" y2="12" />
-                              <line x1="9" y1="15" x2="15" y2="15" />
-                            </svg>
-                            {t.createContractFromThis}
-                          </button>
-                        )}
                         <button
                           onClick={e => { e.stopPropagation(); handleDuplicate(contract) }}
                           className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors"
@@ -462,24 +579,7 @@ export function Contracts({ user, embedded = false }: { user: User; embedded?: b
                   )}
                 </div>
 
-                {contract.is_template ? (
-                  <div className="mb-3 flex flex-wrap gap-1">
-                    <span
-                      className="inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium"
-                      style={{ backgroundColor: 'color-mix(in srgb, var(--color-primary) 14%, transparent)', color: 'var(--color-primary)' }}
-                    >
-                      {t.contractTemplateBadge}
-                    </span>
-                    {contract.template_for_position && (
-                      <span
-                        className="inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium"
-                        style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}
-                      >
-                        {contract.template_for_position}
-                      </span>
-                    )}
-                  </div>
-                ) : contract.employee && getEmployeeDepts(contract.employee).length > 0 && (
+                {contract.employee && getEmployeeDepts(contract.employee).length > 0 && (
                   <div className="mb-3 flex flex-wrap gap-1">
                     {getEmployeeDepts(contract.employee).map(d => (
                       <span
@@ -497,13 +597,7 @@ export function Contracts({ user, embedded = false }: { user: User; embedded?: b
                   {contract.title}
                 </h3>
 
-                {contract.is_template ? (
-                  !contract.template_for_position && (
-                    <p className="mt-1.5 text-xs leading-relaxed" style={{ color: 'var(--color-text-tertiary)' }}>
-                      {t.contractTemplateUnused}
-                    </p>
-                  )
-                ) : contract.employee && (
+                {contract.employee && (
                   <p className="mt-1.5 text-xs leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>
                     {contract.employee.name}
                   </p>
@@ -528,15 +622,11 @@ export function Contracts({ user, embedded = false }: { user: User; embedded?: b
                 )}
 
                 <div className="mt-3 flex items-center gap-2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                  {!contract.is_template && (
-                    <>
-                      <span className="inline-flex items-center gap-1" style={{ color: statusColors[contract.status] }}>
-                        <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: statusColors[contract.status] }} />
-                        {statusLabels[contract.status] || contract.status}
-                      </span>
-                      <span>&middot;</span>
-                    </>
-                  )}
+                  <span className="inline-flex items-center gap-1" style={{ color: statusColors[contract.status] }}>
+                    <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: statusColors[contract.status] }} />
+                    {statusLabels[contract.status] || contract.status}
+                  </span>
+                  <span>&middot;</span>
                   <span>v{contract.current_version}</span>
                   <span>&middot;</span>
                   <span>{new Date(contract.updated_at).toLocaleDateString()}</span>
@@ -561,7 +651,7 @@ export function Contracts({ user, embedded = false }: { user: User; embedded?: b
           orgId={user.org_id}
           jobPositions={jobPositions}
           onClose={() => setShowCreateTemplate(false)}
-          onCreated={(id) => navigate(documentEditPath('contract', id))}
+          onCreated={(id) => navigate(documentTemplateEditPath(id))}
           onManagePositions={() => { setShowCreateTemplate(false); navigate('/dashboard/company?tab=structure') }}
         />
       )}
@@ -601,6 +691,11 @@ function NewTemplateModal({ orgId, jobPositions, onClose, onCreated, onManagePos
   const { t } = useLang()
   const [title, setTitle] = useState('')
   const [position, setPosition] = useState('')
+  // Phase G.2: starter picker. 'blank' keeps the previous behaviour
+  // (empty doc); 'pkwt' / 'pkwtt' seed the template with the bilingual
+  // PKWT / PKWTT structured starter so users have a real working
+  // contract to customise.
+  const [starter, setStarter] = useState<'blank' | 'pkwt' | 'pkwtt'>('pkwt')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -609,14 +704,14 @@ function NewTemplateModal({ orgId, jobPositions, onClose, onCreated, onManagePos
     if (!title.trim() || saving) return
     setSaving(true)
     setError('')
+    const doc = starter === 'blank' ? emptyDocumentDoc() : buildPkwtStarterDoc(starter)
     const { data, error: insertError } = await supabase
-      .from('contracts')
+      .from('document_templates')
       .insert({
         org_id: orgId,
+        type: 'contract',
         title: title.trim(),
-        content_doc: docAsJson(emptyDocumentDoc()),
-        status: 'draft',
-        is_template: true,
+        content_doc: docAsJson(doc),
         template_for_position: position || null,
       })
       .select()
@@ -678,6 +773,33 @@ function NewTemplateModal({ orgId, jobPositions, onClose, onCreated, onManagePos
               {t.contractTemplateForPositionHelp}
             </p>
           </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.newTemplateStarterLabel}</label>
+            <div className="grid grid-cols-3 gap-2">
+              {(['pkwt', 'pkwtt', 'blank'] as const).map(opt => {
+                const isSelected = starter === opt
+                const label = opt === 'pkwt' ? t.contractTypeFixedTerm
+                  : opt === 'pkwtt' ? t.contractTypePermanent
+                  : t.newTemplateStarterBlank
+                return (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => setStarter(opt)}
+                    className="rounded-lg border px-3 py-2 text-xs font-medium transition-all"
+                    style={{
+                      borderColor: isSelected ? 'var(--color-primary)' : 'var(--color-border)',
+                      backgroundColor: isSelected ? 'color-mix(in srgb, var(--color-primary) 8%, transparent)' : 'transparent',
+                      color: isSelected ? 'var(--color-primary)' : 'var(--color-text)',
+                    }}
+                  >
+                    {label}
+                  </button>
+                )
+              })}
+            </div>
+            <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.newTemplateStarterHelp}</p>
+          </div>
           {error && <p className="text-sm" style={{ color: 'var(--color-danger)' }}>{error}</p>}
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" onClick={onClose} className="rounded-lg border px-4 py-2 text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>
@@ -695,202 +817,6 @@ function NewTemplateModal({ orgId, jobPositions, onClose, onCreated, onManagePos
 
 type ContractType = 'pkwt' | 'pkwtt'
 
-function generateContractMarkdown(
-  type: ContractType,
-  fields: {
-    employeeName: string
-    employeeAddress: string
-    ktpNumber: string
-    position: string
-    department: string
-    workLocation: string
-    startDate: string
-    endDate: string
-    probationMonths: string
-    baseSalary: string
-    allowance: string
-    hoursPerDay: string
-    daysPerWeek: string
-    annualLeave: string
-  },
-) {
-  // Fields backed by structured data become merge field tokens — they
-  // re-resolve at view time, so updates to the employee record or contract
-  // numerics flow through automatically. Creation-time-only inputs (start
-  // date, work location, etc.) are baked into the markdown as text.
-  const isPKWT = type === 'pkwt'
-  const name = '{{employee_name}}'
-  const address = '{{employee_address}}'
-  const ktp = '{{employee_ktp_nik}}'
-  const dept = '{{employee_departments}}'
-  const orgName = '{{org_name}}'
-  const orgAddress = '{{org_address}}'
-  const salary = '{{base_wage_idr}}'
-  const allowance = '{{allowance_idr}}'
-  const hoursTok = '{{hours_per_day}}'
-  const daysTok = '{{days_per_week}}'
-  const position = fields.position || '[Position]'
-  const location = fields.workLocation || '[Work Location]'
-  // Dates are now stored as structured columns and resolved via merge tokens
-  // at view time, so changing start/end in the dashboard reflows the body.
-  const start = '{{contract_start_date}}'
-  const end = '{{contract_end_date}}'
-  const hours = fields.hoursPerDay || '8'
-  const days = fields.daysPerWeek || '6'
-  const leave = fields.annualLeave || '12'
-
-  let md = `# ${isPKWT ? 'PERJANJIAN KERJA WAKTU TERTENTU (PKWT)' : 'PERJANJIAN KERJA WAKTU TIDAK TERTENTU (PKWTT)'}
-
-# EMPLOYMENT CONTRACT
-
-This Employment Contract (the "Agreement") is entered into on this **${start}**,
-
-**BETWEEN:**
-
-**${orgName}**, a company organized and existing under the laws of the Republic of Indonesia, with its principal office located at ${orgAddress} (the "Employer");
-
-**AND:**
-
-**${name}**, holder of KTP No. **${ktp}**, residing at **${address}** (the "Employee").
-
-The parties agree to the following terms and conditions:
-
----
-
-## 1. POSITION AND DUTIES
-
-1.1 **Title:** The Employee is hired for the position of **${position}** within the **${dept}**.
-
-1.2 **Reporting:** The Employee shall report directly to their designated supervisor or such other person as the Employer may designate.
-
-1.3 **Responsibilities:** The Employee agrees to perform the duties customary to this position, including but not limited to those outlined by the Employer.
-
-1.4 **Work Location:** ${location}
-
----
-
-## 2. CONTRACT DURATION
-
-`
-
-  if (isPKWT) {
-    md += `2.1 This Agreement shall commence on **${start}** and shall terminate on **${end}**, unless terminated earlier in accordance with the terms of this Agreement.
-
-2.2 This Agreement may be extended by mutual written consent of both parties, subject to the maximum duration permitted under applicable law (PP 35/2021).
-
-2.3 Upon expiration, the Employee shall be entitled to compensation pay as stipulated under Government Regulation No. 35 of 2021.
-
-`
-  } else {
-    const probation = fields.probationMonths || '3'
-    md += `2.1 This Agreement shall commence on **${start}** and shall continue indefinitely until terminated by either party in accordance with the terms of this Agreement.
-
-2.2 **Probation Period:** The Employee shall be subject to a probation period of **${probation} month(s)** from the commencement date. During probation, either party may terminate this Agreement with 7 days' written notice.
-
-`
-  }
-
-  md += `---
-
-## 3. COMPENSATION
-
-3.1 **Base Salary:** The Employee shall receive a monthly base salary of **${salary}** (gross), payable on the last working day of each month.
-
-3.2 **Allowances:** **${allowance}** per month, covering transport, meals, and other elastic components of compensation.
-
-3.3 **THR (Tunjangan Hari Raya):** The Employee is entitled to a religious holiday bonus equivalent to one month's salary after 12 months of continuous service, or pro-rated for service less than 12 months.
-
-3.4 **Tax:** Income tax (PPh 21) shall be calculated and withheld in accordance with applicable tax regulations.
-
----
-
-## 4. WORKING HOURS
-
-4.1 The Employee shall work **${hoursTok} hours per day**, **${daysTok} days per week**, totaling **${Number(hours) * Number(days)} hours per week**.
-
-4.2 The specific work schedule shall be determined by the Employer and communicated to the Employee.
-
----
-
-## 5. OVERTIME
-
-5.1 Overtime work shall be compensated in accordance with Indonesian labor law:
-- **First hour:** 1.5x the hourly wage
-- **Subsequent hours:** 2x the hourly wage
-
-5.2 Overtime must be authorized in advance by the Employee's supervisor.
-
----
-
-## 6. LEAVE
-
-6.1 **Annual Leave:** The Employee is entitled to **${leave} working days** of paid annual leave per year, after completing 12 months of continuous service.
-
-6.2 **Sick Leave:** As per applicable law, with valid medical certificate.
-
-6.3 **Maternity Leave:** 3 months (1.5 months before and 1.5 months after delivery) with full pay, as per Law No. 13/2003.
-
-6.4 **Other Leave:** As stipulated under applicable Indonesian labor law.
-
----
-
-## 7. SOCIAL SECURITY (BPJS)
-
-7.1 The Employer shall register the Employee in **BPJS Kesehatan** (health insurance) and **BPJS Ketenagakerjaan** (employment social security) in accordance with applicable law.
-
-7.2 Contributions shall be shared between the Employer and Employee as prescribed by regulation.
-
----
-
-## 8. TERMINATION
-
-8.1 Either party may terminate this Agreement in accordance with the provisions of Law No. 13/2003 on Manpower and its amendments under Law No. 11/2020 (Cipta Kerja).
-
-8.2 The Employee shall be entitled to severance pay, service pay, and compensation rights as applicable under law.
-
-8.3 Grounds for termination by the Employer include, but are not limited to: serious misconduct, repeated violation of company rules, or prolonged absence without notice.
-
----
-
-## 9. CONFIDENTIALITY
-
-9.1 The Employee shall maintain the confidentiality of all proprietary information, trade secrets, and business operations of the Employer during and after the term of employment.
-
----
-
-## 10. GENERAL PROVISIONS
-
-10.1 This Agreement is governed by the laws of the Republic of Indonesia.
-
-10.2 Any disputes arising from this Agreement shall be resolved through deliberation (musyawarah) and, failing that, through the Industrial Relations Court.
-
-10.3 This Agreement is made in duplicate, each copy having equal legal force, one for each party.
-
----
-
-**EMPLOYER:**
-
-Name: {{employer_name}}
-
-Title: {{employer_title}}
-
-Signature: {{employer_signature}}
-
-Date: {{employer_sign_date}}
-
-&nbsp;
-
-**EMPLOYEE:**
-
-Name: **${name}**
-
-Signature: {{employee_signature}}
-
-Date: {{employee_sign_date}}
-`
-
-  return md
-}
 
 function CreateContractModal({ orgId, employees, onClose, onCreated }: {
   orgId: string
@@ -951,44 +877,23 @@ function CreateContractModal({ orgId, employees, onClose, onCreated }: {
     setError('')
     setCreating(true)
 
-    const markdown = generateContractMarkdown(contractType, {
-      employeeName: selectedEmployee?.name || '',
-      employeeAddress,
-      ktpNumber,
-      position: selectedEmployee ? (primaryDept(selectedEmployee) ? `${primaryDept(selectedEmployee)} Staff` : '') : '',
-      department: selectedEmployee ? deptsJoined(selectedEmployee) : '',
-      workLocation,
-      startDate,
-      endDate,
-      probationMonths,
-      baseSalary,
-      allowance,
-      hoursPerDay,
-      daysPerWeek,
-      annualLeave,
-    })
-
     const baseWageIdr = baseSalary ? Number(baseSalary) : null
     const allowanceIdr = allowance ? Number(allowance) : null
     const hoursPerDayInt = hoursPerDay ? Number(hoursPerDay) : null
     const daysPerWeekInt = daysPerWeek ? Number(daysPerWeek) : null
 
-    // New contracts land with an empty structured doc. The old PKWT /
-    // PKWTT markdown generator is retired with the markdown editor; a
-    // structured-doc equivalent will return as part of Phase G's typed
-    // templates table. The quick-fill form's *structural* fields
-    // (wages, hours, dates) still populate the row columns so the
-    // compensation page, signing hash, and inbox flows keep working.
-    // The `markdown` local from the generator below is currently unused
-    // — kept around as a TODO marker for the structured starter content.
-    void markdown
+    // Phase G.2: new contracts land with the PKWT or PKWTT structured
+    // starter so users don't begin from a blank canvas. Merge fields
+    // inside the starter (base_wage_idr, start_date, etc.) resolve at
+    // view time from the row columns set below.
+    const starterDoc = buildPkwtStarterDoc(contractType)
     const { data, error: insertError } = await supabase
       .from('contracts')
       .insert({
         org_id: orgId,
         employee_id: employeeId || null,
         title: title.trim(),
-        content_doc: docAsJson(emptyDocumentDoc()),
+        content_doc: docAsJson(starterDoc),
         status: 'draft' as const,
         base_wage_idr: baseWageIdr,
         allowance_idr: allowanceIdr,
@@ -1303,9 +1208,9 @@ function CreateContractButton({ disabled, disabledTitle, onFromScratch, onFromTe
 }
 
 function PickTemplateModal({ templates, onClose, onPick }: {
-  templates: ContractWithEmployee[]
+  templates: DocumentTemplate[]
   onClose: () => void
-  onPick: (template: ContractWithEmployee) => void
+  onPick: (template: DocumentTemplate) => void
 }) {
   const { t } = useLang()
   const [query, setQuery] = useState('')
@@ -1327,7 +1232,7 @@ function PickTemplateModal({ templates, onClose, onPick }: {
   // Group by position. Templates with no position go in a final "Any position"
   // group so they don't disappear in the noise. Position groups are sorted
   // alphabetically; within each group, most-recently-edited first.
-  const groups = new Map<string, ContractWithEmployee[]>()
+  const groups = new Map<string, DocumentTemplate[]>()
   for (const tpl of filtered) {
     const key = tpl.template_for_position || ''
     const arr = groups.get(key) || []

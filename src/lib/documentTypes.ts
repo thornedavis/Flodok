@@ -41,6 +41,15 @@ export function documentHistoryPath(type: DocumentType, id: string): string {
 }
 
 /**
+ * Edit path for a document *template* (Phase G.1). Templates live in
+ * the typed `document_templates` table, distinct from the per-type
+ * concrete-document tables — they have their own slim editor.
+ */
+export function documentTemplateEditPath(id: string): string {
+  return `/dashboard/document-templates/${id}/edit`
+}
+
+/**
  * Canonical index path, optionally pre-filtered to a type. Pass no
  * argument to land on the default Documents tab.
  */
