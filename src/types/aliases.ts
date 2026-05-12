@@ -24,6 +24,7 @@ export type ContractVersion = Database['public']['Tables']['contract_versions'][
 export type FeedEvent = Database['public']['Tables']['feed_events']['Row']
 export type OrgInvitation = Database['public']['Tables']['org_invitations']['Row']
 export type ContractSignature = Database['public']['Tables']['contract_signatures']['Row']
+export type DocumentViewPref = Database['public']['Tables']['document_view_prefs']['Row']
 export type EmployeeFamilyMember = Database['public']['Tables']['employee_family_members']['Row']
 export type EmployeeEmergencyContact = Database['public']['Tables']['employee_emergency_contacts']['Row']
 export type EmployeeFormalEducation = Database['public']['Tables']['employee_formal_education']['Row']

@@ -9,7 +9,7 @@ import { FilterPanel, FilterSearchInput, MultiSelectDropdown } from '../../compo
 import type { FilterPanelSection } from '../../components/FilterControls'
 import { useLang } from '../../contexts/LanguageContext'
 import { getEmployeeDepts } from '../../lib/employee'
-import { getSopStarterTemplate } from '../../lib/templates'
+import { docAsJson, emptyDocumentDoc } from '../../lib/documentDoc'
 import { isPro, syncSeats } from '../../lib/billing'
 import { FREE_EMPLOYEE_LIMIT, PRO_MIN_SEATS } from '../../lib/pricing'
 import { UpgradeModal } from '../../components/UpgradeModal'
@@ -349,11 +349,14 @@ export function Employees({ user }: { user: User }) {
     }
 
     // Match the existing convention: every employee gets a draft starter SOP.
+    // Phase C onward: structured doc storage. The starter scaffold from the
+    // markdown era is gone — Phase G's typed templates will reintroduce
+    // starter content as a per-doc-type choice.
     await supabase.from('sops').insert({
       org_id: user.org_id,
       employee_id: emp.id,
       title: t.defaultSopTitle(placeholderName),
-      content_markdown: getSopStarterTemplate(),
+      content_doc: docAsJson(emptyDocumentDoc()),
       status: 'draft',
     })
 

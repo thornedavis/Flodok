@@ -1,6 +1,17 @@
 name = "flodok-router"
 main = "src/index.ts"
 compatibility_date = "2025-04-10"
+# nodejs_compat is required by @cloudflare/puppeteer (PDF endpoint).
+# Browser Rendering itself is bound separately below; this flag lets the
+# puppeteer client library use Node-style imports.
+compatibility_flags = ["nodejs_compat"]
+
+# Cloudflare Browser Rendering — used by the /pdf endpoint to spin up a
+# headless Chromium, set the rendered document HTML, and capture a PDF.
+# Browser Rendering must be enabled on the account (Workers Paid plan)
+# and the binding deployed via `wrangler deploy`.
+[browser]
+binding = "BROWSER"
 
 [observability]
 [observability.logs]

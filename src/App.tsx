@@ -1,4 +1,4 @@
-import { createBrowserRouter, RouterProvider, Routes, Route, Navigate } from 'react-router-dom'
+import { createBrowserRouter, RouterProvider, Routes, Route, Navigate, useParams, useLocation } from 'react-router-dom'
 import { useAuth } from './hooks/useAuth'
 import { DashboardLayout, PublicLayout } from './components/Layout'
 import { Login } from './pages/auth/Login'
@@ -10,10 +10,9 @@ import { Employees } from './pages/dashboard/Employees'
 import { EmployeeEdit } from './pages/dashboard/EmployeeEdit'
 import { Hiring } from './pages/dashboard/Hiring'
 import { Company } from './pages/dashboard/Company'
-import { SOPs } from './pages/dashboard/SOPs'
+import { Documents } from './pages/dashboard/Documents'
 import { SOPEdit } from './pages/dashboard/SOPEdit'
 import { SOPHistory } from './pages/dashboard/SOPHistory'
-import { Contracts } from './pages/dashboard/Contracts'
 import { ContractEdit } from './pages/dashboard/ContractEdit'
 import { ContractHistory } from './pages/dashboard/ContractHistory'
 import { Performance } from './pages/dashboard/Performance'
@@ -109,12 +108,21 @@ function AppRoutes() {
             <Route path="/dashboard/hiring" element={<Hiring user={user} />} />
             <Route path="/dashboard/company" element={<Company user={user} />} />
 
-            <Route path="/dashboard/sops" element={<SOPs user={user} />} />
-            <Route path="/dashboard/sops/:id/edit" element={<SOPEdit user={user} />} />
-            <Route path="/dashboard/sops/:id/history" element={<SOPHistory />} />
-            <Route path="/dashboard/contracts" element={<Contracts user={user} />} />
-            <Route path="/dashboard/contracts/:id/edit" element={<ContractEdit user={user} />} />
-            <Route path="/dashboard/contracts/:id/history" element={<ContractHistory />} />
+            <Route path="/dashboard/documents" element={<Documents user={user} />} />
+            <Route path="/dashboard/documents/sop/:id/edit" element={<SOPEdit user={user} />} />
+            <Route path="/dashboard/documents/sop/:id/history" element={<SOPHistory />} />
+            <Route path="/dashboard/documents/contract/:id/edit" element={<ContractEdit user={user} />} />
+            <Route path="/dashboard/documents/contract/:id/history" element={<ContractHistory />} />
+
+            {/* Legacy redirects — preserve inbound links from before the
+                Documents IA consolidation. Safe to remove once external
+                bookmarks have aged out. */}
+            <Route path="/dashboard/sops" element={<Navigate to="/dashboard/documents?type=sop" replace />} />
+            <Route path="/dashboard/sops/:id/edit" element={<LegacyDocRedirect type="sop" action="edit" />} />
+            <Route path="/dashboard/sops/:id/history" element={<LegacyDocRedirect type="sop" action="history" />} />
+            <Route path="/dashboard/contracts" element={<Navigate to="/dashboard/documents?type=contract" replace />} />
+            <Route path="/dashboard/contracts/:id/edit" element={<LegacyDocRedirect type="contract" action="edit" />} />
+            <Route path="/dashboard/contracts/:id/history" element={<LegacyDocRedirect type="contract" action="history" />} />
             <Route path="/dashboard/performance" element={<Performance user={user} />} />
             <Route path="/dashboard/spotlight" element={<Spotlight user={user} />} />
             <Route path="/dashboard/spotlight/new" element={<SpotlightEdit user={user} />} />
@@ -133,6 +141,17 @@ function AppRoutes() {
       )}
     </Routes>
   )
+}
+
+// Forwarder for legacy /dashboard/sops/:id/{edit,history} and
+// /dashboard/contracts/:id/{edit,history} URLs. <Navigate> doesn't
+// interpolate path params, so we read :id off the matched route and
+// preserve the query string for completeness.
+function LegacyDocRedirect({ type, action }: { type: 'sop' | 'contract'; action: 'edit' | 'history' }) {
+  const { id } = useParams<{ id: string }>()
+  const { search } = useLocation()
+  if (!id) return <Navigate to="/dashboard/documents" replace />
+  return <Navigate to={`/dashboard/documents/${type}/${id}/${action}${search}`} replace />
 }
 
 // Data router is required for `useBlocker` (used by the unsaved-changes

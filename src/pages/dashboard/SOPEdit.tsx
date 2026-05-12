@@ -1,12 +1,16 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { SOPEditor } from '../../components/Editor'
+import { DocumentEditor } from '../../components/editor/bilingual/DocumentEditor'
 import { useLang } from '../../contexts/LanguageContext'
-import { primaryDept, deptsJoined } from '../../lib/employee'
+import { primaryDept } from '../../lib/employee'
 import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning'
+import { useDocumentViewPref } from '../../hooks/useDocumentViewPref'
 import { writeSnapshot } from '../../lib/snapshotApi'
+import { emptyDocumentDoc, type DocumentDoc } from '../../lib/documentDoc'
+import { exportDocumentPdf } from '../../lib/pdfExport'
 import { useBilling } from '../../contexts/BillingContext'
+import { documentHistoryPath, documentsIndexPath } from '../../lib/documentTypes'
 import type { User, Sop, Tag, Employee, Organization } from '../../types/aliases'
 
 export function SOPEdit({ user }: { user: User }) {
@@ -14,25 +18,25 @@ export function SOPEdit({ user }: { user: User }) {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { canWrite } = useBilling()
+  const { view, setView } = useDocumentViewPref('sop', id ?? null)
   const [sop, setSOP] = useState<Sop | null>(null)
   const [organization, setOrganization] = useState<Organization | null>(null)
-  const [employee, setEmployee] = useState<Employee | null>(null)
+  const [, setEmployee] = useState<Employee | null>(null)
   const [allEmployees, setAllEmployees] = useState<Employee[]>([])
   const [employeeId, setEmployeeId] = useState<string | null>(null)
   const [title, setTitle] = useState('')
-  const [content, setContent] = useState('')
-  const [contentId, setContentId] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'en' | 'id'>('en')
+  // Phase C source of truth: the full structured document. Local
+  // `contentDoc` mirrors the editor state; `savedContentDoc` captures
+  // the last persisted shape so we can detect unsaved changes via
+  // deep-equality. Markdown derivation happens server-side on save.
+  const [contentDoc, setContentDoc] = useState<DocumentDoc>(() => emptyDocumentDoc())
+  const [savedContentDoc, setSavedContentDoc] = useState<DocumentDoc>(() => emptyDocumentDoc())
   const [translating, setTranslating] = useState(false)
-  const [translateDone, setTranslateDone] = useState(false)
   const [status, setStatus] = useState<'active' | 'draft' | 'archived'>('draft')
   const [changeSummary] = useState('')
   const [saving, setSaving] = useState(false)
+  const [downloading, setDownloading] = useState(false)
   const [error, setError] = useState('')
-
-  // AI generation
-  const [aiPrompt, setAiPrompt] = useState('')
-  const [generating, setGenerating] = useState(false)
 
   // Tags
   const [allTags, setAllTags] = useState<Tag[]>([])
@@ -55,8 +59,9 @@ export function SOPEdit({ user }: { user: User }) {
       if (sopResult.data) {
         setSOP(sopResult.data)
         setTitle(sopResult.data.title)
-        setContent(sopResult.data.content_markdown)
-        setContentId(sopResult.data.content_markdown_id)
+        const loadedDoc = (sopResult.data.content_doc as DocumentDoc | null) ?? emptyDocumentDoc()
+        setContentDoc(loadedDoc)
+        setSavedContentDoc(loadedDoc)
         setStatus(sopResult.data.status as typeof status)
         setEmployeeId(sopResult.data.employee_id)
 
@@ -99,136 +104,22 @@ export function SOPEdit({ user }: { user: User }) {
     }
   }
 
-  async function handleTranslate(direction: 'en-to-id' | 'id-to-en') {
-    if (!sop) return
-    setTranslating(true)
-    setTranslateDone(false)
-    setError('')
+  // Phase C.2 note: handleTranslate (whole-doc translation) and
+  // handleGenerate (AI markdown generation) were removed when the
+  // markdown editor was replaced. Per-block translation arrives in
+  // Phase E (per-block dirty tracking + BubbleMenu). AI generation
+  // will return as a structured-doc producer in a follow-up.
 
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) { setError(t.notAuthenticated); setTranslating(false); return }
-
-      const controller = new AbortController()
-      const timeout = setTimeout(() => controller.abort(), 55000)
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/translate-sop`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({ sop_id: sop.id, direction }),
-          signal: controller.signal,
-        },
-      )
-      clearTimeout(timeout)
-
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}))
-        throw new Error(body.error || `${t.translationFailed} (${response.status})`)
-      }
-
-      // Reload the full SOP so the local baseline matches the DB.
-      // This prevents Save from seeing the translated field as a "change"
-      // and re-triggering translation.
-      const { data } = await supabase.from('sops').select('*').eq('id', sop.id).single()
-      if (data) {
-        setSOP(data)
-        if (direction === 'en-to-id') setContentId(data.content_markdown_id)
-        else setContent(data.content_markdown)
-      }
-
-      setTranslateDone(true)
-      setTimeout(() => setTranslateDone(false), 3000)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t.translationFailed)
-    }
-
-    setTranslating(false)
-  }
-
-  async function handleGenerate() {
-    if (!aiPrompt.trim() || generating) return
-    setGenerating(true)
-    setError('')
-
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) { setError(t.notAuthenticated); setGenerating(false); return }
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-sop`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({
-            prompt: aiPrompt,
-            employee_name: employee?.name,
-            department: employee ? deptsJoined(employee) : undefined,
-            title,
-            existing_content: content || undefined,
-          }),
-        },
-      )
-
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}))
-        throw new Error(body.error || `${t.generationFailed} (${response.status})`)
-      }
-
-      // Parse SSE stream — collect all content, then set once at end
-      const reader = response.body!.getReader()
-      const decoder = new TextDecoder()
-      let generated = ''
-      let buffer = ''
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue
-          const data = line.slice(6)
-          if (data === '[DONE]') continue
-
-          try {
-            const parsed = JSON.parse(data)
-            const delta = parsed.choices?.[0]?.delta?.content
-            if (delta) {
-              generated += delta
-            }
-          } catch {
-            // skip non-JSON lines
-          }
-        }
-      }
-
-      if (generated) {
-        setContent(generated)
-      }
-      setAiPrompt('')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t.generationFailed)
-    }
-
-    setGenerating(false)
-  }
-
-  const enChanged = sop ? content !== sop.content_markdown : false
-  const idChanged = sop ? contentId !== sop.content_markdown_id : false
+  // Deep-equality on the doc JSON catches structural changes (block
+  // text, section titles, etc.) without false positives from the
+  // editor handing us a fresh object on every keystroke.
+  const docChanged = useMemo(
+    () => JSON.stringify(contentDoc) !== JSON.stringify(savedContentDoc),
+    [contentDoc, savedContentDoc],
+  )
   const employeeChanged = sop ? employeeId !== sop.employee_id : false
   const hasChanges = sop ? (
-    enChanged || idChanged || employeeChanged ||
+    docChanged || employeeChanged ||
     title !== sop.title ||
     status !== sop.status ||
     changeSummary !== ''
@@ -244,12 +135,10 @@ export function SOPEdit({ user }: { user: User }) {
     setError('')
     setSaving(true)
 
-    const contentChanged = enChanged || idChanged
-
     // Write metadata (title, status, employee_id) first so the snapshot
     // helper — which re-reads the row to render merge fields — sees the
-    // about-to-be-saved employee. The snapshot helper then owns content,
-    // content_markdown_id, and current_version.
+    // about-to-be-saved employee. The snapshot helper then owns the
+    // structured doc, derived markdown columns, and current_version.
     const { error: updateError } = await supabase
       .from('sops')
       .update({
@@ -272,26 +161,24 @@ export function SOPEdit({ user }: { user: User }) {
 
     setStatus(nextStatus)
 
-    if (!contentChanged) {
+    if (!docChanged) {
       setSOP({ ...sop, title, employee_id: employeeId, status: nextStatus })
       setSaving(false)
       bypassUnsavedWarning()
-      navigate('/dashboard/sops')
+      navigate(documentsIndexPath('sop'))
       return
     }
 
-    // One round-trip: the snapshot helper translates the missing side,
-    // renders merge fields, updates the live row's content + bumps
-    // current_version, and inserts the version row. Pass only the side(s)
-    // the user actually changed so the helper knows which to translate.
+    // Single round-trip: send the full structured doc; the helper
+    // derives markdown for both languages, renders merge fields, bumps
+    // current_version, and inserts the snapshot row.
     setTranslating(true)
     let result
     try {
       result = await writeSnapshot({
         table: 'sops',
         doc_id: sop.id,
-        new_content_en: enChanged ? content : undefined,
-        new_content_id: idChanged ? contentId : undefined,
+        new_content_doc: contentDoc,
         change_summary: changeSummary || null,
         changed_by: user.id,
       })
@@ -305,9 +192,10 @@ export function SOPEdit({ user }: { user: User }) {
 
     // Sync local state to whatever the helper finalized so the form matches
     // the DB after a save (avoids "unsaved changes" reappearing).
-    setContent(result.content_markdown)
-    setContentId(result.content_markdown_id)
-    setSOP({ ...sop, content_markdown: result.content_markdown, content_markdown_id: result.content_markdown_id, current_version: result.version_number, title, employee_id: employeeId, status: nextStatus })
+    const finalDoc = (result.content_doc as DocumentDoc | null) ?? contentDoc
+    setContentDoc(finalDoc)
+    setSavedContentDoc(finalDoc)
+    setSOP({ ...sop, content_markdown: result.content_markdown, content_markdown_id: result.content_markdown_id, content_doc: result.content_doc as Sop['content_doc'], current_version: result.version_number, title, employee_id: employeeId, status: nextStatus })
 
     if (employeeId) {
       await supabase.from('feed_events').insert({
@@ -330,11 +218,36 @@ export function SOPEdit({ user }: { user: User }) {
     }
 
     bypassUnsavedWarning()
-    navigate('/dashboard/sops')
+    navigate(documentsIndexPath('sop'))
   }
 
   function handleSaveAsDraft() { persistSOP('draft') }
   function handlePublish() { persistSOP('active') }
+
+  async function handleDownloadPdf() {
+    if (downloading) return
+    setDownloading(true)
+    try {
+      // Same context object for both languages — merge fields that
+      // resolve differently per language (signatures, dates) get the
+      // lang override from the renderer side.
+      const baseCtx = {
+        employee: allEmployees.find(e => e.id === employeeId) ?? null,
+        organization,
+        today: new Date(),
+      }
+      await exportDocumentPdf({
+        doc: contentDoc,
+        title: title || 'SOP',
+        view,
+        contextEn: { ...baseCtx, lang: 'en' },
+        contextId: { ...baseCtx, lang: 'id' },
+      })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'PDF export failed')
+    }
+    setDownloading(false)
+  }
 
   if (!sop) return <div style={{ color: 'var(--color-text-secondary)' }}>{t.loading}</div>
 
@@ -349,10 +262,6 @@ export function SOPEdit({ user }: { user: User }) {
     draft: 'var(--color-warning)',
     archived: 'var(--color-text-tertiary)',
   }
-
-  const translateDirection = activeTab === 'en' ? 'en-to-id' : 'id-to-en'
-  const hasSourceContent = activeTab === 'en' ? !!content : !!contentId
-  const needsSaveBeforeTranslate = activeTab === 'en' ? enChanged : idChanged
 
   return (
     <div>
@@ -375,14 +284,27 @@ export function SOPEdit({ user }: { user: User }) {
         </div>
         <div className="flex items-center gap-3">
           <Link
-            to={`/dashboard/sops/${sop.id}/history`}
+            to={documentHistoryPath('sop', sop.id)}
             className="rounded-lg border px-4 py-2 text-sm"
             style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
           >
             {t.historyLinkLabel}
           </Link>
           <button
-            onClick={() => navigate('/dashboard/sops')}
+            onClick={handleDownloadPdf}
+            disabled={downloading}
+            className="inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm disabled:opacity-50"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
+          >
+            {downloading && (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
+                <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+              </svg>
+            )}
+            {downloading ? t.generatingPdf : t.downloadPdf}
+          </button>
+          <button
+            onClick={() => navigate(documentsIndexPath('sop'))}
             className="rounded-lg border px-4 py-2 text-sm"
             style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
           >
@@ -520,156 +442,28 @@ export function SOPEdit({ user }: { user: User }) {
         <div>
           <div className="mb-2 flex items-center justify-between">
             <label className="block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.contentLabel}</label>
-            <div className="flex items-center gap-2">
-              <div
-                className="flex rounded-lg border p-0.5"
-                style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)' }}
-              >
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('en')}
-                  className="rounded-md px-3 py-1 text-xs font-medium transition-colors"
-                  style={{
-                    backgroundColor: activeTab === 'en' ? 'var(--color-bg)' : 'transparent',
-                    color: activeTab === 'en' ? 'var(--color-text)' : 'var(--color-text-tertiary)',
-                    boxShadow: activeTab === 'en' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
-                  }}
-                >
-                  {t.english}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('id')}
-                  className="rounded-md px-3 py-1 text-xs font-medium transition-colors"
-                  style={{
-                    backgroundColor: activeTab === 'id' ? 'var(--color-bg)' : 'transparent',
-                    color: activeTab === 'id' ? 'var(--color-text)' : 'var(--color-text-tertiary)',
-                    boxShadow: activeTab === 'id' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
-                  }}
-                >
-                  {t.bahasaIndonesiaLabel}
-                </button>
-              </div>
-              <button
-                type="button"
-                onClick={() => handleTranslate(translateDirection)}
-                disabled={translating || !canWrite || !hasSourceContent || needsSaveBeforeTranslate}
-                title={!canWrite ? t.dunningWriteBlocked : needsSaveBeforeTranslate ? t.saveChangesBeforeTranslatingHint : undefined}
-                className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all disabled:opacity-50"
-                style={{
-                  borderColor: translateDone ? 'var(--color-success, #22c55e)' : 'var(--color-border)',
-                  color: translateDone ? 'var(--color-success, #22c55e)' : 'var(--color-text-secondary)',
-                }}
-                onMouseOver={e => { if (!translateDone) e.currentTarget.style.borderColor = 'var(--color-primary)' }}
-                onMouseOut={e => { if (!translateDone) e.currentTarget.style.borderColor = 'var(--color-border)' }}
-              >
-                {translating ? (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
-                    <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-                  </svg>
-                ) : translateDone ? (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="20 6 9 17 4 12"/>
-                  </svg>
-                ) : (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="m5 8 6 6"/>
-                    <path d="m4 14 6-6 2-3"/>
-                    <path d="M2 5h12"/>
-                    <path d="M7 2h1"/>
-                    <path d="m22 22-5-10-5 10"/>
-                    <path d="M14 18h6"/>
-                  </svg>
-                )}
-                {needsSaveBeforeTranslate ? t.saveBeforeTranslating : translating ? t.translating : translateDone ? t.translateComplete : (
-                  activeTab === 'en'
-                    ? (contentId ? t.retranslateToId : t.translateToId)
-                    : (content ? t.retranslateToEn : t.translateToEn)
-                )}
-              </button>
-            </div>
           </div>
-
-          {activeTab === 'en' ? (
-            <SOPEditor
-              key="en"
-              content={content}
-              onChange={setContent}
-              mergeFields={{
-                scope: 'sop',
+          {/* Bilingual editor — both EN and ID slots authored side-by-side
+              within the same canvas. The old EN/ID switcher and whole-doc
+              translate button are gone; per-block translation arrives in
+              Phase E (BubbleMenu). AI generation will return as a
+              structured-doc producer in a follow-up. */}
+          <DocumentEditor
+            initialDoc={contentDoc}
+            onChange={setContentDoc}
+            view={view}
+            onViewChange={setView}
+            mergeFields={{
+              scope: 'sop',
+              getContext: () => ({
+                employee: allEmployees.find(e => e.id === employeeId) ?? null,
+                organization,
+                today: new Date(),
                 lang: 'en',
-                getContext: () => ({
-                  employee: allEmployees.find(e => e.id === employeeId) ?? null,
-                  organization,
-                  today: new Date(),
-                  lang: 'en',
-                }),
-              }}
-            />
-          ) : (
-            <SOPEditor
-              key="id"
-              content={contentId || ''}
-              onChange={setContentId}
-              mergeFields={{
-                scope: 'sop',
-                lang: 'id',
-                getContext: () => ({
-                  employee: allEmployees.find(e => e.id === employeeId) ?? null,
-                  organization,
-                  today: new Date(),
-                  lang: 'id',
-                }),
-              }}
-            />
-          )}
+              }),
+            }}
+          />
         </div>
-
-        {/* AI Generate */}
-        <div
-          className="rounded-xl border p-4"
-          style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary, var(--color-bg))' }}
-        >
-          <label className="mb-2 flex items-center gap-2 text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-primary)' }}>
-              <path d="M12 2L2 7l10 5 10-5-10-5z" />
-              <path d="M2 17l10 5 10-5" />
-              <path d="M2 12l10 5 10-5" />
-            </svg>
-            {t.aiGenerate}
-          </label>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={aiPrompt}
-              onChange={e => setAiPrompt(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleGenerate() } }}
-              placeholder={content
-                ? t.aiPromptWithContent
-                : t.aiPromptEmpty((employee && primaryDept(employee)) || 'marketing')}
-              disabled={generating}
-              className="flex-1 rounded-lg border px-3 py-2 text-sm outline-none disabled:opacity-50"
-              style={inputStyle}
-            />
-            <button
-              type="button"
-              onClick={handleGenerate}
-              disabled={generating || !canWrite || !aiPrompt.trim()}
-              title={!canWrite ? t.dunningWriteBlocked : undefined}
-              className="flex shrink-0 items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
-              style={{ backgroundColor: 'var(--color-primary)' }}
-            >
-              {generating && (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
-                  <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-                </svg>
-              )}
-              {generating ? t.generating : t.generate}
-            </button>
-          </div>
-        </div>
-
-
       </div>
     </div>
   )

@@ -22,6 +22,7 @@ import type {
   SopSignature,
   InboxDismissal,
 } from '../types/aliases'
+import { documentEditPath } from './documentTypes'
 
 export type InboxBucket = 'action_required' | 'awaiting_others' | 'upcoming'
 export type InboxCategory = 'contract' | 'sop' | 'probation' | 'document' | 'pending_update'
@@ -130,7 +131,7 @@ export function deriveInboxItems({
       title: c.title,
       subtitle: emp?.name,
       due_at: c.updated_at || c.created_at,
-      href: `/dashboard/contracts/${c.id}/edit`,
+      href: documentEditPath('contract', c.id),
       action_label_key: 'inboxActionOpenContract',
     })
   }
@@ -152,7 +153,7 @@ export function deriveInboxItems({
       title: s.title,
       subtitle: emp?.name,
       due_at: s.updated_at || s.created_at,
-      href: `/dashboard/sops/${s.id}/edit`,
+      href: documentEditPath('sop', s.id),
       action_label_key: 'inboxActionOpenSop',
     })
   }

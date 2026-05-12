@@ -14,7 +14,7 @@ import { DunningBanner } from './DunningBanner'
 import { NotificationBell } from './NotificationBell'
 import { FilterSearchInput } from './FilterControls'
 
-type NavKey = 'navOverview' | 'navInbox' | 'navEmployees' | 'navHiring' | 'navCompany' | 'navSops' | 'navContracts' | 'navPerformance' | 'navSpotlight' | 'navPending' | 'navSettings'
+type NavKey = 'navOverview' | 'navInbox' | 'navEmployees' | 'navHiring' | 'navCompany' | 'navDocuments' | 'navPerformance' | 'navSpotlight' | 'navPending' | 'navSettings'
 
 interface NavItemDef {
   path: string
@@ -41,14 +41,9 @@ const navItems: NavItemDef[] = [
     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="8" r="4" /><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" /><line x1="19" y1="8" x2="19" y2="14" /><line x1="16" y1="11" x2="22" y2="11" /></svg>,
   },
   {
-    path: '/dashboard/sops',
-    labelKey: 'navSops',
-    icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="8" y1="13" x2="16" y2="13" /><line x1="8" y1="17" x2="16" y2="17" /><line x1="8" y1="9" x2="10" y2="9" /></svg>,
-  },
-  {
-    path: '/dashboard/contracts',
-    labelKey: 'navContracts',
-    icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="3" width="16" height="18" rx="2" /><line x1="8" y1="8" x2="16" y2="8" /><line x1="8" y1="12" x2="16" y2="12" /><line x1="8" y1="16" x2="12" y2="16" /></svg>,
+    path: '/dashboard/documents',
+    labelKey: 'navDocuments',
+    icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" /></svg>,
   },
   {
     path: '/dashboard/employees',
@@ -367,8 +362,7 @@ function deriveBreadcrumbs(pathname: string, orgName: string, t: Translations, t
   const sectionMap: Record<string, { label: string; href: string }> = {
     employees: { label: t.navEmployees, href: '/dashboard/employees' },
     company: { label: t.navCompany, href: '/dashboard/company' },
-    sops: { label: t.navSops, href: '/dashboard/sops' },
-    contracts: { label: t.navContracts, href: '/dashboard/contracts' },
+    documents: { label: t.navDocuments, href: '/dashboard/documents' },
     performance: { label: t.navPerformance, href: '/dashboard/performance' },
     spotlight: { label: t.navSpotlight, href: '/dashboard/spotlight' },
     pending: { label: t.navPending, href: '/dashboard/pending' },
@@ -378,8 +372,10 @@ function deriveBreadcrumbs(pathname: string, orgName: string, t: Translations, t
   const section = sectionMap[segments[1]]
   if (!section) return [{ label: orgName }]
 
-  // Drill-down: /dashboard/<section>/<id>/<action>
-  const action = segments[3]
+  // Drill-down: /dashboard/<section>/<id>/<action> for most sections, but the
+  // documents tree nests one level deeper — /dashboard/documents/<type>/<id>/<action> —
+  // so the trailing action lives at segments[4] there.
+  const action = segments[1] === 'documents' ? segments[4] : segments[3]
   if (action === 'edit') return [rootCrumb, { label: section.label, href: section.href }, { label: trailing ?? t.breadcrumbEdit }]
   if (action === 'history') return [rootCrumb, { label: section.label, href: section.href }, { label: trailing ?? t.breadcrumbHistory }]
 

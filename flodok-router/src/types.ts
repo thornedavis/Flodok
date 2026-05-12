@@ -2,6 +2,10 @@
 
 export interface Env {
   KV: KVNamespace;
+  // Cloudflare Browser Rendering binding (Workers Paid plan + Browser
+  // Rendering enabled on account). Consumed by the /pdf endpoint to
+  // render a structured document into a PDF without leaving the Worker.
+  BROWSER: Fetcher;
   // Set via `wrangler secret put`:
   SUPABASE_URL: string;
   WORKER_SERVICE_TOKEN: string;
@@ -10,6 +14,13 @@ export interface Env {
   // throttling lives at the app layer (processing_logs counter), not here.
   OPENROUTER_API_KEY: string;
   OPENROUTER_MODEL?: string;
+  // Supabase anon API key — used by the /pdf endpoint to verify
+  // user sessions via the auth/v1/user lookup. This is algorithm-
+  // agnostic so it works regardless of whether the project signs
+  // tokens with the legacy HS256 secret or the newer ECC signing
+  // keys. Set via `wrangler secret put SUPABASE_ANON_KEY` from
+  // flodok-router/. Same value as the browser's VITE_SUPABASE_ANON_KEY.
+  SUPABASE_ANON_KEY?: string;
   // Optional — if set, requests to the legacy /webhook/fireflies path route
   // to this org for a grace period while users update their Fireflies URLs.
   LEGACY_WEBHOOK_ORG_ID?: string;

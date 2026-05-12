@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useLang } from '../../../../contexts/LanguageContext'
 import { DatePicker } from '../../../DatePicker'
 import { SectionPanel, FieldRow, FieldValue } from '../../SectionPanel'
+import { documentEditPath, documentsIndexPath } from '../../../../lib/documentTypes'
 import type { Translations } from '../../../../lib/translations'
 import type { Contract, Employee } from '../../../../types/aliases'
 
@@ -86,8 +87,8 @@ function ContractSignDateValue({
   const formatted = formatDateTime(contractSignedAt)
 
   const linkTarget = activeContract
-    ? `/dashboard/contracts/${activeContract.id}/edit`
-    : '/dashboard/contracts'
+    ? documentEditPath('contract', activeContract.id)
+    : documentsIndexPath('contract')
 
   return (
     <div className="flex items-center gap-2">

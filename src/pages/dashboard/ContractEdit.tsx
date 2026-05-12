@@ -1,58 +1,46 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { SOPEditor } from '../../components/Editor'
+import { DocumentEditor } from '../../components/editor/bilingual/DocumentEditor'
 import { useLang } from '../../contexts/LanguageContext'
-import { primaryDept, deptsJoined } from '../../lib/employee'
+import { primaryDept } from '../../lib/employee'
 import { bucketReferenceValues, referenceNames } from '../../lib/companyReference'
 import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning'
+import { useDocumentViewPref } from '../../hooks/useDocumentViewPref'
+import { exportDocumentPdf } from '../../lib/pdfExport'
 import { formatIdrDigits } from '../../lib/credits'
 import { InfoTooltip } from '../../components/InfoTooltip'
 import { writeSnapshot } from '../../lib/snapshotApi'
+import { emptyDocumentDoc, type DocumentDoc } from '../../lib/documentDoc'
 import { buildContractDocumentHash, captureSignatureIp, currentAuthToken, getUserAgent } from '../../lib/signatureFingerprint'
 import { SIGNATURE_FONTS, ensureSignatureFontsLoaded } from '../../lib/signatureFonts'
 import { DateTimePicker } from '../../components/DateTimePicker'
 import { useBilling } from '../../contexts/BillingContext'
+import { documentHistoryPath, documentsIndexPath } from '../../lib/documentTypes'
 import type { User, Contract, Tag, Employee, Organization } from '../../types/aliases'
 
 ensureSignatureFontsLoaded()
-
-const GENERATE_SYSTEM_PROMPT = `You are an expert employment contract writer for workplace documentation.
-
-You either generate new contracts or revise existing ones based on the user's instructions.
-
-When creating a new contract:
-- Structure logically: Parties, Position & Duties, Compensation, Working Hours, Leave, Termination, Confidentiality, General Provisions
-- Be specific and legally clear — each clause should be unambiguous
-
-When revising an existing contract:
-- Apply the user's requested changes to the existing content
-- Preserve sections and content the user did not ask to change
-- Return the complete revised contract, not just the changed parts
-
-Rules for all responses:
-- Use clear markdown formatting: headings (#, ##, ###), bullet lists, numbered clauses, bold for emphasis
-- Use professional legal language that is still accessible
-- Tailor the content to the employee's role and department if provided
-- Keep it practical and relevant
-- Do not include meta-commentary or explanations — output ONLY the contract markdown content`
 
 export function ContractEdit({ user }: { user: User }) {
   const { t } = useLang()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { canWrite } = useBilling()
+  const { view, setView } = useDocumentViewPref('contract', id ?? null)
   const [contract, setContract] = useState<Contract | null>(null)
   const [organization, setOrganization] = useState<Organization | null>(null)
-  const [employee, setEmployee] = useState<Employee | null>(null)
+  const [, setEmployee] = useState<Employee | null>(null)
   const [allEmployees, setAllEmployees] = useState<Employee[]>([])
   const [employeeId, setEmployeeId] = useState<string | null>(null)
   const [title, setTitle] = useState('')
-  const [content, setContent] = useState('')
-  const [contentId, setContentId] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'en' | 'id'>('en')
+  // Phase C source of truth: the full structured document. `contentDoc`
+  // mirrors the editor state, `savedContentDoc` captures the last
+  // persisted shape so we can deep-equality-detect unsaved changes
+  // without false positives from the editor handing us a fresh object
+  // each keystroke.
+  const [contentDoc, setContentDoc] = useState<DocumentDoc>(() => emptyDocumentDoc())
+  const [savedContentDoc, setSavedContentDoc] = useState<DocumentDoc>(() => emptyDocumentDoc())
   const [translating, setTranslating] = useState(false)
-  const [translateDone, setTranslateDone] = useState(false)
   const [status, setStatus] = useState<'active' | 'draft' | 'archived'>('draft')
   const [baseWageIdr, setBaseWageIdr] = useState<string>('')
   const [allowanceIdr, setAllowanceIdr] = useState<string>('')
@@ -64,10 +52,8 @@ export function ContractEdit({ user }: { user: User }) {
   const [jobPositions, setJobPositions] = useState<string[]>([])
   const [changeSummary] = useState('')
   const [saving, setSaving] = useState(false)
+  const [downloading, setDownloading] = useState(false)
   const [error, setError] = useState('')
-
-  const [aiPrompt, setAiPrompt] = useState('')
-  const [generating, setGenerating] = useState(false)
 
   const [allTags, setAllTags] = useState<Tag[]>([])
   const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set())
@@ -105,8 +91,9 @@ export function ContractEdit({ user }: { user: User }) {
       if (contractResult.data) {
         setContract(contractResult.data)
         setTitle(contractResult.data.title)
-        setContent(contractResult.data.content_markdown)
-        setContentId(contractResult.data.content_markdown_id)
+        const loadedDoc = (contractResult.data.content_doc as DocumentDoc | null) ?? emptyDocumentDoc()
+        setContentDoc(loadedDoc)
+        setSavedContentDoc(loadedDoc)
         setStatus(contractResult.data.status as typeof status)
         setEmployeeId(contractResult.data.employee_id)
         setBaseWageIdr(contractResult.data.base_wage_idr?.toString() ?? '')
@@ -149,117 +136,19 @@ export function ContractEdit({ user }: { user: User }) {
     }
   }
 
-  async function handleTranslate(direction: 'en-to-id' | 'id-to-en') {
-    if (!contract) return
-    setTranslating(true)
-    setTranslateDone(false)
-    setError('')
-
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) { setError(t.notAuthenticated); setTranslating(false); return }
-
-      const controller = new AbortController()
-      const timeout = setTimeout(() => controller.abort(), 55000)
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/translate-sop`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-          body: JSON.stringify({ sop_id: contract.id, direction, table: 'contracts' }),
-          signal: controller.signal,
-        },
-      )
-      clearTimeout(timeout)
-
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}))
-        throw new Error(body.error || `${t.translationFailed} (${response.status})`)
-      }
-
-      const { data } = await supabase.from('contracts').select('*').eq('id', contract.id).single()
-      if (data) {
-        setContract(data)
-        if (direction === 'en-to-id') setContentId(data.content_markdown_id)
-        else setContent(data.content_markdown)
-      }
-
-      setTranslateDone(true)
-      setTimeout(() => setTranslateDone(false), 3000)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t.translationFailed)
-    }
-    setTranslating(false)
-  }
-
-  async function handleGenerate() {
-    if (!aiPrompt.trim() || generating) return
-    setGenerating(true)
-    setError('')
-
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) { setError(t.notAuthenticated); setGenerating(false); return }
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-sop`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-          body: JSON.stringify({
-            prompt: aiPrompt,
-            employee_name: employee?.name,
-            department: employee ? deptsJoined(employee) : undefined,
-            title,
-            existing_content: content || undefined,
-            system_prompt: GENERATE_SYSTEM_PROMPT,
-          }),
-        },
-      )
-
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}))
-        throw new Error(body.error || `${t.generationFailed} (${response.status})`)
-      }
-
-      const reader = response.body!.getReader()
-      const decoder = new TextDecoder()
-      let generated = ''
-      let buffer = ''
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue
-          const data = line.slice(6)
-          if (data === '[DONE]') continue
-          try {
-            const parsed = JSON.parse(data)
-            const delta = parsed.choices?.[0]?.delta?.content
-            if (delta) generated += delta
-          } catch { /* skip */ }
-        }
-      }
-
-      if (generated) setContent(generated)
-      setAiPrompt('')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t.generationFailed)
-    }
-    setGenerating(false)
-  }
+  // Phase C.2 note: handleTranslate (whole-doc) and handleGenerate
+  // (AI markdown generation) were removed when the markdown editor was
+  // replaced. Per-block translation comes back in Phase E; AI gen will
+  // return as a structured-doc producer in a follow-up.
 
   const parsedBaseWage = baseWageIdr.trim() === '' ? null : Number(baseWageIdr)
   const parsedAllowance = allowanceIdr.trim() === '' ? null : Number(allowanceIdr)
   const parsedHoursPerDay = hoursPerDay.trim() === '' ? null : Number(hoursPerDay)
   const parsedDaysPerWeek = daysPerWeek.trim() === '' ? null : Number(daysPerWeek)
-  const enChanged = contract ? content !== contract.content_markdown : false
-  const idChanged = contract ? contentId !== contract.content_markdown_id : false
+  const docChanged = useMemo(
+    () => JSON.stringify(contentDoc) !== JSON.stringify(savedContentDoc),
+    [contentDoc, savedContentDoc],
+  )
   const employeeChanged = contract ? employeeId !== contract.employee_id : false
   const wagesChanged = contract ? (
     parsedBaseWage !== contract.base_wage_idr ||
@@ -272,7 +161,7 @@ export function ContractEdit({ user }: { user: User }) {
     (endDate || null) !== (contract.end_date || null)
   ) : false
   const hasChanges = contract ? (
-    enChanged || idChanged || employeeChanged || wagesChanged || datesChanged ||
+    docChanged || employeeChanged || wagesChanged || datesChanged ||
     title !== contract.title ||
     status !== contract.status ||
     changeSummary !== ''
@@ -289,12 +178,11 @@ export function ContractEdit({ user }: { user: User }) {
     setError('')
     setSaving(true)
 
-    const contentChanged = enChanged || idChanged
     // Contracts snapshot their structured wage/hours/employee state alongside
-    // content. Without this, wage edits that leave the markdown untouched
-    // would silently overwrite the live row with no version trail.
+    // content. Without this, wage edits that leave the doc untouched would
+    // silently overwrite the live row with no version trail.
     const structuralChanged = wagesChanged || employeeChanged
-    const snapshotNeeded = contentChanged || structuralChanged
+    const snapshotNeeded = docChanged || structuralChanged
 
     const baseWageValid = parsedBaseWage === null || (Number.isFinite(parsedBaseWage) && parsedBaseWage >= 0)
     const allowanceValid = parsedAllowance === null || (Number.isFinite(parsedAllowance) && parsedAllowance >= 0)
@@ -339,8 +227,7 @@ export function ContractEdit({ user }: { user: User }) {
       result = await writeSnapshot({
         table: 'contracts',
         doc_id: contract.id,
-        new_content_en: enChanged ? content : undefined,
-        new_content_id: idChanged ? contentId : undefined,
+        new_content_doc: docChanged ? contentDoc : undefined,
         change_summary: changeSummary || null,
         changed_by: user.id,
         employee_id: employeeId,
@@ -357,14 +244,16 @@ export function ContractEdit({ user }: { user: User }) {
     }
     setTranslating(false)
 
-    setContent(result.content_markdown)
-    setContentId(result.content_markdown_id)
+    const finalDoc = (result.content_doc as DocumentDoc | null) ?? contentDoc
+    setContentDoc(finalDoc)
+    setSavedContentDoc(finalDoc)
     setContract({
       ...contract,
       title,
       status: nextStatus,
       content_markdown: result.content_markdown,
       content_markdown_id: result.content_markdown_id,
+      content_doc: result.content_doc as Contract['content_doc'],
       current_version: result.version_number,
       employee_id: employeeId,
       base_wage_idr: parsedBaseWage,
@@ -400,7 +289,38 @@ export function ContractEdit({ user }: { user: User }) {
     const result = await persistContract('draft')
     if (!result) return
     bypassUnsavedWarning()
-    navigate('/dashboard/contracts')
+    navigate(documentsIndexPath('contract'))
+  }
+
+  async function handleDownloadPdf() {
+    if (downloading) return
+    setDownloading(true)
+    try {
+      const baseCtx = {
+        employee: allEmployees.find(e => e.id === employeeId) ?? null,
+        organization,
+        contract: contract ? {
+          ...contract,
+          base_wage_idr: parsedBaseWage,
+          allowance_idr: parsedAllowance,
+          hours_per_day: parsedHoursPerDay,
+          days_per_week: parsedDaysPerWeek,
+          employee_id: employeeId,
+        } : null,
+        today: new Date(),
+        signer: { name: user.name, title: user.title },
+      }
+      await exportDocumentPdf({
+        doc: contentDoc,
+        title: title || 'Contract',
+        view,
+        contextEn: { ...baseCtx, lang: 'en' },
+        contextId: { ...baseCtx, lang: 'id' },
+      })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'PDF export failed')
+    }
+    setDownloading(false)
   }
 
   // Editing an active contract auto-bumps to a new (draft) version on save.
@@ -421,7 +341,11 @@ export function ContractEdit({ user }: { user: User }) {
     setSigning(true)
     setError('')
 
-    const documentHash = await buildContractDocumentHash(content, contract.current_version)
+    // Document hash signs the latest derived markdown projection — content
+    // lives in content_markdown after the snapshot helper derives it from
+    // content_doc on save. Phase F may switch this to hash content_doc
+    // directly for clauses-level fidelity.
+    const documentHash = await buildContractDocumentHash(contract.content_markdown ?? '', contract.current_version)
     const { data: sigRow, error: sigError } = await supabase
       .from('contract_signatures')
       .insert({
@@ -456,7 +380,7 @@ export function ContractEdit({ user }: { user: User }) {
     setStatus('active')
     setSigning(false)
     bypassUnsavedWarning()
-    navigate('/dashboard/contracts')
+    navigate(documentsIndexPath('contract'))
   }
 
   if (!contract) return <div style={{ color: 'var(--color-text-secondary)' }}>{t.loading}</div>
@@ -468,10 +392,6 @@ export function ContractEdit({ user }: { user: User }) {
     draft: 'var(--color-warning)',
     archived: 'var(--color-text-tertiary)',
   }
-
-  const translateDirection = activeTab === 'en' ? 'en-to-id' : 'id-to-en'
-  const hasSourceContent = activeTab === 'en' ? !!content : !!contentId
-  const needsSaveBeforeTranslate = activeTab === 'en' ? enChanged : idChanged
 
   return (
     <div>
@@ -502,8 +422,16 @@ export function ContractEdit({ user }: { user: User }) {
           )}
         </div>
         <div className="flex items-center gap-3">
-          <Link to={`/dashboard/contracts/${contract.id}/history`} className="rounded-lg border px-4 py-2 text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>{t.historyLinkLabel}</Link>
-          <button onClick={() => navigate('/dashboard/contracts')} className="rounded-lg border px-4 py-2 text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>{t.cancel}</button>
+          <Link to={documentHistoryPath('contract', contract.id)} className="rounded-lg border px-4 py-2 text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>{t.historyLinkLabel}</Link>
+          <button onClick={handleDownloadPdf} disabled={downloading} className="inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm disabled:opacity-50" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>
+            {downloading && (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
+                <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+              </svg>
+            )}
+            {downloading ? t.generatingPdf : t.downloadPdf}
+          </button>
+          <button onClick={() => navigate(documentsIndexPath('contract'))} className="rounded-lg border px-4 py-2 text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>{t.cancel}</button>
           {contract.is_template ? (
             <button onClick={handleSaveAsDraft} disabled={saving || !canWrite || !hasChanges} title={!canWrite ? t.dunningWriteBlocked : undefined}
               className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50" style={{ backgroundColor: 'var(--color-primary)' }}>
@@ -723,115 +651,36 @@ export function ContractEdit({ user }: { user: User }) {
         <div>
           <div className="mb-2 flex items-center justify-between">
             <label className="block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.contentLabel}</label>
-            <div className="flex items-center gap-2">
-              <div className="flex rounded-lg border p-0.5" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)' }}>
-                <button type="button" onClick={() => setActiveTab('en')} className="rounded-md px-3 py-1 text-xs font-medium transition-colors"
-                  style={{ backgroundColor: activeTab === 'en' ? 'var(--color-bg)' : 'transparent', color: activeTab === 'en' ? 'var(--color-text)' : 'var(--color-text-tertiary)', boxShadow: activeTab === 'en' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none' }}>
-                  {t.english}
-                </button>
-                <button type="button" onClick={() => setActiveTab('id')} className="rounded-md px-3 py-1 text-xs font-medium transition-colors"
-                  style={{ backgroundColor: activeTab === 'id' ? 'var(--color-bg)' : 'transparent', color: activeTab === 'id' ? 'var(--color-text)' : 'var(--color-text-tertiary)', boxShadow: activeTab === 'id' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none' }}>
-                  {t.bahasaIndonesiaLabel}
-                </button>
-              </div>
-              <button type="button" onClick={() => handleTranslate(translateDirection)} disabled={translating || !canWrite || !hasSourceContent || needsSaveBeforeTranslate}
-                title={!canWrite ? t.dunningWriteBlocked : needsSaveBeforeTranslate ? t.saveChangesBeforeTranslatingHint : undefined}
-                className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all disabled:opacity-50"
-                style={{ borderColor: translateDone ? 'var(--color-success, #22c55e)' : 'var(--color-border)', color: translateDone ? 'var(--color-success, #22c55e)' : 'var(--color-text-secondary)' }}
-                onMouseOver={e => { if (!translateDone) e.currentTarget.style.borderColor = 'var(--color-primary)' }}
-                onMouseOut={e => { if (!translateDone) e.currentTarget.style.borderColor = 'var(--color-border)' }}
-              >
-                {translating ? (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
-                ) : translateDone ? (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                ) : (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/>
-                  </svg>
-                )}
-                {needsSaveBeforeTranslate ? t.saveBeforeTranslating : translating ? t.translating : translateDone ? t.translateComplete : (
-                  activeTab === 'en'
-                    ? (contentId ? t.retranslateToId : t.translateToId)
-                    : (content ? t.retranslateToEn : t.translateToEn)
-                )}
-              </button>
-            </div>
           </div>
-
-          {activeTab === 'en' ? (
-            <SOPEditor
-              key="en"
-              content={content}
-              onChange={setContent}
-              mergeFields={{
-                scope: 'contract',
+          {/* Bilingual editor — both EN and ID slots authored side-by-side
+              within the same canvas. EN/ID switcher, whole-doc translate,
+              and AI Generate are all gone in C.2; per-block translation
+              returns in Phase E and AI gen will return as a structured-doc
+              producer in a follow-up. */}
+          <DocumentEditor
+            initialDoc={contentDoc}
+            onChange={setContentDoc}
+            view={view}
+            onViewChange={setView}
+            mergeFields={{
+              scope: 'contract',
+              getContext: () => ({
+                employee: allEmployees.find(e => e.id === employeeId) ?? null,
+                organization,
+                contract: contract ? {
+                  ...contract,
+                  base_wage_idr: parsedBaseWage,
+                  allowance_idr: parsedAllowance,
+                  hours_per_day: parsedHoursPerDay,
+                  days_per_week: parsedDaysPerWeek,
+                  employee_id: employeeId,
+                } : null,
+                today: new Date(),
                 lang: 'en',
-                getContext: () => ({
-                  employee: allEmployees.find(e => e.id === employeeId) ?? null,
-                  organization,
-                  contract: contract ? {
-                    ...contract,
-                    base_wage_idr: parsedBaseWage,
-                    allowance_idr: parsedAllowance,
-                    hours_per_day: parsedHoursPerDay,
-                    days_per_week: parsedDaysPerWeek,
-                    employee_id: employeeId,
-                  } : null,
-                  today: new Date(),
-                  lang: 'en',
-                  signer: { name: user.name, title: user.title },
-                }),
-              }}
-            />
-          ) : (
-            <SOPEditor
-              key="id"
-              content={contentId || ''}
-              onChange={setContentId}
-              mergeFields={{
-                scope: 'contract',
-                lang: 'id',
-                getContext: () => ({
-                  employee: allEmployees.find(e => e.id === employeeId) ?? null,
-                  organization,
-                  contract: contract ? {
-                    ...contract,
-                    base_wage_idr: parsedBaseWage,
-                    allowance_idr: parsedAllowance,
-                    hours_per_day: parsedHoursPerDay,
-                    days_per_week: parsedDaysPerWeek,
-                    employee_id: employeeId,
-                  } : null,
-                  today: new Date(),
-                  lang: 'id',
-                  signer: { name: user.name, title: user.title },
-                }),
-              }}
-            />
-          )}
-        </div>
-
-        <div className="rounded-xl border p-4" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary, var(--color-bg))' }}>
-          <label className="mb-2 flex items-center gap-2 text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-primary)' }}>
-              <path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" />
-            </svg>
-            {t.aiGenerate}
-          </label>
-          <div className="flex gap-2">
-            <input type="text" value={aiPrompt} onChange={e => setAiPrompt(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleGenerate() } }}
-              placeholder={content
-                ? t.aiContractPromptWithContent
-                : t.aiContractPromptEmpty((employee && primaryDept(employee)) || 'full-time')}
-              disabled={generating} className="flex-1 rounded-lg border px-3 py-2 text-sm outline-none disabled:opacity-50" style={inputStyle} />
-            <button type="button" onClick={handleGenerate} disabled={generating || !canWrite || !aiPrompt.trim()} title={!canWrite ? t.dunningWriteBlocked : undefined}
-              className="flex shrink-0 items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-60" style={{ backgroundColor: 'var(--color-primary)' }}>
-              {generating && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>}
-              {generating ? t.generating : t.generate}
-            </button>
-          </div>
+                signer: { name: user.name, title: user.title },
+              }),
+            }}
+          />
         </div>
 
         {showSignPanel && (

@@ -15,6 +15,7 @@ import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
 import { getEmployeeDepts } from '../../lib/employee'
 import { formatIdr } from '../../lib/credits'
+import { documentsIndexPath } from '../../lib/documentTypes'
 import { BadgeGlyph } from '../../components/BadgeGlyph'
 import type { Translations } from '../../lib/translations'
 import type { FeedEvent, User } from '../../types/aliases'
@@ -271,7 +272,7 @@ function QuickActions({ t }: { t: Translations }) {
     },
     {
       label: t.quickActionNewSop,
-      onClick: () => navigate('/dashboard/sops'),
+      onClick: () => navigate(documentsIndexPath('sop')),
       icon: (
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
@@ -283,7 +284,7 @@ function QuickActions({ t }: { t: Translations }) {
     },
     {
       label: t.quickActionNewContract,
-      onClick: () => navigate('/dashboard/contracts'),
+      onClick: () => navigate(documentsIndexPath('contract')),
       icon: (
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <rect x="4" y="3" width="16" height="18" rx="2" />
@@ -321,9 +322,9 @@ function QuickActions({ t }: { t: Translations }) {
 function StatCards({ stats, t }: { stats: Stats; t: Translations }) {
   const cards = [
     { label: t.overviewEmployees, value: stats.employeeCount, link: '/dashboard/employees' },
-    { label: t.overviewActiveSops, value: stats.activeSOPs, link: '/dashboard/sops' },
-    { label: t.overviewActiveContracts, value: stats.activeContracts, link: '/dashboard/contracts' },
-    { label: t.overviewAwaitingSignature, value: stats.pendingSignatures, link: '/dashboard/sops' },
+    { label: t.overviewActiveSops, value: stats.activeSOPs, link: documentsIndexPath('sop') },
+    { label: t.overviewActiveContracts, value: stats.activeContracts, link: documentsIndexPath('contract') },
+    { label: t.overviewAwaitingSignature, value: stats.pendingSignatures, link: documentsIndexPath('sop') },
     { label: t.overviewPendingUpdates, value: stats.pendingUpdates, link: '/dashboard/pending' },
   ]
   return (

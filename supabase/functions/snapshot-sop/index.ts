@@ -38,6 +38,10 @@ Deno.serve(async (req: Request) => {
     const input: SnapshotInput = {
       table,
       doc_id: body.doc_id,
+      // Structured-document path (Phase C+). When present, the helper
+      // derives content_markdown_en/id from it and skips translation.
+      new_content_doc: body.new_content_doc,
+      // Legacy markdown path, kept for callers that haven't migrated.
       new_content_en: body.new_content_en,
       new_content_id: body.new_content_id,
       auto_translate: body.auto_translate,

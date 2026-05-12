@@ -7,6 +7,7 @@ import { useBilling } from '../../contexts/BillingContext'
 import { Modal } from '../Modal'
 import { InfoTooltip } from '../InfoTooltip'
 import { currentPeriodMonth, formatIdr, allowanceGradientColor, creditToIdr } from '../../lib/credits'
+import { documentEditPath } from '../../lib/documentTypes'
 import { CompensationRing, ShieldPath, WalletPath, CoinPath, GiftPath } from '../portal/CompensationRing'
 import { StatRow } from '../portal/StatRow'
 import type { Contract, User } from '../../types/aliases'
@@ -181,7 +182,7 @@ export function CompensationOverview({
         </h2>
         {contract && (
           <Link
-            to={`/dashboard/contracts/${contract.id}/edit`}
+            to={documentEditPath('contract', contract.id)}
             className="text-sm"
             style={{ color: 'var(--color-text-secondary)' }}
           >
@@ -239,7 +240,7 @@ export function CompensationOverview({
                 accent={allowanceColor}
                 actions={canAdjust && contract ? (
                   <Link
-                    to={`/dashboard/contracts/${contract.id}/edit`}
+                    to={documentEditPath('contract', contract.id)}
                     className="text-xs"
                     style={{ color: 'var(--color-text-secondary)' }}
                   >

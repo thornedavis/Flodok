@@ -6,14 +6,20 @@
 // version insert atomically — the browser just hands it the new content.
 
 import { supabase } from './supabase'
+import type { DocumentDoc } from './documentDoc'
 
 export type SnapshotInput = {
   table: 'sops' | 'contracts'
   doc_id: string
   changed_by: string
-  // Pass new_content_en/new_content_id only for the side(s) the user actually
-  // changed. The helper translates the missing side when exactly one side
-  // changed; if both are passed it treats both as user-authoritative.
+  // Structured-document path — Phase C onward. When provided, the snapshot
+  // helper derives content_markdown_en/id from it via docToMarkdown and
+  // skips auto-translation. Callers that have moved to the bilingual
+  // editor pass this; legacy callers continue to use the flat fields below.
+  new_content_doc?: DocumentDoc | Record<string, unknown> | null
+  // Legacy markdown path. Pass new_content_en / new_content_id only for the
+  // side(s) the user actually changed; the helper translates the missing
+  // side when exactly one side changed. Ignored if new_content_doc is set.
   new_content_en?: string | null
   new_content_id?: string | null
   auto_translate?: boolean
@@ -32,6 +38,7 @@ export type SnapshotResult = {
   translation_error: string | null
   content_markdown: string
   content_markdown_id: string | null
+  content_doc: DocumentDoc | Record<string, unknown> | null
 }
 
 export async function writeSnapshot(input: SnapshotInput): Promise<SnapshotResult> {

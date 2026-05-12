@@ -12,7 +12,9 @@ import { primaryDept } from '../../lib/employee'
 import { formatIdr, allowanceGradientColor } from '../../lib/credits'
 import { formatRelativeTime } from '../../lib/relativeTime'
 import { BadgeGlyph } from '../../components/BadgeGlyph'
-import { renderMergeFields } from '../../lib/mergeFields'
+import { renderMergeFields, type MergeContext } from '../../lib/mergeFields'
+import { DocumentRenderer, DOCUMENT_RENDERER_STYLES } from '../../components/editor/bilingual/DocumentRenderer'
+import { isDocumentDoc } from '../../lib/documentDoc'
 import { CompensationRing, ShieldPath, WalletPath, CoinPath, GiftPath } from '../../components/portal/CompensationRing'
 import { StatRow } from '../../components/portal/StatRow'
 import { InfoTooltip } from '../../components/InfoTooltip'
@@ -664,14 +666,13 @@ export function Portal() {
   // name in-place. While the user is picking a font but hasn't confirmed,
   // a preview signature is synthesized from the selected font so the body
   // updates live as they tab through the four options.
-  function getDocContent(doc: { content_markdown: string; content_markdown_id?: string | null }) {
-    const raw = docContentLang === 'id' && doc.content_markdown_id
-      ? doc.content_markdown_id
-      : doc.content_markdown
-    // Pick the persisted employee signature matching whichever doc type is
-    // open. For unsigned docs, synthesize a preview signature from the
-    // currently-selected font so the body updates live as the user tabs
-    // through font options before confirming.
+  // Builds the merge-field resolution context Portal applies to both
+  // the markdown render path (legacy / version-preview) and the native
+  // DocumentRenderer (live doc). Picks the persisted employee signature
+  // for the active doc, falling back to a live preview signature
+  // synthesized from the currently-selected font when the doc isn't
+  // signed yet — so the body updates as the user tabs through fonts.
+  function buildDocMergeContext(): MergeContext {
     const persistedEmployeeSig = activeContract
       ? contractSignatures[activeContract.id]
       : activeSop
@@ -692,7 +693,7 @@ export function Portal() {
           employer_title: employerSig.signer_title,
         }
       : null
-    return renderMergeFields(raw, {
+    return {
       employee,
       organization: org,
       contract: activeContract,
@@ -700,7 +701,14 @@ export function Portal() {
       lang: docContentLang,
       employeeSignature,
       employerSignature,
-    })
+    }
+  }
+
+  function getDocContent(doc: { content_markdown: string; content_markdown_id?: string | null }) {
+    const raw = docContentLang === 'id' && doc.content_markdown_id
+      ? doc.content_markdown_id
+      : doc.content_markdown
+    return renderMergeFields(raw, buildDocMergeContext())
   }
 
   async function handleDownloadPdf(includeSignature: boolean = true) {
@@ -1169,11 +1177,38 @@ export function Portal() {
                   </div>
                 )}
 
-                {/* Content */}
+                {/* Content. Render priority:
+                    1. Version preview → markdown from the snapshot's
+                       resolved_markdown_* so the historical state is
+                       preserved verbatim (merge fields were frozen at
+                       save time).
+                    2. Live doc with content_doc set → DocumentRenderer
+                       walks the structured doc and resolves merge
+                       fields against the current employee/org/contract
+                       context. This is the post-Phase-C path.
+                    3. Live doc without content_doc → fall back to
+                       markdown derivation. Reached only by legacy docs
+                       created before Phase C; new docs always have
+                       content_doc populated by the snapshot helper. */}
                 <div ref={docContentRef} className="sop-content max-w-none" style={{ color: 'var(--color-text)' }}>
-                  <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
-                    {previewMd ?? getDocContent(doc)}
-                  </ReactMarkdown>
+                  {previewMd ? (
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+                      {previewMd}
+                    </ReactMarkdown>
+                  ) : isDocumentDoc(doc.content_doc) ? (
+                    <>
+                      <DocumentRenderer
+                        doc={doc.content_doc}
+                        lang={docContentLang}
+                        mergeContext={buildDocMergeContext()}
+                      />
+                      <style>{DOCUMENT_RENDERER_STYLES}</style>
+                    </>
+                  ) : (
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+                      {getDocContent(doc)}
+                    </ReactMarkdown>
+                  )}
                 </div>
 
                 {/* Floating "Jump to sign" button. Shown only on the current

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
 import { getEmployeeDepts, primaryDept, deptsJoined } from '../../lib/employee'
@@ -10,14 +10,17 @@ import { FilterPill, FilterPanel, FilterSearchInput } from '../../components/Fil
 import type { FilterPanelSection } from '../../components/FilterControls'
 import { DateTimePicker } from '../../components/DateTimePicker'
 import { useBilling } from '../../contexts/BillingContext'
+import { documentEditPath } from '../../lib/documentTypes'
+import { docAsJson, emptyDocumentDoc } from '../../lib/documentDoc'
 import type { User, Contract, Employee, Tag } from '../../types/aliases'
 
 type ContractsView = 'contracts' | 'templates'
 
 type ContractWithEmployee = Contract & { employee: Employee | null; tagIds: string[] }
 
-export function Contracts({ user }: { user: User }) {
+export function Contracts({ user, embedded = false }: { user: User; embedded?: boolean }) {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { t } = useLang()
   const { canWrite, visibleItemLimit, state: dunning } = useBilling()
   const [contracts, setContracts] = useState<ContractWithEmployee[]>([])
@@ -28,9 +31,9 @@ export function Contracts({ user }: { user: User }) {
   const [activeDepartments, setActiveDepartments] = useState<Set<string>>(new Set())
   const [activeStatuses, setActiveStatuses] = useState<Set<string>>(new Set())
   const [activeTags, setActiveTags] = useState<Set<string>>(new Set())
-  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showCreateModalLocal, setShowCreateModalLocal] = useState(false)
   const [showCreateTemplate, setShowCreateTemplate] = useState(false)
-  const [showPickTemplate, setShowPickTemplate] = useState(false)
+  const [showPickTemplateLocal, setShowPickTemplateLocal] = useState(false)
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
   const [sortBy, setSortBy] = useState<'last_edited' | 'newest' | 'oldest'>('last_edited')
   const [view, setView] = useState<ContractsView>('contracts')
@@ -71,6 +74,32 @@ export function Contracts({ user }: { user: User }) {
     }
     load()
   }, [user.org_id])
+
+  // When embedded, the Documents shell can signal "open the create-from-
+  // scratch modal" with `?new=1` or "open the template picker" with
+  // `?new=template`. Derive open-state directly from URL (no mirroring
+  // into local state) and clear the URL param in the close handler.
+  // Non-embedded mounts ignore the URL signal entirely.
+  const urlNewParam = embedded ? searchParams.get('new') : null
+  const showCreateModal = showCreateModalLocal || urlNewParam === '1'
+  const showPickTemplate = showPickTemplateLocal || urlNewParam === 'template'
+
+  function clearUrlNewParam() {
+    if (!urlNewParam) return
+    const params = new URLSearchParams(searchParams)
+    params.delete('new')
+    setSearchParams(params, { replace: true })
+  }
+
+  function closeCreateModal() {
+    setShowCreateModalLocal(false)
+    if (urlNewParam === '1') clearUrlNewParam()
+  }
+
+  function closePickTemplate() {
+    setShowPickTemplateLocal(false)
+    if (urlNewParam === 'template') clearUrlNewParam()
+  }
 
   const departments = [...new Set(contracts.flatMap(c => c.employee ? getEmployeeDepts(c.employee) : []))].sort()
 
@@ -131,8 +160,7 @@ export function Contracts({ user }: { user: User }) {
         org_id: user.org_id,
         employee_id: null,
         title: template.title,
-        content_markdown: template.content_markdown,
-        content_markdown_id: template.content_markdown_id,
+        content_doc: template.content_doc ?? docAsJson(emptyDocumentDoc()),
         base_wage_idr: template.base_wage_idr,
         allowance_idr: template.allowance_idr,
         hours_per_day: template.hours_per_day,
@@ -145,7 +173,7 @@ export function Contracts({ user }: { user: User }) {
       .select()
       .single()
     if (error) { alert(error.message); return }
-    if (data) navigate(`/dashboard/contracts/${data.id}/edit`)
+    if (data) navigate(documentEditPath('contract', data.id))
   }
 
   async function handleDuplicate(contract: ContractWithEmployee) {
@@ -156,15 +184,14 @@ export function Contracts({ user }: { user: User }) {
         org_id: user.org_id,
         employee_id: contract.employee_id,
         title: t.copyOfName(contract.title),
-        content_markdown: contract.content_markdown,
-        content_markdown_id: contract.content_markdown_id,
+        content_doc: contract.content_doc ?? docAsJson(emptyDocumentDoc()),
         status: 'draft' as const,
       })
       .select()
       .single()
 
     if (error) { alert(error.message); return }
-    if (data) navigate(`/dashboard/contracts/${data.id}/edit`)
+    if (data) navigate(documentEditPath('contract', data.id))
   }
 
   async function handleDelete(contract: ContractWithEmployee) {
@@ -228,27 +255,49 @@ export function Contracts({ user }: { user: User }) {
 
   return (
     <div>
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.contractsTitle}</h1>
-        {view === 'templates' || templates.length === 0 ? (
+      {!embedded && (
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.contractsTitle}</h1>
+          {view === 'templates' || templates.length === 0 ? (
+            <button
+              onClick={() => view === 'templates' ? setShowCreateTemplate(true) : setShowCreateModalLocal(true)}
+              disabled={!canWrite}
+              title={!canWrite ? t.dunningWriteBlocked : undefined}
+              className="shrink-0 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
+              style={{ backgroundColor: 'var(--color-primary)' }}
+            >
+              {view === 'templates' ? t.createTemplate : t.createContract}
+            </button>
+          ) : (
+            <CreateContractButton
+              disabled={!canWrite}
+              disabledTitle={!canWrite ? t.dunningWriteBlocked : undefined}
+              onFromScratch={() => setShowCreateModalLocal(true)}
+              onFromTemplate={() => setShowPickTemplateLocal(true)}
+            />
+          )}
+        </div>
+      )}
+
+      {/* Embedded mode: the parent Documents shell owns the global "New
+          Document" menu, so we suppress the page-level Create button for
+          regular contracts. The Templates sub-view, however, is the only
+          place that can create a new template — keep its Create Template
+          button visible there until templates get their own dedicated
+          surface in Phase G. */}
+      {embedded && view === 'templates' && (
+        <div className="mb-6 flex justify-end">
           <button
-            onClick={() => view === 'templates' ? setShowCreateTemplate(true) : setShowCreateModal(true)}
+            onClick={() => setShowCreateTemplate(true)}
             disabled={!canWrite}
             title={!canWrite ? t.dunningWriteBlocked : undefined}
             className="shrink-0 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
             style={{ backgroundColor: 'var(--color-primary)' }}
           >
-            {view === 'templates' ? t.createTemplate : t.createContract}
+            {t.createTemplate}
           </button>
-        ) : (
-          <CreateContractButton
-            disabled={!canWrite}
-            disabledTitle={!canWrite ? t.dunningWriteBlocked : undefined}
-            onFromScratch={() => setShowCreateModal(true)}
-            onFromTemplate={() => setShowPickTemplate(true)}
-          />
-        )}
-      </div>
+        </div>
+      )}
 
       <div className="mb-5 flex gap-1 border-b" style={{ borderColor: 'var(--color-border)' }}>
         <ViewTab active={view === 'contracts'} onClick={() => setView('contracts')}>
@@ -329,7 +378,7 @@ export function Contracts({ user }: { user: User }) {
                 key={contract.id}
                 className="group relative cursor-pointer rounded-xl border p-5 transition-all"
                 style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }}
-                onClick={() => navigate(`/dashboard/contracts/${contract.id}/edit`)}
+                onClick={() => navigate(documentEditPath('contract', contract.id))}
                 onMouseOver={e => {
                   e.currentTarget.style.borderColor = 'var(--color-border-strong)'
                   e.currentTarget.style.transform = 'translateY(-1px)'
@@ -502,8 +551,8 @@ export function Contracts({ user }: { user: User }) {
         <CreateContractModal
           orgId={user.org_id}
           employees={employees}
-          onClose={() => setShowCreateModal(false)}
-          onCreated={(id) => navigate(`/dashboard/contracts/${id}/edit`)}
+          onClose={closeCreateModal}
+          onCreated={(id) => navigate(documentEditPath('contract', id))}
         />
       )}
 
@@ -512,7 +561,7 @@ export function Contracts({ user }: { user: User }) {
           orgId={user.org_id}
           jobPositions={jobPositions}
           onClose={() => setShowCreateTemplate(false)}
-          onCreated={(id) => navigate(`/dashboard/contracts/${id}/edit`)}
+          onCreated={(id) => navigate(documentEditPath('contract', id))}
           onManagePositions={() => { setShowCreateTemplate(false); navigate('/dashboard/company?tab=structure') }}
         />
       )}
@@ -520,8 +569,8 @@ export function Contracts({ user }: { user: User }) {
       {showPickTemplate && (
         <PickTemplateModal
           templates={templates}
-          onClose={() => setShowPickTemplate(false)}
-          onPick={(tpl) => { setShowPickTemplate(false); handleCreateFromTemplate(tpl) }}
+          onClose={closePickTemplate}
+          onPick={(tpl) => { closePickTemplate(); handleCreateFromTemplate(tpl) }}
         />
       )}
     </div>
@@ -565,7 +614,7 @@ function NewTemplateModal({ orgId, jobPositions, onClose, onCreated, onManagePos
       .insert({
         org_id: orgId,
         title: title.trim(),
-        content_markdown: '',
+        content_doc: docAsJson(emptyDocumentDoc()),
         status: 'draft',
         is_template: true,
         template_for_position: position || null,
@@ -924,13 +973,22 @@ function CreateContractModal({ orgId, employees, onClose, onCreated }: {
     const hoursPerDayInt = hoursPerDay ? Number(hoursPerDay) : null
     const daysPerWeekInt = daysPerWeek ? Number(daysPerWeek) : null
 
+    // New contracts land with an empty structured doc. The old PKWT /
+    // PKWTT markdown generator is retired with the markdown editor; a
+    // structured-doc equivalent will return as part of Phase G's typed
+    // templates table. The quick-fill form's *structural* fields
+    // (wages, hours, dates) still populate the row columns so the
+    // compensation page, signing hash, and inbox flows keep working.
+    // The `markdown` local from the generator below is currently unused
+    // — kept around as a TODO marker for the structured starter content.
+    void markdown
     const { data, error: insertError } = await supabase
       .from('contracts')
       .insert({
         org_id: orgId,
         employee_id: employeeId || null,
         title: title.trim(),
-        content_markdown: markdown,
+        content_doc: docAsJson(emptyDocumentDoc()),
         status: 'draft' as const,
         base_wage_idr: baseWageIdr,
         allowance_idr: allowanceIdr,

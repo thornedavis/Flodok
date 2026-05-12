@@ -13,6 +13,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { diffLines } from 'diff'
 import { supabase } from '../../lib/supabase'
+import { documentEditPath } from '../../lib/documentTypes'
 import { useLang } from '../../contexts/LanguageContext'
 import { renderMergeFields, type MergeContext } from '../../lib/mergeFields'
 import { formatIdr } from '../../lib/credits'
@@ -141,7 +142,7 @@ export function ContractHistory() {
           <p className="mt-1 text-sm" style={{ color: 'var(--color-text-secondary)' }}>{t.currentVersionLabel(contract.current_version)}</p>
         </div>
         <Link
-          to={`/dashboard/contracts/${contract.id}/edit`}
+          to={documentEditPath('contract', contract.id)}
           className="rounded-lg border px-4 py-2 text-sm"
           style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
         >

@@ -2,6 +2,7 @@ import type { Env, OrgConfig } from "./types";
 import { verifyWebhookSignature, parseWebhookPayload } from "./webhook";
 import { processWebhook } from "./processor";
 import { fetchRecentTranscripts } from "./fireflies";
+import { handlePdf } from "./pdf";
 import {
   loadOrgById,
   listActiveOrgs,
@@ -61,6 +62,15 @@ export default {
     const deepHealthMatch = url.pathname.match(/^\/health\/deep\/([^/]+)\/?$/);
     if (deepHealthMatch && method === "GET") {
       return handleDeepHealth(request, env, deepHealthMatch[1]);
+    }
+
+    // PDF rendering. Browser pre-renders the structured document to a
+    // complete HTML string and POSTs it; this endpoint authenticates
+    // via Supabase JWT and pipes the HTML through Browser Rendering's
+    // Chromium to produce a PDF. CORS preflight handled inside
+    // handlePdf so OPTIONS works before the secrets check below.
+    if (url.pathname === "/pdf") {
+      return handlePdf(request, env);
     }
 
     // Fail loud if core secrets are missing. Other routes would return

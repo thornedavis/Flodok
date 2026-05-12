@@ -9,6 +9,8 @@ import { generateUniqueSlug, generateAccessToken } from '../../lib/slug'
 import { getAvatarGradient } from '../../lib/avatar'
 import { bucketReferenceValues, referenceNames } from '../../lib/companyReference'
 import { findTemplateForPosition, buildContractFromTemplate } from '../../lib/contractTemplates'
+import { documentEditPath, documentsIndexPath } from '../../lib/documentTypes'
+import { docAsJson, emptyDocumentDoc } from '../../lib/documentDoc'
 import { advanceSignedToActiveForOrg } from '../../lib/lifecycleAdvance'
 import { PhoneInput } from '../../components/PhoneInput'
 import { FilterSearchInput, MultiSelectDropdown } from '../../components/FilterControls'
@@ -207,8 +209,8 @@ export function Hiring({ user }: { user: User }) {
           orgId={user.org_id}
           onClose={() => setMakeOfferCandidate(null)}
           onCompleted={async () => { setMakeOfferCandidate(null); await loadData() }}
-          onEditContract={(contractId) => navigate(`/dashboard/contracts/${contractId}/edit`)}
-          onManageTemplates={() => { setMakeOfferCandidate(null); navigate('/dashboard/contracts') }}
+          onEditContract={(contractId) => navigate(documentEditPath('contract', contractId))}
+          onManageTemplates={() => { setMakeOfferCandidate(null); navigate(documentsIndexPath('contract')) }}
         />
       )}
 
@@ -858,8 +860,7 @@ function MakeOfferModal({ candidate, orgId, onClose, onCompleted, onEditContract
           org_id: orgId,
           employee_id: candidate.id,
           title: baseTitle,
-          content_markdown: '',
-          content_markdown_id: null,
+          content_doc: docAsJson(emptyDocumentDoc()),
           base_wage_idr: null,
           allowance_idr: null,
           hours_per_day: null,

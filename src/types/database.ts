@@ -349,6 +349,7 @@ export type Database = {
           base_wage_idr: number | null
           change_summary: string | null
           changed_by: string
+          content_doc: Json | null
           content_markdown: string
           content_markdown_id: string | null
           contract_id: string
@@ -368,6 +369,7 @@ export type Database = {
           base_wage_idr?: number | null
           change_summary?: string | null
           changed_by: string
+          content_doc?: Json | null
           content_markdown: string
           content_markdown_id?: string | null
           contract_id: string
@@ -387,6 +389,7 @@ export type Database = {
           base_wage_idr?: number | null
           change_summary?: string | null
           changed_by?: string
+          content_doc?: Json | null
           content_markdown?: string
           content_markdown_id?: string | null
           contract_id?: string
@@ -421,18 +424,22 @@ export type Database = {
       contracts: {
         Row: {
           allowance_idr: number | null
+          approved_by: string | null
           base_wage_idr: number | null
+          content_doc: Json | null
           content_markdown: string
           content_markdown_id: string | null
           created_at: string
           current_version: number
           days_per_week: number | null
+          document_number: string | null
           employee_id: string | null
           end_date: string | null
           hours_per_day: number | null
           id: string
           is_template: boolean
           org_id: string
+          owner_department: string | null
           start_date: string | null
           status: string
           template_for_position: string | null
@@ -441,18 +448,22 @@ export type Database = {
         }
         Insert: {
           allowance_idr?: number | null
+          approved_by?: string | null
           base_wage_idr?: number | null
+          content_doc?: Json | null
           content_markdown?: string
           content_markdown_id?: string | null
           created_at?: string
           current_version?: number
           days_per_week?: number | null
+          document_number?: string | null
           employee_id?: string | null
           end_date?: string | null
           hours_per_day?: number | null
           id?: string
           is_template?: boolean
           org_id: string
+          owner_department?: string | null
           start_date?: string | null
           status?: string
           template_for_position?: string | null
@@ -461,18 +472,22 @@ export type Database = {
         }
         Update: {
           allowance_idr?: number | null
+          approved_by?: string | null
           base_wage_idr?: number | null
+          content_doc?: Json | null
           content_markdown?: string
           content_markdown_id?: string | null
           created_at?: string
           current_version?: number
           days_per_week?: number | null
+          document_number?: string | null
           employee_id?: string | null
           end_date?: string | null
           hours_per_day?: number | null
           id?: string
           is_template?: boolean
           org_id?: string
+          owner_department?: string | null
           start_date?: string | null
           status?: string
           template_for_position?: string | null
@@ -556,6 +571,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      document_view_prefs: {
+        Row: {
+          document_id: string
+          document_type: string
+          updated_at: string
+          user_id: string
+          view_mode: string
+        }
+        Insert: {
+          document_id: string
+          document_type: string
+          updated_at?: string
+          user_id: string
+          view_mode: string
+        }
+        Update: {
+          document_id?: string
+          document_type?: string
+          updated_at?: string
+          user_id?: string
+          view_mode?: string
+        }
+        Relationships: []
       }
       company_reference_values: {
         Row: {
@@ -1913,6 +1952,7 @@ export type Database = {
         Row: {
           change_summary: string | null
           changed_by: string
+          content_doc: Json | null
           content_markdown: string
           content_markdown_id: string | null
           created_at: string
@@ -1927,6 +1967,7 @@ export type Database = {
         Insert: {
           change_summary?: string | null
           changed_by: string
+          content_doc?: Json | null
           content_markdown: string
           content_markdown_id?: string | null
           created_at?: string
@@ -1941,6 +1982,7 @@ export type Database = {
         Update: {
           change_summary?: string | null
           changed_by?: string
+          content_doc?: Json | null
           content_markdown?: string
           content_markdown_id?: string | null
           created_at?: string
@@ -1964,37 +2006,49 @@ export type Database = {
       }
       sops: {
         Row: {
+          approved_by: string | null
+          content_doc: Json | null
           content_markdown: string
           content_markdown_id: string | null
           created_at: string
           current_version: number
+          document_number: string | null
           employee_id: string | null
           id: string
           org_id: string
+          owner_department: string | null
           status: string
           title: string
           updated_at: string
         }
         Insert: {
+          approved_by?: string | null
+          content_doc?: Json | null
           content_markdown?: string
           content_markdown_id?: string | null
           created_at?: string
           current_version?: number
+          document_number?: string | null
           employee_id?: string | null
           id?: string
           org_id: string
+          owner_department?: string | null
           status?: string
           title: string
           updated_at?: string
         }
         Update: {
+          approved_by?: string | null
+          content_doc?: Json | null
           content_markdown?: string
           content_markdown_id?: string | null
           created_at?: string
           current_version?: number
+          document_number?: string | null
           employee_id?: string | null
           id?: string
           org_id?: string
+          owner_department?: string | null
           status?: string
           title?: string
           updated_at?: string

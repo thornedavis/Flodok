@@ -1,18 +1,20 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
 import { getEmployeeDepts, primaryDept } from '../../lib/employee'
-import { getSopStarterTemplate } from '../../lib/templates'
 import { FilterPill, FilterPanel, FilterSearchInput } from '../../components/FilterControls'
 import type { FilterPanelSection } from '../../components/FilterControls'
 import { useBilling } from '../../contexts/BillingContext'
+import { documentEditPath } from '../../lib/documentTypes'
+import { docAsJson, emptyDocumentDoc } from '../../lib/documentDoc'
 import type { User, Sop, Employee, Tag } from '../../types/aliases'
 
 type SopWithEmployee = Sop & { employee: Employee | null; tagIds: string[] }
 
-export function SOPs({ user }: { user: User }) {
+export function SOPs({ user, embedded = false }: { user: User; embedded?: boolean }) {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { t } = useLang()
   const { canWrite, visibleItemLimit, state: dunning } = useBilling()
   const [sops, setSOPs] = useState<SopWithEmployee[]>([])
@@ -23,7 +25,7 @@ export function SOPs({ user }: { user: User }) {
   const [activeDepartments, setActiveDepartments] = useState<Set<string>>(new Set())
   const [activeStatuses, setActiveStatuses] = useState<Set<string>>(new Set())
   const [activeTags, setActiveTags] = useState<Set<string>>(new Set())
-  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showCreateModalLocal, setShowCreateModalLocal] = useState(false)
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
   const [sortBy, setSortBy] = useState<'last_edited' | 'newest' | 'oldest'>('last_edited')
 
@@ -57,6 +59,22 @@ export function SOPs({ user }: { user: User }) {
     }
     load()
   }, [user.org_id])
+
+  // When embedded, the Documents shell can signal "open the create modal"
+  // by setting `?new=1` on the URL. Derive `showCreateModal` directly from
+  // URL state (no mirroring into local state) and clear the URL param in
+  // the close handler. Non-embedded mounts ignore the URL signal entirely.
+  const urlNewSignal = embedded && searchParams.get('new') === '1'
+  const showCreateModal = showCreateModalLocal || urlNewSignal
+
+  function closeCreateModal() {
+    setShowCreateModalLocal(false)
+    if (urlNewSignal) {
+      const params = new URLSearchParams(searchParams)
+      params.delete('new')
+      setSearchParams(params, { replace: true })
+    }
+  }
 
   // Derive departments from employees
   const departments = [...new Set(sops.flatMap(s => s.employee ? getEmployeeDepts(s.employee) : []))].sort()
@@ -127,7 +145,7 @@ export function SOPs({ user }: { user: User }) {
       .single()
 
     if (error) { alert(error.message); return }
-    if (data) navigate(`/dashboard/sops/${data.id}/edit`)
+    if (data) navigate(documentEditPath('sop', data.id))
   }
 
   async function handleDelete(sop: SopWithEmployee) {
@@ -191,18 +209,20 @@ export function SOPs({ user }: { user: User }) {
 
   return (
     <div>
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.sopsTitle}</h1>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          disabled={!canWrite}
-          title={!canWrite ? t.dunningWriteBlocked : undefined}
-          className="shrink-0 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
-          style={{ backgroundColor: 'var(--color-primary)' }}
-        >
-          {t.createSop}
-        </button>
-      </div>
+      {!embedded && (
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.sopsTitle}</h1>
+          <button
+            onClick={() => setShowCreateModalLocal(true)}
+            disabled={!canWrite}
+            title={!canWrite ? t.dunningWriteBlocked : undefined}
+            className="shrink-0 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
+            style={{ backgroundColor: 'var(--color-primary)' }}
+          >
+            {t.createSop}
+          </button>
+        </div>
+      )}
 
       {/* Filter bar */}
       <div className="mb-5 flex flex-wrap items-center gap-2">
@@ -266,7 +286,7 @@ export function SOPs({ user }: { user: User }) {
                 key={sop.id}
                 className="group relative cursor-pointer rounded-xl border p-5 transition-all"
                 style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }}
-                onClick={() => navigate(`/dashboard/sops/${sop.id}/edit`)}
+                onClick={() => navigate(documentEditPath('sop', sop.id))}
                 onMouseOver={e => {
                   e.currentTarget.style.borderColor = 'var(--color-border-strong)'
                   e.currentTarget.style.transform = 'translateY(-1px)'
@@ -405,8 +425,8 @@ export function SOPs({ user }: { user: User }) {
         <CreateSOPModal
           orgId={user.org_id}
           employees={employees}
-          onClose={() => setShowCreateModal(false)}
-          onCreated={(sopId) => navigate(`/dashboard/sops/${sopId}/edit`)}
+          onClose={closeCreateModal}
+          onCreated={(sopId) => navigate(documentEditPath('sop', sopId))}
         />
       )}
     </div>
@@ -448,13 +468,17 @@ function CreateSOPModal({ orgId, employees, onClose, onCreated }: {
     setError('')
     setCreating(true)
 
+    // New SOPs land with an empty structured doc (one section, one paired
+    // bilingual block). The starter scaffold from the markdown era is
+    // gone — Phase G's typed templates will reintroduce starter content
+    // as a per-doc-type choice.
     const { data, error: insertError } = await supabase
       .from('sops')
       .insert({
         org_id: orgId,
         employee_id: employeeId || null,
         title: title.trim(),
-        content_markdown: getSopStarterTemplate(),
+        content_doc: docAsJson(emptyDocumentDoc()),
         status: 'draft' as const,
       })
       .select()

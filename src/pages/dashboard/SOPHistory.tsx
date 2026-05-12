@@ -13,6 +13,7 @@ import { useParams, Link } from 'react-router-dom'
 import { diffLines } from 'diff'
 import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
+import { documentEditPath } from '../../lib/documentTypes'
 import { renderMergeFields, type MergeContext } from '../../lib/mergeFields'
 import type { Sop, SopVersion, Employee, Organization } from '../../types/aliases'
 
@@ -134,7 +135,7 @@ export function SOPHistory() {
           <p className="mt-1 text-sm" style={{ color: 'var(--color-text-secondary)' }}>{t.currentVersionLabel(sop.current_version)}</p>
         </div>
         <Link
-          to={`/dashboard/sops/${sop.id}/edit`}
+          to={documentEditPath('sop', sop.id)}
           className="rounded-lg border px-4 py-2 text-sm"
           style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
         >
