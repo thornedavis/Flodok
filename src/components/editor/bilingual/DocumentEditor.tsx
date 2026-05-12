@@ -16,12 +16,13 @@
 //   - Selection-translate bubble menu — Phase F.
 
 import { useEditor, EditorContent, ReactNodeViewRenderer } from '@tiptap/react'
+import { BubbleMenu } from '@tiptap/react/menus'
 import { StarterKit } from '@tiptap/starter-kit'
 import { Placeholder } from '@tiptap/extension-placeholder'
 import { Link } from '@tiptap/extension-link'
 import { Underline } from '@tiptap/extension-underline'
 import { Table, TableRow, TableCell, TableHeader } from '@tiptap/extension-table'
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { Editor } from '@tiptap/core'
 import {
   DocumentNode,
@@ -33,10 +34,12 @@ import {
   emptySection,
 } from './nodes'
 import { SectionView } from './SectionView'
+import { BilingualBlockView } from './BilingualBlockView'
 import { BilingualMergeFieldExtension } from './BilingualMergeField'
 import { MergeFieldButton } from '../MergeFieldButton'
 import { MERGE_FIELD_STYLES } from '../MergeField'
 import { DOCUMENT_EDITOR_STYLES } from './styles'
+import { supabase } from '../../../lib/supabase'
 import type { DocumentDoc } from '../../../lib/documentDoc'
 import type { MergeContext } from '../../../lib/mergeFields'
 
@@ -73,14 +76,22 @@ interface DocumentEditorProps {
 }
 
 export function DocumentEditor({ initialDoc, onChange, view = 'stacked', onViewChange, mergeFields }: DocumentEditorProps) {
-  // Bind the React NodeView to the section node at editor-creation
-  // time (rather than baking JSX into nodes.ts, which would force that
-  // file to be .tsx and pull React into the schema definitions).
+  // Bind React NodeViews at editor-creation time rather than baking
+  // JSX into nodes.ts — keeps the schema file framework-agnostic.
   const SectionWithView = SectionNode.extend({
     addNodeView() {
       return ReactNodeViewRenderer(SectionView)
     },
   })
+  const BilingualBlockWithView = BilingualBlockNode.extend({
+    addNodeView() {
+      return ReactNodeViewRenderer(BilingualBlockView)
+    },
+  })
+
+  // State for the per-selection translate action. Tracks the in-flight
+  // request so we can show a spinner on the BubbleMenu button.
+  const [translating, setTranslating] = useState(false)
 
   const editor = useEditor({
     extensions: [
@@ -97,7 +108,7 @@ export function DocumentEditor({ initialDoc, onChange, view = 'stacked', onViewC
       }),
       DocumentNode,
       SectionWithView,
-      BilingualBlockNode,
+      BilingualBlockWithView,
       BlockBodyNode,
       CalloutNode,
       Placeholder.configure({
@@ -182,6 +193,100 @@ export function DocumentEditor({ initialDoc, onChange, view = 'stacked', onViewC
     }
   }, [editor])
 
+  // Selection-translate. Reads the highlighted text from the current
+  // blockBody, sends it through the translate-text edge function,
+  // and appends the translation as a new paragraph at the end of the
+  // paired blockBody on the other side. Keeps the source content
+  // intact — the user explicitly opted into one-way translation by
+  // hitting this button on a selection.
+  const translateSelection = useCallback(async () => {
+    if (!editor || translating) return
+    const { state } = editor
+    const { from, to } = state.selection
+    if (from === to) return
+    const text = state.doc.textBetween(from, to, '\n').trim()
+    if (!text) return
+
+    // Walk up from the selection to find which blockBody it's in and
+    // the parent bilingualBlock that owns the pair.
+    const $from = state.doc.resolve(from)
+    let sourceLang: 'en' | 'id' | null = null
+    let bilingualBlockDepth = -1
+    for (let d = $from.depth; d > 0; d--) {
+      const node = $from.node(d)
+      if (node.type.name === 'blockBody' && sourceLang === null) {
+        const lang = node.attrs?.lang
+        sourceLang = lang === 'id' ? 'id' : 'en'
+      }
+      if (node.type.name === 'bilingualBlock') {
+        bilingualBlockDepth = d
+        break
+      }
+    }
+    if (!sourceLang || bilingualBlockDepth < 0) return
+
+    const targetLang = sourceLang === 'en' ? 'id' : 'en'
+    const direction = sourceLang === 'en' ? 'en-to-id' : 'id-to-en'
+
+    // Find the paired blockBody's end-of-content position by walking
+    // the bilingualBlock node's children. ProseMirror positions: the
+    // bilingualBlock opens at $from.before(d); its first child starts
+    // at +1; each child takes `nodeSize` slots; the position one
+    // before a child's closing tag is its end-of-content.
+    const blockNode = $from.node(bilingualBlockDepth)
+    const blockStart = $from.before(bilingualBlockDepth)
+    let cursor = blockStart + 1
+    let insertAt: number | null = null
+    for (let i = 0; i < blockNode.childCount; i++) {
+      const child = blockNode.child(i)
+      if (child.type.name === 'blockBody' && child.attrs?.lang === targetLang) {
+        insertAt = cursor + child.nodeSize - 1
+        break
+      }
+      cursor += child.nodeSize
+    }
+    if (insertAt === null) return
+
+    setTranslating(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) throw new Error('Not authenticated')
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/translate-text`
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text, direction }),
+      })
+      if (!response.ok) {
+        let msg = `Translate failed (HTTP ${response.status})`
+        try {
+          const body = await response.json() as { error?: string }
+          if (body.error) msg = body.error
+        } catch { /* fall through */ }
+        throw new Error(msg)
+      }
+      const result = await response.json() as { translated: string }
+      if (!result.translated) return
+      editor
+        .chain()
+        .focus()
+        .insertContentAt(insertAt, {
+          type: 'paragraph',
+          content: [{ type: 'text', text: result.translated }],
+        })
+        .run()
+    } catch (err) {
+      // Surface as a window.alert for now — Phase F polish can add an
+      // inline error toast inside the BubbleMenu surface.
+      window.alert(err instanceof Error ? err.message : 'Translation failed')
+    } finally {
+      setTranslating(false)
+    }
+  }, [editor, translating])
+
   if (!editor) return null
 
   return (
@@ -195,6 +300,42 @@ export function DocumentEditor({ initialDoc, onChange, view = 'stacked', onViewC
         view={view}
         onViewChange={onViewChange}
       />
+      <BubbleMenu editor={editor}>
+        <div
+          className="flex items-center gap-0.5 rounded-lg border p-1 shadow-lg"
+          style={{ backgroundColor: 'var(--color-bg)', borderColor: 'var(--color-border)' }}
+        >
+          <ToolbarButton active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()} title="Bold">
+            <BoldIcon />
+          </ToolbarButton>
+          <ToolbarButton active={editor.isActive('italic')} onClick={() => editor.chain().focus().toggleItalic().run()} title="Italic">
+            <ItalicIcon />
+          </ToolbarButton>
+          <ToolbarButton active={editor.isActive('underline')} onClick={() => editor.chain().focus().toggleUnderline().run()} title="Underline">
+            <UnderlineIcon />
+          </ToolbarButton>
+          <Divider />
+          <button
+            type="button"
+            onClick={translateSelection}
+            disabled={translating}
+            title="Translate selection and insert into the paired language side"
+            className="flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors disabled:opacity-50"
+            style={{ color: 'var(--color-text-secondary)' }}
+            onMouseOver={e => { if (!translating) e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
+            onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
+          >
+            {translating ? (
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
+                <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+              </svg>
+            ) : (
+              <TranslateIcon />
+            )}
+            <span>{translating ? 'Translating…' : 'Translate'}</span>
+          </button>
+        </div>
+      </BubbleMenu>
       <EditorContent editor={editor} />
       <style>{DOCUMENT_EDITOR_STYLES}{MERGE_FIELD_STYLES}</style>
     </div>
@@ -374,3 +515,4 @@ function TableIcon() { return <svg {...s}><rect x="3" y="3" width="18" height="1
 function CodeBlockIcon() { return <svg {...s}><rect x="2" y="3" width="20" height="18" rx="2"/><polyline points="10 8 6 12 10 16"/><polyline points="14 8 18 12 14 16"/></svg> }
 function SideBySideIcon() { return <svg {...s}><rect x="3" y="4" width="8" height="16" rx="1"/><rect x="13" y="4" width="8" height="16" rx="1"/></svg> }
 function StackedIcon() { return <svg {...s}><rect x="3" y="3" width="18" height="8" rx="1"/><rect x="3" y="13" width="18" height="8" rx="1"/></svg> }
+function TranslateIcon() { return <svg {...s}><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg> }

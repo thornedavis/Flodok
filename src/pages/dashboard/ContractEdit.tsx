@@ -52,6 +52,10 @@ export function ContractEdit({ user }: { user: User }) {
   const [jobPositions, setJobPositions] = useState<string[]>([])
   const [changeSummary] = useState('')
   const [saving, setSaving] = useState(false)
+  // Which save action is currently running. Distinct from `saving`
+  // (a generic boolean) so only the clicked button shows the spinner
+  // and "Translating…" label rather than both buttons mirroring it.
+  const [savingMode, setSavingMode] = useState<'draft' | 'activate' | null>(null)
   const [downloading, setDownloading] = useState(false)
   const [error, setError] = useState('')
 
@@ -286,10 +290,15 @@ export function ContractEdit({ user }: { user: User }) {
   }
 
   async function handleSaveAsDraft() {
-    const result = await persistContract('draft')
-    if (!result) return
-    bypassUnsavedWarning()
-    navigate(documentsIndexPath('contract'))
+    setSavingMode('draft')
+    try {
+      const result = await persistContract('draft')
+      if (!result) return
+      bypassUnsavedWarning()
+      navigate(documentsIndexPath('contract'))
+    } finally {
+      setSavingMode(null)
+    }
   }
 
   async function handleDownloadPdf() {
@@ -328,6 +337,15 @@ export function ContractEdit({ user }: { user: User }) {
   // below flips it to 'active'. If there are no changes (e.g. the contract
   // was already a clean draft awaiting signature), skip straight to the panel.
   async function handleActivateAndSign() {
+    setSavingMode('activate')
+    try {
+      await runActivateAndSign()
+    } finally {
+      setSavingMode(null)
+    }
+  }
+
+  async function runActivateAndSign() {
     if (hasChanges) {
       const result = await persistContract('draft')
       if (!result) return
@@ -435,7 +453,7 @@ export function ContractEdit({ user }: { user: User }) {
           {contract.is_template ? (
             <button onClick={handleSaveAsDraft} disabled={saving || !canWrite || !hasChanges} title={!canWrite ? t.dunningWriteBlocked : undefined}
               className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50" style={{ backgroundColor: 'var(--color-primary)' }}>
-              {saving ? (
+              {savingMode === 'draft' ? (
                 <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>{translating ? t.savingTranslating : t.saving}</>
               ) : t.saveTemplate}
             </button>
@@ -444,13 +462,13 @@ export function ContractEdit({ user }: { user: User }) {
               <button onClick={handleSaveAsDraft} disabled={saving || !canWrite || (!hasChanges && status === 'draft')} title={!canWrite ? t.dunningWriteBlocked : undefined}
                 className="flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium disabled:opacity-50"
                 style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-                {saving ? (
+                {savingMode === 'draft' ? (
                   <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>{translating ? t.savingTranslating : t.saving}</>
                 ) : t.saveAsDraft}
               </button>
               <button onClick={handleActivateAndSign} disabled={saving || signing || !canWrite} title={!canWrite ? t.dunningWriteBlocked : undefined}
                 className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50" style={{ backgroundColor: 'var(--color-primary)' }}>
-                {saving ? (
+                {savingMode === 'activate' ? (
                   <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>{translating ? t.savingTranslating : t.saving}</>
                 ) : t.activateAndSign}
               </button>

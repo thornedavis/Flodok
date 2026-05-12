@@ -218,7 +218,16 @@ export const DOCUMENT_EDITOR_STYLES = `
  * flips the modifier on .doc-editor.
  */
 
-.bilingual-block {
+/* Grid lives on the outer NodeViewWrapper (.bilingual-block-wrap) so
+ * we control the layout root directly. Everything between that and
+ * the .block-body cells (the NodeViewContent itself, plus any
+ * wrapper TipTap injects inside it for content reconciliation) uses
+ * display:contents so its children participate in the wrap's grid.
+ * Without this, the inserted wrapper becomes a single grid cell
+ * containing both blockBody divs, collapsing side-by-side to a
+ * stack. The review banner sits in the wrap as the first grid item
+ * and spans both columns via grid-column 1/-1. */
+.bilingual-block-wrap {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1rem;
@@ -228,12 +237,61 @@ export const DOCUMENT_EDITOR_STYLES = `
   transition: border-color 120ms ease;
 }
 
-.doc-editor.is-stacked .bilingual-block {
+.doc-editor.is-stacked .bilingual-block-wrap {
   grid-template-columns: 1fr;
 }
 
-.bilingual-block[data-needs-review="true"] {
+.bilingual-block-wrap[data-needs-review="true"] {
   border-left-color: var(--color-warning);
+}
+
+/* The NodeViewContent and any TipTap-internal wrapper become layout
+ * pass-throughs so the blockBody children land directly in the
+ * wrap's grid. Excluding .block-body itself keeps the cells
+ * rendering as normal flow containers for their own content. */
+.bilingual-block,
+.bilingual-block > *:not(.block-body) {
+  display: contents;
+}
+
+.bilingual-block-review-banner {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  margin: 0 0 0.25rem;
+  border: 1px solid var(--color-warning);
+  border-radius: 0.375rem;
+  background: color-mix(in srgb, var(--color-warning) 8%, transparent);
+  font-size: 0.8125rem;
+}
+
+.bilingual-block-review-message {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--color-warning);
+  font-weight: 500;
+}
+
+.bilingual-block-review-resolve {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.625rem;
+  border: 1px solid var(--color-warning);
+  border-radius: 0.25rem;
+  background: transparent;
+  color: var(--color-warning);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.bilingual-block-review-resolve:hover {
+  background: color-mix(in srgb, var(--color-warning) 15%, transparent);
 }
 
 .block-body {

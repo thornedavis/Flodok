@@ -61,55 +61,140 @@ export type SnapshotResult = {
   content_doc: DocumentDoc | Record<string, unknown> | null;
 };
 
-// ── Per-section / per-block translation ─────────────────────────────
+// ── Per-section / per-block translation (Phase E) ───────────────────
 //
-// Walks the doc and, for each section title or bilingual block body
-// where one language has content and the other is empty, translates
-// the populated side over to the empty side. Plain-text result for
-// block bodies in C.2 — formatting is intentionally flattened to a
-// single paragraph since we don't have a markdown-to-ProseMirror
-// parser available on the Deno side. Phase E will preserve formatting
-// by doing per-block translation in the editor where TipTap is loaded.
+// Translation strategy:
+//   1. Diff the new doc against the existing one by section / block id.
+//      Only sides that meaningfully changed are eligible for translation;
+//      unchanged blocks are skipped entirely.
+//   2. For changed blocks where one side has content and the other is
+//      empty (or untouched since last save), translate the populated
+//      side over. Walk the source body and translate per top-level
+//      block element so paragraphs stay paragraphs, headings stay
+//      headings, list items stay list items. Inline marks (bold/etc.)
+//      are dropped on this path — Phase F's BubbleMenu adds
+//      selection-level translation that preserves them.
+//   3. Every translation goes through `translation_cache` first.
+//      Identical text + direction across docs hits the cache; only
+//      misses go to OpenRouter.
+//
+// Both-sides-changed blocks are flagged `needsReview` instead of
+// being silently overwritten — surfaces in the editor via the
+// `needs_review` indicator added in Phase F.
 
-async function translateMissingSides(doc: DocumentDoc): Promise<{ doc: DocumentDoc; error: string | null }> {
-  // Deep clone — we don't want to mutate the caller's input. JSON
-  // round-trip is fine for these doc shapes (no Dates, functions, etc.).
-  const out = JSON.parse(JSON.stringify(doc)) as DocumentDoc;
+async function translateMissingSides(
+  newDoc: DocumentDoc,
+  existingDoc: DocumentDoc | null,
+  supabase: SupabaseClient,
+  orgId: string,
+): Promise<{ doc: DocumentDoc; error: string | null }> {
+  const out = JSON.parse(JSON.stringify(newDoc)) as DocumentDoc;
   let firstError: string | null = null;
+
+  // Map existing sections / blocks by id so we can detect changes per node.
+  const existingSections = new Map<string, DocNode>();
+  const existingBlocks = new Map<string, DocNode>();
+  for (const s of existingDoc?.content || []) {
+    const sid = s.attrs?.id as string | undefined;
+    if (s.type === 'section' && sid) {
+      existingSections.set(sid, s);
+      for (const b of s.content || []) {
+        const bid = b.attrs?.id as string | undefined;
+        if (b.type === 'bilingualBlock' && bid) existingBlocks.set(bid, b);
+      }
+    }
+  }
 
   for (const section of out.content || []) {
     if (section.type !== 'section' || !section.attrs) continue;
     const attrs = section.attrs as Record<string, unknown>;
+    const sid = typeof attrs.id === 'string' ? attrs.id : '';
+    const prevSection = sid ? existingSections.get(sid) : undefined;
+    const prevAttrs = (prevSection?.attrs || {}) as Record<string, unknown>;
+
     const titleEn = typeof attrs.titleEn === 'string' ? attrs.titleEn.trim() : '';
     const titleId = typeof attrs.titleId === 'string' ? attrs.titleId.trim() : '';
+    const prevEn = typeof prevAttrs.titleEn === 'string' ? prevAttrs.titleEn.trim() : '';
+    const prevId = typeof prevAttrs.titleId === 'string' ? prevAttrs.titleId.trim() : '';
+    const enChanged = titleEn !== prevEn;
+    const idChanged = titleId !== prevId;
 
-    if (titleEn && !titleId) {
-      const r = await translateSOP(titleEn, 'en-to-id');
-      if (r.text) attrs.titleId = r.text.trim();
-      else if (!firstError) firstError = r.error;
-    } else if (titleId && !titleEn) {
-      const r = await translateSOP(titleId, 'id-to-en');
-      if (r.text) attrs.titleEn = r.text.trim();
-      else if (!firstError) firstError = r.error;
+    if (titleEn && !titleId && (enChanged || !prevSection)) {
+      try {
+        attrs.titleId = await translateWithCache(titleEn, 'en-to-id', supabase, orgId);
+      } catch (err) {
+        if (!firstError) firstError = (err instanceof Error ? err.message : 'translation failed');
+      }
+    } else if (titleId && !titleEn && (idChanged || !prevSection)) {
+      try {
+        attrs.titleEn = await translateWithCache(titleId, 'id-to-en', supabase, orgId);
+      } catch (err) {
+        if (!firstError) firstError = (err instanceof Error ? err.message : 'translation failed');
+      }
     }
 
     for (const block of section.content || []) {
       if (block.type !== 'bilingualBlock' || !Array.isArray(block.content)) continue;
+      const bid = block.attrs?.id as string | undefined;
+      const prevBlock = bid ? existingBlocks.get(bid) : undefined;
       const enBody = block.content.find(b => b.type === 'blockBody' && b.attrs?.lang === 'en');
       const idBody = block.content.find(b => b.type === 'blockBody' && b.attrs?.lang === 'id');
       if (!enBody || !idBody) continue;
+      const prevContent = prevBlock?.content as DocNode[] | undefined;
+      const prevEnBody = prevContent?.find(b => b.type === 'blockBody' && b.attrs?.lang === 'en');
+      const prevIdBody = prevContent?.find(b => b.type === 'blockBody' && b.attrs?.lang === 'id');
 
-      const enText = extractBodyText(enBody.content || []);
-      const idText = extractBodyText(idBody.content || []);
+      const enEmpty = isBodyEmpty(enBody.content || []);
+      const idEmpty = isBodyEmpty(idBody.content || []);
+      const enChangedBlock = !sameBodyContent(enBody, prevEnBody);
+      const idChangedBlock = !sameBodyContent(idBody, prevIdBody);
 
-      if (enText && !idText) {
-        const r = await translateSOP(enText, 'en-to-id');
-        if (r.text) idBody.content = textToParagraphs(r.text);
-        else if (!firstError) firstError = r.error;
-      } else if (idText && !enText) {
-        const r = await translateSOP(idText, 'id-to-en');
-        if (r.text) enBody.content = textToParagraphs(r.text);
-        else if (!firstError) firstError = r.error;
+      const blockAttrs: Record<string, unknown> = (block.attrs && typeof block.attrs === 'object'
+        ? (block.attrs as Record<string, unknown>)
+        : {});
+
+      // Both sides edited in the same save — user is intentionally
+      // authoring both languages; leave both as written and flag for
+      // review so they can confirm consistency in the editor.
+      if (enChangedBlock && idChangedBlock && !enEmpty && !idEmpty) {
+        blockAttrs.needsReview = true;
+        continue;
+      }
+
+      // EN edited → re-translate ID from the new EN (overwriting any
+      // prior auto-translation). The previous behavior preserved ID
+      // whenever it had any content, which meant edits on EN never
+      // reflected on the ID side once an initial translation had run.
+      // Surgical preservation of manual ID edits is a Phase F concern
+      // (per-selection translate via BubbleMenu); the default model
+      // here is "EN is source, ID mirrors it".
+      if (enChangedBlock && !enEmpty) {
+        try {
+          idBody.content = await translateBodyContent(enBody.content || [], 'en-to-id', supabase, orgId);
+          // The block is no longer in a "both edited / needs review"
+          // state — clear any stale flag so the editor's orange
+          // indicator doesn't linger past the resolution.
+          blockAttrs.needsReview = false;
+        } catch (err) {
+          if (!firstError) firstError = (err instanceof Error ? err.message : 'translation failed');
+        }
+      } else if (idChangedBlock && !idEmpty && enEmpty) {
+        // ID edited from-scratch with no EN content yet → seed EN.
+        // We don't auto-flip ID-edits-to-EN when EN already exists
+        // because typical authoring is EN-first; surfacing an
+        // intentional ID-only edit shouldn't clobber the EN body.
+        try {
+          enBody.content = await translateBodyContent(idBody.content || [], 'id-to-en', supabase, orgId);
+          blockAttrs.needsReview = false;
+        } catch (err) {
+          if (!firstError) firstError = (err instanceof Error ? err.message : 'translation failed');
+        }
+      } else if (!enChangedBlock && !idChangedBlock) {
+        // Genuinely unchanged block — clear any stale needsReview flag
+        // a previous save may have set incorrectly (e.g. before the
+        // diff comparison was hardened against TipTap's attr-order
+        // shuffling).
+        blockAttrs.needsReview = false;
       }
     }
   }
@@ -117,43 +202,200 @@ async function translateMissingSides(doc: DocumentDoc): Promise<{ doc: DocumentD
   return { doc: out, error: firstError };
 }
 
-// Flattens a block body's content tree to its text content, joining
-// runs with spaces and paragraphs with double newlines so the
-// translator sees structure-meaningful breaks without being confused
-// by ProseMirror's nesting.
-function extractBodyText(nodes: DocNode[]): string {
-  const lines: string[] = [];
+// True when a body has no rendered text (every text node is empty
+// after trim). Empty paragraphs are the schema's "empty body" state,
+// so we treat both `[]` and `[{paragraph}]` as empty.
+function isBodyEmpty(nodes: DocNode[]): boolean {
+  return extractInlineText(nodes).trim() === '';
+}
+
+// Walks a node tree and returns concatenated text content, mirrors
+// the inline text extraction used by the per-block translator.
+function extractInlineText(nodes: DocNode[]): string {
+  const parts: string[] = [];
   for (const n of nodes) {
-    if (n.type === 'paragraph' || n.type === 'heading') {
-      lines.push(extractInline(n.content || []));
-    } else if (n.type === 'bulletList' || n.type === 'orderedList') {
-      for (const li of n.content || []) {
-        lines.push('- ' + extractInline((li.content || []).flatMap(p => p.content || [])));
-      }
-    } else if (n.type === 'codeBlock') {
-      lines.push(extractInline(n.content || []));
-    } else if (n.type === 'callout') {
-      lines.push(extractInline((n.content || []).flatMap(p => p.content || [])));
-    }
+    if (n.type === 'text') parts.push(n.text || '');
+    else if (Array.isArray(n.content)) parts.push(extractInlineText(n.content));
   }
-  return lines.join('\n\n').trim();
+  return parts.join('');
 }
 
-function extractInline(nodes: DocNode[]): string {
-  return nodes.map(n => n.type === 'text' ? (n.text || '') : '').join('');
+// Structural equality on two blockBody nodes. Used to detect "this
+// side hasn't changed since last save" so we know whether translation
+// should fire. Key order is normalized via deepEqualNodes — TipTap
+// can re-serialize identical content with different attr key order
+// (e.g. orderedList's `start` and `type` attrs added on load), which
+// would otherwise falsely look like a content change and cause
+// spurious needsReview flags.
+function sameBodyContent(a: DocNode | undefined, b: DocNode | undefined): boolean {
+  if (!a && !b) return true;
+  if (!a || !b) return false;
+  return deepEqualNodes(a.content || [], b.content || []);
 }
 
-// Splits translated text on double-newlines so multi-paragraph
-// translations land as multiple paragraphs in the ID body. Inline
-// formatting (bold, lists) is lost on this path — accepted trade-off
-// for C.2 until Phase E can preserve structure.
-function textToParagraphs(text: string): DocNode[] {
-  const paras = text.split(/\n\s*\n/).map(s => s.trim()).filter(Boolean);
-  if (paras.length === 0) return [{ type: 'paragraph' }];
-  return paras.map(p => ({
-    type: 'paragraph',
-    content: [{ type: 'text', text: p }],
-  }));
+// Recursive deep-equal that treats object keys as a set rather than a
+// sequence. Plain `JSON.stringify(a) === JSON.stringify(b)` would
+// flag `{type, attrs, content}` and `{type, content, attrs}` as
+// different even though the content is identical.
+function deepEqualNodes(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false;
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b)) return false;
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      if (!deepEqualNodes(a[i], b[i])) return false;
+    }
+    return true;
+  }
+  const aKeys = Object.keys(a as Record<string, unknown>).sort();
+  const bKeys = Object.keys(b as Record<string, unknown>).sort();
+  if (aKeys.length !== bKeys.length) return false;
+  for (let i = 0; i < aKeys.length; i++) {
+    if (aKeys[i] !== bKeys[i]) return false;
+  }
+  for (const k of aKeys) {
+    if (!deepEqualNodes((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k])) return false;
+  }
+  return true;
+}
+
+// Translates the content of a blockBody while preserving block-level
+// structure. Each top-level block (paragraph, heading, list, table
+// cell, callout) is translated independently; the returned tree has
+// the same shape as the input with text content swapped.
+
+async function translateBodyContent(
+  content: DocNode[],
+  direction: 'en-to-id' | 'id-to-en',
+  supabase: SupabaseClient,
+  orgId: string,
+): Promise<DocNode[]> {
+  const out: DocNode[] = [];
+  for (const node of content) {
+    out.push(await translateBlockNode(node, direction, supabase, orgId));
+  }
+  return out;
+}
+
+async function translateBlockNode(
+  node: DocNode,
+  direction: 'en-to-id' | 'id-to-en',
+  supabase: SupabaseClient,
+  orgId: string,
+): Promise<DocNode> {
+  switch (node.type) {
+    case 'paragraph':
+    case 'heading': {
+      const text = extractInlineText(node.content || []).trim();
+      if (!text) return { ...node };
+      const translated = await translateWithCache(text, direction, supabase, orgId);
+      return { ...node, content: [{ type: 'text', text: translated }] };
+    }
+    case 'bulletList':
+    case 'orderedList': {
+      const items: DocNode[] = [];
+      for (const li of node.content || []) {
+        items.push(await translateBlockNode(li, direction, supabase, orgId));
+      }
+      return { ...node, content: items };
+    }
+    case 'listItem': {
+      const children: DocNode[] = [];
+      for (const c of node.content || []) {
+        children.push(await translateBlockNode(c, direction, supabase, orgId));
+      }
+      return { ...node, content: children };
+    }
+    case 'callout': {
+      const children: DocNode[] = [];
+      for (const c of node.content || []) {
+        children.push(await translateBlockNode(c, direction, supabase, orgId));
+      }
+      return { ...node, content: children };
+    }
+    case 'table': {
+      const rows: DocNode[] = [];
+      for (const row of node.content || []) {
+        const cells: DocNode[] = [];
+        for (const cell of row.content || []) {
+          const cellChildren: DocNode[] = [];
+          for (const c of cell.content || []) {
+            cellChildren.push(await translateBlockNode(c, direction, supabase, orgId));
+          }
+          cells.push({ ...cell, content: cellChildren });
+        }
+        rows.push({ ...row, content: cells });
+      }
+      return { ...node, content: rows };
+    }
+    case 'codeBlock':
+      // Code blocks aren't translated — copy verbatim.
+      return { ...node };
+    default:
+      return { ...node };
+  }
+}
+
+// SHA-256 hash of the trimmed source string, hex-encoded. Used as
+// the `translation_cache.source_hash` column.
+async function sha256Hex(text: string): Promise<string> {
+  const bytes = new TextEncoder().encode(text);
+  const hashBuf = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(hashBuf))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+async function translateWithCache(
+  text: string,
+  direction: 'en-to-id' | 'id-to-en',
+  supabase: SupabaseClient,
+  orgId: string,
+): Promise<string> {
+  const trimmed = text.trim();
+  if (!trimmed) return '';
+  const hash = await sha256Hex(trimmed);
+
+  const { data: cached } = await supabase
+    .from('translation_cache')
+    .select('translated_content')
+    .eq('source_hash', hash)
+    .eq('direction', direction)
+    .eq('org_id', orgId)
+    .maybeSingle();
+  if (cached?.translated_content) {
+    return cached.translated_content as string;
+  }
+
+  const r = await translateSOP(trimmed, direction);
+  if (!r.text) {
+    throw new Error(r.error || 'translation failed');
+  }
+  const translated = r.text.trim();
+
+  // Best-effort cache write. A failure here shouldn't abort the save
+  // — the model already produced a translation; missing the cache
+  // just costs us a re-translation next time.
+  await supabase
+    .from('translation_cache')
+    .insert({
+      source_hash: hash,
+      direction,
+      org_id: orgId,
+      source_excerpt: trimmed.slice(0, 500),
+      translated_content: translated,
+      model: Deno.env.get('OPENROUTER_TRANSLATION_MODEL') || null,
+    })
+    .then(({ error }) => {
+      if (error && error.code !== '23505') {
+        // 23505 = unique_violation — fine, another concurrent save
+        // wrote the same entry first.
+        console.warn('translation_cache insert failed:', error.message);
+      }
+    });
+
+  return translated;
 }
 
 export async function writeSnapshot(
@@ -191,7 +433,9 @@ export async function writeSnapshot(
       throw new Error('new_content_doc is not a valid DocumentDoc');
     }
     if (input.auto_translate !== false) {
-      const r = await translateMissingSides(newDoc);
+      const existingDoc = (doc as { content_doc?: DocumentDoc | null }).content_doc ?? null;
+      const orgId = (doc as { org_id: string }).org_id;
+      const r = await translateMissingSides(newDoc, existingDoc, supabase, orgId);
       newDoc = r.doc;
       if (r.error) {
         translationStatus = 'failed';
