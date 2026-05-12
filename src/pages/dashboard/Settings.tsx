@@ -375,23 +375,37 @@ function generateInviteToken() {
   return Array.from(array).map(b => b.toString(16).padStart(2, '0')).join('')
 }
 
+type EmployeeOption = { id: string; name: string }
+
 function TeamMembersSection({ user, t }: { user: User; t: Translations }) {
   const { isAdmin } = useRole(user)
   const [members, setMembers] = useState<User[]>([])
   const [invites, setInvites] = useState<OrgInvitation[]>([])
+  const [employees, setEmployees] = useState<EmployeeOption[]>([])
   const [loading, setLoading] = useState(true)
   const [showInvite, setShowInvite] = useState(false)
 
   useEffect(() => { loadData() }, [user.org_id])
 
   async function loadData() {
-    const [usersResult, invitesResult] = await Promise.all([
+    const [usersResult, invitesResult, employeesResult] = await Promise.all([
       supabase.from('users').select('*').eq('org_id', user.org_id).order('created_at'),
       supabase.from('org_invitations').select('*').eq('org_id', user.org_id).eq('status', 'pending').order('created_at', { ascending: false }),
+      supabase.from('employees').select('id, name').eq('org_id', user.org_id).order('name'),
     ])
     setMembers(usersResult.data || [])
     setInvites(invitesResult.data || [])
+    setEmployees(employeesResult.data || [])
     setLoading(false)
+  }
+
+  async function handleLinkEmployee(userId: string, employeeId: string | null) {
+    const { error } = await supabase
+      .from('users')
+      .update({ employee_id: employeeId })
+      .eq('id', userId)
+    if (error) { alert(error.message); return }
+    loadData()
   }
 
   async function handleRevoke(id: string) {
@@ -400,7 +414,7 @@ function TeamMembersSection({ user, t }: { user: User; t: Translations }) {
     loadData()
   }
 
-  async function handleRoleChange(targetId: string, newRole: 'admin' | 'manager') {
+  async function handleRoleChange(targetId: string, newRole: 'admin' | 'hr' | 'member') {
     const { error } = await supabase.rpc('admin_update_user_role', {
       target_user_id: targetId,
       new_role: newRole,
@@ -430,6 +444,13 @@ function TeamMembersSection({ user, t }: { user: User; t: Translations }) {
         <div className="divide-y rounded-xl border" style={{ borderColor: 'var(--color-border)' }}>
           {members.map(m => {
             const canEditRole = isAdmin && m.id !== user.id && m.role !== 'owner'
+            const canEditLink = isAdmin
+            // Employees still available to link: the one this user already
+            // points at (so the current selection renders even if it'd
+            // otherwise be filtered) plus any unlinked employees.
+            const linkedTo = m.employee_id ?? null
+            const takenByOthers = new Set(members.filter(other => other.id !== m.id && other.employee_id).map(other => other.employee_id as string))
+            const availableEmployees = employees.filter(e => e.id === linkedTo || !takenByOthers.has(e.id))
             return (
               <div key={m.id} className="flex items-center gap-3 px-4 py-3">
                 <div
@@ -450,17 +471,39 @@ function TeamMembersSection({ user, t }: { user: User; t: Translations }) {
                     )}
                   </div>
                   <div className="truncate text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{m.email}</div>
+                  <div className="mt-1 flex items-center gap-1.5 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                    <span>{t.linkedEmployeeLabel}</span>
+                    {canEditLink ? (
+                      <select
+                        value={linkedTo ?? ''}
+                        onChange={e => handleLinkEmployee(m.id, e.target.value || null)}
+                        className="min-w-0 max-w-[14rem] truncate rounded-md border px-1.5 py-0.5 text-xs"
+                        style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+                        aria-label={t.linkedEmployeeLabel}
+                      >
+                        <option value="">{t.linkedEmployeeNone}</option>
+                        {availableEmployees.map(e => (
+                          <option key={e.id} value={e.id}>{e.name}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span style={{ color: 'var(--color-text-secondary)' }}>
+                        {linkedTo ? (employees.find(e => e.id === linkedTo)?.name ?? '—') : t.linkedEmployeeNone}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 {canEditRole ? (
                   <select
                     value={m.role}
-                    onChange={e => handleRoleChange(m.id, e.target.value as 'admin' | 'manager')}
+                    onChange={e => handleRoleChange(m.id, e.target.value as 'admin' | 'hr' | 'member')}
                     className="shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium"
                     style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}
                     aria-label={t.changeRole}
                   >
                     <option value="admin">{t.adminRole}</option>
-                    <option value="manager">{t.memberRole}</option>
+                    <option value="hr">{t.hrRole}</option>
+                    <option value="member">{t.memberRole}</option>
                   </select>
                 ) : (
                   <span
@@ -529,6 +572,7 @@ function TeamMembersSection({ user, t }: { user: User; t: Translations }) {
 function roleLabel(role: string, t: Translations) {
   if (role === 'owner') return t.ownerRole
   if (role === 'admin') return t.adminRole
+  if (role === 'hr') return t.hrRole
   return t.memberRole
 }
 
@@ -573,7 +617,7 @@ function InviteMemberModal({ user, t, existingInvites, onClose, onCreated }: {
   onCreated: () => void
 }) {
   const [email, setEmail] = useState('')
-  const [role, setRole] = useState<'manager' | 'admin'>('manager')
+  const [role, setRole] = useState<'member' | 'hr' | 'admin'>('member')
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
   const [createdInvite, setCreatedInvite] = useState<OrgInvitation | null>(null)
@@ -706,15 +750,16 @@ function InviteMemberModal({ user, t, existingInvites, onClose, onCreated }: {
               <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.inviteRoleLabel}</label>
               <select
                 value={role}
-                onChange={e => setRole(e.target.value as 'manager' | 'admin')}
+                onChange={e => setRole(e.target.value as 'member' | 'hr' | 'admin')}
                 className="w-full rounded-lg border px-3 py-2 text-sm"
                 style={inputStyle}
               >
-                <option value="manager">{t.memberRole}</option>
+                <option value="member">{t.memberRole}</option>
+                <option value="hr">{t.hrRole}</option>
                 <option value="admin">{t.adminRole}</option>
               </select>
               <p className="mt-2 text-xs leading-relaxed" style={{ color: 'var(--color-text-tertiary)' }}>
-                {role === 'admin' ? t.inviteRoleAdminDesc : t.inviteRoleMemberDesc}
+                {role === 'admin' ? t.inviteRoleAdminDesc : role === 'hr' ? t.inviteRoleHrDesc : t.inviteRoleMemberDesc}
               </p>
             </div>
 

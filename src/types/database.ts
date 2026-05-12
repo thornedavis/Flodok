@@ -2306,6 +2306,7 @@ export type Database = {
         Row: {
           created_at: string
           email: string
+          employee_id: string | null
           id: string
           is_platform_admin: boolean
           name: string
@@ -2319,6 +2320,7 @@ export type Database = {
         Insert: {
           created_at?: string
           email: string
+          employee_id?: string | null
           id: string
           is_platform_admin?: boolean
           name: string
@@ -2332,6 +2334,7 @@ export type Database = {
         Update: {
           created_at?: string
           email?: string
+          employee_id?: string | null
           id?: string
           is_platform_admin?: boolean
           name?: string
@@ -2343,6 +2346,13 @@ export type Database = {
           title?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "users_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "users_org_id_fkey"
             columns: ["org_id"]
@@ -2438,6 +2448,10 @@ export type Database = {
           target_employee_id: string
         }
         Returns: Json
+      }
+      employee_in_departments: {
+        Args: { p_department_names: string[]; p_employee_id: string }
+        Returns: boolean
       }
       evaluate_first_event_for_employee: {
         Args: { p_employee_id: string }

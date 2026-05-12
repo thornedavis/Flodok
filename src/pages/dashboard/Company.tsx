@@ -336,6 +336,11 @@ function CompanyProfileTab({ user }: { user: User }) {
 type DepartmentSection = 'departments' | 'branch_table'
 type SavingTarget = CompanyReferenceKind | DepartmentSection | null
 
+/** A user who is also linked to an employee record — eligible to be set as
+ *  a department's manager. We require the user link because the manager
+ *  needs to be able to log in and act on approval items. */
+type ManagerCandidate = { employee_id: string; user_name: string; employee_name: string }
+
 function CompanyStructureTab({ user }: { user: User }) {
   const { t } = useLang()
   const { canWrite } = useBilling()
@@ -343,6 +348,7 @@ function CompanyStructureTab({ user }: { user: User }) {
   const [branches, setBranches] = useState<CompanyBranch[]>([])
   const [departments, setDepartments] = useState<CompanyDepartment[]>([])
   const [departmentCounts, setDepartmentCounts] = useState<Map<string, number>>(new Map())
+  const [managerCandidates, setManagerCandidates] = useState<ManagerCandidate[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
   const [loading, setLoading] = useState(true)
   const [savingKind, setSavingKind] = useState<SavingTarget>(null)
@@ -365,12 +371,20 @@ function CompanyStructureTab({ user }: { user: User }) {
 
   async function loadData() {
     setLoading(true)
-    const [valueResult, branchResult, departmentResult, deptLinkResult, employeeResult] = await Promise.all([
+    const [valueResult, branchResult, departmentResult, deptLinkResult, employeeResult, managerResult] = await Promise.all([
       supabase.from('company_reference_values').select('*').eq('org_id', user.org_id).order('display_order').order('name'),
       supabase.from('company_branches').select('*').eq('org_id', user.org_id).order('name'),
       supabase.from('company_departments').select('*').eq('org_id', user.org_id).order('display_order').order('name'),
       supabase.from('employee_departments').select('department_id, employee_id, employee:employees!inner(org_id)').eq('employee.org_id', user.org_id),
       supabase.from('employees').select('*').eq('org_id', user.org_id),
+      // Eligible department managers: users in this org who are linked to an
+      // employee record. The manager_employee_id FK on company_departments
+      // points at the employee, but only those with a login can act on
+      // approval items.
+      supabase.from('users')
+        .select('name, employee_id, employee:employees!inner(id, name, org_id)')
+        .eq('org_id', user.org_id)
+        .not('employee_id', 'is', null),
     ])
     setValues(valueResult.data || [])
     setBranches(branchResult.data || [])
@@ -381,6 +395,18 @@ function CompanyStructureTab({ user }: { user: User }) {
     }
     setDepartmentCounts(counts)
     setEmployees(employeeResult.data || [])
+    const candidates: ManagerCandidate[] = []
+    for (const row of (managerResult.data ?? []) as Array<{ name: string | null; employee_id: string | null; employee: { id: string; name: string; org_id: string } | null }>) {
+      if (row.employee_id && row.employee) {
+        candidates.push({
+          employee_id: row.employee_id,
+          user_name: row.name ?? row.employee.name,
+          employee_name: row.employee.name,
+        })
+      }
+    }
+    candidates.sort((a, b) => a.user_name.localeCompare(b.user_name))
+    setManagerCandidates(candidates)
     setLoading(false)
   }
 
@@ -524,6 +550,22 @@ function CompanyStructureTab({ user }: { user: User }) {
     loadData()
   }
 
+  async function handleSetDepartmentManager(dept: CompanyDepartment, employeeId: string | null) {
+    if (!canWrite) return
+    setSavingKind('departments')
+    const { error } = await supabase
+      .from('company_departments')
+      .update({ manager_employee_id: employeeId })
+      .eq('id', dept.id)
+    setSavingKind(null)
+    if (error) {
+      alert(error.message)
+      return
+    }
+    setMessage(t.companyReferenceSaved)
+    loadData()
+  }
+
   async function handleDeleteDepartment(dept: CompanyDepartment) {
     if (!canWrite) return
     const usage = departmentCounts.get(dept.id) ?? 0
@@ -616,6 +658,7 @@ function CompanyStructureTab({ user }: { user: User }) {
         <DepartmentSection
           departments={departments}
           counts={departmentCounts}
+          managerCandidates={managerCandidates}
           addName={departmentName}
           saving={savingKind === 'departments'}
           disabled={!canWrite}
@@ -625,6 +668,7 @@ function CompanyStructureTab({ user }: { user: User }) {
           onAddNameChange={setDepartmentName}
           onRename={handleRenameDepartment}
           onDelete={handleDeleteDepartment}
+          onSetManager={handleSetDepartmentManager}
         />
         <BranchSection
           branches={branches}
@@ -660,6 +704,7 @@ function CompanyStructureTab({ user }: { user: User }) {
 function DepartmentSection({
   departments,
   counts,
+  managerCandidates,
   addName,
   saving,
   disabled,
@@ -669,9 +714,11 @@ function DepartmentSection({
   onAddNameChange,
   onRename,
   onDelete,
+  onSetManager,
 }: {
   departments: CompanyDepartment[]
   counts: Map<string, number>
+  managerCandidates: ManagerCandidate[]
   addName: string
   saving: boolean
   disabled: boolean
@@ -681,6 +728,7 @@ function DepartmentSection({
   onAddNameChange: (name: string) => void
   onRename: (dept: CompanyDepartment) => void
   onDelete: (dept: CompanyDepartment) => void
+  onSetManager: (dept: CompanyDepartment, employeeId: string | null) => void
 }) {
   const { t } = useLang()
   return (
@@ -697,17 +745,74 @@ function DepartmentSection({
       {departments.map(dept => {
         const used = counts.get(dept.id) ?? 0
         return (
-          <ValueRow
+          <DepartmentRow
             key={dept.id}
-            name={dept.name}
+            dept={dept}
             subtitle={used > 0 ? t.companyReferenceInUseCount(used) : t.companyReferenceUnused}
+            managerCandidates={managerCandidates}
             disabled={disabled}
             onRename={() => onRename(dept)}
             onDelete={() => onDelete(dept)}
+            onSetManager={employeeId => onSetManager(dept, employeeId)}
           />
         )
       })}
     </SimpleListSection>
+  )
+}
+
+function DepartmentRow({
+  dept,
+  subtitle,
+  managerCandidates,
+  disabled,
+  onRename,
+  onDelete,
+  onSetManager,
+}: {
+  dept: CompanyDepartment
+  subtitle: string
+  managerCandidates: ManagerCandidate[]
+  disabled: boolean
+  onRename: () => void
+  onDelete: () => void
+  onSetManager: (employeeId: string | null) => void
+}) {
+  const { t } = useLang()
+  const noCandidates = managerCandidates.length === 0
+  return (
+    <div className="py-2">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>{dept.name}</p>
+          <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{subtitle}</p>
+        </div>
+        <div className="flex items-center gap-1">
+          <button type="button" onClick={onRename} disabled={disabled} className="rounded-md px-2 py-1 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-40" style={{ color: 'var(--color-primary)' }}>
+            {t.edit}
+          </button>
+          <button type="button" onClick={onDelete} disabled={disabled} className="rounded-md px-2 py-1 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-40" style={{ color: 'var(--color-danger)' }}>
+            {t.delete}
+          </button>
+        </div>
+      </div>
+      <div className="mt-1.5 flex items-center gap-2 text-xs">
+        <span style={{ color: 'var(--color-text-tertiary)' }}>{t.companyDepartmentManagerLabel}</span>
+        <select
+          value={dept.manager_employee_id ?? ''}
+          onChange={e => onSetManager(e.target.value || null)}
+          disabled={disabled || noCandidates}
+          className="min-w-0 max-w-[60%] truncate rounded-md border px-2 py-0.5 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+          style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+          aria-label={t.companyDepartmentManagerLabel}
+        >
+          <option value="">{noCandidates ? t.companyDepartmentManagerNoCandidates : t.companyDepartmentManagerNone}</option>
+          {managerCandidates.map(c => (
+            <option key={c.employee_id} value={c.employee_id}>{c.user_name}</option>
+          ))}
+        </select>
+      </div>
+    </div>
   )
 }
 
