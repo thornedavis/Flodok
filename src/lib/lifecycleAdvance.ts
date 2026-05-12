@@ -5,7 +5,7 @@ import { supabase } from './supabase'
 // graduate to `active` and start showing up in the regular Employees list.
 //
 // Without a cron job to flip these automatically, we run a lightweight
-// idempotent check on each read path (Hiring page load + Portal load).
+// idempotent check on each read path (Recruitment page load + Portal load).
 // One UPDATE per page load with a tight WHERE clause — no-op when there's
 // nothing to advance.
 
@@ -18,8 +18,8 @@ function todayYmd(): string {
 }
 
 // Bulk-advance any `signed` employees in this org whose join_date has
-// arrived. Called from the Hiring page so HR sees them disappear out of
-// the Signed tab and reappear in Employees the moment they start.
+// arrived. Called from the Recruitment page so HR sees them disappear out
+// of the Signed tab and reappear in Employees the moment they start.
 export async function advanceSignedToActiveForOrg(orgId: string): Promise<void> {
   await supabase
     .from('employees')

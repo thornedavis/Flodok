@@ -151,7 +151,7 @@ const QUICKSTART: ReactNode = (
     <H3 id="hiring">5. Bring on your first hire</H3>
     <P>
       When you're ready to interview candidates, head to{' '}
-      <strong>Hiring</strong>. You can add candidates in seconds (just a
+      <strong>Recruitment</strong>. You can add candidates in seconds (just a
       name + phone), make decisions through the funnel (Prospective →
       Shortlisted → Offered), and once you click <strong>Make offer</strong>{' '}
       Flodok auto-creates a draft contract from your{' '}
@@ -465,12 +465,12 @@ const SOP_IMPORT: ReactNode = (
   </>
 )
 
-// ─── Hiring ──────────────────────────────────────────────
+// ─── Recruitment ─────────────────────────────────────────
 
 const HIRING_FUNNEL: ReactNode = (
   <>
     <P>
-      Flodok models hiring as a single funnel that lives alongside your
+      Flodok models recruitment as a single funnel that lives alongside your
       employee directory — candidates are stored in the same table as your
       active staff, surfaced on a different page, and graduate over to the
       Employees list automatically once they start. No transfer step, no
@@ -496,9 +496,9 @@ const HIRING_FUNNEL: ReactNode = (
     <H3 id="auto-graduate">Auto-graduation to Employees</H3>
     <P>
       The moment a Signed candidate's <strong>start date</strong> arrives, they
-      flip to <strong>Active</strong> and disappear from Hiring, reappearing in
-      the Employees directory. This happens lazily — on the next Hiring page
-      load and on the next time the candidate opens their portal — so
+      flip to <strong>Active</strong> and disappear from Recruitment, reappearing
+      in the Employees directory. This happens lazily — on the next Recruitment
+      page load and on the next time the candidate opens their portal — so
       there's no nightly job to wait for. If you set the start date for next
       Monday and they sign on Friday, Monday morning they're an employee.
     </P>
@@ -506,14 +506,14 @@ const HIRING_FUNNEL: ReactNode = (
     <H3 id="filters">Tabs, filters, and inline status changes</H3>
     <Bullets
       items={[
-        <>The tabs at the top of <strong>Hiring</strong> are quick filters with live counts. The <strong>Stage</strong> dropdown next to search is multi-select for combining stages (e.g. Shortlisted + Offered).</>,
+        <>The tabs at the top of <strong>Recruitment</strong> are quick filters with live counts. The <strong>Stage</strong> dropdown next to search is multi-select for combining stages (e.g. Shortlisted + Offered).</>,
         <>The status badge in each row is a <em>dropdown</em> — click it to switch a candidate's stage in one tap. Use the row's <strong>Actions</strong> menu for stage transitions that have side effects (Make offer creates a contract; Delete is destructive).</>,
         <>The WhatsApp icon on every row opens <code>wa.me/&lt;phone&gt;</code> in a new tab — handy for pinging the candidate before or after the interview.</>,
       ]}
     />
 
     <Callout type="note">
-      Hiring stages and the <strong>Active / Probation / Separated</strong>{' '}
+      Recruitment stages and the <strong>Active / Probation / Separated</strong>{' '}
       badge you see in Employees are computed from the same data — there's
       no editable status dropdown. Probation flips to Active automatically
       when the probation end date passes; you don't need to remember to
@@ -525,13 +525,13 @@ const HIRING_FUNNEL: ReactNode = (
 const HIRING_CANDIDATES: ReactNode = (
   <>
     <P>
-      The Hiring page is designed for the actual rhythm of running interviews:
+      The Recruitment page is designed for the actual rhythm of running interviews:
       add a candidate in 10 seconds, deal with details later.
     </P>
 
     <H3 id="add">Adding a candidate</H3>
     <P>
-      Click <strong>Add candidate</strong> on the Hiring page. The minimum
+      Click <strong>Add candidate</strong> on the Recruitment page. The minimum
       is just a name; phone, position, department, photo, and notes are
       optional. The candidate is saved as <strong>Prospective</strong> and
       shows up immediately on the list.
@@ -697,7 +697,7 @@ const CONTRACTS_CREATE: ReactNode = (
     <H3 id="from-candidate">From a candidate (recommended)</H3>
     <P>
       Most contracts get created automatically when you click{' '}
-      <strong>Make offer</strong> on a Hiring candidate — the contract is
+      <strong>Make offer</strong> on a Recruitment candidate — the contract is
       drafted from your{' '}
       <Link to="/help/docs/contract-templates">position template</Link>{' '}
       (if you have one) and linked to that candidate. See{' '}
@@ -1511,7 +1511,7 @@ export const sections: DocSection[] = [
   },
   {
     id: 'hiring',
-    title: 'Hiring',
+    title: 'Recruitment',
     description: 'The candidate-to-employee funnel — interview decisions, offers, and onboarding.',
     topics: [
       {
@@ -1839,11 +1839,11 @@ export const faqGroups: FAQGroup[] = [
   },
   {
     id: 'hiring',
-    title: 'Hiring',
+    title: 'Recruitment',
     items: [
       {
-        q: 'How does hiring work in Flodok?',
-        a: <P>Candidates and employees live in the same database — what changes is their <em>lifecycle stage</em>. Add a candidate, move them through Prospective → Shortlisted → Offered → Signed → Active. The Hiring page surfaces the funnel; once a candidate's start date arrives they auto-graduate to the Employees directory. See <Link to="/help/docs/hiring-funnel">The hiring funnel</Link>.</P>,
+        q: 'How does recruitment work in Flodok?',
+        a: <P>Candidates and employees live in the same database — what changes is their <em>lifecycle stage</em>. Add a candidate, move them through Prospective → Shortlisted → Offered → Signed → Active. The Recruitment page surfaces the funnel; once a candidate's start date arrives they auto-graduate to the Employees directory. See <Link to="/help/docs/hiring-funnel">The hiring funnel</Link>.</P>,
       },
       {
         q: 'Do I need to fill out a contract for every offer on the spot?',

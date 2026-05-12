@@ -56,9 +56,9 @@ export function Performance({ user }: { user: User }) {
   async function loadRoster() {
     setLoading(true)
     // The RPC returns every employee row regardless of lifecycle stage; filter
-    // out anyone still in the hiring pipeline (prospective/offered/onboarding/
-    // talent_pool) so Performance only shows people who exist in the
-    // Employees section.
+    // out anyone still in the recruitment pipeline (prospective/offered/
+    // signed/talent_pool) so Performance only shows people who exist in
+    // the Employees section.
     const [{ data: rosterData }, { data: empRows }] = await Promise.all([
       supabase.rpc('admin_rewards_roster'),
       supabase

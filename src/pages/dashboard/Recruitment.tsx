@@ -19,18 +19,18 @@ import { FilterSearchInput, MultiSelectDropdown } from '../../components/FilterC
 import type { Employee, Organization, User } from '../../types/aliases'
 import type { Translations } from '../../lib/translations'
 
-type HiringStage = 'prospective' | 'shortlisted' | 'offered' | 'signed' | 'talent_pool'
-type HiringTab = 'all' | HiringStage
+type RecruitmentStage = 'prospective' | 'shortlisted' | 'offered' | 'signed' | 'talent_pool'
+type RecruitmentTab = 'all' | RecruitmentStage
 type Candidate = Employee & EmpDeptShape
 
-const HIRING_STAGES: HiringStage[] = ['prospective', 'shortlisted', 'offered', 'signed', 'talent_pool']
+const RECRUITMENT_STAGES: RecruitmentStage[] = ['prospective', 'shortlisted', 'offered', 'signed', 'talent_pool']
 const MAX_PHOTO_SIZE = 2 * 1024 * 1024
 const ALLOWED_PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 
 const CANDIDATE_WITH_DEPTS_SELECT =
   '*, employee_departments(is_primary, department:company_departments(id, name))'
 
-export function Hiring({ user }: { user: User }) {
+export function Recruitment({ user }: { user: User }) {
   const { t, lang } = useLang()
   const navigate = useNavigate()
   const { canWrite } = useBilling()
@@ -40,9 +40,9 @@ export function Hiring({ user }: { user: User }) {
   const [jobPositions, setJobPositions] = useState<string[]>([])
   const [availableDepartments, setAvailableDepartments] = useState<DepartmentOption[]>([])
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<HiringTab>('all')
+  const [tab, setTab] = useState<RecruitmentTab>('all')
   const [search, setSearch] = useState('')
-  const [stageFilter, setStageFilter] = useState<HiringStage[]>([])
+  const [stageFilter, setStageFilter] = useState<RecruitmentStage[]>([])
   const [modalCandidate, setModalCandidate] = useState<Candidate | null>(null)
   const [makeOfferCandidate, setMakeOfferCandidate] = useState<Employee | null>(null)
   const [showAdd, setShowAdd] = useState(false)
@@ -52,13 +52,13 @@ export function Hiring({ user }: { user: User }) {
   async function loadData() {
     setLoading(true)
     // Graduate any 'signed' candidates whose start date has arrived before
-    // we read — keeps the Hiring page consistent with reality.
+    // we read — keeps the Recruitment page consistent with reality.
     await advanceSignedToActiveForOrg(user.org_id)
     const [empResult, orgResult, refResult, departmentsResult] = await Promise.all([
       supabase.from('employees')
         .select(CANDIDATE_WITH_DEPTS_SELECT)
         .eq('org_id', user.org_id)
-        .in('lifecycle_stage', HIRING_STAGES)
+        .in('lifecycle_stage', RECRUITMENT_STAGES)
         .order('created_at', { ascending: false }),
       supabase.from('organizations').select('*').eq('id', user.org_id).single(),
       supabase.from('company_reference_values')
@@ -85,9 +85,9 @@ export function Hiring({ user }: { user: User }) {
   }
 
   const counts = useMemo(() => {
-    const out: Record<'all' | HiringStage, number> = { all: candidates.length, prospective: 0, shortlisted: 0, offered: 0, signed: 0, talent_pool: 0 }
+    const out: Record<'all' | RecruitmentStage, number> = { all: candidates.length, prospective: 0, shortlisted: 0, offered: 0, signed: 0, talent_pool: 0 }
     for (const c of candidates) {
-      const stage = c.lifecycle_stage as HiringStage
+      const stage = c.lifecycle_stage as RecruitmentStage
       if (stage in out) out[stage]++
     }
     return out
@@ -98,7 +98,7 @@ export function Hiring({ user }: { user: User }) {
     const filterSet = new Set(stageFilter)
     return candidates.filter(c => {
       if (tab !== 'all' && c.lifecycle_stage !== tab) return false
-      if (filterSet.size > 0 && !filterSet.has(c.lifecycle_stage as HiringStage)) return false
+      if (filterSet.size > 0 && !filterSet.has(c.lifecycle_stage as RecruitmentStage)) return false
       if (!q) return true
       return (
         c.name.toLowerCase().includes(q) ||
@@ -110,7 +110,7 @@ export function Hiring({ user }: { user: User }) {
 
   const stageLabels = stageLabelMap(t)
 
-  async function changeStage(candidate: Employee, nextStage: HiringStage) {
+  async function changeStage(candidate: Employee, nextStage: RecruitmentStage) {
     // Transitions into 'offered' open the Make offer modal — that's where
     // the draft contract gets created from the template (if any). Direct
     // stage flips for everything else.
@@ -143,8 +143,8 @@ export function Hiring({ user }: { user: User }) {
     <div>
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.hiringTitle}</h1>
-          <p className="mt-1 max-w-3xl text-sm" style={{ color: 'var(--color-text-secondary)' }}>{t.hiringSubtitle}</p>
+          <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.recruitmentTitle}</h1>
+          <p className="mt-1 max-w-3xl text-sm" style={{ color: 'var(--color-text-secondary)' }}>{t.recruitmentSubtitle}</p>
         </div>
         <button
           type="button"
@@ -173,8 +173,8 @@ export function Hiring({ user }: { user: User }) {
         <MultiSelectDropdown
           label={t.hiringFilterStagesLabel}
           value={stageFilter}
-          onChange={next => setStageFilter(next as HiringStage[])}
-          options={HIRING_STAGES.map(s => ({ id: s, label: stageLabels[s], count: counts[s] }))}
+          onChange={next => setStageFilter(next as RecruitmentStage[])}
+          options={RECRUITMENT_STAGES.map(s => ({ id: s, label: stageLabels[s], count: counts[s] }))}
         />
       </div>
 
@@ -202,7 +202,7 @@ export function Hiring({ user }: { user: User }) {
                 <CandidateRow
                   key={c.id}
                   candidate={c}
-                  stageLabel={stageLabels[c.lifecycle_stage as HiringStage] ?? c.lifecycle_stage}
+                  stageLabel={stageLabels[c.lifecycle_stage as RecruitmentStage] ?? c.lifecycle_stage}
                   lang={lang}
                   canWrite={canWrite}
                   onOpen={() => setModalCandidate(c)}
@@ -269,14 +269,14 @@ function CandidateRow({ candidate, stageLabel, lang, canWrite, onOpen, onChangeS
   lang: 'en' | 'id'
   canWrite: boolean
   onOpen: () => void
-  onChangeStage: (next: HiringStage) => void
+  onChangeStage: (next: RecruitmentStage) => void
   onDelete: () => void
   onViewFullProfile: () => void
 }) {
   const { t } = useLang()
   const gradient = getAvatarGradient(candidate.id)
   const initials = candidate.name.split(/\s+/).slice(0, 2).map(s => s[0]?.toUpperCase() || '').join('')
-  const stage = candidate.lifecycle_stage as HiringStage
+  const stage = candidate.lifecycle_stage as RecruitmentStage
   const whatsappUrl = candidate.phone ? `https://wa.me/${candidate.phone.replace(/[^0-9]/g, '')}` : null
 
   return (
@@ -336,10 +336,10 @@ function CandidateRow({ candidate, stageLabel, lang, canWrite, onOpen, onChangeS
 }
 
 function RowActionsMenu({ stage, disabled, onEdit, onChangeStage, onDelete, onViewFullProfile }: {
-  stage: HiringStage
+  stage: RecruitmentStage
   disabled: boolean
   onEdit: () => void
-  onChangeStage: (next: HiringStage) => void
+  onChangeStage: (next: RecruitmentStage) => void
   onDelete: () => void
   onViewFullProfile: () => void
 }) {
@@ -456,10 +456,10 @@ function em() {
 }
 
 function StagePicker({ stage, label, disabled, onChange }: {
-  stage: HiringStage
+  stage: RecruitmentStage
   label: string
   disabled: boolean
-  onChange: (next: HiringStage) => void
+  onChange: (next: RecruitmentStage) => void
 }) {
   const { t } = useLang()
   const [open, setOpen] = useState(false)
@@ -523,7 +523,7 @@ function StagePicker({ stage, label, disabled, onChange }: {
           className="fixed z-50 min-w-[160px] overflow-hidden rounded-lg border py-1 shadow-lg"
           style={{ top: `${pos.top}px`, left: `${pos.left}px`, borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-elevated, var(--color-bg))' }}
         >
-          {HIRING_STAGES.map(s => {
+          {RECRUITMENT_STAGES.map(s => {
             const stageTone = STAGE_TONES[s]
             const isCurrent = s === stage
             return (
@@ -552,7 +552,7 @@ function StagePicker({ stage, label, disabled, onChange }: {
   )
 }
 
-const STAGE_TONES: Record<HiringStage, { bg: string; text: string; dot: string }> = {
+const STAGE_TONES: Record<RecruitmentStage, { bg: string; text: string; dot: string }> = {
   prospective: { bg: 'color-mix(in srgb, var(--color-text-tertiary) 14%, transparent)', text: 'var(--color-text-secondary)', dot: 'var(--color-text-tertiary)' },
   shortlisted: { bg: 'color-mix(in srgb, var(--color-warning) 14%, transparent)', text: 'var(--color-warning)', dot: 'var(--color-warning)' },
   offered: { bg: 'color-mix(in srgb, var(--color-primary) 14%, transparent)', text: 'var(--color-primary)', dot: 'var(--color-primary)' },
@@ -560,7 +560,7 @@ const STAGE_TONES: Record<HiringStage, { bg: string; text: string; dot: string }
   talent_pool: { bg: 'color-mix(in srgb, var(--color-text-tertiary) 10%, transparent)', text: 'var(--color-text-tertiary)', dot: 'var(--color-text-tertiary)' },
 }
 
-function stageLabelMap(t: Translations): Record<HiringStage, string> {
+function stageLabelMap(t: Translations): Record<RecruitmentStage, string> {
   return {
     prospective: t.hiringStageProspective,
     shortlisted: t.hiringStageShortlisted,

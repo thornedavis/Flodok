@@ -26,9 +26,9 @@ const EMPLOYEE_WITH_DEPTS_SELECT =
   '*, employee_departments(is_primary, department:company_departments(id, name))'
 
 type EmployeesView = 'list' | 'cards'
-// Filter values now mirror the derived status — hiring stages live on the
-// Hiring page (filtered out at the query level) so only these three states
-// are reachable for an employee in the directory.
+// Filter values now mirror the derived status — pre-hire stages live on
+// the Recruitment page (filtered out at the query level) so only these
+// three states are reachable for an employee in the directory.
 type EmployeeStatus = 'active' | 'probation' | 'separated'
 type SortField =
   | 'name' | 'created_at' | 'phone' | 'status'

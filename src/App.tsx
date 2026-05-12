@@ -8,7 +8,7 @@ import { ResetPassword } from './pages/auth/ResetPassword'
 import { Overview } from './pages/dashboard/Overview'
 import { Employees } from './pages/dashboard/Employees'
 import { EmployeeEdit } from './pages/dashboard/EmployeeEdit'
-import { Hiring } from './pages/dashboard/Hiring'
+import { Recruitment } from './pages/dashboard/Recruitment'
 import { Company } from './pages/dashboard/Company'
 import { Documents } from './pages/dashboard/Documents'
 import { SOPEdit } from './pages/dashboard/SOPEdit'
@@ -106,7 +106,9 @@ function AppRoutes() {
             <Route path="/dashboard" element={<Overview user={user} />} />
             <Route path="/dashboard/employees" element={<Employees user={user} />} />
             <Route path="/dashboard/employees/:id/edit" element={<EmployeeEdit user={user} />} />
-            <Route path="/dashboard/hiring" element={<Hiring user={user} />} />
+            <Route path="/dashboard/recruitment" element={<Recruitment user={user} />} />
+            {/* Redirect bookmarks from the pre-rename path. */}
+            <Route path="/dashboard/hiring" element={<Navigate to="/dashboard/recruitment" replace />} />
             <Route path="/dashboard/company" element={<Company user={user} />} />
 
             <Route path="/dashboard/documents" element={<Documents user={user} />} />

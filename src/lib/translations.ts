@@ -74,7 +74,7 @@ export const translations = {
     // Manager app — nav
     navOverview: 'Overview',
     navEmployees: 'Employees',
-    navHiring: 'Hiring',
+    navRecruitment: 'Recruitment',
     navCompany: 'Company',
     navDocuments: 'Documents',
     navSops: 'SOPs',
@@ -196,9 +196,12 @@ export const translations = {
       `Remove department "${dept}"? This will clear the department field from ${count} employee${count === 1 ? '' : 's'}.`,
     defaultSopTitle: (name: string) => `${name}'s SOP`,
 
-    // Manager app — Hiring page
-    hiringTitle: 'Hiring',
-    hiringSubtitle: 'Track candidates from first meeting through signed contract. Once they start, they move to Employees automatically.',
+    // Manager app — Recruitment page (renamed from "Hiring" — the new top-
+    // level "Hiring" section owns the request/JD pre-funnel workflow). The
+    // hiring* translation keys below stay for v1 to keep the diff focused;
+    // they're internal identifiers, not user-visible.
+    recruitmentTitle: 'Recruitment',
+    recruitmentSubtitle: 'Track candidates from first meeting through signed contract. Once they start, they move to Employees automatically.',
     hiringTabAll: 'All',
     hiringTabProspective: 'Prospective',
     hiringTabShortlisted: 'Shortlisted',
@@ -1718,7 +1721,7 @@ export const translations = {
     navSpotlight: 'Sorot',
     navOverview: 'Ringkasan',
     navEmployees: 'Karyawan',
-    navHiring: 'Perekrutan',
+    navRecruitment: 'Perekrutan',
     navCompany: 'Perusahaan',
     navDocuments: 'Dokumen',
     navSops: 'SOP',
@@ -1840,9 +1843,9 @@ export const translations = {
     defaultSopTitle: (name: string) => `SOP ${name}`,
 
     // Manager app — Company page
-    // Manager app — Hiring page
-    hiringTitle: 'Perekrutan',
-    hiringSubtitle: 'Pantau kandidat dari pertemuan pertama hingga kontrak ditandatangani. Setelah mulai bekerja, mereka berpindah ke Karyawan secara otomatis.',
+    // Manager app — Recruitment page (renamed from "Hiring")
+    recruitmentTitle: 'Perekrutan',
+    recruitmentSubtitle: 'Pantau kandidat dari pertemuan pertama hingga kontrak ditandatangani. Setelah mulai bekerja, mereka berpindah ke Karyawan secara otomatis.',
     hiringTabAll: 'Semua',
     hiringTabProspective: 'Prospek',
     hiringTabShortlisted: 'Daftar pendek',
