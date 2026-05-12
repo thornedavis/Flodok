@@ -13,9 +13,18 @@ authenticated dashboard. End-user help docs live in
 - **Frontend**: Vite + React 19 + React Router 7, TypeScript, Tailwind 4
 - **Backend**: Supabase (Postgres + Auth + Storage + Edge Functions)
 - **Hosting**: Cloudflare Pages (static) + a sidecar Worker at
-  `flodok-router/` for serverside routing concerns
-- **Editor**: TipTap (rich text) for SOPs and contracts
-- **Markdown rendering**: react-markdown + remark-gfm + rehype-raw
+  `flodok-router/` for serverside routing concerns (incl. PDF rendering
+  via Cloudflare Browser Rendering)
+- **Editor**: TipTap with a custom bilingual schema
+  (Document → Section → BilingualBlock with paired EN/ID sides). The
+  structured doc lives in `content_doc` JSONB on `sops` / `contracts` /
+  `document_templates`; flat markdown columns are a derived projection
+  for legacy consumers (portal, signature hash, AI pipeline).
+- **AI**: OpenRouter for translation (`translate-text`, used by the
+  selection BubbleMenu) and structured-doc generation
+  (`generate-document`, used by the "AI Generate" toolbar button).
+- **Markdown rendering** (read-only surfaces only): react-markdown +
+  remark-gfm + rehype-raw — for the portal renderer and Pending review.
 
 ## Repo layout
 
@@ -95,6 +104,37 @@ If you can't / don't regenerate immediately, hand-add the new fields to
 `database.ts` — but mark a TODO and regenerate before merging. The hand-add
 must match the generated shape (alphabetized within Row/Insert/Update).
 
+## Documents (SOPs & Contracts)
+
+Both doc types share one structured-document model and one editor.
+
+- **Storage**: `content_doc` JSONB column on `sops`, `contracts`,
+  `document_templates`, `sop_versions`, `contract_versions`. Source of
+  truth from Phase C onward. Flat markdown columns (`content_markdown`,
+  `content_markdown_id`) are a derived projection — the snapshot helper
+  re-runs `docToMarkdown` on every save so portal/PDF/signature-hash
+  consumers keep working.
+- **Editor**:
+  [src/components/editor/bilingual/DocumentEditor.tsx](src/components/editor/bilingual/DocumentEditor.tsx).
+  TipTap with a custom schema (Document → Section → BilingualBlock →
+  BlockBody) that pairs an EN and ID side per block. View toggle
+  (stacked vs side-by-side) is per-user, per-doc, persisted in
+  `document_view_prefs`.
+- **Snapshot helper**: every save funnels through
+  `supabase/functions/snapshot-sop` via [src/lib/snapshotApi.ts](src/lib/snapshotApi.ts).
+  It writes the version row, derives markdown, and translates per-block
+  diffs against the `translation_cache` table.
+- **AI**: per-selection translation
+  ([translate-text](supabase/functions/translate-text/index.ts)) and
+  whole-doc generation
+  ([generate-document](supabase/functions/generate-document/index.ts),
+  JSON-mode bilingual output).
+- **PDF**: the bilingual renderer is pre-rendered via
+  `react-dom/server` and POSTed to the Cloudflare Worker
+  ([flodok-router/src/pdf.ts](flodok-router/src/pdf.ts)) which prints
+  it through Browser Rendering.
+- **Templates**: see "Document templates" below.
+
 ## Edge Functions
 
 Each function lives in `supabase/functions/<name>/index.ts`. Shared helpers
@@ -138,20 +178,31 @@ new code that reads the legacy `employees.status` column; it stays for
 backward compat with the original Employees status filter, but new code
 should call `deriveEmployeeStatus()`.
 
-## Contract templates
+## Document templates
 
-Templates are normal contracts with `is_template = true` and no
-`employee_id`. They live in the same table so they can reuse the contract
-editor (markdown, AI generation, merge fields, structured fields, version
-history) for free. A template is associated with a `template_for_position`;
-when "Make offer" runs on a candidate with that position, the template is
-instantiated into a fresh draft contract via
-`src/lib/contractTemplates.ts:buildContractFromTemplate`.
+Templates live in their own typed `document_templates` table with a
+`type` discriminator (`'sop' | 'contract'`). They share the bilingual
+structured doc shape (`content_doc`) with concrete documents but skip
+versioning, signing, and employee linking — a template is a starter,
+not an issued document. Contract templates also carry the structured
+contract fields (wage, allowance, hours, days) so they pre-fill a fresh
+offer.
+
+A contract template can target a specific job position via
+`template_for_position`. When "Make offer" runs on a candidate, Flodok
+looks up a template for that position and instantiates it into a fresh
+draft contract via `src/lib/contractTemplates.ts:buildContractFromTemplate`.
+
+Editing happens at `/dashboard/document-templates/:id/edit`
+([DocumentTemplateEdit.tsx](src/pages/dashboard/DocumentTemplateEdit.tsx))
+— a slim editor without snapshots or signatures. New contract templates
+can be seeded from a built-in PKWT or PKWTT bilingual starter
+([src/lib/pkwtStarterDoc.ts](src/lib/pkwtStarterDoc.ts)).
 
 Merge tags live in `src/lib/mergeFields.ts` — `{{employee_name}}`,
 `{{base_wage_idr}}`, `{{contract_start_date}}`, etc. The same renderer
-runs in both the dashboard editor and the candidate-side contract review
-in the portal onboarding flow.
+runs in the bilingual editor (per-side localisation), the PDF export,
+and the candidate-side contract review in the portal onboarding flow.
 
 ## Signature evidence
 

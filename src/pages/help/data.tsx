@@ -140,9 +140,11 @@ const QUICKSTART: ReactNode = (
 
     <H3 id="first-sop">4. Publish your first SOP</H3>
     <P>
-      Go to <strong>SOPs → New SOP</strong>. Write or paste your content using the
-      rich-text editor — headings, lists, tables, images, embeds all work. Save
-      as draft, then click <strong>Publish</strong> when ready. Your team sees it
+      Go to <strong>Documents → SOPs → New SOP</strong>. Write the EN
+      side of the first block (or hit <strong>AI Generate</strong> and
+      describe what you want) — Flodok translates the ID side on save,
+      and you can edit either language directly. Save as draft, then
+      click <strong>Publish</strong> when ready. Your team sees it
       immediately on their portal.
     </P>
 
@@ -336,28 +338,41 @@ const INVITES: ReactNode = (
 const SOP_CREATE: ReactNode = (
   <>
     <P>
-      Flodok's SOP editor uses a block-based rich-text experience. Headings,
-      lists, tables, images, embeds, and code blocks all work — paste from
-      Google Docs or Notion and formatting carries over.
+      Flodok's editor is bilingual by design — every SOP is authored in
+      both English and Bahasa Indonesia, paired block-by-block. The
+      editor renders the two languages side-by-side or stacked (your
+      choice, remembered per-doc), so reviewers can keep the two
+      versions aligned as the document evolves.
     </P>
 
     <H3 id="create">Creating a new SOP</H3>
     <Steps
       items={[
-        <>From the dashboard, go to <strong>SOPs</strong> and click <strong>New SOP</strong>.</>,
+        <>From the dashboard, go to <strong>Documents</strong>, choose the <strong>SOPs</strong> tab, and click <strong>New SOP</strong>.</>,
         <>Give it a title and (optionally) a department. Both are searchable.</>,
-        <>Start writing. Hit <code>/</code> for a block menu (heading, list, table, callout, embed).</>,
+        <>Write the EN side; Flodok translates the missing ID side on save (and vice versa). Or fill in both — the editor's BubbleMenu has a <strong>Translate</strong> action for the selected text.</>,
+        <>Group related sentences into the same <strong>block</strong> so translation parity stays clean. Hit <strong>+ Block</strong> for a new paired block, or <strong>+ Section</strong> to start a new titled section.</>,
         <>Click <strong>Save draft</strong> to come back later, or <strong>Publish</strong> to make it live.</>,
       ]}
     />
 
+    <H3 id="ai-generate">AI Generate</H3>
+    <P>
+      Click <strong>AI Generate</strong> in the toolbar to draft an SOP
+      from a short prompt. Flodok produces a fully bilingual structured
+      doc (both EN and ID filled in, organised into sections and
+      blocks) that you can then edit and refine. Useful as a starting
+      point — you'll still want to tailor it to your team's actual
+      process.
+    </P>
+
     <H3 id="formatting">Formatting tips</H3>
     <Bullets
       items={[
-        <>Use <strong>headings</strong> generously — they become a clickable table of contents in the portal.</>,
-        <>Tables are great for decision matrices. Cells support inline formatting.</>,
-        <>Embed videos (YouTube, Vimeo) by pasting the URL on a blank line.</>,
-        <>Mark steps that <em>must</em> be done in order with a numbered list. Reading time is calculated automatically.</>,
+        <>Use <strong>section titles</strong> generously — they become the document's outline and survive reordering.</>,
+        <>Headings (H3, H4) work <em>within</em> a block for sub-structure.</>,
+        <>Tables, bullet/numbered lists, callouts, and code blocks are all available from the toolbar.</>,
+        <>The "needs review" banner appears on a block when both its EN and ID sides were edited in the same save — a hint to double-check translation parity.</>,
       ]}
     />
 
@@ -417,21 +432,27 @@ const SOP_IMPORT: ReactNode = (
   <>
     <P>
       Most teams arrive at Flodok with a graveyard of Google Docs, Notion
-      pages, or Word files. We make moving them in painless.
+      pages, or Word files. The bilingual editor is structured (paired
+      EN/ID per block), so importing is a slightly more deliberate act
+      than dumping a markdown file — but in practice it's still quick.
     </P>
 
     <H3 id="paste">Paste from Google Docs / Notion</H3>
     <P>
-      Open your source doc, select all, copy. In Flodok, create a new SOP and
-      paste — headings, lists, tables, links, and images all carry over. Manual
-      cleanup is usually under five minutes per doc.
+      Open your source doc, select all, copy. In Flodok, create a new
+      SOP and paste into the EN side of the first block — headings,
+      lists, tables, and links carry over. Flodok will translate the
+      ID side on the first save. Use <strong>+ Section</strong> to
+      break the dump into logical sections after pasting.
     </P>
 
-    <H3 id="upload">Upload .docx or .md</H3>
+    <H3 id="ai">Generate from a prompt</H3>
     <P>
-      <strong>SOPs → New SOP → Upload file</strong>. We support .docx, .md, and
-      .html. Tables and embedded images are preserved; complex Word layouts
-      (multi-column, headers/footers) are flattened.
+      If you don't have an existing doc to paste, click{' '}
+      <strong>AI Generate</strong> in the editor toolbar and describe
+      the SOP you want. Flodok drafts a fully bilingual structured doc
+      (sections + blocks, EN + ID) that you can refine. Faster than
+      starting from scratch.
     </P>
 
     <H3 id="bulk">Bulk migration</H3>
@@ -688,9 +709,10 @@ const CONTRACTS_CREATE: ReactNode = (
     <P>
       <strong>Contracts → Create Contract</strong>. Pick a contract type
       (<strong>PKWT</strong> fixed-term or <strong>PKWTT</strong> permanent),
-      enter the basics (employee, salary, dates), and Flodok generates a
-      starter markdown contract with the standard Indonesian clauses for
-      that type. From there you edit it like any other contract.
+      enter the basics (employee, salary, dates), and Flodok seeds the
+      new contract with a fully bilingual structured starter — both EN
+      and ID sides pre-filled with the standard Indonesian clauses for
+      that type. You can then edit it like any other contract.
     </P>
     <Bullets
       items={[
@@ -699,12 +721,24 @@ const CONTRACTS_CREATE: ReactNode = (
       ]}
     />
 
+    <H3 id="ai-generate">AI Generate</H3>
+    <P>
+      The editor toolbar's <strong>AI Generate</strong> button drafts a
+      bilingual contract from a short prompt — useful for non-standard
+      arrangements (consultancy, internship, board appointment) that
+      don't fit the PKWT/PKWTT starter. The result replaces the current
+      draft, so use it before you've spent time editing.
+    </P>
+
     <H3 id="merge-fields">Merge fields</H3>
     <P>
-      Contracts (and templates) support merge tags that resolve against the
-      linked employee, your organization, and the contract's own structured
-      fields. Type the token directly in the markdown editor — it'll resolve
-      when the contract is rendered for the employee.
+      Contracts (and templates) support merge tags that resolve against
+      the linked employee, your organization, and the contract's own
+      structured fields. Use the <strong>Field</strong> button in the
+      editor toolbar to insert one as an inline pill — it renders the
+      resolved value (e.g. "Rp 3,400,000") while editing and serialises
+      back to its token (e.g. <code>{'{{base_wage_idr}}'}</code>) on
+      save, so updates to the underlying data flow through automatically.
     </P>
     <Bullets
       items={[
@@ -750,9 +784,11 @@ const CONTRACT_TEMPLATES: ReactNode = (
       any candidate-specific bits are typically all that's left to fill in.
     </P>
     <P>
-      Templates live alongside contracts (same editor, same merge tags,
-      same versioning) — they're just contracts marked as templates with
-      no employee attached.
+      Templates live in their own area (the <strong>Templates</strong>{' '}
+      tab under Contracts) with a slim editor: same bilingual document
+      shape and merge tags as contracts, minus the versioning, signing,
+      and employee-link plumbing — a template is a starter, not an
+      issued document.
     </P>
 
     <H3 id="create">Creating a template</H3>
@@ -760,9 +796,10 @@ const CONTRACT_TEMPLATES: ReactNode = (
       items={[
         <>Go to <strong>Contracts</strong> and click the <strong>Templates</strong> tab.</>,
         <>Click <strong>New template</strong>. Give it a recognisable title (e.g. "Kitchen Staff PKWTT") and pick the <strong>job position</strong> it auto-fills for. The position dropdown is sourced from <Link to="/dashboard/company?tab=structure">Company → Structure</Link>; the <strong>Manage →</strong> link gets you there if you need to add a position first.</>,
-        <>Click <strong>Add</strong> — you land in the contract editor, with a "Template" badge in place of the usual status pill.</>,
-        <>Write the contract once, using merge tags (<code>{'{{employee_name}}'}</code>, <code>{'{{contract_start_date}}'}</code>, <code>{'{{base_wage_idr}}'}</code>, etc.) for everything that varies per candidate.</>,
-        <>Save. The template is now ready to be picked up the next time you make an offer to a candidate with that position.</>,
+        <>Pick a <strong>starter</strong>: <strong>PKWT</strong> or <strong>PKWTT</strong> seeds the template with the standard Indonesian employment clauses (bilingual, ready to customise); <strong>Blank</strong> drops you into an empty doc.</>,
+        <>Click <strong>Add</strong> — you land in the template editor with a "Template" badge in place of the usual status pill.</>,
+        <>Tailor the content. Use merge tags (<code>{'{{employee_name}}'}</code>, <code>{'{{contract_start_date}}'}</code>, <code>{'{{base_wage_idr}}'}</code>, etc.) for everything that varies per candidate. Set default wage/hours/days so offers pre-fill those columns too.</>,
+        <>Save. The template is ready to be picked up the next time you make an offer to a candidate with that position.</>,
       ]}
     />
 
@@ -779,13 +816,15 @@ const CONTRACT_TEMPLATES: ReactNode = (
     <P>
       Leaving the position blank on a template marks it as a general
       template (no auto-match). It still appears in the Templates tab and
-      you can duplicate from it manually, but Make offer won't pick it up.
+      you can create a contract from it via the picker on{' '}
+      <strong>Create Contract → From a template</strong>, but{' '}
+      <strong>Make offer</strong> won't auto-pick it.
     </P>
 
     <Callout type="note">
-      Templates are not signed and don't have a status — they live as
-      drafts forever. Don't worry about "activating" a template; it's
-      ready to use the moment you save.
+      Templates aren't versioned or signed — there's no history tab and
+      no Activate &amp; sign button. The latest saved content is always
+      what the next offer instantiates from.
     </Callout>
   </>
 )
@@ -839,8 +878,8 @@ const CONTRACTS_HISTORY: ReactNode = (
   <>
     <P>
       Like SOPs, contracts are versioned automatically. Every meaningful
-      save creates a new snapshot with the structured fields (wage, hours,
-      dates) frozen alongside the markdown.
+      save creates a new snapshot with the structured fields (wage,
+      hours, dates) frozen alongside the bilingual document content.
     </P>
 
     <H3 id="view">Viewing history</H3>
@@ -1324,9 +1363,15 @@ const SETTINGS_LANGUAGE: ReactNode = (
 
     <H3 id="content">SOP & contract content</H3>
     <P>
-      Content you write yourself — SOPs, contracts, announcements — is in
-      whatever language you author it in. We don't auto-translate. Some teams
-      maintain bilingual SOPs by including both languages in a single document.
+      SOPs and contracts are bilingual by design: every block has an EN
+      and an ID side, side-by-side in the editor. Write either side and
+      Flodok translates the missing one on save (powered by an LLM —
+      results are cached per-org so repeated text doesn't re-translate).
+      The editor's BubbleMenu also has a per-selection{' '}
+      <strong>Translate</strong> action, and the toolbar's{' '}
+      <strong>AI Generate</strong> drafts a fully bilingual doc from a
+      prompt. Announcements remain single-language — write them in
+      whichever language fits your audience.
     </P>
   </>
 )
@@ -1507,7 +1552,7 @@ export const sections: DocSection[] = [
       {
         slug: 'sop-create',
         title: 'Creating an SOP',
-        description: 'Use the rich-text editor to write SOPs your team will actually read.',
+        description: 'Use the bilingual editor and AI Generate to write SOPs your team will actually read.',
         iconKey: 'pen',
         body: SOP_CREATE,
       },
