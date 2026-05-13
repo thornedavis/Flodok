@@ -28,7 +28,6 @@ import { Landing } from './pages/public/Landing'
 import { PublicSiteLayout } from './components/PublicSiteLayout'
 import { Pricing } from './pages/public/Pricing'
 import { About } from './pages/public/About'
-import { Contact } from './pages/public/Contact'
 import { Security } from './pages/public/Security'
 import { Terms } from './pages/public/Terms'
 import { Privacy } from './pages/public/Privacy'
@@ -65,7 +64,10 @@ function AppRoutes() {
       <Route element={<PublicSiteLayout />}>
         <Route path="/pricing" element={<Pricing />} />
         <Route path="/about" element={<About />} />
-        <Route path="/contact" element={<Contact />} />
+        {/* /contact is unified with /help/contact — same component, one
+            destination for everyone. The redirect keeps the marketing URL
+            working from links/SEO without duplicating the page. */}
+        <Route path="/contact" element={<Navigate to="/help/contact" replace />} />
         <Route path="/security" element={<Security />} />
         <Route path="/terms" element={<Terms />} />
         <Route path="/privacy" element={<Privacy />} />

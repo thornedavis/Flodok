@@ -61,6 +61,7 @@ function SiteNav() {
           <Link to="/pricing" className="transition-colors hover:opacity-70">Pricing</Link>
           <Link to="/about" className="transition-colors hover:opacity-70">About</Link>
           <Link to="/contact" className="transition-colors hover:opacity-70">Contact</Link>
+          <Link to="/help" className="transition-colors hover:opacity-70">Help Center</Link>
         </nav>
 
         <div className="flex items-center gap-2">
