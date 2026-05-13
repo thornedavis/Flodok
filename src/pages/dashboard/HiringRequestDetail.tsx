@@ -218,7 +218,7 @@ export function HiringRequestDetail({ user }: { user: User }) {
   const writeDisabledTitle = !canWrite ? t.dunningWriteBlocked : undefined
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="max-w-2xl space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="mb-2"><StatusBadge status={status} t={t} /></div>
@@ -228,6 +228,18 @@ export function HiringRequestDetail({ user }: { user: User }) {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {/* Always-available escape hatch back to the list. The breadcrumb
+              also links there, but a button in the header chrome reads as
+              the more obvious "I'm done looking, take me back" affordance —
+              matches what Cancel does on the edit pages. */}
+          <button
+            type="button"
+            onClick={() => navigate('/dashboard/hiring')}
+            className="rounded-lg border px-3 py-1.5 text-sm font-medium"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+          >
+            {t.cancel}
+          </button>
           {capability.canEditDraft && (
             <button
               onClick={() => navigate(`/dashboard/hiring/${row.id}/edit`)}

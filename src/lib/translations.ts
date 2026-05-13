@@ -212,7 +212,7 @@ export const translations = {
 
     // Hiring requests page — the pre-pipeline approval workflow.
     hiringRequestsTitle: 'Hiring',
-    hiringRequestsSubtitle: 'Submit and approve requests to open a new role. Approved requests become job descriptions, which feed into Recruitment.',
+    hiringRequestsSubtitle: 'Submit and approve requests to open a new role.',
     hiringRequestsTabMy: 'My requests',
     hiringRequestsTabApprovals: 'Approvals',
     hiringRequestsTabAll: 'All',
@@ -220,6 +220,9 @@ export const translations = {
     hiringRequestsEmptyMy: "You haven't submitted any requests yet.",
     hiringRequestsEmptyApprovals: 'No requests are awaiting your decision.',
     hiringRequestsEmptyAll: 'No hiring requests yet.',
+    hiringRequestsSearchPlaceholder: 'Search requests…',
+    hiringRequestsNoMatches: 'No requests match your search.',
+    jdSearchPlaceholder: 'Search job descriptions…',
     hiringRequestsStatusDraft: 'Draft',
     hiringRequestsStatusSubmitted: 'Awaiting manager',
     hiringRequestsStatusManagerApproved: 'Awaiting owner',
@@ -2081,7 +2084,7 @@ export const translations = {
 
     // Hiring requests page
     hiringRequestsTitle: 'Permintaan Hiring',
-    hiringRequestsSubtitle: 'Ajukan dan setujui permintaan untuk membuka posisi baru. Permintaan yang disetujui menjadi deskripsi pekerjaan, yang mengalir ke Perekrutan.',
+    hiringRequestsSubtitle: 'Ajukan dan setujui permintaan untuk membuka posisi baru.',
     hiringRequestsTabMy: 'Permintaan saya',
     hiringRequestsTabApprovals: 'Persetujuan',
     hiringRequestsTabAll: 'Semua',
@@ -2089,6 +2092,9 @@ export const translations = {
     hiringRequestsEmptyMy: 'Anda belum mengajukan permintaan.',
     hiringRequestsEmptyApprovals: 'Tidak ada permintaan yang menunggu keputusan Anda.',
     hiringRequestsEmptyAll: 'Belum ada permintaan hiring.',
+    hiringRequestsSearchPlaceholder: 'Cari permintaan…',
+    hiringRequestsNoMatches: 'Tidak ada permintaan yang cocok dengan pencarian.',
+    jdSearchPlaceholder: 'Cari deskripsi pekerjaan…',
     hiringRequestsStatusDraft: 'Draf',
     hiringRequestsStatusSubmitted: 'Menunggu manajer',
     hiringRequestsStatusManagerApproved: 'Menunggu pemilik',

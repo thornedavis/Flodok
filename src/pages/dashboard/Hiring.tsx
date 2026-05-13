@@ -14,6 +14,7 @@ import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
 import { useBilling } from '../../contexts/BillingContext'
 import { useRole } from '../../hooks/useRole'
+import { FilterPill, FilterSearchInput } from '../../components/FilterControls'
 import { pendingApprover, statusTone, type RequestStatus } from '../../lib/hiringRequests'
 import { jdStatusTone, type JobDescriptionStatus } from '../../lib/jobDescriptions'
 import type { Translations } from '../../lib/translations'
@@ -41,6 +42,9 @@ type RequestRow = HiringRequest & {
 
 export function Hiring({ user }: { user: User }) {
   const { t } = useLang()
+  const navigate = useNavigate()
+  const { canWrite } = useBilling()
+  const role = useRole(user)
   const [searchParams, setSearchParams] = useSearchParams()
   const view: SectionView = searchParams.get('view') === 'jds' ? 'jds' : 'requests'
 
@@ -51,9 +55,44 @@ export function Hiring({ user }: { user: User }) {
     setSearchParams(params, { replace: true })
   }
 
+  // Title + subtitle stay constant across tabs — the page is "Hiring"
+  // regardless of whether you're looking at requests or JDs. Only the
+  // primary action button changes, mirroring the Documents page pattern
+  // where the New Document/SOP/Contract CTA swaps with the active type.
+  const showNewJdAction = view === 'jds' && role.canManagePeople
+
   return (
     <div>
-      <div className="mb-4 flex items-center gap-1 border-b" style={{ borderColor: 'var(--color-border)' }}>
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.hiringRequestsTitle}</h1>
+          <p className="mt-1 max-w-3xl text-sm" style={{ color: 'var(--color-text-secondary)' }}>{t.hiringRequestsSubtitle}</p>
+        </div>
+        {view === 'requests' && (
+          <button
+            type="button"
+            onClick={() => navigate('/dashboard/hiring/new')}
+            disabled={!canWrite}
+            className="shrink-0 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+            style={{ backgroundColor: 'var(--color-primary)' }}
+          >
+            {t.hiringRequestsNew}
+          </button>
+        )}
+        {showNewJdAction && (
+          <button
+            type="button"
+            onClick={() => navigate('/dashboard/hiring/jds/new')}
+            disabled={!canWrite}
+            className="shrink-0 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+            style={{ backgroundColor: 'var(--color-primary)' }}
+          >
+            {t.jdListNew}
+          </button>
+        )}
+      </div>
+
+      <div className="mb-6 flex items-center gap-1 border-b" style={{ borderColor: 'var(--color-border)' }}>
         <SectionToggle
           active={view === 'requests'}
           onClick={() => setView('requests')}
@@ -76,7 +115,6 @@ export function Hiring({ user }: { user: User }) {
 function RequestsView({ user }: { user: User }) {
   const { t, lang } = useLang()
   const navigate = useNavigate()
-  const { canWrite } = useBilling()
   const role = useRole(user)
 
   const [requests, setRequests] = useState<RequestRow[]>([])
@@ -87,6 +125,7 @@ function RequestsView({ user }: { user: User }) {
     managedDepartmentIds: new Set(),
   })
   const [tab, setTab] = useState<HiringTab>('my')
+  const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => { loadAll() }, [user.id, user.org_id])
@@ -119,8 +158,8 @@ function RequestsView({ user }: { user: User }) {
     setLoading(false)
   }
 
-  // Decide which tabs are visible. The "Approvals" tab is hidden for users
-  // who can't approve anything; the "All" tab is hidden for plain members.
+  // Decide which filter pills are visible. "Approvals" is hidden for users
+  // who can't approve anything; "All" is hidden for plain members.
   const visibleTabs = useMemo(() => {
     const tabs: HiringTab[] = ['my']
     if (capability.canApprove) tabs.push('approvals')
@@ -128,8 +167,8 @@ function RequestsView({ user }: { user: User }) {
     return tabs
   }, [capability])
 
-  // If the current tab becomes hidden after a capability load, fall back to
-  // 'my' so we never render an unreachable tab.
+  // If the current pill becomes hidden after a capability load, fall back to
+  // 'my' so we never render an unreachable filter.
   useEffect(() => {
     if (!visibleTabs.includes(tab)) setTab('my')
   }, [visibleTabs, tab])
@@ -145,47 +184,51 @@ function RequestsView({ user }: { user: User }) {
   }, [requests, capability, user.id])
 
   const visible = useMemo(() => {
+    const q = search.trim().toLowerCase()
     return requests.filter(r => {
-      if (tab === 'my') return r.hiring_manager_id === user.id
-      if (tab === 'approvals') return isAwaitingMyDecision(r, capability)
-      return true
+      if (tab === 'my' && r.hiring_manager_id !== user.id) return false
+      if (tab === 'approvals' && !isAwaitingMyDecision(r, capability)) return false
+      if (!q) return true
+      // Case-insensitive substring search across the columns shown in the
+      // table. Keeps the implementation in lock-step with what HR sees.
+      return (
+        r.position_name.toLowerCase().includes(q) ||
+        (r.department?.name?.toLowerCase().includes(q) ?? false) ||
+        (r.requester?.name?.toLowerCase().includes(q) ?? false)
+      )
     })
-  }, [requests, tab, capability, user.id])
+  }, [requests, tab, capability, user.id, search])
+
+  const searchActive = search.trim().length > 0
 
   return (
     <div>
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.hiringRequestsTitle}</h1>
-          <p className="mt-1 max-w-3xl text-sm" style={{ color: 'var(--color-text-secondary)' }}>{t.hiringRequestsSubtitle}</p>
-        </div>
-        <button
-          type="button"
-          onClick={() => navigate('/dashboard/hiring/new')}
-          disabled={!canWrite}
-          className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
-          style={{ backgroundColor: 'var(--color-primary)' }}
-        >
-          {t.hiringRequestsNew}
-        </button>
-      </div>
-
-      <div className="mb-4 flex flex-wrap items-center gap-1 border-b" style={{ borderColor: 'var(--color-border)' }}>
+      <div className="mb-5 flex flex-wrap items-center gap-2">
         {visibleTabs.map(k => (
-          <TabButton
+          <FilterPill
             key={k}
             active={tab === k}
             onClick={() => setTab(k)}
-            label={tabLabel(k, t)}
             count={tabCounts[k]}
-          />
+          >
+            {tabLabel(k, t)}
+          </FilterPill>
         ))}
+        <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
+          <div className="flex-1 sm:w-64 sm:flex-none">
+            <FilterSearchInput
+              value={search}
+              onChange={setSearch}
+              placeholder={t.hiringRequestsSearchPlaceholder}
+            />
+          </div>
+        </div>
       </div>
 
       {loading ? (
         <div className="py-12 text-center text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{t.loading}</div>
       ) : visible.length === 0 ? (
-        <EmptyState message={emptyMessage(tab, t)} />
+        <EmptyState message={searchActive ? t.hiringRequestsNoMatches : emptyMessage(tab, t)} />
       ) : (
         <RequestsTable rows={visible} t={t} lang={lang} onRowClick={r => navigate(`/dashboard/hiring/${r.id}`)} />
       )}
@@ -204,11 +247,11 @@ type JdRow = JobDescription & {
 function JobDescriptionsView({ user }: { user: User }) {
   const { t, lang } = useLang()
   const navigate = useNavigate()
-  const { canWrite } = useBilling()
   const role = useRole(user)
 
   const [rows, setRows] = useState<JdRow[]>([])
   const [filter, setFilter] = useState<JdFilter>('all')
+  const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -229,9 +272,16 @@ function JobDescriptionsView({ user }: { user: User }) {
   }, [user.org_id])
 
   const filtered = useMemo(() => {
-    if (filter === 'all') return rows
-    return rows.filter(r => r.status === filter)
-  }, [rows, filter])
+    const q = search.trim().toLowerCase()
+    return rows.filter(r => {
+      if (filter !== 'all' && r.status !== filter) return false
+      if (!q) return true
+      return (
+        r.title.toLowerCase().includes(q) ||
+        (r.department?.name?.toLowerCase().includes(q) ?? false)
+      )
+    })
+  }, [rows, filter, search])
 
   // Non-HR users only see published+archived JDs (RLS already filters
   // drafts out for them server-side, but the filter chip set should reflect
@@ -240,42 +290,36 @@ function JobDescriptionsView({ user }: { user: User }) {
     ? ['all', 'draft', 'published', 'archived']
     : ['all', 'published', 'archived']
 
+  const searchActive = search.trim().length > 0
+
   return (
     <div>
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.jdListTitle}</h1>
-          <p className="mt-1 max-w-3xl text-sm" style={{ color: 'var(--color-text-secondary)' }}>{t.jdListSubtitle}</p>
-        </div>
-        {role.canManagePeople && (
-          <button
-            type="button"
-            onClick={() => navigate('/dashboard/hiring/jds/new')}
-            disabled={!canWrite}
-            className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
-            style={{ backgroundColor: 'var(--color-primary)' }}
-          >
-            {t.jdListNew}
-          </button>
-        )}
-      </div>
-
-      <div className="mb-4 flex flex-wrap items-center gap-1 border-b" style={{ borderColor: 'var(--color-border)' }}>
+      <div className="mb-5 flex flex-wrap items-center gap-2">
         {visibleFilters.map(f => (
-          <TabButton
+          <FilterPill
             key={f}
             active={filter === f}
             onClick={() => setFilter(f)}
-            label={jdFilterLabel(f, t)}
             count={f === 'all' ? rows.length : rows.filter(r => r.status === f).length}
-          />
+          >
+            {jdFilterLabel(f, t)}
+          </FilterPill>
         ))}
+        <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
+          <div className="flex-1 sm:w-64 sm:flex-none">
+            <FilterSearchInput
+              value={search}
+              onChange={setSearch}
+              placeholder={t.jdSearchPlaceholder}
+            />
+          </div>
+        </div>
       </div>
 
       {loading ? (
         <div className="py-12 text-center text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{t.loading}</div>
       ) : filtered.length === 0 ? (
-        <EmptyState message={t.jdListEmpty} />
+        <EmptyState message={searchActive ? t.hiringRequestsNoMatches : t.jdListEmpty} />
       ) : (
         <JdTable rows={filtered} t={t} lang={lang} onRowClick={r => navigate(`/dashboard/hiring/jds/${r.id}/edit`)} />
       )}
@@ -347,20 +391,6 @@ function SectionToggle({ active, onClick, label }: { active: boolean; onClick: (
       style={{ color: active ? 'var(--color-text)' : 'var(--color-text-tertiary)' }}
     >
       {label}
-      {active && <span className="absolute -bottom-px left-0 right-0 h-0.5" style={{ backgroundColor: 'var(--color-primary)' }} />}
-    </button>
-  )
-}
-
-function TabButton({ active, onClick, label, count }: { active: boolean; onClick: () => void; label: string; count: number }) {
-  return (
-    <button
-      onClick={onClick}
-      className="relative flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors"
-      style={{ color: active ? 'var(--color-text)' : 'var(--color-text-tertiary)' }}
-    >
-      <span>{label}</span>
-      <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}>{count}</span>
       {active && <span className="absolute -bottom-px left-0 right-0 h-0.5" style={{ backgroundColor: 'var(--color-primary)' }} />}
     </button>
   )

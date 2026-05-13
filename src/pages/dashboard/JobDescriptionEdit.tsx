@@ -19,6 +19,7 @@ import { useLang } from '../../contexts/LanguageContext'
 import { useBilling } from '../../contexts/BillingContext'
 import { useBreadcrumbTrailing } from '../../contexts/BreadcrumbContext'
 import { DocumentEditor } from '../../components/editor/bilingual/DocumentEditor'
+import { DateTimePicker } from '../../components/DateTimePicker'
 import { docAsJson, type DocumentDoc, type ViewMode } from '../../lib/documentDoc'
 import {
   archiveJobDescription, buildJobDescriptionSeedDoc, isJdEditable,
@@ -326,7 +327,7 @@ export function JobDescriptionEdit({ user }: { user: User }) {
   }
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <div>
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="mb-1 text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--color-text-tertiary)' }}>
@@ -472,13 +473,11 @@ export function JobDescriptionEdit({ user }: { user: User }) {
             />
           </Field>
           <Field label={t.jdFieldEffectiveDate}>
-            <input
-              type="date"
+            <DateTimePicker
+              mode="date"
               value={form.effective_date}
-              onChange={e => update('effective_date', e.target.value)}
+              onChange={v => update('effective_date', v)}
               disabled={readOnly}
-              className="w-full rounded-lg border px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
-              style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
             />
           </Field>
           <Field label={t.jdFieldDocVersion} hint={t.jdFieldDocVersionHint}>

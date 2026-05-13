@@ -12,6 +12,8 @@ import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
 import { useBilling } from '../../contexts/BillingContext'
 import { useBreadcrumbTrailing } from '../../contexts/BreadcrumbContext'
+import { DateTimePicker } from '../../components/DateTimePicker'
+import { formatIdrDigits } from '../../lib/credits'
 import {
   ALLOWANCE_OPTIONS, CANDIDATE_SOURCES, EMPLOYMENT_TYPES, FUND_SOURCES, REQUEST_CATEGORIES,
   emitHiringRequestEvent, submitHiringRequest,
@@ -69,6 +71,11 @@ export function HiringRequestEdit({ user }: { user: User }) {
   const isNew = !id
 
   const [form, setForm] = useState<FormState>(DEFAULT_FORM)
+  // Snapshot of the form as it was when loaded — for new requests, after any
+  // auto-fill (e.g. the user's solo-managed department); for edits, the saved
+  // row. Used to compute `isDirty` so we can disable "Save as draft" when the
+  // user hasn't actually changed anything.
+  const [initialForm, setInitialForm] = useState<FormState>(DEFAULT_FORM)
   const [departments, setDepartments] = useState<DepartmentOption[]>([])
   const [separated, setSeparated] = useState<SeparatedOption[]>([])
   const [userEmployeeId, setUserEmployeeId] = useState<string | null>(user.employee_id ?? null)
@@ -109,7 +116,9 @@ export function HiringRequestEdit({ user }: { user: User }) {
           navigate(`/dashboard/hiring`, { replace: true })
           return
         }
-        setForm(rowToForm(r))
+        const loaded = rowToForm(r)
+        setForm(loaded)
+        setInitialForm(loaded)
       } else if (deptsResult.data && deptsResult.data.length > 0) {
         // Sensible default: if this user manages exactly one department,
         // pre-select it. Otherwise leave blank to force a deliberate choice.
@@ -117,7 +126,9 @@ export function HiringRequestEdit({ user }: { user: User }) {
         if (linkedEmp) {
           const managed = deptsResult.data.filter(d => d.manager_employee_id === linkedEmp)
           if (managed.length === 1) {
-            setForm(prev => ({ ...prev, department_id: managed[0].id }))
+            const seeded = { ...DEFAULT_FORM, department_id: managed[0].id }
+            setForm(seeded)
+            setInitialForm(seeded)
           }
         }
       }
@@ -287,17 +298,62 @@ export function HiringRequestEdit({ user }: { user: User }) {
   }
 
   const noDepartments = departments.length === 0
+  // Derived button-state flags. validate() is cheap and we want the disabled
+  // state to track the form live, so compute on every render rather than
+  // gating behind useMemo.
+  const isDirty = JSON.stringify(form) !== JSON.stringify(initialForm)
+  const draftValid = validate(false) === null
+  const submitValid = validate(true) === null
+  // Save-as-draft only fires when (a) there's something new to save and
+  // (b) validation passes. Submit-for-approval doesn't require isDirty —
+  // a saved-and-unchanged draft is a legitimate "submit it as-is" path.
+  const canSaveDraft = isDirty && draftValid
+  const canSubmit = submitValid
   const showReplacing = form.category === 'replacement'
   const showFundJustification = form.source_of_fund === 'non_budgeted'
   const showAllowanceOther = form.allowances.includes('other')
   const writeDisabledTitle = !canWrite ? t.dunningWriteBlocked : undefined
 
   return (
-    <div className="mx-auto max-w-3xl">
-      <div className="mb-6">
+    <div className="max-w-2xl">
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>
           {isNew ? t.hiringRequestsNewTitle : t.hiringRequestsEditTitle}
         </h1>
+        {/* Action buttons live in the header to match the rest of the app
+            (detail view, JD editor, employee edit, etc.). Order is left→right:
+            destructive/cancel → save draft → primary action, mirroring the
+            JobDescriptionEdit header. */}
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => navigate('/dashboard/hiring')}
+            className="rounded-lg border px-3 py-1.5 text-sm font-medium"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+          >
+            {t.cancel}
+          </button>
+          <button
+            type="button"
+            onClick={handleSaveDraft}
+            disabled={saving || !canWrite || noDepartments || !canSaveDraft}
+            title={writeDisabledTitle}
+            className="rounded-lg border px-3 py-1.5 text-sm font-medium disabled:cursor-not-allowed"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', opacity: (saving || !canWrite || noDepartments || !canSaveDraft) ? 0.5 : 1 }}
+          >
+            {t.hiringRequestsActionSaveDraft}
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmitForApproval}
+            disabled={saving || !canWrite || noDepartments || !canSubmit}
+            title={writeDisabledTitle}
+            className="rounded-lg px-3 py-1.5 text-sm font-medium text-white disabled:cursor-not-allowed"
+            style={{ backgroundColor: 'var(--color-primary)', opacity: (saving || !canWrite || noDepartments || !canSubmit) ? 0.5 : 1 }}
+          >
+            {t.hiringRequestsActionSubmit}
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -314,7 +370,11 @@ export function HiringRequestEdit({ user }: { user: User }) {
 
       <div className="space-y-6">
         <Section title={t.hiringRequestsSectionPosition}>
-          <Field label={t.hiringRequestsFieldDepartment} required>
+          <Field
+            label={t.hiringRequestsFieldDepartment}
+            required
+            action={<ManageButton label={t.hiringFieldManage} onClick={() => navigate('/dashboard/company?tab=structure')} />}
+          >
             <select
               value={form.department_id}
               onChange={e => update('department_id', e.target.value)}
@@ -422,12 +482,10 @@ export function HiringRequestEdit({ user }: { user: User }) {
           </Field>
 
           <Field label={t.hiringRequestsFieldExpectedDate}>
-            <input
-              type="date"
+            <DateTimePicker
+              mode="date"
               value={form.expected_hiring_date}
-              onChange={e => update('expected_hiring_date', e.target.value)}
-              className="w-full rounded-lg border px-3 py-2 text-sm"
-              style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+              onChange={v => update('expected_hiring_date', v)}
             />
           </Field>
 
@@ -474,27 +532,17 @@ export function HiringRequestEdit({ user }: { user: User }) {
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label={t.hiringRequestsFieldSalaryMin} hint={t.hiringRequestsFieldSalaryHint}>
-              <input
-                type="number"
-                inputMode="numeric"
-                min={0}
-                step={100000}
+              <IdrInput
                 value={form.base_salary_min}
-                onChange={e => update('base_salary_min', e.target.value)}
-                className="w-full rounded-lg border px-3 py-2 text-sm"
-                style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+                onChange={v => update('base_salary_min', v)}
+                idrLabel={t.idr}
               />
             </Field>
             <Field label={t.hiringRequestsFieldSalaryMax}>
-              <input
-                type="number"
-                inputMode="numeric"
-                min={0}
-                step={100000}
+              <IdrInput
                 value={form.base_salary_max}
-                onChange={e => update('base_salary_max', e.target.value)}
-                className="w-full rounded-lg border px-3 py-2 text-sm"
-                style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+                onChange={v => update('base_salary_max', v)}
+                idrLabel={t.idr}
               />
             </Field>
           </div>
@@ -542,36 +590,6 @@ export function HiringRequestEdit({ user }: { user: User }) {
         )}
       </div>
 
-      <div className="mt-6 flex flex-wrap gap-3">
-        <button
-          type="button"
-          onClick={() => navigate('/dashboard/hiring')}
-          className="rounded-lg border px-4 py-2 text-sm font-medium"
-          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-        >
-          {t.cancel}
-        </button>
-        <button
-          type="button"
-          onClick={handleSaveDraft}
-          disabled={saving || !canWrite || noDepartments}
-          title={writeDisabledTitle}
-          className="rounded-lg border px-4 py-2 text-sm font-medium disabled:cursor-not-allowed"
-          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', opacity: (saving || !canWrite || noDepartments) ? 0.5 : 1 }}
-        >
-          {t.hiringRequestsActionSaveDraft}
-        </button>
-        <button
-          type="button"
-          onClick={handleSubmitForApproval}
-          disabled={saving || !canWrite || noDepartments}
-          title={writeDisabledTitle}
-          className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed"
-          style={{ backgroundColor: 'var(--color-primary)', opacity: (saving || !canWrite || noDepartments) ? 0.5 : 1 }}
-        >
-          {t.hiringRequestsActionSubmit}
-        </button>
-      </div>
     </div>
   )
 }
@@ -691,21 +709,65 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   )
 }
 
-function Field({ label, hint, required, children }: {
+function Field({ label, hint, required, action, children }: {
   label: string
   hint?: string
   required?: boolean
+  action?: React.ReactNode
   children: React.ReactNode
 }) {
   return (
     <div>
-      <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text)' }}>
-        {label}
-        {required && <span className="ml-0.5" style={{ color: 'var(--color-danger)' }}>*</span>}
-      </label>
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <label className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+          {label}
+          {required && <span className="ml-0.5" style={{ color: 'var(--color-danger)' }}>*</span>}
+        </label>
+        {action}
+      </div>
       {children}
       {hint && <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{hint}</p>}
     </div>
+  )
+}
+
+// IDR-formatted text input. Mirrors the wage-input pattern used by
+// ContractEdit (formatIdrDigits → thousands separators on display, raw
+// digits in state). State stays a digit string so existing parseSalary +
+// payload conversion work unchanged.
+function IdrInput({ value, onChange, idrLabel }: {
+  value: string
+  onChange: (next: string) => void
+  idrLabel: string
+}) {
+  return (
+    <div className="relative">
+      <input
+        type="text"
+        inputMode="numeric"
+        value={formatIdrDigits(value)}
+        onChange={e => onChange(e.target.value.replace(/\D/g, ''))}
+        className="w-full rounded-lg border px-3 py-2 pr-12 text-sm"
+        style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+      />
+      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{idrLabel}</span>
+    </div>
+  )
+}
+
+// Visually mirrors the Recruitment page's ManageButton (small primary-coloured
+// inline link with a chevron) so HR users see one consistent affordance for
+// "jump to settings to add the option you're missing."
+function ManageButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="text-xs font-medium hover:underline"
+      style={{ color: 'var(--color-primary)' }}
+    >
+      {label}
+    </button>
   )
 }
 

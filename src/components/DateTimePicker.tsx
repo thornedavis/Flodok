@@ -122,6 +122,10 @@ export function DateTimePicker({ value, onChange, placeholder = 'Pick a date…'
     setViewMonth(next.getMonth())
   }
 
+  function nudgeYear(delta: number) {
+    setViewYear(y => y + delta)
+  }
+
   function quickPick(option: 'in1h' | 'tomorrow') {
     const d = new Date()
     if (option === 'in1h') {
@@ -156,29 +160,62 @@ export function DateTimePicker({ value, onChange, placeholder = 'Pick a date…'
             </div>
           )}
 
-          {/* Month header */}
+          {/* Month + year header. Two pairs of chevrons flank the title —
+              double-chevron jumps by year, single by month. Pattern matches
+              what e.g. Linear/Notion use; cheap to add and removes the
+              click-twelve-times tax for dates more than a year away. */}
           <div className="flex items-center justify-between px-3 py-2">
-            <button
-              type="button"
-              onClick={() => nudgeMonth(-1)}
-              className="rounded-md p-1 hover:opacity-70"
-              style={{ color: 'var(--color-text-secondary)' }}
-              aria-label="Previous month"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
-            </button>
+            <div className="flex items-center gap-0.5">
+              <button
+                type="button"
+                onClick={() => nudgeYear(-1)}
+                className="rounded-md p-1 hover:opacity-70"
+                style={{ color: 'var(--color-text-secondary)' }}
+                aria-label="Previous year"
+                title="Previous year"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="11 18 5 12 11 6" />
+                  <polyline points="18 18 12 12 18 6" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                onClick={() => nudgeMonth(-1)}
+                className="rounded-md p-1 hover:opacity-70"
+                style={{ color: 'var(--color-text-secondary)' }}
+                aria-label="Previous month"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+              </button>
+            </div>
             <div className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
               {monthName(viewMonth)} {viewYear}
             </div>
-            <button
-              type="button"
-              onClick={() => nudgeMonth(1)}
-              className="rounded-md p-1 hover:opacity-70"
-              style={{ color: 'var(--color-text-secondary)' }}
-              aria-label="Next month"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
-            </button>
+            <div className="flex items-center gap-0.5">
+              <button
+                type="button"
+                onClick={() => nudgeMonth(1)}
+                className="rounded-md p-1 hover:opacity-70"
+                style={{ color: 'var(--color-text-secondary)' }}
+                aria-label="Next month"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+              </button>
+              <button
+                type="button"
+                onClick={() => nudgeYear(1)}
+                className="rounded-md p-1 hover:opacity-70"
+                style={{ color: 'var(--color-text-secondary)' }}
+                aria-label="Next year"
+                title="Next year"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="13 18 19 12 13 6" />
+                  <polyline points="6 18 12 12 6 6" />
+                </svg>
+              </button>
+            </div>
           </div>
 
           {/* Calendar grid */}

@@ -374,16 +374,31 @@ function deriveBreadcrumbs(pathname: string, orgName: string, t: Translations, t
     pending: { label: t.navPending, href: '/dashboard/pending' },
     inbox: { label: t.navInbox, href: '/dashboard/inbox' },
     settings: { label: t.navSettings, href: '/dashboard/settings' },
+    hiring: { label: t.navHiring, href: '/dashboard/hiring' },
+    recruitment: { label: t.navRecruitment, href: '/dashboard/recruitment' },
   }
   const section = sectionMap[segments[1]]
   if (!section) return [{ label: orgName }]
 
-  // Drill-down: /dashboard/<section>/<id>/<action> for most sections, but the
-  // documents tree nests one level deeper — /dashboard/documents/<type>/<id>/<action> —
-  // so the trailing action lives at segments[4] there.
-  const action = segments[1] === 'documents' ? segments[4] : segments[3]
+  // Drill-down: most sections nest one level — /dashboard/<section>/<id>/<action>.
+  // Two sections nest deeper:
+  //   /dashboard/documents/<type>/<id>/<action>
+  //   /dashboard/hiring/jds/<id>/<action>      (JD authoring lives under hiring)
+  // For those the action token sits at segments[4] instead of [3].
+  const isDeeperTree = segments[1] === 'documents' || (segments[1] === 'hiring' && segments[2] === 'jds')
+  const action = isDeeperTree ? segments[4] : segments[3]
+
   if (action === 'edit') return [rootCrumb, { label: section.label, href: section.href }, { label: trailing ?? t.breadcrumbEdit }]
   if (action === 'history') return [rootCrumb, { label: section.label, href: section.href }, { label: trailing ?? t.breadcrumbHistory }]
+
+  // Detail / "new" routes — anything one level deeper than the section root.
+  // The page is responsible for calling useBreadcrumbTrailing with the right
+  // label (e.g. position name for a request, title for a JD); when it does,
+  // we surface that as the trailing crumb. When it doesn't, fall through to
+  // just the section name.
+  if (segments.length >= 3 && trailing) {
+    return [rootCrumb, { label: section.label, href: section.href }, { label: trailing }]
+  }
 
   return [rootCrumb, { label: section.label }]
 }
