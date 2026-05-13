@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       achievement_definitions: {
@@ -227,6 +202,168 @@ export type Database = {
           },
           {
             foreignKeyName: "bonus_adjustments_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      company_branches: {
+        Row: {
+          address_city: string | null
+          address_country: string
+          address_postal_code: string | null
+          address_province: string | null
+          address_street: string | null
+          code: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          is_headquarters: boolean
+          name: string
+          org_id: string
+          parent_branch_id: string | null
+          phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          address_city?: string | null
+          address_country?: string
+          address_postal_code?: string | null
+          address_province?: string | null
+          address_street?: string | null
+          code?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_headquarters?: boolean
+          name: string
+          org_id: string
+          parent_branch_id?: string | null
+          phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          address_city?: string | null
+          address_country?: string
+          address_postal_code?: string | null
+          address_province?: string | null
+          address_street?: string | null
+          code?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_headquarters?: boolean
+          name?: string
+          org_id?: string
+          parent_branch_id?: string | null
+          phone?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_branches_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "company_branches_parent_branch_id_fkey"
+            columns: ["parent_branch_id"]
+            isOneToOne: false
+            referencedRelation: "company_branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      company_departments: {
+        Row: {
+          created_at: string
+          display_order: number
+          id: string
+          manager_employee_id: string | null
+          name: string
+          org_id: string
+          parent_department_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          display_order?: number
+          id?: string
+          manager_employee_id?: string | null
+          name: string
+          org_id: string
+          parent_department_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          display_order?: number
+          id?: string
+          manager_employee_id?: string | null
+          name?: string
+          org_id?: string
+          parent_department_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_departments_manager_employee_id_fkey"
+            columns: ["manager_employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "company_departments_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "company_departments_parent_department_id_fkey"
+            columns: ["parent_department_id"]
+            isOneToOne: false
+            referencedRelation: "company_departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      company_reference_values: {
+        Row: {
+          created_at: string
+          display_order: number
+          id: string
+          kind: string
+          name: string
+          org_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          display_order?: number
+          id?: string
+          kind: string
+          name: string
+          org_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          display_order?: number
+          id?: string
+          kind?: string
+          name?: string
+          org_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_reference_values_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
@@ -653,39 +790,57 @@ export type Database = {
           user_id?: string
           view_mode?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "document_view_prefs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
-      company_reference_values: {
+      employee_custom_fields: {
         Row: {
           created_at: string
           display_order: number
+          employee_id: string
           id: string
-          kind: string
-          name: string
+          label: string
           org_id: string
           updated_at: string
+          value: string | null
         }
         Insert: {
           created_at?: string
           display_order?: number
+          employee_id: string
           id?: string
-          kind: string
-          name: string
+          label: string
           org_id: string
           updated_at?: string
+          value?: string | null
         }
         Update: {
           created_at?: string
           display_order?: number
+          employee_id?: string
           id?: string
-          kind?: string
-          name?: string
+          label?: string
           org_id?: string
           updated_at?: string
+          value?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "company_reference_values_org_id_fkey"
+            foreignKeyName: "employee_custom_fields_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_custom_fields_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
@@ -693,226 +848,152 @@ export type Database = {
           },
         ]
       }
-      company_branches: {
+      employee_departments: {
         Row: {
-          address_city: string | null
-          address_country: string
-          address_postal_code: string | null
-          address_province: string | null
-          address_street: string | null
-          code: string | null
           created_at: string
-          id: string
-          is_active: boolean
-          is_headquarters: boolean
-          name: string
-          org_id: string
-          parent_branch_id: string | null
-          phone: string | null
-          updated_at: string
+          department_id: string
+          employee_id: string
+          is_primary: boolean
         }
         Insert: {
-          address_city?: string | null
-          address_country?: string
-          address_postal_code?: string | null
-          address_province?: string | null
-          address_street?: string | null
-          code?: string | null
           created_at?: string
-          id?: string
-          is_active?: boolean
-          is_headquarters?: boolean
-          name: string
-          org_id: string
-          parent_branch_id?: string | null
-          phone?: string | null
-          updated_at?: string
+          department_id: string
+          employee_id: string
+          is_primary?: boolean
         }
         Update: {
-          address_city?: string | null
-          address_country?: string
-          address_postal_code?: string | null
-          address_province?: string | null
-          address_street?: string | null
-          code?: string | null
           created_at?: string
-          id?: string
-          is_active?: boolean
-          is_headquarters?: boolean
-          name?: string
-          org_id?: string
-          parent_branch_id?: string | null
-          phone?: string | null
-          updated_at?: string
+          department_id?: string
+          employee_id?: string
+          is_primary?: boolean
         }
         Relationships: [
           {
-            foreignKeyName: "company_branches_org_id_fkey"
-            columns: ["org_id"]
+            foreignKeyName: "employee_departments_department_id_fkey"
+            columns: ["department_id"]
             isOneToOne: false
-            referencedRelation: "organizations"
+            referencedRelation: "company_departments"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "company_branches_parent_branch_id_fkey"
-            columns: ["parent_branch_id"]
+            foreignKeyName: "employee_departments_employee_id_fkey"
+            columns: ["employee_id"]
             isOneToOne: false
-            referencedRelation: "company_branches"
+            referencedRelation: "employees"
             referencedColumns: ["id"]
           },
         ]
       }
-      employees: {
+      employee_emergency_contacts: {
         Row: {
-          access_token: string
-          address: string | null
-          bank_account_holder: string | null
-          bank_account_number: string | null
-          bank_name: string | null
-          blood_type: string | null
-          branch_name: string | null
-          citizen_id_address: string | null
-          class: string | null
           created_at: string
-          date_of_birth: string | null
-          department: string | null
-          departments: string[]
-          email: string | null
-          employee_code: string | null
-          employment_type: string | null
-          first_name: string | null
-          gender: string | null
-          grade: string | null
+          employee_id: string
           id: string
-          job_level: string | null
-          job_position: string | null
-          join_date: string | null
-          kk_photo_url: string | null
-          ktp_nik: string | null
-          ktp_photo_url: string | null
-          last_name: string | null
-          last_notifications_seen_at: string | null
-          lifecycle_stage: string
-          marital_status: string | null
           name: string
-          notes: string | null
-          npwp: string | null
           org_id: string
-          passport_expiry: string | null
-          passport_number: string | null
           phone: string
-          photo_url: string | null
-          place_of_birth: string | null
-          postal_code: string | null
-          probation_end_date: string | null
-          religion: string | null
-          resign_date: string | null
-          separation_reason: string | null
-          separation_type: string | null
-          slug: string
-          status: string
+          relationship: string
+          updated_at: string
         }
         Insert: {
-          access_token: string
-          address?: string | null
-          bank_account_holder?: string | null
-          bank_account_number?: string | null
-          bank_name?: string | null
-          blood_type?: string | null
-          branch_name?: string | null
-          citizen_id_address?: string | null
-          class?: string | null
           created_at?: string
-          date_of_birth?: string | null
-          department?: string | null
-          departments?: string[]
-          email?: string | null
-          employee_code?: string | null
-          employment_type?: string | null
-          first_name?: string | null
-          gender?: string | null
-          grade?: string | null
+          employee_id: string
           id?: string
-          job_level?: string | null
-          job_position?: string | null
-          join_date?: string | null
-          kk_photo_url?: string | null
-          ktp_nik?: string | null
-          ktp_photo_url?: string | null
-          last_name?: string | null
-          last_notifications_seen_at?: string | null
-          lifecycle_stage?: string
-          marital_status?: string | null
           name: string
-          notes?: string | null
-          npwp?: string | null
           org_id: string
-          passport_expiry?: string | null
-          passport_number?: string | null
           phone: string
-          photo_url?: string | null
-          place_of_birth?: string | null
-          postal_code?: string | null
-          probation_end_date?: string | null
-          religion?: string | null
-          resign_date?: string | null
-          separation_reason?: string | null
-          separation_type?: string | null
-          slug: string
-          status?: string
+          relationship: string
+          updated_at?: string
         }
         Update: {
-          access_token?: string
-          address?: string | null
-          bank_account_holder?: string | null
-          bank_account_number?: string | null
-          bank_name?: string | null
-          blood_type?: string | null
-          branch_name?: string | null
-          citizen_id_address?: string | null
-          class?: string | null
           created_at?: string
-          date_of_birth?: string | null
-          department?: string | null
-          departments?: string[]
-          email?: string | null
-          employee_code?: string | null
-          employment_type?: string | null
-          first_name?: string | null
-          gender?: string | null
-          grade?: string | null
+          employee_id?: string
           id?: string
-          job_level?: string | null
-          job_position?: string | null
-          join_date?: string | null
-          kk_photo_url?: string | null
-          ktp_nik?: string | null
-          ktp_photo_url?: string | null
-          last_name?: string | null
-          last_notifications_seen_at?: string | null
-          lifecycle_stage?: string
-          marital_status?: string | null
           name?: string
-          notes?: string | null
-          npwp?: string | null
           org_id?: string
-          passport_expiry?: string | null
-          passport_number?: string | null
           phone?: string
-          photo_url?: string | null
-          place_of_birth?: string | null
-          postal_code?: string | null
-          probation_end_date?: string | null
-          religion?: string | null
-          resign_date?: string | null
-          separation_reason?: string | null
-          separation_type?: string | null
-          slug?: string
-          status?: string
+          relationship?: string
+          updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "employees_org_id_fkey"
+            foreignKeyName: "employee_emergency_contacts_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_emergency_contacts_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      employee_family_members: {
+        Row: {
+          address: string | null
+          birthdate: string | null
+          created_at: string
+          employee_id: string
+          full_name: string
+          gender: string | null
+          id: string
+          id_number: string | null
+          is_emergency_contact: boolean
+          job: string | null
+          marital_status: string | null
+          org_id: string
+          relationship: string
+          religion: string | null
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          birthdate?: string | null
+          created_at?: string
+          employee_id: string
+          full_name: string
+          gender?: string | null
+          id?: string
+          id_number?: string | null
+          is_emergency_contact?: boolean
+          job?: string | null
+          marital_status?: string | null
+          org_id: string
+          relationship: string
+          religion?: string | null
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          birthdate?: string | null
+          created_at?: string
+          employee_id?: string
+          full_name?: string
+          gender?: string | null
+          id?: string
+          id_number?: string | null
+          is_emergency_contact?: boolean
+          job?: string | null
+          marital_status?: string | null
+          org_id?: string
+          relationship?: string
+          religion?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_family_members_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_family_members_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
@@ -1109,212 +1190,151 @@ export type Database = {
           },
         ]
       }
-      employee_custom_fields: {
+      employees: {
         Row: {
-          created_at: string
-          display_order: number
-          employee_id: string
-          id: string
-          label: string
-          org_id: string
-          updated_at: string
-          value: string | null
-        }
-        Insert: {
-          created_at?: string
-          display_order?: number
-          employee_id: string
-          id?: string
-          label: string
-          org_id: string
-          updated_at?: string
-          value?: string | null
-        }
-        Update: {
-          created_at?: string
-          display_order?: number
-          employee_id?: string
-          id?: string
-          label?: string
-          org_id?: string
-          updated_at?: string
-          value?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "employee_custom_fields_employee_id_fkey"
-            columns: ["employee_id"]
-            isOneToOne: false
-            referencedRelation: "employees"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "employee_custom_fields_org_id_fkey"
-            columns: ["org_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      inbox_dismissals: {
-        Row: {
-          created_at: string
-          dedupe_key: string
-          dismissed_at: string | null
-          id: string
-          org_id: string
-          snoozed_until: string | null
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          dedupe_key: string
-          dismissed_at?: string | null
-          id?: string
-          org_id: string
-          snoozed_until?: string | null
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          dedupe_key?: string
-          dismissed_at?: string | null
-          id?: string
-          org_id?: string
-          snoozed_until?: string | null
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "inbox_dismissals_org_id_fkey"
-            columns: ["org_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inbox_dismissals_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      employee_emergency_contacts: {
-        Row: {
-          created_at: string
-          employee_id: string
-          id: string
-          name: string
-          org_id: string
-          phone: string
-          relationship: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          employee_id: string
-          id?: string
-          name: string
-          org_id: string
-          phone: string
-          relationship: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          employee_id?: string
-          id?: string
-          name?: string
-          org_id?: string
-          phone?: string
-          relationship?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "employee_emergency_contacts_employee_id_fkey"
-            columns: ["employee_id"]
-            isOneToOne: false
-            referencedRelation: "employees"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "employee_emergency_contacts_org_id_fkey"
-            columns: ["org_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      employee_family_members: {
-        Row: {
+          access_token: string
           address: string | null
-          birthdate: string | null
+          bank_account_holder: string | null
+          bank_account_number: string | null
+          bank_name: string | null
+          blood_type: string | null
+          branch_name: string | null
+          citizen_id_address: string | null
+          class: string | null
           created_at: string
-          employee_id: string
-          full_name: string
+          date_of_birth: string | null
+          email: string | null
+          employee_code: string | null
+          employment_type: string | null
+          first_name: string | null
           gender: string | null
+          grade: string | null
           id: string
-          id_number: string | null
-          is_emergency_contact: boolean
-          job: string | null
+          job_level: string | null
+          job_position: string | null
+          join_date: string | null
+          kk_photo_url: string | null
+          ktp_nik: string | null
+          ktp_photo_url: string | null
+          last_name: string | null
+          last_notifications_seen_at: string | null
+          lifecycle_stage: string
           marital_status: string | null
+          name: string
+          notes: string | null
+          npwp: string | null
           org_id: string
-          relationship: string
+          passport_expiry: string | null
+          passport_number: string | null
+          phone: string
+          photo_url: string | null
+          place_of_birth: string | null
+          postal_code: string | null
+          probation_end_date: string | null
           religion: string | null
-          updated_at: string
+          resign_date: string | null
+          separation_reason: string | null
+          separation_type: string | null
+          slug: string
+          status: string
         }
         Insert: {
+          access_token: string
           address?: string | null
-          birthdate?: string | null
+          bank_account_holder?: string | null
+          bank_account_number?: string | null
+          bank_name?: string | null
+          blood_type?: string | null
+          branch_name?: string | null
+          citizen_id_address?: string | null
+          class?: string | null
           created_at?: string
-          employee_id: string
-          full_name: string
+          date_of_birth?: string | null
+          email?: string | null
+          employee_code?: string | null
+          employment_type?: string | null
+          first_name?: string | null
           gender?: string | null
+          grade?: string | null
           id?: string
-          id_number?: string | null
-          is_emergency_contact?: boolean
-          job?: string | null
+          job_level?: string | null
+          job_position?: string | null
+          join_date?: string | null
+          kk_photo_url?: string | null
+          ktp_nik?: string | null
+          ktp_photo_url?: string | null
+          last_name?: string | null
+          last_notifications_seen_at?: string | null
+          lifecycle_stage?: string
           marital_status?: string | null
+          name: string
+          notes?: string | null
+          npwp?: string | null
           org_id: string
-          relationship: string
+          passport_expiry?: string | null
+          passport_number?: string | null
+          phone: string
+          photo_url?: string | null
+          place_of_birth?: string | null
+          postal_code?: string | null
+          probation_end_date?: string | null
           religion?: string | null
-          updated_at?: string
+          resign_date?: string | null
+          separation_reason?: string | null
+          separation_type?: string | null
+          slug: string
+          status?: string
         }
         Update: {
+          access_token?: string
           address?: string | null
-          birthdate?: string | null
+          bank_account_holder?: string | null
+          bank_account_number?: string | null
+          bank_name?: string | null
+          blood_type?: string | null
+          branch_name?: string | null
+          citizen_id_address?: string | null
+          class?: string | null
           created_at?: string
-          employee_id?: string
-          full_name?: string
+          date_of_birth?: string | null
+          email?: string | null
+          employee_code?: string | null
+          employment_type?: string | null
+          first_name?: string | null
           gender?: string | null
+          grade?: string | null
           id?: string
-          id_number?: string | null
-          is_emergency_contact?: boolean
-          job?: string | null
+          job_level?: string | null
+          job_position?: string | null
+          join_date?: string | null
+          kk_photo_url?: string | null
+          ktp_nik?: string | null
+          ktp_photo_url?: string | null
+          last_name?: string | null
+          last_notifications_seen_at?: string | null
+          lifecycle_stage?: string
           marital_status?: string | null
+          name?: string
+          notes?: string | null
+          npwp?: string | null
           org_id?: string
-          relationship?: string
+          passport_expiry?: string | null
+          passport_number?: string | null
+          phone?: string
+          photo_url?: string | null
+          place_of_birth?: string | null
+          postal_code?: string | null
+          probation_end_date?: string | null
           religion?: string | null
-          updated_at?: string
+          resign_date?: string | null
+          separation_reason?: string | null
+          separation_type?: string | null
+          slug?: string
+          status?: string
         }
         Relationships: [
           {
-            foreignKeyName: "employee_family_members_employee_id_fkey"
-            columns: ["employee_id"]
-            isOneToOne: false
-            referencedRelation: "employees"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "employee_family_members_org_id_fkey"
+            foreignKeyName: "employees_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
@@ -1366,6 +1386,225 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hiring_requests: {
+        Row: {
+          actioned_at: string | null
+          actioned_by: string | null
+          allowance_other: string | null
+          allowances: string[]
+          base_salary_max: number | null
+          base_salary_min: number | null
+          candidate_employee_id: string | null
+          category: string
+          created_at: string
+          department_id: string
+          employment_type: string
+          expected_hiring_date: string | null
+          hiring_manager_id: string
+          id: string
+          manager_auto_approved: boolean
+          manager_decided_at: string | null
+          manager_decided_by: string | null
+          manager_decision: string | null
+          manager_decision_note: string | null
+          org_id: string
+          other_benefits: string | null
+          owner_decided_at: string | null
+          owner_decided_by: string | null
+          owner_decision: string | null
+          owner_decision_note: string | null
+          position_name: string
+          replacing_employee_id: string | null
+          required_qualifications_md: string
+          source_of_candidate: string
+          source_of_fund: string
+          source_of_fund_justification: string | null
+          status: string
+          submitted_at: string | null
+          supporting_reason: string
+          updated_at: string
+        }
+        Insert: {
+          actioned_at?: string | null
+          actioned_by?: string | null
+          allowance_other?: string | null
+          allowances?: string[]
+          base_salary_max?: number | null
+          base_salary_min?: number | null
+          candidate_employee_id?: string | null
+          category: string
+          created_at?: string
+          department_id: string
+          employment_type: string
+          expected_hiring_date?: string | null
+          hiring_manager_id: string
+          id?: string
+          manager_auto_approved?: boolean
+          manager_decided_at?: string | null
+          manager_decided_by?: string | null
+          manager_decision?: string | null
+          manager_decision_note?: string | null
+          org_id: string
+          other_benefits?: string | null
+          owner_decided_at?: string | null
+          owner_decided_by?: string | null
+          owner_decision?: string | null
+          owner_decision_note?: string | null
+          position_name: string
+          replacing_employee_id?: string | null
+          required_qualifications_md?: string
+          source_of_candidate: string
+          source_of_fund: string
+          source_of_fund_justification?: string | null
+          status?: string
+          submitted_at?: string | null
+          supporting_reason?: string
+          updated_at?: string
+        }
+        Update: {
+          actioned_at?: string | null
+          actioned_by?: string | null
+          allowance_other?: string | null
+          allowances?: string[]
+          base_salary_max?: number | null
+          base_salary_min?: number | null
+          candidate_employee_id?: string | null
+          category?: string
+          created_at?: string
+          department_id?: string
+          employment_type?: string
+          expected_hiring_date?: string | null
+          hiring_manager_id?: string
+          id?: string
+          manager_auto_approved?: boolean
+          manager_decided_at?: string | null
+          manager_decided_by?: string | null
+          manager_decision?: string | null
+          manager_decision_note?: string | null
+          org_id?: string
+          other_benefits?: string | null
+          owner_decided_at?: string | null
+          owner_decided_by?: string | null
+          owner_decision?: string | null
+          owner_decision_note?: string | null
+          position_name?: string
+          replacing_employee_id?: string | null
+          required_qualifications_md?: string
+          source_of_candidate?: string
+          source_of_fund?: string
+          source_of_fund_justification?: string | null
+          status?: string
+          submitted_at?: string | null
+          supporting_reason?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hiring_requests_actioned_by_fkey"
+            columns: ["actioned_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hiring_requests_candidate_employee_id_fkey"
+            columns: ["candidate_employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hiring_requests_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "company_departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hiring_requests_hiring_manager_id_fkey"
+            columns: ["hiring_manager_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hiring_requests_manager_decided_by_fkey"
+            columns: ["manager_decided_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hiring_requests_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hiring_requests_owner_decided_by_fkey"
+            columns: ["owner_decided_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hiring_requests_replacing_employee_id_fkey"
+            columns: ["replacing_employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inbox_dismissals: {
+        Row: {
+          created_at: string
+          dedupe_key: string
+          dismissed_at: string | null
+          id: string
+          org_id: string
+          snoozed_until: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          dedupe_key: string
+          dismissed_at?: string | null
+          id?: string
+          org_id: string
+          snoozed_until?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          dedupe_key?: string
+          dismissed_at?: string | null
+          id?: string
+          org_id?: string
+          snoozed_until?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inbox_dismissals_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inbox_dismissals_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -1619,9 +1858,9 @@ export type Database = {
           address_street: string | null
           badges_enabled: boolean
           bonuses_enabled: boolean
-          cancel_at_period_end: boolean
           bpjs_ketenagakerjaan_number: string | null
           business_license_number: string | null
+          cancel_at_period_end: boolean
           company_email: string | null
           company_registration_number: string | null
           company_size_range: string | null
@@ -1651,10 +1890,10 @@ export type Database = {
           stripe_subscription_id: string | null
           subscription_quantity: number | null
           subscription_status: string | null
-          taxable_date: string | null
           tax_person_name: string | null
           tax_person_npwp_15: string | null
           tax_person_npwp_16: string | null
+          taxable_date: string | null
           timezone: string
           website_url: string | null
         }
@@ -1666,9 +1905,9 @@ export type Database = {
           address_street?: string | null
           badges_enabled?: boolean
           bonuses_enabled?: boolean
-          cancel_at_period_end?: boolean
           bpjs_ketenagakerjaan_number?: string | null
           business_license_number?: string | null
+          cancel_at_period_end?: boolean
           company_email?: string | null
           company_registration_number?: string | null
           company_size_range?: string | null
@@ -1698,10 +1937,10 @@ export type Database = {
           stripe_subscription_id?: string | null
           subscription_quantity?: number | null
           subscription_status?: string | null
-          taxable_date?: string | null
           tax_person_name?: string | null
           tax_person_npwp_15?: string | null
           tax_person_npwp_16?: string | null
+          taxable_date?: string | null
           timezone?: string
           website_url?: string | null
         }
@@ -1713,9 +1952,9 @@ export type Database = {
           address_street?: string | null
           badges_enabled?: boolean
           bonuses_enabled?: boolean
-          cancel_at_period_end?: boolean
           bpjs_ketenagakerjaan_number?: string | null
           business_license_number?: string | null
+          cancel_at_period_end?: boolean
           company_email?: string | null
           company_registration_number?: string | null
           company_size_range?: string | null
@@ -1745,10 +1984,10 @@ export type Database = {
           stripe_subscription_id?: string | null
           subscription_quantity?: number | null
           subscription_status?: string | null
-          taxable_date?: string | null
           tax_person_name?: string | null
           tax_person_npwp_15?: string | null
           tax_person_npwp_16?: string | null
+          taxable_date?: string | null
           timezone?: string
           website_url?: string | null
         }
@@ -2302,6 +2541,44 @@ export type Database = {
           },
         ]
       }
+      translation_cache: {
+        Row: {
+          created_at: string
+          direction: string
+          model: string | null
+          org_id: string
+          source_excerpt: string
+          source_hash: string
+          translated_content: string
+        }
+        Insert: {
+          created_at?: string
+          direction: string
+          model?: string | null
+          org_id: string
+          source_excerpt: string
+          source_hash: string
+          translated_content: string
+        }
+        Update: {
+          created_at?: string
+          direction?: string
+          model?: string | null
+          org_id?: string
+          source_excerpt?: string
+          source_hash?: string
+          translated_content?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "translation_cache_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       users: {
         Row: {
           created_at: string
@@ -2487,6 +2764,148 @@ export type Database = {
             }
             Returns: string
           }
+      is_department_manager: {
+        Args: { p_department_id: string }
+        Returns: boolean
+      }
+      manager_decide_hiring_request: {
+        Args: { p_approve: boolean; p_note?: string; p_request_id: string }
+        Returns: {
+          actioned_at: string | null
+          actioned_by: string | null
+          allowance_other: string | null
+          allowances: string[]
+          base_salary_max: number | null
+          base_salary_min: number | null
+          candidate_employee_id: string | null
+          category: string
+          created_at: string
+          department_id: string
+          employment_type: string
+          expected_hiring_date: string | null
+          hiring_manager_id: string
+          id: string
+          manager_auto_approved: boolean
+          manager_decided_at: string | null
+          manager_decided_by: string | null
+          manager_decision: string | null
+          manager_decision_note: string | null
+          org_id: string
+          other_benefits: string | null
+          owner_decided_at: string | null
+          owner_decided_by: string | null
+          owner_decision: string | null
+          owner_decision_note: string | null
+          position_name: string
+          replacing_employee_id: string | null
+          required_qualifications_md: string
+          source_of_candidate: string
+          source_of_fund: string
+          source_of_fund_justification: string | null
+          status: string
+          submitted_at: string | null
+          supporting_reason: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "hiring_requests"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      mark_hiring_request_actioned: {
+        Args: { p_candidate_employee_id: string; p_request_id: string }
+        Returns: {
+          actioned_at: string | null
+          actioned_by: string | null
+          allowance_other: string | null
+          allowances: string[]
+          base_salary_max: number | null
+          base_salary_min: number | null
+          candidate_employee_id: string | null
+          category: string
+          created_at: string
+          department_id: string
+          employment_type: string
+          expected_hiring_date: string | null
+          hiring_manager_id: string
+          id: string
+          manager_auto_approved: boolean
+          manager_decided_at: string | null
+          manager_decided_by: string | null
+          manager_decision: string | null
+          manager_decision_note: string | null
+          org_id: string
+          other_benefits: string | null
+          owner_decided_at: string | null
+          owner_decided_by: string | null
+          owner_decision: string | null
+          owner_decision_note: string | null
+          position_name: string
+          replacing_employee_id: string | null
+          required_qualifications_md: string
+          source_of_candidate: string
+          source_of_fund: string
+          source_of_fund_justification: string | null
+          status: string
+          submitted_at: string | null
+          supporting_reason: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "hiring_requests"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      owner_decide_hiring_request: {
+        Args: { p_approve: boolean; p_note?: string; p_request_id: string }
+        Returns: {
+          actioned_at: string | null
+          actioned_by: string | null
+          allowance_other: string | null
+          allowances: string[]
+          base_salary_max: number | null
+          base_salary_min: number | null
+          candidate_employee_id: string | null
+          category: string
+          created_at: string
+          department_id: string
+          employment_type: string
+          expected_hiring_date: string | null
+          hiring_manager_id: string
+          id: string
+          manager_auto_approved: boolean
+          manager_decided_at: string | null
+          manager_decided_by: string | null
+          manager_decision: string | null
+          manager_decision_note: string | null
+          org_id: string
+          other_benefits: string | null
+          owner_decided_at: string | null
+          owner_decided_by: string | null
+          owner_decision: string | null
+          owner_decision_note: string | null
+          position_name: string
+          replacing_employee_id: string | null
+          required_qualifications_md: string
+          source_of_candidate: string
+          source_of_fund: string
+          source_of_fund_justification: string | null
+          status: string
+          submitted_at: string | null
+          supporting_reason: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "hiring_requests"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       portal_badges: {
         Args: { emp_slug: string; emp_token: string }
         Returns: Json
@@ -2592,6 +3011,52 @@ export type Database = {
       spotlight_target_employee_ids: {
         Args: { p_post_id: string }
         Returns: string[]
+      }
+      submit_hiring_request: {
+        Args: { p_request_id: string }
+        Returns: {
+          actioned_at: string | null
+          actioned_by: string | null
+          allowance_other: string | null
+          allowances: string[]
+          base_salary_max: number | null
+          base_salary_min: number | null
+          candidate_employee_id: string | null
+          category: string
+          created_at: string
+          department_id: string
+          employment_type: string
+          expected_hiring_date: string | null
+          hiring_manager_id: string
+          id: string
+          manager_auto_approved: boolean
+          manager_decided_at: string | null
+          manager_decided_by: string | null
+          manager_decision: string | null
+          manager_decision_note: string | null
+          org_id: string
+          other_benefits: string | null
+          owner_decided_at: string | null
+          owner_decided_by: string | null
+          owner_decision: string | null
+          owner_decision_note: string | null
+          position_name: string
+          replacing_employee_id: string | null
+          required_qualifications_md: string
+          source_of_candidate: string
+          source_of_fund: string
+          source_of_fund_justification: string | null
+          status: string
+          submitted_at: string | null
+          supporting_reason: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "hiring_requests"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       take_monthly_leaderboard_snapshot: {
         Args: { p_period_start: string }
@@ -2738,9 +3203,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {},
   },
