@@ -9,6 +9,9 @@ import { Overview } from './pages/dashboard/Overview'
 import { Employees } from './pages/dashboard/Employees'
 import { EmployeeEdit } from './pages/dashboard/EmployeeEdit'
 import { Hiring } from './pages/dashboard/Hiring'
+import { HiringRequestEdit } from './pages/dashboard/HiringRequestEdit'
+import { HiringRequestDetail } from './pages/dashboard/HiringRequestDetail'
+import { JobDescriptionEdit } from './pages/dashboard/JobDescriptionEdit'
 import { Recruitment } from './pages/dashboard/Recruitment'
 import { Company } from './pages/dashboard/Company'
 import { Documents } from './pages/dashboard/Documents'
@@ -110,6 +113,11 @@ function AppRoutes() {
             <Route path="/dashboard/employees" element={<Employees user={user} />} />
             <Route path="/dashboard/employees/:id/edit" element={<EmployeeEdit user={user} />} />
             <Route path="/dashboard/hiring" element={<Hiring user={user} />} />
+            <Route path="/dashboard/hiring/new" element={<HiringRequestEdit user={user} />} />
+            <Route path="/dashboard/hiring/jds/new" element={<JobDescriptionEdit user={user} />} />
+            <Route path="/dashboard/hiring/jds/:id/edit" element={<JobDescriptionEdit user={user} />} />
+            <Route path="/dashboard/hiring/:id" element={<HiringRequestDetail user={user} />} />
+            <Route path="/dashboard/hiring/:id/edit" element={<HiringRequestEdit user={user} />} />
             <Route path="/dashboard/recruitment" element={<Recruitment user={user} />} />
             <Route path="/dashboard/company" element={<Company user={user} />} />
 

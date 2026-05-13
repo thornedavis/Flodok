@@ -106,6 +106,54 @@ export async function ownerDecideHiringRequest(
   return data as unknown as HiringRequest
 }
 
+// ─── Feed events ────────────────────────────────────────────────────────
+//
+// Hiring-request lifecycle transitions land in the org-wide feed so they
+// show up on the Overview page activity stream. The Overview renderer
+// special-cases event_type values starting with 'hiring_request_' — see
+// eventLabel/eventVisual there.
+//
+// employee_id is left null because the request isn't about an existing
+// employee. The "actor" (requester or decider) is embedded in the
+// description so the feed entry reads naturally without a user lookup.
+
+export type HiringEventKind =
+  | 'submitted'
+  | 'manager_approved'
+  | 'manager_rejected'
+  | 'approved'
+  | 'owner_rejected'
+
+interface EmitArgs {
+  orgId: string
+  kind: HiringEventKind
+  request: HiringRequest
+  positionName: string
+  description?: string | null
+}
+
+export async function emitHiringRequestEvent({
+  orgId, kind, request, positionName, description,
+}: EmitArgs): Promise<void> {
+  // Best-effort — if the insert fails (e.g. RLS quirk), we log and move on
+  // rather than blocking the workflow. The transition itself already
+  // succeeded server-side at this point.
+  const { error } = await supabase.from('feed_events').insert({
+    org_id: orgId,
+    employee_id: null,
+    event_type: `hiring_request_${kind}`,
+    title: positionName,
+    description: description ?? null,
+    metadata: {
+      hiring_request_id: request.id,
+      department_id: request.department_id,
+      requester_id: request.hiring_manager_id,
+      manager_auto_approved: request.manager_auto_approved,
+    },
+  })
+  if (error) console.warn('feed_events insert (hiring) failed:', error.message)
+}
+
 export async function markHiringRequestActioned(
   requestId: string,
   candidateEmployeeId: string,

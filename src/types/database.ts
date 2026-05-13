@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       achievement_definitions: {
@@ -1609,6 +1634,222 @@ export type Database = {
           },
         ]
       }
+      job_description_signatures: {
+        Row: {
+          employee_id: string
+          id: string
+          job_description_id: string
+          signature_font: string | null
+          signed_at: string
+          typed_name: string
+          version_number: number
+        }
+        Insert: {
+          employee_id: string
+          id?: string
+          job_description_id: string
+          signature_font?: string | null
+          signed_at?: string
+          typed_name: string
+          version_number: number
+        }
+        Update: {
+          employee_id?: string
+          id?: string
+          job_description_id?: string
+          signature_font?: string | null
+          signed_at?: string
+          typed_name?: string
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "job_description_signatures_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "job_description_signatures_job_description_id_fkey"
+            columns: ["job_description_id"]
+            isOneToOne: false
+            referencedRelation: "job_descriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      job_description_versions: {
+        Row: {
+          change_summary: string | null
+          changed_by: string | null
+          content_doc: Json | null
+          created_at: string
+          department_id: string | null
+          doc_version: string | null
+          effective_date: string | null
+          id: string
+          job_description_id: string
+          job_level: string | null
+          reporting_line: string | null
+          supervised_team: string | null
+          title: string
+          version_number: number
+          work_location: string | null
+        }
+        Insert: {
+          change_summary?: string | null
+          changed_by?: string | null
+          content_doc?: Json | null
+          created_at?: string
+          department_id?: string | null
+          doc_version?: string | null
+          effective_date?: string | null
+          id?: string
+          job_description_id: string
+          job_level?: string | null
+          reporting_line?: string | null
+          supervised_team?: string | null
+          title: string
+          version_number: number
+          work_location?: string | null
+        }
+        Update: {
+          change_summary?: string | null
+          changed_by?: string | null
+          content_doc?: Json | null
+          created_at?: string
+          department_id?: string | null
+          doc_version?: string | null
+          effective_date?: string | null
+          id?: string
+          job_description_id?: string
+          job_level?: string | null
+          reporting_line?: string | null
+          supervised_team?: string | null
+          title?: string
+          version_number?: number
+          work_location?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "job_description_versions_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "job_description_versions_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "company_departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "job_description_versions_job_description_id_fkey"
+            columns: ["job_description_id"]
+            isOneToOne: false
+            referencedRelation: "job_descriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      job_descriptions: {
+        Row: {
+          archived_at: string | null
+          content_doc: Json | null
+          created_at: string
+          created_by: string | null
+          current_version: number
+          department_id: string | null
+          doc_version: string | null
+          effective_date: string | null
+          hiring_request_id: string | null
+          id: string
+          job_level: string | null
+          org_id: string
+          published_at: string | null
+          reporting_line: string | null
+          status: string
+          supervised_team: string | null
+          title: string
+          updated_at: string
+          work_location: string | null
+        }
+        Insert: {
+          archived_at?: string | null
+          content_doc?: Json | null
+          created_at?: string
+          created_by?: string | null
+          current_version?: number
+          department_id?: string | null
+          doc_version?: string | null
+          effective_date?: string | null
+          hiring_request_id?: string | null
+          id?: string
+          job_level?: string | null
+          org_id: string
+          published_at?: string | null
+          reporting_line?: string | null
+          status?: string
+          supervised_team?: string | null
+          title: string
+          updated_at?: string
+          work_location?: string | null
+        }
+        Update: {
+          archived_at?: string | null
+          content_doc?: Json | null
+          created_at?: string
+          created_by?: string | null
+          current_version?: number
+          department_id?: string | null
+          doc_version?: string | null
+          effective_date?: string | null
+          hiring_request_id?: string | null
+          id?: string
+          job_level?: string | null
+          org_id?: string
+          published_at?: string | null
+          reporting_line?: string | null
+          status?: string
+          supervised_team?: string | null
+          title?: string
+          updated_at?: string
+          work_location?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "job_descriptions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "job_descriptions_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "company_departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "job_descriptions_hiring_request_id_fkey"
+            columns: ["hiring_request_id"]
+            isOneToOne: false
+            referencedRelation: "hiring_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "job_descriptions_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       leaderboard_snapshots: {
         Row: {
           created_at: string
@@ -2708,6 +2949,36 @@ export type Database = {
         Args: { new_role: string; target_user_id: string }
         Returns: undefined
       }
+      archive_job_description: {
+        Args: { p_id: string }
+        Returns: {
+          archived_at: string | null
+          content_doc: Json | null
+          created_at: string
+          created_by: string | null
+          current_version: number
+          department_id: string | null
+          doc_version: string | null
+          effective_date: string | null
+          hiring_request_id: string | null
+          id: string
+          job_level: string | null
+          org_id: string
+          published_at: string | null
+          reporting_line: string | null
+          status: string
+          supervised_team: string | null
+          title: string
+          updated_at: string
+          work_location: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "job_descriptions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       auto_close_periods: { Args: never; Returns: Json }
       cleanup_processed_meetings: {
         Args: { retention_days?: number }
@@ -2968,6 +3239,36 @@ export type Database = {
         Args: { emp_slug: string; emp_token: string }
         Returns: number
       }
+      publish_job_description: {
+        Args: { p_id: string }
+        Returns: {
+          archived_at: string | null
+          content_doc: Json | null
+          created_at: string
+          created_by: string | null
+          current_version: number
+          department_id: string | null
+          doc_version: string | null
+          effective_date: string | null
+          hiring_request_id: string | null
+          id: string
+          job_level: string | null
+          org_id: string
+          published_at: string | null
+          reporting_line: string | null
+          status: string
+          supervised_team: string | null
+          title: string
+          updated_at: string
+          work_location: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "job_descriptions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       recent_unlocks: {
         Args: { p_days_back: number }
         Returns: {
@@ -3203,6 +3504,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {},
   },

@@ -89,6 +89,11 @@ const EVENT_TYPE_TO_SERIES: Record<string, keyof Pick<ActivityBucket, 'sops' | '
   contract_updated: 'contracts',
   contract_assigned: 'contracts',
   reward_given: 'other',
+  hiring_request_submitted: 'employees',
+  hiring_request_manager_approved: 'employees',
+  hiring_request_manager_rejected: 'employees',
+  hiring_request_approved: 'employees',
+  hiring_request_owner_rejected: 'employees',
 }
 
 // ─── Page ───────────────────────────────────────────────
@@ -629,8 +634,11 @@ function RecentActivity({ orgId, initial, employeesById, t, lang }: {
               const isLast = i === events.length - 1
               const emp = evt.employee_id ? employeesById[evt.employee_id] : null
               const visual = eventVisual(evt.event_type)
-              const meta = (evt.metadata || {}) as { signature_font?: string; version?: number; icon?: string | null }
+              const meta = (evt.metadata || {}) as { signature_font?: string; version?: number; icon?: string | null; hiring_request_id?: string }
               const isBadgeEvent = evt.event_type === 'achievement_unlocked'
+              // Hiring-request events have no subject employee — render the
+              // position name (evt.title) as the lead instead of "—".
+              const isHiringEvent = evt.event_type.startsWith('hiring_request_')
 
               return (
                 <li key={evt.id} className="flex gap-3">
@@ -658,7 +666,17 @@ function RecentActivity({ orgId, initial, employeesById, t, lang }: {
                   <div className="min-w-0 flex-1 pb-5 pt-1">
                     <div className="flex items-baseline justify-between gap-2">
                       <div className="min-w-0 text-sm" style={{ color: 'var(--color-text)' }}>
-                        <span className="font-medium">{emp?.name || '—'}</span>{' '}
+                        {isHiringEvent ? (
+                          meta.hiring_request_id ? (
+                            <Link to={`/dashboard/hiring/${meta.hiring_request_id}`} className="font-medium hover:underline">
+                              {evt.title}
+                            </Link>
+                          ) : (
+                            <span className="font-medium">{evt.title}</span>
+                          )
+                        ) : (
+                          <span className="font-medium">{emp?.name || '—'}</span>
+                        )}{' '}
                         <span style={{ color: 'var(--color-text-secondary)' }}>{eventLabel(evt.event_type, t).toLowerCase()}</span>
                       </div>
                       <span className="shrink-0 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
@@ -666,8 +684,8 @@ function RecentActivity({ orgId, initial, employeesById, t, lang }: {
                       </span>
                     </div>
                     <div className="mt-0.5 truncate text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                      {evt.title}
-                      {typeof meta.version === 'number' && (
+                      {isHiringEvent ? evt.description : evt.title}
+                      {!isHiringEvent && typeof meta.version === 'number' && (
                         <> · {t.version} {meta.version}</>
                       )}
                     </div>
@@ -730,6 +748,11 @@ function eventLabel(eventType: string, t: Translations): string {
     case 'reward_given': return t.eventRewardGiven
     case 'welcome': return t.eventWelcome
     case 'achievement_unlocked': return t.eventBadgeEarned
+    case 'hiring_request_submitted': return t.eventHiringRequestSubmitted
+    case 'hiring_request_manager_approved': return t.eventHiringRequestManagerApproved
+    case 'hiring_request_manager_rejected': return t.eventHiringRequestManagerRejected
+    case 'hiring_request_approved': return t.eventHiringRequestApproved
+    case 'hiring_request_owner_rejected': return t.eventHiringRequestOwnerRejected
     default: return eventType
   }
 }
@@ -803,6 +826,22 @@ function eventVisual(eventType: string): { color: string; icon: React.ReactNode 
       return {
         color: '#f59e0b',
         icon: null,
+      }
+    case 'hiring_request_submitted':
+    case 'hiring_request_manager_approved':
+    case 'hiring_request_manager_rejected':
+    case 'hiring_request_approved':
+    case 'hiring_request_owner_rejected':
+      return {
+        // Tone matches Recruitment/Hiring sidebar accent — a soft amber so the
+        // workflow events read as distinct from contract/SOP signature events.
+        color: '#0ea5e9',
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="2" y="7" width="20" height="14" rx="2" />
+            <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+          </svg>
+        ),
       }
     default:
       return {
