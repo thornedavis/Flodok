@@ -19,7 +19,7 @@ import { StatRow } from '../../components/portal/StatRow'
 import { InfoTooltip } from '../../components/InfoTooltip'
 import { AvatarWithBadge } from '../../components/portal/AvatarWithBadge'
 import { MonthStrip } from '../../components/portal/MonthStrip'
-import type { Employee, Sop, SopSignature, SopVersion, Organization, Contract, ContractSignature, ContractVersion, FeedEvent } from '../../types/aliases'
+import type { Employee, Sop, SopSignature, SopVersion, Organization, Contract, ContractSignature, ContractVersion, FeedEvent, JobDescription, JobDescriptionSignature } from '../../types/aliases'
 
 type AchievementSummary = {
   unlock_id: string
@@ -229,6 +229,10 @@ export function Portal() {
   // the EMPLOYER block (matching how employee sigs render in the EMPLOYEE
   // block).
   const [contractEmployerSignatures, setContractEmployerSignatures] = useState<Record<string, ContractSignature>>({})
+  // JD this candidate applied for (Phase D linked it at intake). When set,
+  // the onboarding flow renders a JD-signing step alongside the contract.
+  const [appliedForJd, setAppliedForJd] = useState<JobDescription | null>(null)
+  const [jdSignature, setJdSignature] = useState<JobDescriptionSignature | null>(null)
   const [feedEvents, setFeedEvents] = useState<FeedEvent[]>([])
   const [portal, setPortal] = useState<PortalHomeData | null>(null)
   const [unreadInformational, setUnreadInformational] = useState(0)
@@ -413,6 +417,32 @@ export function Portal() {
           }
           setContractSignatures(empSigs)
           setContractEmployerSignatures(erSigs)
+        }
+      }
+
+      // Phase E — JD signing step in onboarding. When the candidate has an
+      // applied_for_jd_id, fetch the JD (must be published or archived for
+      // their RLS read to succeed) and any existing signature against its
+      // current_version. Both feed into CandidateOnboarding below.
+      if (emp.applied_for_jd_id) {
+        const [{ data: jd }, { data: existingSig }] = await Promise.all([
+          supabase.from('job_descriptions').select('*').eq('id', emp.applied_for_jd_id).maybeSingle(),
+          supabase
+            .from('job_description_signatures')
+            .select('*')
+            .eq('job_description_id', emp.applied_for_jd_id)
+            .eq('employee_id', emp.id)
+            .order('signed_at', { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+        ])
+        setAppliedForJd((jd as JobDescription | null) ?? null)
+        // Only treat the signature as valid if it's against the JD's
+        // current_version — an amended JD requires a fresh ack.
+        if (jd && existingSig && existingSig.version_number === (jd as JobDescription).current_version) {
+          setJdSignature(existingSig as JobDescriptionSignature)
+        } else {
+          setJdSignature(null)
         }
       }
     }
@@ -834,6 +864,8 @@ export function Portal() {
         activeContract={activeContract}
         employerSignature={activeContract ? contractEmployerSignatures[activeContract.id] ?? null : null}
         employeeSignature={activeContract ? contractSignatures[activeContract.id] ?? null : null}
+        appliedForJd={appliedForJd}
+        jdSignature={jdSignature}
         onCompleted={() => {
           sessionStorage.setItem(onboardingDismissedKey, '1')
           // Force a re-render by updating any state — easiest: refresh the page.

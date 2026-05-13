@@ -85,6 +85,7 @@ const EVENT_TYPE_TO_SERIES: Record<string, keyof Pick<ActivityBucket, 'sops' | '
   sop_assigned: 'sops',
   sop_signed: 'signatures',
   contract_signed: 'signatures',
+  job_description_signed: 'signatures',
   welcome: 'employees',
   contract_updated: 'contracts',
   contract_assigned: 'contracts',
@@ -740,6 +741,7 @@ function RecentActivity({ orgId, initial, employeesById, t, lang }: {
 function eventLabel(eventType: string, t: Translations): string {
   switch (eventType) {
     case 'sop_signed': return t.eventSopSigned
+    case 'job_description_signed': return t.eventJobDescriptionSigned
     case 'sop_updated': return t.eventSopUpdated
     case 'sop_assigned': return t.eventSopAssigned
     case 'contract_assigned': return t.eventContractAssigned

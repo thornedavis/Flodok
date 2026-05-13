@@ -4,8 +4,9 @@ import { useLang } from '../../contexts/LanguageContext'
 import { renderMergeFields } from '../../lib/mergeFields'
 import { SIGNATURE_FONTS, ensureSignatureFontsLoaded } from '../../lib/signatureFonts'
 import { buildContractDocumentHash, captureSignatureIp, getUserAgent } from '../../lib/signatureFingerprint'
+import { docToMarkdown, type DocumentDoc } from '../../lib/documentDoc'
 import { DocumentUpload } from '../DocumentUpload'
-import type { Contract, ContractSignature, Employee, Organization } from '../../types/aliases'
+import type { Contract, ContractSignature, Employee, JobDescription, JobDescriptionSignature, Organization } from '../../types/aliases'
 
 ensureSignatureFontsLoaded()
 
@@ -15,13 +16,24 @@ interface Props {
   activeContract: Contract | null
   employerSignature: ContractSignature | null
   employeeSignature: ContractSignature | null
+  // Optional — only present when the candidate applied for a specific JD
+  // at intake (Phase D). When set, onboarding inserts a JD-sign step
+  // between contract signing and personal details.
+  appliedForJd?: JobDescription | null
+  jdSignature?: JobDescriptionSignature | null
   onCompleted: () => void
 }
 
-type Step = 'welcome' | 'sign' | 'personal' | 'banking' | 'emergency' | 'docs' | 'done'
+type Step = 'welcome' | 'sign' | 'signJd' | 'personal' | 'banking' | 'emergency' | 'docs' | 'done'
 
-const STEP_ORDER: Step[] = ['welcome', 'sign', 'personal', 'banking', 'emergency', 'docs', 'done']
-const TOTAL_STEPS = STEP_ORDER.length - 1 // 'done' isn't a numbered step
+const STEP_ORDER: Step[] = ['welcome', 'sign', 'signJd', 'personal', 'banking', 'emergency', 'docs', 'done']
+// 'done' isn't a numbered step. The active step list is filtered at
+// render time when there's no contract or no JD, so the progress
+// denominator below is the *maximum* possible step count; the chrome
+// will show "step 2 of 7" even for a candidate who skips signJd. That's
+// acceptable noise — better than a denominator that jumps based on
+// data we discover mid-flow.
+const TOTAL_STEPS = STEP_ORDER.length - 1
 
 export function CandidateOnboarding({
   employee: initialEmployee,
@@ -29,17 +41,33 @@ export function CandidateOnboarding({
   activeContract,
   employerSignature,
   employeeSignature: initialSig,
+  appliedForJd = null,
+  jdSignature: initialJdSig = null,
   onCompleted,
 }: Props) {
   const { t, lang } = useLang()
   const [employee, setEmployee] = useState<Employee>(initialEmployee)
   const [signature, setSignature] = useState<ContractSignature | null>(initialSig)
+  const [jdSig, setJdSig] = useState<JobDescriptionSignature | null>(initialJdSig)
+  const requiresJdSig = !!appliedForJd
   const [step, setStep] = useState<Step>(() => {
     if (initialEmployee.lifecycle_stage === 'signed') {
       return needsPersonalInfo(initialEmployee) ? 'personal' : 'done'
     }
     return 'welcome'
   })
+
+  // Flip lifecycle_stage to 'signed' only once every required ack is in
+  // place. When there's no JD attached, contract sig alone advances; when
+  // there is, both signatures must be present. Idempotent — calling it
+  // multiple times is fine.
+  async function maybeAdvanceToSigned(opts: { contractSigned: boolean; jdSigned: boolean }) {
+    if (employee.lifecycle_stage !== 'offered') return
+    if (activeContract && !opts.contractSigned) return
+    if (requiresJdSig && !opts.jdSigned) return
+    await supabase.from('employees').update({ lifecycle_stage: 'signed' }).eq('id', employee.id)
+    setEmployee(prev => ({ ...prev, lifecycle_stage: 'signed' }))
+  }
 
   const stepIndex = Math.min(STEP_ORDER.indexOf(step) + 1, TOTAL_STEPS)
 
@@ -65,7 +93,7 @@ export function CandidateOnboarding({
           {step === 'welcome' && (
             <WelcomeStep
               orgName={organization?.display_name || organization?.name || ''}
-              onContinue={() => go(activeContract ? 'sign' : 'personal')}
+              onContinue={() => go(firstSigningStep(activeContract, requiresJdSig))}
             />
           )}
 
@@ -79,15 +107,25 @@ export function CandidateOnboarding({
               lang={lang}
               onSigned={async sig => {
                 setSignature(sig)
-                // Flip lifecycle_stage to 'signed' so HR sees the candidate
-                // has completed the contract step. Don't block the UI on this.
-                if (employee.lifecycle_stage === 'offered') {
-                  await supabase.from('employees').update({ lifecycle_stage: 'signed' }).eq('id', employee.id)
-                  setEmployee(prev => ({ ...prev, lifecycle_stage: 'signed' }))
-                }
-                go('personal')
+                await maybeAdvanceToSigned({ contractSigned: true, jdSigned: !!jdSig })
+                go(requiresJdSig ? 'signJd' : 'personal')
               }}
               onSkipBack={() => go('welcome')}
+            />
+          )}
+
+          {step === 'signJd' && appliedForJd && (
+            <SignJdStep
+              employee={employee}
+              jd={appliedForJd}
+              jdSignature={jdSig}
+              lang={lang}
+              onSigned={async sig => {
+                setJdSig(sig)
+                await maybeAdvanceToSigned({ contractSigned: !!signature, jdSigned: true })
+                go('personal')
+              }}
+              onSkipBack={() => go(activeContract ? 'sign' : 'welcome')}
             />
           )}
 
@@ -95,7 +133,7 @@ export function CandidateOnboarding({
             <PersonalStep
               employee={employee}
               onSaved={updated => { setEmployee(updated); go('banking') }}
-              onBack={() => go(activeContract ? 'sign' : 'welcome')}
+              onBack={() => go(previousStepBeforePersonal(activeContract, requiresJdSig))}
             />
           )}
 
@@ -139,6 +177,21 @@ export function CandidateOnboarding({
 
 function needsPersonalInfo(employee: Employee): boolean {
   return !employee.ktp_nik || !employee.ktp_photo_url
+}
+
+// Step routing — keeps the "skip steps that don't apply" logic in one place
+// so the welcome screen's Continue button and the personal step's Back
+// button agree on what the previous/next step is.
+function firstSigningStep(activeContract: Contract | null, requiresJdSig: boolean): Step {
+  if (activeContract) return 'sign'
+  if (requiresJdSig) return 'signJd'
+  return 'personal'
+}
+
+function previousStepBeforePersonal(activeContract: Contract | null, requiresJdSig: boolean): Step {
+  if (requiresJdSig) return 'signJd'
+  if (activeContract) return 'sign'
+  return 'welcome'
 }
 
 // ───── Progress bar ──────────────────────────────────────────────────────
@@ -380,6 +433,188 @@ function SignStep({ employee, organization, activeContract, employerSignature, e
           style={{ backgroundColor: 'var(--color-primary)' }}
         >
           {signing ? t.onboardingSaving : t.onboardingSignButton}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ───── JD acknowledgment step ────────────────────────────────────────────
+//
+// Mirrors SignStep but writes to job_description_signatures and uses a
+// JD-specific consent line ("acknowledge" instead of "agree to terms").
+// No employer countersignature concept here — JDs are signed by one
+// party (the employee).
+
+function SignJdStep({ employee, jd, jdSignature, lang, onSigned, onSkipBack }: {
+  employee: Employee
+  jd: JobDescription
+  jdSignature: JobDescriptionSignature | null
+  lang: 'en' | 'id'
+  onSigned: (sig: JobDescriptionSignature) => void
+  onSkipBack: () => void
+}) {
+  const { t } = useLang()
+  const [typedName, setTypedName] = useState(employee.name)
+  const [selectedFont, setSelectedFont] = useState(SIGNATURE_FONTS[0].name)
+  const [agreed, setAgreed] = useState(false)
+  const [signing, setSigning] = useState(false)
+  const [error, setError] = useState('')
+  const [scrolledToBottom, setScrolledToBottom] = useState(false)
+
+  // JD body is stored as a structured doc (content_doc). Project it to
+  // markdown in the candidate's preferred language, then reuse the same
+  // contractToHtml helper so the visual treatment matches the contract
+  // pane above.
+  const renderedBody = useMemo(() => {
+    return docToMarkdown(jd.content_doc as DocumentDoc | null, lang)
+  }, [jd.content_doc, lang])
+
+  function handleScroll(e: React.UIEvent<HTMLDivElement>) {
+    const el = e.currentTarget
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 40) setScrolledToBottom(true)
+  }
+
+  async function handleSign() {
+    if (signing) return
+    if (!typedName.trim() || !agreed) return
+    setSigning(true)
+    setError('')
+    const { data, error: sigError } = await supabase
+      .from('job_description_signatures')
+      .insert({
+        job_description_id: jd.id,
+        version_number: jd.current_version,
+        employee_id: employee.id,
+        typed_name: typedName.trim(),
+        signature_font: selectedFont,
+      })
+      .select()
+      .single()
+
+    if (sigError || !data) {
+      setSigning(false)
+      setError(sigError?.message || t.onboardingError)
+      return
+    }
+
+    // Match the contract flow's signer-IP capture for the JD signature too —
+    // useful for audit if a question ever arises about who acknowledged.
+    captureSignatureIp(data.id, { type: 'portal', slug: employee.slug, accessToken: employee.access_token })
+
+    await supabase.from('feed_events').insert({
+      org_id: employee.org_id,
+      employee_id: employee.id,
+      event_type: 'job_description_signed',
+      title: jd.title,
+      description: `Version ${jd.current_version}`,
+      metadata: { job_description_id: jd.id, version: jd.current_version, signature_font: selectedFont },
+    })
+    onSigned(data as JobDescriptionSignature)
+  }
+
+  if (jdSignature) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.onboardingJdTitle}</h1>
+        <div className="rounded-lg border p-4 text-sm" style={{ borderColor: 'var(--color-success)', backgroundColor: 'color-mix(in srgb, var(--color-success) 8%, transparent)', color: 'var(--color-success)' }}>
+          {t.onboardingJdSignAlready}
+        </div>
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => onSigned(jdSignature)}
+            className="rounded-lg px-6 py-3 text-base font-medium text-white"
+            style={{ backgroundColor: 'var(--color-primary)' }}
+          >
+            {t.onboardingNext}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  const canSign = !!typedName.trim() && agreed && scrolledToBottom
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.onboardingJdTitle}</h1>
+        <p className="mt-1 text-sm" style={{ color: 'var(--color-text-secondary)' }}>{t.onboardingJdBody}</p>
+      </div>
+
+      <div
+        onScroll={handleScroll}
+        className="prose-portal max-h-96 overflow-y-auto rounded-lg border p-5 text-sm"
+        style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text)' }}
+        dangerouslySetInnerHTML={{ __html: contractToHtml(renderedBody) }}
+      />
+
+      <div className="space-y-4 rounded-lg border p-5" style={{ borderColor: 'var(--color-border)' }}>
+        <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>{t.onboardingJdSignTitle}</h2>
+        <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>{t.onboardingJdSignBody}</p>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.onboardingSignNameLabel}</label>
+          <input
+            type="text"
+            value={typedName}
+            onChange={e => setTypedName(e.target.value)}
+            className="w-full rounded-lg border px-3 py-2 text-sm"
+            style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+          />
+        </div>
+
+        <div>
+          <label className="mb-2 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.onboardingSignFontLabel}</label>
+          <div className="grid grid-cols-2 gap-2">
+            {SIGNATURE_FONTS.map(font => {
+              const isSelected = selectedFont === font.name
+              return (
+                <button
+                  key={font.name}
+                  type="button"
+                  onClick={() => setSelectedFont(font.name)}
+                  className="flex flex-col items-start gap-1 rounded-lg border p-3 transition-all"
+                  style={{
+                    borderColor: isSelected ? 'var(--color-primary)' : 'var(--color-border)',
+                    backgroundColor: isSelected ? 'color-mix(in srgb, var(--color-primary) 8%, transparent)' : 'var(--color-bg)',
+                  }}
+                >
+                  <span className="text-2xl leading-none" style={{ fontFamily: `'${font.name}', cursive`, color: 'var(--color-text)' }}>
+                    {typedName.trim() || employee.name}
+                  </span>
+                  <span className="text-[10px] uppercase tracking-wide" style={{ color: 'var(--color-text-tertiary)' }}>{font.label}</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        <label className="flex items-start gap-2 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+          <input
+            type="checkbox"
+            checked={agreed}
+            onChange={e => setAgreed(e.target.checked)}
+            className="mt-0.5 h-4 w-4"
+            style={{ accentColor: 'var(--color-primary)' }}
+          />
+          <span>{t.onboardingJdConsent}</span>
+        </label>
+
+        {error && <p className="text-sm" style={{ color: 'var(--color-danger)' }}>{error}</p>}
+      </div>
+
+      <div className="flex justify-between">
+        <button type="button" onClick={onSkipBack} className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>← {t.onboardingBack}</button>
+        <button
+          type="button"
+          onClick={handleSign}
+          disabled={!canSign || signing}
+          className="rounded-lg px-6 py-3 text-base font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+          style={{ backgroundColor: 'var(--color-primary)' }}
+        >
+          {signing ? t.onboardingSaving : t.onboardingJdSignButton}
         </button>
       </div>
     </div>
