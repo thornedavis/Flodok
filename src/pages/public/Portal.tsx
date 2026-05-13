@@ -855,8 +855,15 @@ export function Portal() {
   // they can re-enter the regular portal without being looped back.
   const onboardingDismissedKey = `flodok.onboarding.dismissed.${employee.id}`
   const onboardingDismissed = typeof window !== 'undefined' && sessionStorage.getItem(onboardingDismissedKey) === '1'
-  const inHiringFunnel = employee.lifecycle_stage === 'offered' || employee.lifecycle_stage === 'signed'
-  if (inHiringFunnel && !onboardingDismissed) {
+  const inOfferStage = employee.lifecycle_stage === 'offered' || employee.lifecycle_stage === 'signed'
+  // Pre-offer candidates (prospective/shortlisted) also get the onboarding
+  // surface so the portal stays focused on profile completion instead of
+  // showing credits/achievements/payslips that don't apply to them yet.
+  // For pre-offer there's no session dismiss — there's no other useful
+  // portal view to fall back to until they're offered.
+  const preOffer = employee.lifecycle_stage === 'prospective' || employee.lifecycle_stage === 'shortlisted'
+  const showOnboarding = preOffer || (inOfferStage && !onboardingDismissed)
+  if (showOnboarding) {
     return (
       <CandidateOnboarding
         employee={employee}

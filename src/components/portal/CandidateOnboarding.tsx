@@ -5,6 +5,7 @@ import { renderMergeFields } from '../../lib/mergeFields'
 import { SIGNATURE_FONTS, ensureSignatureFontsLoaded } from '../../lib/signatureFonts'
 import { buildContractDocumentHash, captureSignatureIp, getUserAgent } from '../../lib/signatureFingerprint'
 import { docToMarkdown, type DocumentDoc } from '../../lib/documentDoc'
+import { computeProfileSections, profileCompletionPercent } from '../../lib/candidateProfile'
 import { DocumentUpload } from '../DocumentUpload'
 import type { Contract, ContractSignature, Employee, JobDescription, JobDescriptionSignature, Organization } from '../../types/aliases'
 
@@ -50,6 +51,10 @@ export function CandidateOnboarding({
   const [signature, setSignature] = useState<ContractSignature | null>(initialSig)
   const [jdSig, setJdSig] = useState<JobDescriptionSignature | null>(initialJdSig)
   const requiresJdSig = !!appliedForJd
+  // Pre-offer candidates land here for opportunistic profile completion;
+  // copy on the welcome + done screens shifts to match (no "let's review
+  // your contract" framing when there isn't one yet).
+  const preOffer = employee.lifecycle_stage === 'prospective' || employee.lifecycle_stage === 'shortlisted'
   const [step, setStep] = useState<Step>(() => {
     if (initialEmployee.lifecycle_stage === 'signed') {
       return needsPersonalInfo(initialEmployee) ? 'personal' : 'done'
@@ -93,6 +98,8 @@ export function CandidateOnboarding({
           {step === 'welcome' && (
             <WelcomeStep
               orgName={organization?.display_name || organization?.name || ''}
+              preOffer={preOffer}
+              employee={employee}
               onContinue={() => go(firstSigningStep(activeContract, requiresJdSig))}
             />
           )}
@@ -166,6 +173,7 @@ export function CandidateOnboarding({
             <DoneStep
               startDate={employee.join_date}
               lang={lang}
+              preOffer={preOffer}
               onEnter={onCompleted}
             />
           )}
@@ -207,16 +215,37 @@ function ProgressBar({ current, total }: { current: number; total: number }) {
 
 // ───── Welcome step ──────────────────────────────────────────────────────
 
-function WelcomeStep({ orgName, onContinue }: { orgName: string; onContinue: () => void }) {
+function WelcomeStep({ orgName, preOffer, employee, onContinue }: {
+  orgName: string
+  preOffer: boolean
+  employee: Employee
+  onContinue: () => void
+}) {
   const { t } = useLang()
+  // For pre-offer candidates, show the current completion percentage so they
+  // get an at-a-glance "here's how far along you are" framing. The number is
+  // approximate (no joins on education/experience/family) but useful as a
+  // motivator — same calculator that drives the chip on the Recruitment list.
+  const pct = preOffer ? profileCompletionPercent(computeProfileSections(employee)) : null
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-semibold leading-tight" style={{ color: 'var(--color-text)' }}>
-        {t.onboardingWelcomeTitle(orgName)}
+        {preOffer ? t.onboardingWelcomeTitlePreOffer(orgName) : t.onboardingWelcomeTitle(orgName)}
       </h1>
       <p className="text-base leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>
-        {t.onboardingWelcomeBody}
+        {preOffer ? t.onboardingWelcomeBodyPreOffer : t.onboardingWelcomeBody}
       </p>
+      {pct !== null && (
+        <div className="space-y-2 rounded-lg border p-4" style={{ borderColor: 'var(--color-border)' }}>
+          <div className="flex items-center justify-between text-sm">
+            <span style={{ color: 'var(--color-text-secondary)' }}>{t.onboardingProfileProgressLabel}</span>
+            <span className="font-semibold" style={{ color: 'var(--color-text)' }}>{pct}%</span>
+          </div>
+          <div className="h-1.5 w-full overflow-hidden rounded-full" style={{ backgroundColor: 'var(--color-bg-tertiary)' }}>
+            <div className="h-full transition-all" style={{ width: `${pct}%`, backgroundColor: 'var(--color-primary)' }} />
+          </div>
+        </div>
+      )}
       <div className="pt-4">
         <button
           type="button"
@@ -224,7 +253,7 @@ function WelcomeStep({ orgName, onContinue }: { orgName: string; onContinue: () 
           className="rounded-lg px-6 py-3 text-base font-medium text-white"
           style={{ backgroundColor: 'var(--color-primary)' }}
         >
-          {t.onboardingWelcomeStart}
+          {preOffer ? t.onboardingWelcomeStartPreOffer : t.onboardingWelcomeStart}
         </button>
       </div>
     </div>
@@ -1073,11 +1102,21 @@ function DocsStep({ employee, onSaved, onSkip, onBack }: {
 
 // ───── Done step ─────────────────────────────────────────────────────────
 
-function DoneStep({ startDate, lang, onEnter }: { startDate: string | null; lang: 'en' | 'id'; onEnter: () => void }) {
+function DoneStep({ startDate, lang, preOffer, onEnter }: { startDate: string | null; lang: 'en' | 'id'; preOffer: boolean; onEnter: () => void }) {
   const { t } = useLang()
   const formattedDate = startDate
     ? new Intl.DateTimeFormat(lang === 'id' ? 'id-ID' : 'en-US', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(startDate))
     : null
+
+  const title = preOffer ? t.onboardingDoneTitlePreOffer : t.onboardingDoneTitle
+  const body = preOffer
+    ? t.onboardingDoneBodyPreOffer
+    : (formattedDate ? t.onboardingDoneBodyWithDate(formattedDate) : t.onboardingDoneBodyNoDate)
+  // Pre-offer candidates have no useful "portal" to enter past this step —
+  // they're waiting for an offer. The button label nudges them toward
+  // updating their info rather than entering a portal that doesn't apply
+  // to them yet.
+  const cta = preOffer ? t.onboardingDoneEnterPortalPreOffer : t.onboardingDoneEnterPortal
 
   return (
     <div className="space-y-6 text-center">
@@ -1086,9 +1125,9 @@ function DoneStep({ startDate, lang, onEnter }: { startDate: string | null; lang
           <polyline points="20 6 9 17 4 12" />
         </svg>
       </div>
-      <h1 className="text-3xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.onboardingDoneTitle}</h1>
+      <h1 className="text-3xl font-semibold" style={{ color: 'var(--color-text)' }}>{title}</h1>
       <p className="mx-auto max-w-md text-base" style={{ color: 'var(--color-text-secondary)' }}>
-        {formattedDate ? t.onboardingDoneBodyWithDate(formattedDate) : t.onboardingDoneBodyNoDate}
+        {body}
       </p>
       <div className="pt-4">
         <button
@@ -1097,7 +1136,7 @@ function DoneStep({ startDate, lang, onEnter }: { startDate: string | null; lang
           className="rounded-lg px-6 py-3 text-base font-medium text-white"
           style={{ backgroundColor: 'var(--color-primary)' }}
         >
-          {t.onboardingDoneEnterPortal}
+          {cta}
         </button>
       </div>
     </div>
