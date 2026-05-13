@@ -1219,6 +1219,7 @@ export type Database = {
         Row: {
           access_token: string
           address: string | null
+          applied_for_jd_id: string | null
           bank_account_holder: string | null
           bank_account_number: string | null
           bank_name: string | null
@@ -1261,11 +1262,14 @@ export type Database = {
           separation_reason: string | null
           separation_type: string | null
           slug: string
+          source: string | null
+          source_request_id: string | null
           status: string
         }
         Insert: {
           access_token: string
           address?: string | null
+          applied_for_jd_id?: string | null
           bank_account_holder?: string | null
           bank_account_number?: string | null
           bank_name?: string | null
@@ -1308,11 +1312,14 @@ export type Database = {
           separation_reason?: string | null
           separation_type?: string | null
           slug: string
+          source?: string | null
+          source_request_id?: string | null
           status?: string
         }
         Update: {
           access_token?: string
           address?: string | null
+          applied_for_jd_id?: string | null
           bank_account_holder?: string | null
           bank_account_number?: string | null
           bank_name?: string | null
@@ -1355,14 +1362,30 @@ export type Database = {
           separation_reason?: string | null
           separation_type?: string | null
           slug?: string
+          source?: string | null
+          source_request_id?: string | null
           status?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "employees_applied_for_jd_id_fkey"
+            columns: ["applied_for_jd_id"]
+            isOneToOne: false
+            referencedRelation: "job_descriptions"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "employees_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employees_source_request_id_fkey"
+            columns: ["source_request_id"]
+            isOneToOne: false
+            referencedRelation: "hiring_requests"
             referencedColumns: ["id"]
           },
         ]

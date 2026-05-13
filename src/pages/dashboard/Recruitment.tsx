@@ -14,6 +14,11 @@ import { findTemplateForPosition, buildContractFromTemplate } from '../../lib/co
 import { documentEditPath, documentsIndexPath } from '../../lib/documentTypes'
 import { docAsJson, emptyDocumentDoc } from '../../lib/documentDoc'
 import { advanceSignedToActiveForOrg } from '../../lib/lifecycleAdvance'
+import {
+  CANDIDATE_SOURCE_OPTIONS,
+  profileCompletionPercentFromEmployee,
+  type CandidateSourceOption,
+} from '../../lib/candidateProfile'
 import { PhoneInput } from '../../components/PhoneInput'
 import { FilterSearchInput, MultiSelectDropdown } from '../../components/FilterControls'
 import type { Employee, Organization, User } from '../../types/aliases'
@@ -205,6 +210,7 @@ export function Recruitment({ user }: { user: User }) {
                   stageLabel={stageLabels[c.lifecycle_stage as RecruitmentStage] ?? c.lifecycle_stage}
                   lang={lang}
                   canWrite={canWrite}
+                  orgDisplayName={org?.display_name || org?.name || ''}
                   onOpen={() => setModalCandidate(c)}
                   onChangeStage={next => changeStage(c, next)}
                   onDelete={() => deleteCandidate(c)}
@@ -263,11 +269,12 @@ function TabButton({ active, onClick, label, count }: { active: boolean; onClick
   )
 }
 
-function CandidateRow({ candidate, stageLabel, lang, canWrite, onOpen, onChangeStage, onDelete, onViewFullProfile }: {
+function CandidateRow({ candidate, stageLabel, lang, canWrite, orgDisplayName, onOpen, onChangeStage, onDelete, onViewFullProfile }: {
   candidate: Employee
   stageLabel: string
   lang: 'en' | 'id'
   canWrite: boolean
+  orgDisplayName: string
   onOpen: () => void
   onChangeStage: (next: RecruitmentStage) => void
   onDelete: () => void
@@ -277,7 +284,22 @@ function CandidateRow({ candidate, stageLabel, lang, canWrite, onOpen, onChangeS
   const gradient = getAvatarGradient(candidate.id)
   const initials = candidate.name.split(/\s+/).slice(0, 2).map(s => s[0]?.toUpperCase() || '').join('')
   const stage = candidate.lifecycle_stage as RecruitmentStage
-  const whatsappUrl = candidate.phone ? `https://wa.me/${candidate.phone.replace(/[^0-9]/g, '')}` : null
+  // Build the candidate's portal URL once; reused for the copy-link button and
+  // the WhatsApp message body. Same shape as elsewhere in the app
+  // (e.g. Employees.tsx line 152, EmployeeEdit.tsx line 259).
+  const portalUrl = `${window.location.origin}/portal/${candidate.slug}-${candidate.access_token}`
+  const phoneDigits = candidate.phone?.replace(/[^0-9]/g, '') ?? ''
+  // Pre-filled message embeds the portal URL so the candidate can tap-through
+  // straight to their onboarding. Only meaningful pre-offer; for offered/signed
+  // candidates the share button is still useful as a re-send.
+  const whatsappShareUrl = phoneDigits
+    ? `https://wa.me/${phoneDigits}?text=${encodeURIComponent(t.hiringWhatsAppShareMessage(candidate.name, orgDisplayName || '—', portalUrl))}`
+    : null
+  // Only count completion for pre-offer candidates — once they're offered,
+  // HR has typically set the rest of the structural fields and the chip
+  // stops being informative. Hide for signed / talent_pool too.
+  const showCompletionChip = stage === 'prospective' || stage === 'shortlisted'
+  const completionPct = showCompletionChip ? profileCompletionPercentFromEmployee(candidate) : null
 
   return (
     <tr
@@ -292,7 +314,12 @@ function CandidateRow({ candidate, stageLabel, lang, canWrite, onOpen, onChangeS
           ) : (
             <div className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold text-white" style={{ background: gradient }}>{initials || '?'}</div>
           )}
-          <span className="font-medium" style={{ color: 'var(--color-text)' }}>{candidate.name}</span>
+          <div className="flex min-w-0 flex-col">
+            <span className="truncate font-medium" style={{ color: 'var(--color-text)' }}>{candidate.name}</span>
+            {completionPct !== null && (
+              <CompletionChip pct={completionPct} t={t} />
+            )}
+          </div>
         </div>
       </td>
       <td className="px-4 py-3" style={{ color: 'var(--color-text-secondary)' }}>{candidate.job_position || em()}</td>
@@ -308,13 +335,14 @@ function CandidateRow({ candidate, stageLabel, lang, canWrite, onOpen, onChangeS
       <td className="px-4 py-3" style={{ color: 'var(--color-text-tertiary)' }}>{formatDate(candidate.created_at, lang)}</td>
       <td className="px-3 py-3 text-right" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-end gap-1">
-          {whatsappUrl && (
+          <CopyPortalLinkButton url={portalUrl} t={t} />
+          {whatsappShareUrl && (
             <a
-              href={whatsappUrl}
+              href={whatsappShareUrl}
               target="_blank"
               rel="noopener noreferrer"
-              title={t.hiringActionWhatsApp}
-              aria-label={t.hiringActionWhatsApp}
+              title={t.hiringActionShareViaWhatsApp}
+              aria-label={t.hiringActionShareViaWhatsApp}
               className="rounded-md p-1.5 transition-colors hover:bg-[var(--color-bg-tertiary)]"
               style={{ color: 'var(--color-text-tertiary)' }}
             >
@@ -332,6 +360,62 @@ function CandidateRow({ candidate, stageLabel, lang, canWrite, onOpen, onChangeS
         </div>
       </td>
     </tr>
+  )
+}
+
+function CompletionChip({ pct, t }: { pct: number; t: Translations }) {
+  // Colour shifts as completion rises so a 20%-complete profile reads as
+  // urgent ("needs filling") and 80% reads as nearly-done.
+  const tone = pct >= 80 ? 'success' : pct >= 40 ? 'progress' : 'warning'
+  const palette: Record<string, { bg: string; fg: string }> = {
+    warning:  { bg: 'color-mix(in srgb, var(--color-danger) 10%, transparent)',  fg: 'var(--color-danger)' },
+    progress: { bg: 'color-mix(in srgb, var(--color-primary) 12%, transparent)', fg: 'var(--color-primary)' },
+    success:  { bg: 'color-mix(in srgb, var(--color-success) 12%, transparent)', fg: 'var(--color-success)' },
+  }
+  const { bg, fg } = palette[tone]
+  return (
+    <span className="mt-0.5 inline-flex w-fit rounded-full px-1.5 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: bg, color: fg }}>
+      {t.hiringCompletionChip(pct)}
+    </span>
+  )
+}
+
+function CopyPortalLinkButton({ url, t }: { url: string; t: Translations }) {
+  const [copied, setCopied] = useState(false)
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(url)
+    } catch {
+      const ta = document.createElement('textarea')
+      ta.value = url
+      document.body.appendChild(ta)
+      ta.select()
+      document.execCommand('copy')
+      document.body.removeChild(ta)
+    }
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      title={copied ? t.hiringPortalLinkCopied : t.hiringActionCopyPortalLink}
+      aria-label={t.hiringActionCopyPortalLink}
+      className="rounded-md p-1.5 transition-colors hover:bg-[var(--color-bg-tertiary)]"
+      style={{ color: copied ? 'var(--color-success)' : 'var(--color-text-tertiary)' }}
+    >
+      {copied ? (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+      ) : (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+        </svg>
+      )}
+    </button>
   )
 }
 
@@ -580,6 +664,17 @@ function formatDate(iso: string, lang: 'en' | 'id'): string {
 
 type ModalMode = 'create' | 'edit'
 
+function candidateSourceLabel(s: CandidateSourceOption, t: Translations): string {
+  switch (s) {
+    case 'jobseek': return t.candidateSourceJobseek
+    case 'indeed': return t.candidateSourceIndeed
+    case 'linkedin': return t.candidateSourceLinkedin
+    case 'referral': return t.candidateSourceReferral
+    case 'direct': return t.candidateSourceDirect
+    case 'other': return t.candidateSourceOther
+  }
+}
+
 function CandidateModal({ mode, candidate, orgCountryCode, orgId, jobPositions, availableDepartments, onAvailableDepartmentsChange, onClose, onSaved, onManageReferences }: {
   mode: ModalMode
   candidate: Candidate | null
@@ -602,8 +697,57 @@ function CandidateModal({ mode, candidate, orgCountryCode, orgId, jobPositions, 
   const [photoUrl, setPhotoUrl] = useState<string | null>(candidate?.photo_url || null)
   const [pendingPhoto, setPendingPhoto] = useState<File | null>(null)
   const [pendingPhotoPreview, setPendingPhotoPreview] = useState<string | null>(null)
+  const [appliedForJdId, setAppliedForJdId] = useState<string>(candidate?.applied_for_jd_id || '')
+  const [source, setSource] = useState<CandidateSourceOption | ''>(
+    (candidate?.source as CandidateSourceOption | null) ?? '',
+  )
+  const [publishedJds, setPublishedJds] = useState<{ id: string; title: string; department_id: string | null; hiring_request_id: string | null; department_name: string | null }[]>([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+
+  // Published JDs for the "Applied for" picker. Draft/archived JDs aren't
+  // offered — drafts aren't a public role description yet, and archived
+  // roles shouldn't be receiving new candidates.
+  useEffect(() => {
+    let cancelled = false
+    async function loadJds() {
+      const { data } = await supabase
+        .from('job_descriptions')
+        .select('id, title, department_id, hiring_request_id, department:company_departments!job_descriptions_department_id_fkey(name)')
+        .eq('org_id', orgId)
+        .eq('status', 'published')
+        .order('updated_at', { ascending: false })
+      if (cancelled) return
+      setPublishedJds((data ?? []).map(d => ({
+        id: d.id,
+        title: d.title,
+        department_id: d.department_id,
+        hiring_request_id: d.hiring_request_id,
+        // Supabase types the FK join as either an object or array depending
+        // on inferred cardinality. Narrow defensively so the picker can show
+        // a department name beside the title.
+        department_name: Array.isArray(d.department)
+          ? (d.department[0] as { name: string } | undefined)?.name ?? null
+          : ((d.department as { name: string } | null)?.name ?? null),
+      })))
+    }
+    loadJds()
+    return () => { cancelled = true }
+  }, [orgId])
+
+  // When the user picks a JD, auto-fill the position + department fields
+  // from it. The user can still override afterward — e.g. if the JD says
+  // "Senior Backend Engineer" but they want to file the candidate under a
+  // tweaked title. Picking "(none)" clears the JD link but leaves the
+  // already-filled position/department alone (no point un-filling them).
+  function handleAppliedForJdChange(jdId: string) {
+    setAppliedForJdId(jdId)
+    if (!jdId) return
+    const jd = publishedJds.find(j => j.id === jdId)
+    if (!jd) return
+    setPosition(jd.title)
+    if (jd.department_name) setDepartment(jd.department_name)
+  }
 
   const phoneNormalized = normalizePhone(phone, orgCountryCode)
   const phoneValid = !phone || isValidE164(phoneNormalized)
@@ -679,11 +823,18 @@ function CandidateModal({ mode, candidate, orgCountryCode, orgId, jobPositions, 
     setSaving(true)
     setError('')
 
+    // Derive the hiring_request link from the picked JD — saves HR from
+    // entering it twice and keeps the audit chain consistent. If they
+    // unpick the JD, both columns clear.
+    const pickedJd = appliedForJdId ? publishedJds.find(j => j.id === appliedForJdId) : null
     const payload = {
       name: name.trim(),
       phone: phoneNormalized || '',
       job_position: position || null,
       notes: notes.trim() || null,
+      applied_for_jd_id: pickedJd?.id ?? null,
+      source_request_id: pickedJd?.hiring_request_id ?? null,
+      source: source || null,
     }
 
     let candidateId: string
@@ -835,6 +986,37 @@ function CandidateModal({ mode, candidate, orgCountryCode, orgId, jobPositions, 
               {departmentNames.map(d => <option key={d} value={d}>{d}</option>)}
             </select>
           </Field>
+          <Field label={t.candidateFieldAppliedForJd} help={publishedJds.length === 0 ? t.candidateNoPublishedJds : t.candidateFieldAppliedForJdHelp}>
+            <select
+              value={appliedForJdId}
+              onChange={e => handleAppliedForJdChange(e.target.value)}
+              disabled={publishedJds.length === 0}
+              className="w-full rounded-lg border px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+              style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+            >
+              <option value="">{t.candidateFieldAppliedForJdPlaceholder}</option>
+              {publishedJds.map(j => (
+                <option key={j.id} value={j.id}>
+                  {j.department_name ? `${j.title} — ${j.department_name}` : j.title}
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          <Field label={t.candidateFieldSource} help={t.candidateFieldSourceHelp}>
+            <select
+              value={source}
+              onChange={e => setSource(e.target.value as CandidateSourceOption | '')}
+              className="w-full rounded-lg border px-3 py-2 text-sm"
+              style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+            >
+              <option value="">{t.candidateFieldSourcePlaceholder}</option>
+              {CANDIDATE_SOURCE_OPTIONS.map(s => (
+                <option key={s} value={s}>{candidateSourceLabel(s, t)}</option>
+              ))}
+            </select>
+          </Field>
+
           <Field label={t.hiringFieldNotes}>
             <textarea
               value={notes}
