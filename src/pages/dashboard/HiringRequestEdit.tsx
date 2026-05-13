@@ -315,7 +315,7 @@ export function HiringRequestEdit({ user }: { user: User }) {
   const writeDisabledTitle = !canWrite ? t.dunningWriteBlocked : undefined
 
   return (
-    <div className="max-w-2xl">
+    <div className="max-w-4xl">
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>
           {isNew ? t.hiringRequestsNewTitle : t.hiringRequestsEditTitle}

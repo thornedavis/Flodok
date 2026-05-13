@@ -15,7 +15,7 @@ import { useRole } from '../../hooks/useRole'
 import {
   emitHiringRequestEvent,
   managerDecideHiringRequest, ownerDecideHiringRequest,
-  pendingApprover, statusTone, isTerminalStatus,
+  pendingApprover, statusTone, submitHiringRequest, isTerminalStatus,
   type AllowanceOption, type CandidateSource, type EmploymentType, type FundSource, type HiringEventKind, type RequestCategory, type RequestStatus,
 } from '../../lib/hiringRequests'
 import type { Translations } from '../../lib/translations'
@@ -55,6 +55,11 @@ export function HiringRequestDetail({ user }: { user: User }) {
   const [iManageThisDept, setIManageThisDept] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  // Holds the client-side validation message when the user tries to submit
+  // a draft that's missing required fields. Surfaced as a banner with an
+  // "Open editor to fix" CTA, so the user is never bounced to the RPC just
+  // to learn what's missing. Cleared on successful submit or dismiss.
+  const [submitBlocker, setSubmitBlocker] = useState<string | null>(null)
   const [decision, setDecision] = useState<DecisionMode>(null)
   const [note, setNote] = useState('')
   const [working, setWorking] = useState(false)
@@ -178,11 +183,34 @@ export function HiringRequestDetail({ user }: { user: User }) {
     navigate('/dashboard/hiring')
   }
 
+  async function handleSubmit() {
+    if (!row || working) return
+    // Pre-flight: same checks the form's Submit button runs, but against
+    // the saved row (since the detail surface is read-only). If anything's
+    // missing, surface a one-click "Open editor" banner instead of round-
+    // tripping to the RPC just to learn the same thing. The server-side
+    // check in submit_hiring_request stays as the source-of-truth backstop.
+    const missing = validateForSubmit(row, t)
+    if (missing) { setSubmitBlocker(missing); return }
+    if (!confirm(t.hiringRequestsSubmitConfirm)) return
+    setSubmitBlocker(null)
+    setWorking(true)
+    setError('')
+    try {
+      await submitHiringRequest(row.id)
+      await reload()
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setWorking(false)
+    }
+  }
+
   // Who can do what on this row, given the caller's role/relationship and
   // the row's current state. Derived once; the JSX just renders from it.
   const capability = useMemo(() => {
     if (!row) return {
-      canEditDraft: false, canDeleteDraft: false,
+      canEditDraft: false, canDeleteDraft: false, canSubmitDraft: false,
       canManagerDecide: false, canOwnerDecide: false,
       canDraftJd: false,
     }
@@ -191,6 +219,10 @@ export function HiringRequestDetail({ user }: { user: User }) {
     return {
       canEditDraft: isRequester && status === 'draft',
       canDeleteDraft: isRequester && status === 'draft',
+      // Same gate as Edit/Delete — only the requester moves their draft
+      // forward. The submit RPC validates required fields server-side, so
+      // we don't gate on client-side validation here.
+      canSubmitDraft: isRequester && status === 'draft',
       // Manager step is open: caller manages this dept, status is awaiting
       // manager, and caller is not the requester (server blocks self-approval
       // too — this gate is just to hide a button that would error).
@@ -218,16 +250,21 @@ export function HiringRequestDetail({ user }: { user: User }) {
   const writeDisabledTitle = !canWrite ? t.dunningWriteBlocked : undefined
 
   return (
-    <div className="max-w-2xl space-y-6">
+    <div className="hiring-print-doc max-w-4xl space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="mb-2"><StatusBadge status={status} t={t} /></div>
-          <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{row.position_name}</h1>
-          <p className="mt-1 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-            {row.department?.name ?? '—'} · {requesterLine(row, t)}
-          </p>
+        <div className="min-w-0">
+          {/* Eyebrow + status pill ride a single line so the form reads as a
+              titled document ("HIRING REQUEST — Draft") on screen and in
+              print. The position name sits below as the document title. */}
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-tertiary)' }}>
+              {t.hiringRequestsDetailEyebrow}
+            </span>
+            <StatusBadge status={status} t={t} />
+          </div>
+          <h1 className="mt-1 text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{row.position_name}</h1>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="no-print flex flex-wrap gap-2">
           {/* Always-available escape hatch back to the list. The breadcrumb
               also links there, but a button in the header chrome reads as
               the more obvious "I'm done looking, take me back" affordance —
@@ -239,6 +276,17 @@ export function HiringRequestDetail({ user }: { user: User }) {
             style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
           >
             {t.cancel}
+          </button>
+          {/* Browser-native print — relies on the @media print stylesheet in
+              index.css (hides .no-print, white bg, black text) plus the
+              section-card styling which already reads as a printable form. */}
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="rounded-lg border px-3 py-1.5 text-sm font-medium"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+          >
+            {t.hiringRequestsActionPrint}
           </button>
           {capability.canEditDraft && (
             <button
@@ -260,6 +308,17 @@ export function HiringRequestDetail({ user }: { user: User }) {
               style={{ borderColor: 'var(--color-border)', color: 'var(--color-danger)' }}
             >
               {t.hiringRequestsActionDeleteDraft}
+            </button>
+          )}
+          {capability.canSubmitDraft && (
+            <button
+              onClick={handleSubmit}
+              disabled={working || !canWrite}
+              title={writeDisabledTitle}
+              className="rounded-lg px-3 py-1.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+              style={{ backgroundColor: 'var(--color-primary)' }}
+            >
+              {t.hiringRequestsActionSubmit}
             </button>
           )}
           {capability.canDraftJd && (
@@ -304,6 +363,23 @@ export function HiringRequestDetail({ user }: { user: User }) {
         </div>
       )}
 
+      {submitBlocker && row && (
+        <div
+          className="flex flex-wrap items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm"
+          style={{ borderColor: 'var(--color-warning)', backgroundColor: 'color-mix(in srgb, var(--color-warning) 10%, transparent)', color: 'var(--color-warning)' }}
+        >
+          <span>{submitBlocker}</span>
+          <button
+            type="button"
+            onClick={() => navigate(`/dashboard/hiring/${row.id}/edit`)}
+            className="shrink-0 rounded-md px-2 py-1 text-xs font-medium"
+            style={{ backgroundColor: 'var(--color-warning)', color: 'var(--color-bg)' }}
+          >
+            {t.hiringRequestsSubmitBlockerCta}
+          </button>
+        </div>
+      )}
+
       {decision && (
         <div className="rounded-xl border p-4" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)' }}>
           <h2 className="mb-2 text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
@@ -339,6 +415,16 @@ export function HiringRequestDetail({ user }: { user: User }) {
           </div>
         </div>
       )}
+
+      {/* Requester section — top of the form, mirrors the paper template's
+          REQUESTER block. Replaces the inline "Marketing · Submitted by X"
+          subtitle so this info reads as a structured part of the document
+          (and prints alongside the rest of the form, not as page chrome). */}
+      <Section title={t.hiringRequestsDetailSectionRequester}>
+        <Row label={t.hiringRequestsDetailDateOfRequest} value={formatDate(row.created_at, lang) || '—'} />
+        <Row label={t.hiringRequestsDetailHiringManager} value={row.requester?.name ?? '—'} />
+        <Row label={t.hiringRequestsDetailDepartment} value={row.department?.name ?? '—'} />
+      </Section>
 
       <Section title={t.hiringRequestsDetailSectionPosition}>
         <Row label={t.hiringRequestsFieldEmploymentType} value={employmentTypeLabel(row.employment_type as EmploymentType, t)} />
@@ -549,8 +635,12 @@ function Workflow({ row, t, lang }: { row: DetailRow; t: Translations; lang: 'en
 // ─── Section + row primitives ──────────────────────────────────────────
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  // hiring-print-section is a hook the print stylesheet uses to (a) keep
+  // each section together on one page (no mid-section breaks) and (b)
+  // tighten padding so the full form has a better chance of fitting on
+  // a single A4 page when content is short.
   return (
-    <div className="rounded-xl border p-5" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)' }}>
+    <div className="hiring-print-section rounded-xl border p-5" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)' }}>
       <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-tertiary)' }}>{title}</h2>
       <div className="space-y-3">{children}</div>
     </div>
@@ -674,12 +764,34 @@ function allowanceLabel(a: AllowanceOption, t: Translations): string {
   }
 }
 
-// ─── Formatting helpers ─────────────────────────────────────────────────
+// ─── Submit validation ─────────────────────────────────────────────────
+//
+// Mirrors HiringRequestEdit's submit-path validation but reads from the
+// saved DetailRow (typed columns) rather than the form's stringly-typed
+// state. The server's submit_hiring_request RPC remains the source of
+// truth; this is purely a pre-flight so the user sees a one-click fix
+// path instead of an opaque RPC error.
 
-function requesterLine(row: DetailRow, t: Translations): string {
-  const name = row.requester?.name ?? '—'
-  return `${t.hiringRequestsDetailSubmittedBy} ${name}`
+function validateForSubmit(row: DetailRow, t: Translations): string | null {
+  if (!row.department_id) return t.hiringRequestsValidationDepartment
+  if (!row.position_name?.trim()) return t.hiringRequestsValidationPosition
+  if (row.category === 'replacement' && !row.replacing_employee_id) {
+    return t.hiringRequestsValidationReplacing
+  }
+  if (row.source_of_fund === 'non_budgeted' && !row.source_of_fund_justification?.trim()) {
+    return t.hiringRequestsValidationFundJustification
+  }
+  if (row.allowances?.includes('other') && !row.allowance_other?.trim()) {
+    return t.hiringRequestsValidationAllowanceOther
+  }
+  if (row.base_salary_min !== null && row.base_salary_max !== null && row.base_salary_min > row.base_salary_max) {
+    return t.hiringRequestsValidationSalaryRange
+  }
+  if (!row.expected_hiring_date) return t.hiringRequestsValidationExpectedDate
+  return null
 }
+
+// ─── Formatting helpers ─────────────────────────────────────────────────
 
 function formatDate(iso: string | null, lang: 'en' | 'id'): string {
   if (!iso) return ''

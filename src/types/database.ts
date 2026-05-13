@@ -3386,6 +3386,10 @@ export type Database = {
         Args: { p_period_start: string }
         Returns: number
       }
+      transfer_ownership: {
+        Args: { p_target_user_id: string }
+        Returns: undefined
+      }
       upcoming_milestones: {
         Args: { p_days_ahead: number }
         Returns: {

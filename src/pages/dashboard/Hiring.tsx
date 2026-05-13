@@ -8,14 +8,15 @@
 // The two surfaces share nothing structurally but live on the same route
 // so they can be navigated as a single "Hiring" area in the sidebar.
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
 import { useBilling } from '../../contexts/BillingContext'
 import { useRole } from '../../hooks/useRole'
 import { FilterPill, FilterSearchInput } from '../../components/FilterControls'
-import { pendingApprover, statusTone, type RequestStatus } from '../../lib/hiringRequests'
+import { isEditableByRequester, pendingApprover, statusTone, submitHiringRequest, type RequestStatus } from '../../lib/hiringRequests'
 import { jdStatusTone, type JobDescriptionStatus } from '../../lib/jobDescriptions'
 import type { Translations } from '../../lib/translations'
 import type { User, HiringRequest, JobDescription, CompanyDepartment } from '../../types/aliases'
@@ -115,6 +116,7 @@ export function Hiring({ user }: { user: User }) {
 function RequestsView({ user }: { user: User }) {
   const { t, lang } = useLang()
   const navigate = useNavigate()
+  const { canWrite } = useBilling()
   const role = useRole(user)
 
   const [requests, setRequests] = useState<RequestRow[]>([])
@@ -127,6 +129,7 @@ function RequestsView({ user }: { user: User }) {
   const [tab, setTab] = useState<HiringTab>('my')
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState(false)
 
   useEffect(() => { loadAll() }, [user.id, user.org_id])
 
@@ -201,6 +204,76 @@ function RequestsView({ user }: { user: User }) {
 
   const searchActive = search.trim().length > 0
 
+  // Inline list-action handlers. Mirrors the per-row affordances on the
+  // detail page so HR doesn't have to drill into a request to take routine
+  // actions. Delete + submit only show on rows the caller can act on
+  // server-side; other states render fewer items in the menu.
+  async function handleSubmit(r: RequestRow) {
+    if (busy) return
+    setBusy(true)
+    try {
+      await submitHiringRequest(r.id)
+      await loadAll()
+    } catch (e) {
+      // The RPC validates required fields server-side; surface its message
+      // (e.g. "Expected hiring date is required to submit") so the user
+      // knows what's missing without having to open the edit page first.
+      alert((e as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleDuplicate(r: RequestRow) {
+    if (busy) return
+    setBusy(true)
+    // Copy the data-bearing fields into a fresh draft owned by the caller.
+    // Workflow + decision columns reset to defaults — the duplicate is a
+    // new request, not a re-routing of the original.
+    const { data, error } = await supabase
+      .from('hiring_requests')
+      .insert({
+        org_id: user.org_id,
+        hiring_manager_id: user.id,
+        department_id: r.department_id,
+        employment_type: r.employment_type,
+        category: r.category,
+        replacing_employee_id: r.replacing_employee_id,
+        source_of_candidate: r.source_of_candidate,
+        position_name: r.position_name,
+        required_qualifications_md: r.required_qualifications_md,
+        expected_hiring_date: r.expected_hiring_date,
+        supporting_reason: r.supporting_reason,
+        source_of_fund: r.source_of_fund,
+        source_of_fund_justification: r.source_of_fund_justification,
+        base_salary_min: r.base_salary_min,
+        base_salary_max: r.base_salary_max,
+        allowances: r.allowances,
+        allowance_other: r.allowance_other,
+        other_benefits: r.other_benefits,
+      })
+      .select('id')
+      .single()
+    setBusy(false)
+    if (error || !data) {
+      alert(error?.message ?? 'Could not duplicate request')
+      return
+    }
+    // Drop the user into the edit form for the new draft so they can review
+    // before submitting — matches what "Save as draft" on the form does.
+    navigate(`/dashboard/hiring/${data.id}/edit`)
+  }
+
+  async function handleDelete(r: RequestRow) {
+    if (busy) return
+    if (!confirm(t.hiringRequestsDeleteDraftConfirm)) return
+    setBusy(true)
+    const { error } = await supabase.from('hiring_requests').delete().eq('id', r.id)
+    setBusy(false)
+    if (error) { alert(error.message); return }
+    await loadAll()
+  }
+
   return (
     <div>
       <div className="mb-5 flex flex-wrap items-center gap-2">
@@ -230,7 +303,20 @@ function RequestsView({ user }: { user: User }) {
       ) : visible.length === 0 ? (
         <EmptyState message={searchActive ? t.hiringRequestsNoMatches : emptyMessage(tab, t)} />
       ) : (
-        <RequestsTable rows={visible} t={t} lang={lang} onRowClick={r => navigate(`/dashboard/hiring/${r.id}`)} />
+        <RequestsTable
+          rows={visible}
+          t={t}
+          lang={lang}
+          currentUserId={user.id}
+          canWrite={canWrite}
+          busy={busy}
+          onRowClick={r => navigate(`/dashboard/hiring/${r.id}`)}
+          onView={r => navigate(`/dashboard/hiring/${r.id}`)}
+          onEdit={r => navigate(`/dashboard/hiring/${r.id}/edit`)}
+          onSubmit={handleSubmit}
+          onDuplicate={handleDuplicate}
+          onDelete={handleDelete}
+        />
       )}
     </div>
   )
@@ -404,11 +490,19 @@ function EmptyState({ message }: { message: string }) {
   )
 }
 
-function RequestsTable({ rows, t, lang, onRowClick }: {
+function RequestsTable({ rows, t, lang, currentUserId, canWrite, busy, onRowClick, onView, onEdit, onSubmit, onDuplicate, onDelete }: {
   rows: RequestRow[]
   t: Translations
   lang: 'en' | 'id'
+  currentUserId: string
+  canWrite: boolean
+  busy: boolean
   onRowClick: (r: RequestRow) => void
+  onView: (r: RequestRow) => void
+  onEdit: (r: RequestRow) => void
+  onSubmit: (r: RequestRow) => void
+  onDuplicate: (r: RequestRow) => void
+  onDelete: (r: RequestRow) => void
 }) {
   return (
     <div className="overflow-hidden rounded-lg border" style={{ borderColor: 'var(--color-border)' }}>
@@ -420,6 +514,7 @@ function RequestsTable({ rows, t, lang, onRowClick }: {
             <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--color-text-tertiary)' }}>{t.hiringRequestsColRequester}</th>
             <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--color-text-tertiary)' }}>{t.hiringRequestsColCreated}</th>
             <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--color-text-tertiary)' }}>{t.hiringRequestsColStatus}</th>
+            <th className="px-3 py-2.5 text-right" aria-label={t.hiringActionsLabel} />
           </tr>
         </thead>
         <tbody>
@@ -435,11 +530,140 @@ function RequestsTable({ rows, t, lang, onRowClick }: {
               <td className="px-4 py-3" style={{ color: 'var(--color-text-secondary)' }}>{r.requester?.name ?? '—'}</td>
               <td className="px-4 py-3" style={{ color: 'var(--color-text-tertiary)' }}>{formatDate(r.created_at, lang)}</td>
               <td className="px-4 py-3"><StatusBadge status={r.status as RequestStatus} t={t} /></td>
+              <td className="px-3 py-3 text-right" onClick={e => e.stopPropagation()}>
+                <RequestActionsMenu
+                  request={r}
+                  currentUserId={currentUserId}
+                  disabled={!canWrite || busy}
+                  t={t}
+                  onView={() => onView(r)}
+                  onEdit={() => onEdit(r)}
+                  onSubmit={() => onSubmit(r)}
+                  onDuplicate={() => onDuplicate(r)}
+                  onDelete={() => onDelete(r)}
+                />
+              </td>
             </tr>
           ))}
         </tbody>
       </table>
     </div>
+  )
+}
+
+// Per-row Actions menu. Available items depend on row state + caller's
+// relationship to it:
+//   - View          → always
+//   - Edit          → requester + status='draft' (matches RLS UPDATE policy)
+//   - Submit        → requester + status='draft' (server enforces required
+//                      fields; we surface the RPC error as an alert)
+//   - Duplicate     → anyone who can read the row (RLS already gated that)
+//   - Delete        → requester + status='draft' (matches RLS DELETE policy)
+// The portal-based popover mirrors what Recruitment + Employees do so the
+// menu doesn't get clipped by table overflow.
+function RequestActionsMenu({ request, currentUserId, disabled, t, onView, onEdit, onSubmit, onDuplicate, onDelete }: {
+  request: RequestRow
+  currentUserId: string
+  disabled: boolean
+  t: Translations
+  onView: () => void
+  onEdit: () => void
+  onSubmit: () => void
+  onDuplicate: () => void
+  onDelete: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  const status = request.status as RequestStatus
+  const isRequester = request.hiring_manager_id === currentUserId
+  const canEditOrDelete = isRequester && isEditableByRequester(status) && status === 'draft'
+  const canSubmit = isRequester && status === 'draft'
+
+  function openMenu() {
+    const rect = buttonRef.current?.getBoundingClientRect()
+    if (!rect) return
+    setPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right })
+    setOpen(true)
+  }
+
+  useEffect(() => {
+    if (!open) return
+    function handleClick(e: MouseEvent) {
+      const target = e.target as Node
+      if (buttonRef.current?.contains(target)) return
+      if (menuRef.current?.contains(target)) return
+      setOpen(false)
+    }
+    function handleClose() { setOpen(false) }
+    document.addEventListener('mousedown', handleClick)
+    window.addEventListener('scroll', handleClose, true)
+    window.addEventListener('resize', handleClose)
+    return () => {
+      document.removeEventListener('mousedown', handleClick)
+      window.removeEventListener('scroll', handleClose, true)
+      window.removeEventListener('resize', handleClose)
+    }
+  }, [open])
+
+  return (
+    <>
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={() => open ? setOpen(false) : openMenu()}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        disabled={disabled}
+        className="inline-flex items-center gap-1 rounded-lg border px-3 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+        style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)', backgroundColor: 'var(--color-bg)' }}
+      >
+        <span>{t.hiringActionsLabel}</span>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+      {open && pos && createPortal(
+        <div
+          ref={menuRef}
+          role="menu"
+          className="fixed z-50 min-w-[180px] overflow-hidden rounded-lg border py-1 shadow-lg"
+          style={{ top: `${pos.top}px`, right: `${pos.right}px`, borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-elevated, var(--color-bg))' }}
+        >
+          <MenuItem onClick={() => { setOpen(false); onView() }}>{t.hiringRequestsActionView}</MenuItem>
+          <MenuItem onClick={() => { setOpen(false); onDuplicate() }}>{t.duplicate}</MenuItem>
+          {canEditOrDelete && (
+            <MenuItem onClick={() => { setOpen(false); onEdit() }}>{t.hiringRequestsActionEditDraft}</MenuItem>
+          )}
+          {canSubmit && (
+            <MenuItem onClick={() => { setOpen(false); onSubmit() }} primary>{t.hiringRequestsActionSubmit}</MenuItem>
+          )}
+          {canEditOrDelete && (
+            <>
+              <div className="my-1 border-t" style={{ borderColor: 'var(--color-border)' }} />
+              <MenuItem onClick={() => { setOpen(false); onDelete() }} danger>{t.delete}</MenuItem>
+            </>
+          )}
+        </div>,
+        document.body,
+      )}
+    </>
+  )
+}
+
+function MenuItem({ onClick, children, primary, danger }: { onClick: () => void; children: React.ReactNode; primary?: boolean; danger?: boolean }) {
+  const color = danger ? 'var(--color-danger)' : primary ? 'var(--color-primary)' : 'var(--color-text)'
+  return (
+    <button
+      role="menuitem"
+      onClick={onClick}
+      className="flex w-full items-center px-3 py-2 text-left text-sm transition-colors hover:bg-[var(--color-bg-tertiary)]"
+      style={{ color, fontWeight: primary ? 600 : 400 }}
+    >
+      {children}
+    </button>
   )
 }
 

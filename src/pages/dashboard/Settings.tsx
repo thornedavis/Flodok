@@ -378,12 +378,13 @@ function generateInviteToken() {
 type EmployeeOption = { id: string; name: string }
 
 function TeamMembersSection({ user, t }: { user: User; t: Translations }) {
-  const { isAdmin } = useRole(user)
+  const { isAdmin, isOwner } = useRole(user)
   const [members, setMembers] = useState<User[]>([])
   const [invites, setInvites] = useState<OrgInvitation[]>([])
   const [employees, setEmployees] = useState<EmployeeOption[]>([])
   const [loading, setLoading] = useState(true)
   const [showInvite, setShowInvite] = useState(false)
+  const [showTransfer, setShowTransfer] = useState(false)
 
   useEffect(() => { loadData() }, [user.org_id])
 
@@ -425,17 +426,30 @@ function TeamMembersSection({ user, t }: { user: User; t: Translations }) {
 
   return (
     <section>
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>{t.teamMembersSectionTitle}</h2>
-        {isAdmin && (
-          <button
-            onClick={() => setShowInvite(true)}
-            className="rounded-lg px-3 py-1.5 text-sm font-medium text-white"
-            style={{ backgroundColor: 'var(--color-primary)' }}
-          >
-            {t.inviteMemberButton}
-          </button>
-        )}
+        <div className="flex flex-wrap gap-2">
+          {/* Only the current owner sees this. The RPC double-checks, but
+              hiding the button keeps the surface tidy for admins/HR/etc. */}
+          {isOwner && (
+            <button
+              onClick={() => setShowTransfer(true)}
+              className="rounded-lg border px-3 py-1.5 text-sm font-medium"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            >
+              {t.transferOwnershipButton}
+            </button>
+          )}
+          {isAdmin && (
+            <button
+              onClick={() => setShowInvite(true)}
+              className="rounded-lg px-3 py-1.5 text-sm font-medium text-white"
+              style={{ backgroundColor: 'var(--color-primary)' }}
+            >
+              {t.inviteMemberButton}
+            </button>
+          )}
+        </div>
       </div>
 
       {loading ? (
@@ -494,17 +508,38 @@ function TeamMembersSection({ user, t }: { user: User; t: Translations }) {
                   </div>
                 </div>
                 {canEditRole ? (
-                  <select
-                    value={m.role}
-                    onChange={e => handleRoleChange(m.id, e.target.value as 'admin' | 'hr' | 'member')}
-                    className="shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium"
-                    style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}
-                    aria-label={t.changeRole}
-                  >
-                    <option value="admin">{t.adminRole}</option>
-                    <option value="hr">{t.hrRole}</option>
-                    <option value="member">{t.memberRole}</option>
-                  </select>
+                  /* The role pill is a real <select> styled as a pill — we
+                     add an explicit chevron so it reads as clickable instead
+                     of as a static label. appearance-none strips the native
+                     dropdown arrow that some browsers render outside the
+                     rounded-full shape. */
+                  <div className="relative shrink-0">
+                    <select
+                      value={m.role}
+                      onChange={e => handleRoleChange(m.id, e.target.value as 'admin' | 'hr' | 'member')}
+                      className="cursor-pointer appearance-none rounded-full border py-0.5 pl-2 pr-6 text-xs font-medium"
+                      style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}
+                      aria-label={t.changeRole}
+                    >
+                      <option value="admin">{t.adminRole}</option>
+                      <option value="hr">{t.hrRole}</option>
+                      <option value="member">{t.memberRole}</option>
+                    </select>
+                    <svg
+                      width="10"
+                      height="10"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2"
+                      style={{ color: 'var(--color-text-tertiary)' }}
+                    >
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                  </div>
                 ) : (
                   <span
                     className="shrink-0 rounded-full px-2 py-0.5 text-xs font-medium"
@@ -563,6 +598,25 @@ function TeamMembersSection({ user, t }: { user: User; t: Translations }) {
           existingInvites={invites}
           onClose={() => setShowInvite(false)}
           onCreated={() => { loadData() }}
+        />
+      )}
+
+      {showTransfer && (
+        <TransferOwnershipModal
+          t={t}
+          // Eligible targets: any member of this org who isn't the current
+          // owner and isn't the caller themselves. The RPC re-checks but
+          // a tidy picker is a better UX than letting them pick anyone.
+          candidates={members.filter(m => m.id !== user.id && m.role !== 'owner')}
+          onClose={() => setShowTransfer(false)}
+          onTransferred={() => {
+            setShowTransfer(false)
+            // Full reload: the caller's own role flipped to admin, which
+            // changes what the Settings page renders (and what they can
+            // do everywhere else). Easier than threading the role change
+            // through state.
+            window.location.reload()
+          }}
         />
       )}
     </section>
@@ -783,6 +837,162 @@ function InviteMemberModal({ user, t, existingInvites, onClose, onCreated }: {
             </div>
           </form>
         )}
+      </div>
+    </div>
+  )
+}
+
+// ─── Transfer ownership ─────────────────────────────────
+//
+// One-shot atomic role swap via the transfer_ownership RPC. The current
+// owner picks another member of the org; on confirm, both users get
+// re-roled in a single transaction (caller → admin, target → owner).
+// The RPC re-validates everything server-side — this modal exists to
+// give the action a deliberately heavy UX so it can't be triggered
+// accidentally:
+//   - Distinct entry point (not the role dropdown that handles
+//     admin↔hr↔member changes)
+//   - Strong warning copy
+//   - Typed confirmation (the user must type the target's name to
+//     enable the confirm button) — eliminates "I just clicked through"
+//     misfires that a single confirm() dialog can't catch
+
+function TransferOwnershipModal({ t, candidates, onClose, onTransferred }: {
+  t: Translations
+  candidates: User[]
+  onClose: () => void
+  onTransferred: () => void
+}) {
+  const [targetId, setTargetId] = useState<string>('')
+  const [typedName, setTypedName] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', handleKey)
+    return () => document.removeEventListener('keydown', handleKey)
+  }, [onClose])
+
+  const target = candidates.find(c => c.id === targetId) ?? null
+  // The confirm gate matches the target's name case-insensitively + trims.
+  // Strict enough to defeat muscle-memory clicks; lax enough to not reject
+  // a trailing space or a "vs the user actually typed wrong".
+  const confirmValid = !!target && typedName.trim().toLowerCase() === target.name.trim().toLowerCase()
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!target || !confirmValid || submitting) return
+    setSubmitting(true)
+    setError('')
+    const { error: rpcError } = await supabase.rpc('transfer_ownership', { p_target_user_id: target.id })
+    if (rpcError) {
+      setError(rpcError.message)
+      setSubmitting(false)
+      return
+    }
+    onTransferred()
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ backgroundColor: 'rgba(0, 0, 0, 0.6)', backdropFilter: 'blur(4px)' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div
+        className="relative w-full max-w-md rounded-2xl border p-6"
+        style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-elevated, var(--color-bg))' }}
+      >
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute right-4 top-4 rounded-lg p-1.5 transition-colors"
+          style={{ color: 'var(--color-text-tertiary)' }}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+
+        <h2 className="mb-1 text-xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.transferOwnershipTitle}</h2>
+        <p className="mb-5 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+          {t.transferOwnershipDesc}
+        </p>
+
+        {candidates.length === 0 ? (
+          <div className="rounded-lg border px-3 py-3 text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>
+            {t.transferOwnershipNoCandidates}
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+                {t.transferOwnershipTargetLabel}
+              </label>
+              <select
+                value={targetId}
+                onChange={e => { setTargetId(e.target.value); setTypedName('') }}
+                className="w-full rounded-lg border px-3 py-2 text-sm"
+                style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+              >
+                <option value="">{t.transferOwnershipTargetPlaceholder}</option>
+                {candidates.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}{c.email ? ` (${c.email})` : ''}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="rounded-lg border px-3 py-3 text-sm" style={{ borderColor: 'var(--color-warning)', backgroundColor: 'color-mix(in srgb, var(--color-warning) 10%, transparent)', color: 'var(--color-warning)' }}>
+              {t.transferOwnershipWarning}
+            </div>
+
+            {target && (
+              <div>
+                <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+                  {t.transferOwnershipTypedConfirmLabel(target.name)}
+                </label>
+                <input
+                  type="text"
+                  value={typedName}
+                  onChange={e => setTypedName(e.target.value)}
+                  className="w-full rounded-lg border px-3 py-2 text-sm"
+                  style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+                  placeholder={target.name}
+                  autoComplete="off"
+                />
+              </div>
+            )}
+
+            {error && (
+              <p className="text-sm" style={{ color: 'var(--color-danger)' }}>{error}</p>
+            )}
+
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={submitting}
+                className="rounded-lg border px-4 py-2 text-sm font-medium"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+              >
+                {t.cancel}
+              </button>
+              <button
+                type="submit"
+                disabled={!confirmValid || submitting}
+                className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+                style={{ backgroundColor: 'var(--color-danger)' }}
+              >
+                {submitting ? t.transferOwnershipSubmitting : t.transferOwnershipConfirmButton}
+              </button>
+            </div>
+          </form>
+        )}
+
       </div>
     </div>
   )

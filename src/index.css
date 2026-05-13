@@ -241,6 +241,19 @@ select:focus-visible {
     color: black !important;
     font-size: 12pt;
     line-height: 1.5;
+    /* Override the theme colour variables for print so any page rendering
+       with inline style={{ color: 'var(--color-text)' }} prints legibly
+       even when the user was viewing in dark mode. Primary/success/danger
+       intentionally stay vivid because they carry semantic meaning
+       (status pills, decision colours). */
+    --color-bg: #ffffff;
+    --color-bg-secondary: #ffffff;
+    --color-bg-tertiary: #f5f5f5;
+    --color-bg-elevated: #ffffff;
+    --color-text: #111111;
+    --color-text-secondary: #444444;
+    --color-text-tertiary: #666666;
+    --color-border: #bbbbbb;
   }
 
   .print-only {
@@ -254,6 +267,41 @@ select:focus-visible {
 
   h1, h2, h3 {
     page-break-after: avoid;
+  }
+
+  /* Hiring request detail — print compaction. Targeted to this page so
+     other surfaces' print behaviour is untouched. */
+  .hiring-print-doc {
+    font-size: 10pt;
+    line-height: 1.4;
+  }
+  .hiring-print-doc > * + * {
+    margin-top: 10pt !important;
+  }
+  .hiring-print-doc h1 {
+    font-size: 16pt;
+    margin: 0 0 6pt;
+  }
+  .hiring-print-section {
+    /* Keep a whole section together: a break either happens before this
+       card or after it, never mid-content. For very long content this
+       can still overflow within a section — that's acceptable since the
+       only way to fully prevent it is to truncate user input. */
+    page-break-inside: avoid;
+    break-inside: avoid;
+    /* Tighten the on-screen p-5 (20px) padding to something more
+       paper-appropriate. */
+    padding: 10pt !important;
+    /* Drop the soft shadow / rounded-xl visual chrome; a thin border is
+       enough to delineate sections on paper. */
+    border-radius: 4pt !important;
+  }
+  .hiring-print-section h2 {
+    margin: 0 0 6pt !important;
+    font-size: 9pt !important;
+  }
+  .hiring-print-section > div > * + * {
+    margin-top: 4pt !important;
   }
 
   .print-footer {
