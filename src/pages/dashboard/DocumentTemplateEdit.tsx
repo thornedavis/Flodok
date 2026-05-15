@@ -120,6 +120,19 @@ export function DocumentTemplateEdit({ user }: { user: User }) {
   if (!template) return <div style={{ color: 'var(--color-text-secondary)' }}>{t.loading}</div>
 
   const inputStyle = { borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' } as React.CSSProperties
+  // Type-aware bits — the template can be for any document type now.
+  // Wage / hours fields only make sense for contracts; the others
+  // (title, position) work for SOPs + JDs too.
+  const isContractTemplate = template.type === 'contract'
+  const indexType: 'sop' | 'contract' | 'job_description' =
+    template.type === 'sop' ? 'sop'
+    : template.type === 'job_description' ? 'job_description'
+    : 'contract'
+  const badgeLabel = isContractTemplate
+    ? t.contractTemplateBadge
+    : template.type === 'job_description'
+      ? t.jdTemplateBadge
+      : t.sopTemplateBadge
 
   return (
     <div>
@@ -130,11 +143,11 @@ export function DocumentTemplateEdit({ user }: { user: User }) {
             className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium"
             style={{ backgroundColor: 'color-mix(in srgb, var(--color-primary) 14%, transparent)', color: 'var(--color-primary)' }}
           >
-            {t.contractTemplateBadge}
+            {badgeLabel}
           </span>
         </div>
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate(documentsIndexPath('contract'))} className="rounded-lg border px-4 py-2 text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>{t.cancel}</button>
+          <button onClick={() => navigate(documentsIndexPath(indexType))} className="rounded-lg border px-4 py-2 text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>{t.cancel}</button>
           <button
             onClick={handleSave}
             disabled={saving || !canWrite || !hasChanges}
@@ -179,6 +192,7 @@ export function DocumentTemplateEdit({ user }: { user: User }) {
           </div>
         </div>
 
+        {isContractTemplate && (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div>
             <label className="mb-1 flex items-center gap-1 text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
@@ -254,6 +268,7 @@ export function DocumentTemplateEdit({ user }: { user: User }) {
             </select>
           </div>
         </div>
+        )}
 
         <div>
           <div className="mb-2 flex items-center justify-between">

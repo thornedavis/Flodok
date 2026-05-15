@@ -30,6 +30,7 @@ import {
 } from '../../lib/documentTypes'
 import { SOPs } from './SOPs'
 import { Contracts } from './Contracts'
+import { JobDescriptionsList } from './JobDescriptions'
 import type { User } from '../../types/aliases'
 
 type DocumentsTab = 'all' | DocumentType
@@ -65,6 +66,7 @@ export function Documents({ user }: { user: User }) {
     all: t.documentsTabAll,
     sop: t.documentsTabSops,
     contract: t.documentsTabContracts,
+    job_description: t.documentsTabJobDescriptions,
   }
 
   return (
@@ -91,6 +93,7 @@ export function Documents({ user }: { user: User }) {
       {activeTab === 'all' && <AllDocumentsView user={user} />}
       {activeTab === 'sop' && <SOPs user={user} embedded />}
       {activeTab === 'contract' && <Contracts user={user} embedded />}
+      {activeTab === 'job_description' && <JobDescriptionsList user={user} embedded />}
     </div>
   )
 }
@@ -156,12 +159,25 @@ function HeaderAction({ activeTab }: { activeTab: DocumentsTab }) {
     )
   }
 
+  if (activeTab === 'job_description') {
+    return (
+      <DropdownAction
+        label={t.documentsNewJobDescription}
+        items={[
+          { label: t.documentsNewJobDescription, onClick: () => start('job_description', 'scratch') },
+          { label: t.documentsChooseTemplate, onClick: () => start('job_description', 'template') },
+        ]}
+      />
+    )
+  }
+
   return (
     <DropdownAction
       label={t.documentsNewDocument}
       items={[
         { label: t.documentsNewSop, onClick: () => start('sop', 'scratch') },
         { label: t.documentsNewContract, onClick: () => start('contract', 'scratch') },
+        { label: t.documentsNewJobDescription, onClick: () => start('job_description', 'scratch') },
         { label: t.documentsChooseTemplate, onClick: () => start('contract', 'template') },
       ]}
     />
@@ -265,7 +281,7 @@ function AllDocumentsView({ user }: { user: User }) {
 
   useEffect(() => {
     async function load() {
-      const [sopResult, contractResult] = await Promise.all([
+      const [sopResult, contractResult, jdResult] = await Promise.all([
         supabase
           .from('sops')
           .select('id, title, status, current_version, updated_at, created_at')
@@ -275,6 +291,10 @@ function AllDocumentsView({ user }: { user: User }) {
           .select('id, title, status, current_version, updated_at, created_at')
           .eq('org_id', user.org_id)
           .eq('is_template', false),
+        supabase
+          .from('job_descriptions')
+          .select('id, title, status, current_version, updated_at, created_at')
+          .eq('org_id', user.org_id),
       ])
 
       const sops: AllDocItem[] = (sopResult.data || []).map(s => ({
@@ -295,8 +315,17 @@ function AllDocumentsView({ user }: { user: User }) {
         updated_at: c.updated_at,
         created_at: c.created_at,
       }))
+      const jds: AllDocItem[] = (jdResult.data || []).map(j => ({
+        id: j.id,
+        type: 'job_description' as const,
+        title: j.title,
+        status: j.status,
+        current_version: j.current_version,
+        updated_at: j.updated_at,
+        created_at: j.created_at,
+      }))
 
-      const merged = [...sops, ...contracts].sort((a, b) =>
+      const merged = [...sops, ...contracts, ...jds].sort((a, b) =>
         (b.updated_at || b.created_at).localeCompare(a.updated_at || a.created_at),
       )
 
@@ -334,6 +363,7 @@ function AllDocumentsView({ user }: { user: User }) {
   const typeBadgeLabels: Record<DocumentType, string> = {
     sop: t.documentsAllTypeBadgeSop,
     contract: t.documentsAllTypeBadgeContract,
+    job_description: t.documentsAllTypeBadgeJobDescription,
   }
 
   return (

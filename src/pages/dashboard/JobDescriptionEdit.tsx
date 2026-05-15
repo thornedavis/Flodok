@@ -59,6 +59,7 @@ export function JobDescriptionEdit({ user }: { user: User }) {
   const { id } = useParams<{ id?: string }>()
   const [searchParams] = useSearchParams()
   const fromRequestId = searchParams.get('from_request')
+  const templateId = searchParams.get('template')
   const isNew = !id
 
   const [form, setForm] = useState<FormState>(DEFAULT_FORM)
@@ -89,20 +90,31 @@ export function JobDescriptionEdit({ user }: { user: User }) {
         .order('name')
 
       if (isNew) {
-        // For new JDs, optionally seed from an approved hiring request. The
-        // ?from_request=<id> query param is set by the "Draft from request"
-        // button on the request detail page.
+        // For new JDs, optionally seed from an approved hiring request and/or
+        // a JD template. Request seeds title/department/qualifications;
+        // template seeds the body doc + position. If both are present, the
+        // request data wins for the fields it covers.
         const reqPromise = fromRequestId
           ? supabase.from('hiring_requests')
               .select('id, status, position_name, department_id, required_qualifications_md')
               .eq('id', fromRequestId)
               .single()
           : Promise.resolve({ data: null as Partial<HiringRequest> | null, error: null })
+        const tplPromise = templateId
+          ? supabase.from('document_templates')
+              .select('*')
+              .eq('id', templateId)
+              .eq('type', 'job_description')
+              .single()
+          : Promise.resolve({ data: null as { title: string; template_for_position: string | null; content_doc: unknown } | null, error: null })
 
-        const [deptsResult, reqResult] = await Promise.all([deptsPromise, reqPromise])
+        const [deptsResult, reqResult, tplResult] = await Promise.all([deptsPromise, reqPromise, tplPromise])
         if (cancelled) return
 
         setDepartments(deptsResult.data ?? [])
+
+        // Start from either the template's content_doc or the seed doc.
+        const seeded = (tplResult.data?.content_doc as DocumentDoc | null) ?? buildJobDescriptionSeedDoc()
 
         if (reqResult.data && (reqResult.data as Partial<HiringRequest>).status === 'approved') {
           const req = reqResult.data as Partial<HiringRequest>
@@ -110,28 +122,31 @@ export function JobDescriptionEdit({ user }: { user: User }) {
           setHiringRequestId(req.id ?? null)
           setForm(prev => ({
             ...prev,
-            title: req.position_name ?? '',
+            // Template's title is a less specific fallback when no request.
+            title: req.position_name ?? tplResult.data?.title ?? prev.title,
             department_id: req.department_id ?? '',
             doc_version: suggestDocVersion(dept?.name ?? null),
           }))
-          // If the request has qualifications text, drop it into the body
-          // doc's "General Requirements" section (last section in the seed).
-          const seeded = buildJobDescriptionSeedDoc()
+          // Drop the request's qualifications text into the seed/template's
+          // "General Requirements" section (last section). Only the seed has
+          // that section reliably; for templates it may not be the last,
+          // but the heuristic is good enough to make the data discoverable.
           if (req.required_qualifications_md && req.required_qualifications_md.trim()) {
-            const generalReqSection = seeded.content?.[seeded.content.length - 1]
-            if (generalReqSection?.content?.[0]?.content) {
-              // Replace the empty bilingual block's English body paragraph with
-              // the requirements text. Indonesian side stays blank for HR to
-              // translate. Plain-text drop — markdown structure isn't preserved.
-              const enBody = generalReqSection.content[0].content[0]
+            const lastSection = seeded.content?.[seeded.content.length - 1]
+            if (lastSection?.content?.[0]?.content) {
+              const enBody = lastSection.content[0].content[0]
               if (enBody?.content) {
                 enBody.content = [{ type: 'paragraph', content: [{ type: 'text', text: req.required_qualifications_md.trim() }] }]
               }
             }
           }
           setContent(seeded)
+        } else if (tplResult.data) {
+          // Template-only path — pre-fill title from the template name.
+          setForm(prev => ({ ...prev, title: tplResult.data!.title }))
+          setContent(seeded)
         } else {
-          setContent(buildJobDescriptionSeedDoc())
+          setContent(seeded)
         }
         setLoading(false)
         return
@@ -172,7 +187,7 @@ export function JobDescriptionEdit({ user }: { user: User }) {
     }
     load()
     return () => { cancelled = true }
-  }, [id, isNew, fromRequestId, user.org_id, t.jdNotFound])
+  }, [id, isNew, fromRequestId, templateId, user.org_id, t.jdNotFound])
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm(prev => ({ ...prev, [key]: value }))

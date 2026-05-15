@@ -17,13 +17,12 @@ import { useBilling } from '../../contexts/BillingContext'
 import { useRole } from '../../hooks/useRole'
 import { FilterPill, FilterSearchInput } from '../../components/FilterControls'
 import { isEditableByRequester, pendingApprover, statusTone, submitHiringRequest, type RequestStatus } from '../../lib/hiringRequests'
-import { jdStatusTone, type JobDescriptionStatus } from '../../lib/jobDescriptions'
+import { JobDescriptionsList } from './JobDescriptions'
 import type { Translations } from '../../lib/translations'
-import type { User, HiringRequest, JobDescription, CompanyDepartment } from '../../types/aliases'
+import type { User, HiringRequest, CompanyDepartment } from '../../types/aliases'
 
 type HiringTab = 'my' | 'approvals' | 'all'
 type SectionView = 'requests' | 'jds'
-type JdFilter = 'all' | 'draft' | 'published' | 'archived'
 
 // What this user can see, derived from role + linked employee. Determines
 // which tabs render and what shows on the page.
@@ -106,7 +105,7 @@ export function Hiring({ user }: { user: User }) {
         />
       </div>
 
-      {view === 'requests' ? <RequestsView user={user} /> : <JobDescriptionsView user={user} />}
+      {view === 'requests' ? <RequestsView user={user} /> : <JobDescriptionsList user={user} />}
     </div>
   )
 }
@@ -322,97 +321,6 @@ function RequestsView({ user }: { user: User }) {
   )
 }
 
-// ─── Job Descriptions view ──────────────────────────────────────────────
-
-const JD_LIST_COLUMNS = '*, department:company_departments!job_descriptions_department_id_fkey(id, name)'
-
-type JdRow = JobDescription & {
-  department: Pick<CompanyDepartment, 'id' | 'name'> | null
-}
-
-function JobDescriptionsView({ user }: { user: User }) {
-  const { t, lang } = useLang()
-  const navigate = useNavigate()
-  const role = useRole(user)
-
-  const [rows, setRows] = useState<JdRow[]>([])
-  const [filter, setFilter] = useState<JdFilter>('all')
-  const [search, setSearch] = useState('')
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    let cancelled = false
-    async function load() {
-      setLoading(true)
-      const { data } = await supabase
-        .from('job_descriptions')
-        .select(JD_LIST_COLUMNS)
-        .eq('org_id', user.org_id)
-        .order('updated_at', { ascending: false })
-      if (cancelled) return
-      setRows((data ?? []) as JdRow[])
-      setLoading(false)
-    }
-    load()
-    return () => { cancelled = true }
-  }, [user.org_id])
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return rows.filter(r => {
-      if (filter !== 'all' && r.status !== filter) return false
-      if (!q) return true
-      return (
-        r.title.toLowerCase().includes(q) ||
-        (r.department?.name?.toLowerCase().includes(q) ?? false)
-      )
-    })
-  }, [rows, filter, search])
-
-  // Non-HR users only see published+archived JDs (RLS already filters
-  // drafts out for them server-side, but the filter chip set should reflect
-  // what's actually viewable to avoid confusing empty filters).
-  const visibleFilters: JdFilter[] = role.canManagePeople
-    ? ['all', 'draft', 'published', 'archived']
-    : ['all', 'published', 'archived']
-
-  const searchActive = search.trim().length > 0
-
-  return (
-    <div>
-      <div className="mb-5 flex flex-wrap items-center gap-2">
-        {visibleFilters.map(f => (
-          <FilterPill
-            key={f}
-            active={filter === f}
-            onClick={() => setFilter(f)}
-            count={f === 'all' ? rows.length : rows.filter(r => r.status === f).length}
-          >
-            {jdFilterLabel(f, t)}
-          </FilterPill>
-        ))}
-        <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
-          <div className="flex-1 sm:w-64 sm:flex-none">
-            <FilterSearchInput
-              value={search}
-              onChange={setSearch}
-              placeholder={t.jdSearchPlaceholder}
-            />
-          </div>
-        </div>
-      </div>
-
-      {loading ? (
-        <div className="py-12 text-center text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{t.loading}</div>
-      ) : filtered.length === 0 ? (
-        <EmptyState message={searchActive ? t.hiringRequestsNoMatches : t.jdListEmpty} />
-      ) : (
-        <JdTable rows={filtered} t={t} lang={lang} onRowClick={r => navigate(`/dashboard/hiring/jds/${r.id}/edit`)} />
-      )}
-    </div>
-  )
-}
-
 // ─── Helpers ─────────────────────────────────────────────────────────────
 
 function isAwaitingMyDecision(r: HiringRequest, cap: ViewerCapability): boolean {
@@ -447,23 +355,6 @@ function statusLabel(s: RequestStatus, t: Translations): string {
     case 'rejected_by_manager': return t.hiringRequestsStatusRejectedByManager
     case 'rejected_by_owner': return t.hiringRequestsStatusRejectedByOwner
     case 'actioned': return t.hiringRequestsStatusActioned
-  }
-}
-
-function jdFilterLabel(f: JdFilter, t: Translations): string {
-  switch (f) {
-    case 'all': return t.jdFilterAll
-    case 'draft': return t.jdFilterDrafts
-    case 'published': return t.jdFilterPublished
-    case 'archived': return t.jdFilterArchived
-  }
-}
-
-function jdStatusLabel(s: JobDescriptionStatus, t: Translations): string {
-  switch (s) {
-    case 'draft': return t.jdStatusDraft
-    case 'published': return t.jdStatusPublished
-    case 'archived': return t.jdStatusArchived
   }
 }
 
@@ -664,60 +555,6 @@ function MenuItem({ onClick, children, primary, danger }: { onClick: () => void;
     >
       {children}
     </button>
-  )
-}
-
-function JdTable({ rows, t, lang, onRowClick }: {
-  rows: JdRow[]
-  t: Translations
-  lang: 'en' | 'id'
-  onRowClick: (r: JdRow) => void
-}) {
-  return (
-    <div className="overflow-hidden rounded-lg border" style={{ borderColor: 'var(--color-border)' }}>
-      <table className="w-full text-sm">
-        <thead style={{ backgroundColor: 'var(--color-bg-tertiary)' }}>
-          <tr>
-            <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--color-text-tertiary)' }}>{t.jdListColTitle}</th>
-            <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--color-text-tertiary)' }}>{t.jdListColDepartment}</th>
-            <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--color-text-tertiary)' }}>{t.jdListColVersion}</th>
-            <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--color-text-tertiary)' }}>{t.jdListColUpdated}</th>
-            <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--color-text-tertiary)' }}>{t.jdListColStatus}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map(r => (
-            <tr
-              key={r.id}
-              onClick={() => onRowClick(r)}
-              className="cursor-pointer border-t hover:bg-[var(--color-bg-tertiary)]"
-              style={{ borderColor: 'var(--color-border)' }}
-            >
-              <td className="px-4 py-3 font-medium" style={{ color: 'var(--color-text)' }}>{r.title}</td>
-              <td className="px-4 py-3" style={{ color: 'var(--color-text-secondary)' }}>{r.department?.name ?? '—'}</td>
-              <td className="px-4 py-3" style={{ color: 'var(--color-text-tertiary)' }}>{r.doc_version || `v${r.current_version}`}</td>
-              <td className="px-4 py-3" style={{ color: 'var(--color-text-tertiary)' }}>{formatDate(r.updated_at, lang)}</td>
-              <td className="px-4 py-3"><JdStatusBadge status={r.status as JobDescriptionStatus} t={t} /></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  )
-}
-
-function JdStatusBadge({ status, t }: { status: JobDescriptionStatus; t: Translations }) {
-  const tone = jdStatusTone(status)
-  const palette: Record<string, { bg: string; fg: string }> = {
-    neutral: { bg: 'var(--color-bg-tertiary)', fg: 'var(--color-text-secondary)' },
-    success: { bg: 'color-mix(in srgb, var(--color-success) 14%, transparent)', fg: 'var(--color-success)' },
-    muted:   { bg: 'var(--color-bg-tertiary)', fg: 'var(--color-text-tertiary)' },
-  }
-  const { bg, fg } = palette[tone]
-  return (
-    <span className="inline-flex rounded-full px-2 py-0.5 text-xs font-medium" style={{ backgroundColor: bg, color: fg }}>
-      {jdStatusLabel(status, t)}
-    </span>
   )
 }
 

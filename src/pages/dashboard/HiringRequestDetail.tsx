@@ -5,8 +5,9 @@
 // The action buttons we expose are an additional UI gate to avoid presenting
 // a button that would just get rejected by the RPC.
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { PickJdTemplateModal } from './JobDescriptions'
 import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
 import { useBilling } from '../../contexts/BillingContext'
@@ -60,6 +61,7 @@ export function HiringRequestDetail({ user }: { user: User }) {
   // "Open editor to fix" CTA, so the user is never bounced to the RPC just
   // to learn what's missing. Cleared on successful submit or dismiss.
   const [submitBlocker, setSubmitBlocker] = useState<string | null>(null)
+  const [showJdTemplatePicker, setShowJdTemplatePicker] = useState(false)
   const [decision, setDecision] = useState<DecisionMode>(null)
   const [note, setNote] = useState('')
   const [working, setWorking] = useState(false)
@@ -322,15 +324,13 @@ export function HiringRequestDetail({ user }: { user: User }) {
             </button>
           )}
           {capability.canDraftJd && (
-            <button
-              onClick={() => navigate(`/dashboard/hiring/jds/new?from_request=${row.id}`)}
+            <DraftJdDropdown
+              onDraftNew={() => navigate(`/dashboard/hiring/jds/new?from_request=${row.id}`)}
+              onPickTemplate={() => setShowJdTemplatePicker(true)}
               disabled={!canWrite}
               title={writeDisabledTitle}
-              className="rounded-lg px-3 py-1.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
-              style={{ backgroundColor: 'var(--color-primary)' }}
-            >
-              {t.jdListFromRequest}
-            </button>
+              t={t}
+            />
           )}
           {(capability.canManagerDecide || capability.canOwnerDecide) && !decision && (
             <>
@@ -478,6 +478,104 @@ export function HiringRequestDetail({ user }: { user: User }) {
       </Section>
 
       <Workflow row={row} t={t} lang={lang} />
+
+      {showJdTemplatePicker && (
+        <PickJdTemplateModal
+          orgId={user.org_id}
+          t={t}
+          onClose={() => setShowJdTemplatePicker(false)}
+          onPick={tplId => {
+            setShowJdTemplatePicker(false)
+            // Carry both signals into the JD editor so it hydrates from
+            // the template AND layers the request's data on top.
+            navigate(`/dashboard/hiring/jds/new?from_request=${row.id}&template=${tplId}`)
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+// ─── Draft JD dropdown ─────────────────────────────────────────────────
+//
+// Tiny inline dropdown — primary button label is the "common case" (Draft
+// new, since that's what HR does for most one-off roles), and the chevron
+// reveals the "Use template" path when the org has standard templates.
+
+function DraftJdDropdown({ onDraftNew, onPickTemplate, disabled, title, t }: {
+  onDraftNew: () => void
+  onPickTemplate: () => void
+  disabled: boolean
+  title: string | undefined
+  t: Translations
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    function handleKey(e: KeyboardEvent) { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', handleClick)
+    document.addEventListener('keydown', handleKey)
+    return () => {
+      document.removeEventListener('mousedown', handleClick)
+      document.removeEventListener('keydown', handleKey)
+    }
+  }, [open])
+
+  return (
+    <div ref={ref} className="relative inline-flex">
+      <button
+        type="button"
+        onClick={onDraftNew}
+        disabled={disabled}
+        title={title}
+        className="rounded-l-lg px-3 py-1.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+        style={{ backgroundColor: 'var(--color-primary)' }}
+      >
+        {t.jdDraftActionLabel}
+      </button>
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        disabled={disabled}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={t.jdDraftActionOptions}
+        className="rounded-r-lg border-l border-white/20 px-2 py-1.5 text-white disabled:cursor-not-allowed disabled:opacity-50"
+        style={{ backgroundColor: 'var(--color-primary)' }}
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+      {open && (
+        <div
+          role="menu"
+          className="absolute right-0 top-full z-50 mt-1 min-w-[200px] overflow-hidden rounded-lg border py-1 shadow-lg"
+          style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-elevated, var(--color-bg))' }}
+        >
+          <button
+            role="menuitem"
+            onClick={() => { setOpen(false); onDraftNew() }}
+            className="flex w-full items-center px-3 py-2 text-left text-sm transition-colors hover:bg-[var(--color-bg-tertiary)]"
+            style={{ color: 'var(--color-text)' }}
+          >
+            {t.jdDraftActionLabel}
+          </button>
+          <button
+            role="menuitem"
+            onClick={() => { setOpen(false); onPickTemplate() }}
+            className="flex w-full items-center px-3 py-2 text-left text-sm transition-colors hover:bg-[var(--color-bg-tertiary)]"
+            style={{ color: 'var(--color-text)' }}
+          >
+            {t.jdDraftActionFromTemplate}
+          </button>
+        </div>
+      )}
     </div>
   )
 }

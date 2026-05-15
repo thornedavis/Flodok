@@ -7,7 +7,7 @@
 // to its table, edit-route, and human label. New doc types in later
 // phases (hiring forms, offer letters, policies) plug in here.
 
-export const DOCUMENT_TYPES = ['sop', 'contract'] as const
+export const DOCUMENT_TYPES = ['sop', 'contract', 'job_description'] as const
 
 export type DocumentType = (typeof DOCUMENT_TYPES)[number]
 
@@ -20,16 +20,22 @@ export function isDocumentType(value: unknown): value is DocumentType {
  * to query both kinds (e.g. the unified Documents index page) without
  * hard-coding the table name at every call site.
  */
-export function tableForType(type: DocumentType): 'sops' | 'contracts' {
-  return type === 'sop' ? 'sops' : 'contracts'
+export function tableForType(type: DocumentType): 'sops' | 'contracts' | 'job_descriptions' {
+  if (type === 'sop') return 'sops'
+  if (type === 'contract') return 'contracts'
+  return 'job_descriptions'
 }
 
 /**
  * Canonical edit-page path for a document. Centralized so future doc
  * types only need to extend this function, not chase 30 navigate()
- * call sites.
+ * call sites. Job descriptions are an exception — their editor lives
+ * under /dashboard/hiring/jds/... because the workflow context for
+ * authoring them comes from the hiring section. The Documents page
+ * tab still routes here via this helper.
  */
 export function documentEditPath(type: DocumentType, id: string): string {
+  if (type === 'job_description') return `/dashboard/hiring/jds/${id}/edit`
   return `/dashboard/documents/${type}/${id}/edit`
 }
 
