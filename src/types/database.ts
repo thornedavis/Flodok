@@ -586,11 +586,13 @@ export type Database = {
       contracts: {
         Row: {
           allowance_idr: number | null
+          annual_leave_days: number | null
           approved_by: string | null
           base_wage_idr: number | null
           content_doc: Json | null
           content_markdown: string
           content_markdown_id: string | null
+          contract_type: string
           created_at: string
           current_version: number
           days_per_week: number | null
@@ -602,6 +604,7 @@ export type Database = {
           is_template: boolean
           org_id: string
           owner_department: string | null
+          probation_months: number | null
           start_date: string | null
           status: string
           template_for_position: string | null
@@ -610,11 +613,13 @@ export type Database = {
         }
         Insert: {
           allowance_idr?: number | null
+          annual_leave_days?: number | null
           approved_by?: string | null
           base_wage_idr?: number | null
           content_doc?: Json | null
           content_markdown?: string
           content_markdown_id?: string | null
+          contract_type?: string
           created_at?: string
           current_version?: number
           days_per_week?: number | null
@@ -626,6 +631,7 @@ export type Database = {
           is_template?: boolean
           org_id: string
           owner_department?: string | null
+          probation_months?: number | null
           start_date?: string | null
           status?: string
           template_for_position?: string | null
@@ -634,11 +640,13 @@ export type Database = {
         }
         Update: {
           allowance_idr?: number | null
+          annual_leave_days?: number | null
           approved_by?: string | null
           base_wage_idr?: number | null
           content_doc?: Json | null
           content_markdown?: string
           content_markdown_id?: string | null
+          contract_type?: string
           created_at?: string
           current_version?: number
           days_per_week?: number | null
@@ -650,6 +658,7 @@ export type Database = {
           is_template?: boolean
           org_id?: string
           owner_department?: string | null
+          probation_months?: number | null
           start_date?: string | null
           status?: string
           template_for_position?: string | null
@@ -737,15 +746,18 @@ export type Database = {
       document_templates: {
         Row: {
           allowance_idr: number | null
+          annual_leave_days: number | null
           base_wage_idr: number | null
           content_doc: Json | null
           content_markdown: string
           content_markdown_id: string | null
+          contract_type: string | null
           created_at: string
           days_per_week: number | null
           hours_per_day: number | null
           id: string
           org_id: string
+          probation_months: number | null
           template_for_position: string | null
           title: string
           type: string
@@ -753,15 +765,18 @@ export type Database = {
         }
         Insert: {
           allowance_idr?: number | null
+          annual_leave_days?: number | null
           base_wage_idr?: number | null
           content_doc?: Json | null
           content_markdown?: string
           content_markdown_id?: string | null
+          contract_type?: string | null
           created_at?: string
           days_per_week?: number | null
           hours_per_day?: number | null
           id?: string
           org_id: string
+          probation_months?: number | null
           template_for_position?: string | null
           title: string
           type: string
@@ -769,15 +784,18 @@ export type Database = {
         }
         Update: {
           allowance_idr?: number | null
+          annual_leave_days?: number | null
           base_wage_idr?: number | null
           content_doc?: Json | null
           content_markdown?: string
           content_markdown_id?: string | null
+          contract_type?: string | null
           created_at?: string
           days_per_week?: number | null
           hours_per_day?: number | null
           id?: string
           org_id?: string
+          probation_months?: number | null
           template_for_position?: string | null
           title?: string
           type?: string

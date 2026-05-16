@@ -20,6 +20,7 @@ import { SOPHistory } from './pages/dashboard/SOPHistory'
 import { ContractEdit } from './pages/dashboard/ContractEdit'
 import { ContractHistory } from './pages/dashboard/ContractHistory'
 import { DocumentTemplateEdit } from './pages/dashboard/DocumentTemplateEdit'
+import { Templates } from './pages/dashboard/Templates'
 import { Performance } from './pages/dashboard/Performance'
 import { Spotlight } from './pages/dashboard/Spotlight'
 import { SpotlightEdit } from './pages/dashboard/SpotlightEdit'
@@ -127,6 +128,7 @@ function AppRoutes() {
             <Route path="/dashboard/documents/contract/:id/edit" element={<ContractEdit user={user} />} />
             <Route path="/dashboard/documents/contract/:id/history" element={<ContractHistory />} />
             <Route path="/dashboard/document-templates/:id/edit" element={<DocumentTemplateEdit user={user} />} />
+            <Route path="/dashboard/templates" element={<Templates user={user} />} />
 
             {/* Legacy redirects — preserve inbound links from before the
                 Documents IA consolidation. Safe to remove once external

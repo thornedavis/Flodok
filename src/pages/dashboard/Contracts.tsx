@@ -1,16 +1,13 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
-import { getEmployeeDepts, primaryDept, type EmpDeptShape } from '../../lib/employee'
-import { formatIdrDigits as formatCurrency } from '../../lib/credits'
+import { getEmployeeDepts, type EmpDeptShape } from '../../lib/employee'
 import { bucketReferenceValues, referenceNames } from '../../lib/companyReference'
-import { InfoTooltip } from '../../components/InfoTooltip'
 import { FilterPill, FilterPanel, FilterSearchInput } from '../../components/FilterControls'
 import type { FilterPanelSection } from '../../components/FilterControls'
-import { DateTimePicker } from '../../components/DateTimePicker'
 import { useBilling } from '../../contexts/BillingContext'
-import { documentEditPath, documentTemplateEditPath } from '../../lib/documentTypes'
+import { documentEditPath, documentTemplateEditPath, documentsIndexPath } from '../../lib/documentTypes'
 import { docAsJson, emptyDocumentDoc } from '../../lib/documentDoc'
 import { buildPkwtStarterDoc } from '../../lib/pkwtStarterDoc'
 import type { User, Contract, Employee, Tag, DocumentTemplate } from '../../types/aliases'
@@ -31,14 +28,12 @@ export function Contracts({ user, embedded = false }: { user: User; embedded?: b
   const { canWrite, visibleItemLimit, state: dunning } = useBilling()
   const [contracts, setContracts] = useState<ContractWithEmployee[]>([])
   const [templates, setTemplates] = useState<DocumentTemplate[]>([])
-  const [employees, setEmployees] = useState<EmployeeWithDepartments[]>([])
   const [allTags, setAllTags] = useState<Tag[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [activeDepartments, setActiveDepartments] = useState<Set<string>>(new Set())
   const [activeStatuses, setActiveStatuses] = useState<Set<string>>(new Set())
   const [activeTags, setActiveTags] = useState<Set<string>>(new Set())
-  const [showCreateModalLocal, setShowCreateModalLocal] = useState(false)
   const [showCreateTemplate, setShowCreateTemplate] = useState(false)
   const [showPickTemplateLocal, setShowPickTemplateLocal] = useState(false)
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
@@ -76,7 +71,6 @@ export function Contracts({ user, embedded = false }: { user: User; embedded?: b
         tagMap.set(ct.contract_id, arr)
       }
 
-      setEmployees(empList)
       setContracts((contractResult.data || []).map(c => ({
         ...c,
         employee: c.employee_id ? empMap.get(c.employee_id) || null : null,
@@ -89,13 +83,14 @@ export function Contracts({ user, embedded = false }: { user: User; embedded?: b
     load()
   }, [user.org_id])
 
-  // When embedded, the Documents shell can signal "open the create-from-
-  // scratch modal" with `?new=1` or "open the template picker" with
-  // `?new=template`. Derive open-state directly from URL (no mirroring
-  // into local state) and clear the URL param in the close handler.
-  // Non-embedded mounts ignore the URL signal entirely.
+  // When embedded, the Documents shell can signal "open the template picker"
+  // with `?new=template`. The legacy "?new=1" path used to open a scratch
+  // modal; that was removed when the Documents "Blank contract" tile
+  // started inserting the row directly and routing to ContractEdit. Derive
+  // open-state directly from URL (no mirroring into local state) and
+  // clear the URL param in the close handler. Non-embedded mounts ignore
+  // the URL signal entirely.
   const urlNewParam = embedded ? searchParams.get('new') : null
-  const showCreateModal = showCreateModalLocal || urlNewParam === '1'
   const showPickTemplate = showPickTemplateLocal || urlNewParam === 'template'
 
   function clearUrlNewParam() {
@@ -103,11 +98,6 @@ export function Contracts({ user, embedded = false }: { user: User; embedded?: b
     const params = new URLSearchParams(searchParams)
     params.delete('new')
     setSearchParams(params, { replace: true })
-  }
-
-  function closeCreateModal() {
-    setShowCreateModalLocal(false)
-    if (urlNewParam === '1') clearUrlNewParam()
   }
 
   function closePickTemplate() {
@@ -289,23 +279,30 @@ export function Contracts({ user, embedded = false }: { user: User; embedded?: b
       {!embedded && (
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.contractsTitle}</h1>
-          {view === 'templates' || templates.length === 0 ? (
+          {/* Non-embedded mode is only reached via legacy /dashboard/contracts
+              deep links (the standard path redirects to /dashboard/documents).
+              "New contract" routes back to the Documents tiles, which own the
+              create flow now. Templates still create inline. */}
+          {view === 'templates' ? (
             <button
-              onClick={() => view === 'templates' ? setShowCreateTemplate(true) : setShowCreateModalLocal(true)}
+              onClick={() => setShowCreateTemplate(true)}
               disabled={!canWrite}
               title={!canWrite ? t.dunningWriteBlocked : undefined}
               className="shrink-0 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
               style={{ backgroundColor: 'var(--color-primary)' }}
             >
-              {view === 'templates' ? t.createTemplate : t.createContract}
+              {t.createTemplate}
             </button>
           ) : (
-            <CreateContractButton
+            <button
+              onClick={() => navigate(documentsIndexPath())}
               disabled={!canWrite}
-              disabledTitle={!canWrite ? t.dunningWriteBlocked : undefined}
-              onFromScratch={() => setShowCreateModalLocal(true)}
-              onFromTemplate={() => setShowPickTemplateLocal(true)}
-            />
+              title={!canWrite ? t.dunningWriteBlocked : undefined}
+              className="shrink-0 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
+              style={{ backgroundColor: 'var(--color-primary)' }}
+            >
+              {t.createContract}
+            </button>
           )}
         </div>
       )}
@@ -643,15 +640,6 @@ export function Contracts({ user, embedded = false }: { user: User; embedded?: b
         )}
       </div>
 
-      {showCreateModal && (
-        <CreateContractModal
-          orgId={user.org_id}
-          employees={employees}
-          onClose={closeCreateModal}
-          onCreated={(id) => navigate(documentEditPath('contract', id))}
-        />
-      )}
-
       {showCreateTemplate && (
         <NewTemplateModal
           orgId={user.org_id}
@@ -821,397 +809,6 @@ function NewTemplateModal({ orgId, jobPositions, onClose, onCreated, onManagePos
   )
 }
 
-type ContractType = 'pkwt' | 'pkwtt'
-
-
-function CreateContractModal({ orgId, employees, onClose, onCreated }: {
-  orgId: string
-  employees: EmployeeWithDepartments[]
-  onClose: () => void
-  onCreated: (id: string) => void
-}) {
-  const { t } = useLang()
-  const contractTypeInfo: Record<ContractType, { label: string; description: string }> = {
-    pkwt: { label: t.contractTypeFixedTerm, description: t.contractTypePkwtDesc },
-    pkwtt: { label: t.contractTypePermanent, description: t.contractTypePkwttDesc },
-  }
-  const [title, setTitle] = useState('')
-  const [employeeId, setEmployeeId] = useState('')
-  const [empSearch, setEmpSearch] = useState('')
-  const [empOpen, setEmpOpen] = useState(false)
-  const empWrapRef = useRef<HTMLDivElement>(null)
-  const [contractType, setContractType] = useState<ContractType>('pkwt')
-  const [creating, setCreating] = useState(false)
-  const [error, setError] = useState('')
-
-  // Quick-fill fields
-  const [ktpNumber, setKtpNumber] = useState('')
-  const [employeeAddress, setEmployeeAddress] = useState('')
-  const [workLocation, setWorkLocation] = useState('')
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
-  const [probationMonths, setProbationMonths] = useState('3')
-  const [baseSalary, setBaseSalary] = useState('')
-  const [allowance, setAllowance] = useState('')
-  const [hoursPerDay, setHoursPerDay] = useState('8')
-  const [daysPerWeek, setDaysPerWeek] = useState('6')
-  const [annualLeave, setAnnualLeave] = useState('12')
-
-  useEffect(() => {
-    function handleKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
-    document.addEventListener('keydown', handleKey)
-    return () => document.removeEventListener('keydown', handleKey)
-  }, [onClose])
-
-  useEffect(() => {
-    if (!empOpen) return
-    function handleClick(e: MouseEvent) {
-      if (empWrapRef.current && !empWrapRef.current.contains(e.target as Node)) setEmpOpen(false)
-    }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [empOpen])
-
-  const filteredEmployees = empSearch.trim()
-    ? employees.filter(e => e.name.toLowerCase().includes(empSearch.toLowerCase()) || getEmployeeDepts(e).some(d => d.toLowerCase().includes(empSearch.toLowerCase())))
-    : employees
-
-  const selectedEmployee = employees.find(e => e.id === employeeId)
-
-  async function handleCreate() {
-    if (!title.trim()) { setError(t.titleRequired); return }
-    setError('')
-    setCreating(true)
-
-    const baseWageIdr = baseSalary ? Number(baseSalary) : null
-    const allowanceIdr = allowance ? Number(allowance) : null
-    const hoursPerDayInt = hoursPerDay ? Number(hoursPerDay) : null
-    const daysPerWeekInt = daysPerWeek ? Number(daysPerWeek) : null
-
-    // Phase G.2: new contracts land with the PKWT or PKWTT structured
-    // starter so users don't begin from a blank canvas. Merge fields
-    // inside the starter (base_wage_idr, start_date, etc.) resolve at
-    // view time from the row columns set below.
-    const starterDoc = buildPkwtStarterDoc(contractType)
-    const { data, error: insertError } = await supabase
-      .from('contracts')
-      .insert({
-        org_id: orgId,
-        employee_id: employeeId || null,
-        title: title.trim(),
-        content_doc: docAsJson(starterDoc),
-        status: 'draft' as const,
-        base_wage_idr: baseWageIdr,
-        allowance_idr: allowanceIdr,
-        hours_per_day: hoursPerDayInt,
-        days_per_week: daysPerWeekInt,
-        start_date: startDate || null,
-        // PKWTT (permanent) contracts have no end date.
-        end_date: contractType === 'pkwt' ? (endDate || null) : null,
-      })
-      .select()
-      .single()
-
-    if (insertError) { setError(insertError.message); setCreating(false); return }
-    onCreated(data.id)
-  }
-
-  const inputStyle = { borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' } as React.CSSProperties
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ backgroundColor: 'rgba(0, 0, 0, 0.6)', backdropFilter: 'blur(4px)' }}
-      onClick={e => { if (e.target === e.currentTarget) onClose() }}
-    >
-      <div className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border p-6" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-elevated, var(--color-bg))' }}>
-        <button type="button" onClick={onClose} className="absolute right-4 top-4 rounded-lg p-1.5 transition-colors" style={{ color: 'var(--color-text-tertiary)' }}
-          onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
-          onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-          </svg>
-        </button>
-
-        <h2 className="mb-5 text-xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.createContract}</h2>
-
-        <div className="space-y-4">
-          {error && (
-            <div className="rounded-md px-3 py-2 text-sm" style={{ backgroundColor: 'var(--color-diff-remove)', color: 'var(--color-danger)' }}>{error}</div>
-          )}
-
-          {/* Contract Type Toggle */}
-          <div>
-            <label className="mb-2 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.contractTypeLabel}</label>
-            <div className="grid grid-cols-2 gap-2">
-              {(['pkwt', 'pkwtt'] as const).map(type => {
-                const isSelected = contractType === type
-                const info = contractTypeInfo[type]
-                return (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => setContractType(type)}
-                    className="relative rounded-lg border px-3 py-2.5 text-left text-sm font-medium transition-all"
-                    style={{
-                      borderColor: isSelected ? 'var(--color-primary)' : 'var(--color-border)',
-                      backgroundColor: isSelected ? 'color-mix(in srgb, var(--color-primary) 8%, transparent)' : 'transparent',
-                      color: isSelected ? 'var(--color-primary)' : 'var(--color-text)',
-                    }}
-                  >
-                    <span className="flex items-center">
-                      {info.label}
-                      <InfoTooltip text={info.description} />
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Title */}
-          <div>
-            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.titleLabel}</label>
-            <input type="text" value={title} onChange={e => setTitle(e.target.value)} placeholder={t.contractTitlePlaceholder} className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} autoFocus />
-          </div>
-
-          {/* Employee */}
-          <div>
-            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
-              {t.employeeLabel} <span className="font-normal" style={{ color: 'var(--color-text-tertiary)' }}>{t.optional}</span>
-            </label>
-            {selectedEmployee ? (
-              <div className="flex items-center justify-between rounded-lg border px-3 py-2" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }}>
-                <div>
-                  <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{selectedEmployee.name}</span>
-                  {primaryDept(selectedEmployee) && <span className="ml-2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{primaryDept(selectedEmployee)}</span>}
-                </div>
-                <button type="button" onClick={() => { setEmployeeId(''); setKtpNumber(''); setEmployeeAddress('') }} className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.clear}</button>
-              </div>
-            ) : (
-              <div ref={empWrapRef} className="relative">
-                <input
-                  type="text"
-                  value={empSearch}
-                  onChange={e => { setEmpSearch(e.target.value); setEmpOpen(true) }}
-                  onFocus={() => setEmpOpen(true)}
-                  onKeyDown={e => { if (e.key === 'Escape' && empOpen) { e.stopPropagation(); setEmpOpen(false); (e.target as HTMLInputElement).blur() } }}
-                  placeholder={t.searchEmployeesPlaceholder}
-                  className="w-full rounded-lg border px-3 py-2 text-sm"
-                  style={inputStyle}
-                />
-                {empOpen && (
-                  <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-56 overflow-y-auto rounded-lg border shadow-lg" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }}>
-                    {filteredEmployees.length === 0 ? (
-                      <p className="px-3 py-2 text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{t.noMatches}</p>
-                    ) : (
-                      filteredEmployees.map(emp => (
-                        <button key={emp.id} type="button" onClick={() => { setEmployeeId(emp.id); setEmpSearch(''); setEmpOpen(false); if (emp.ktp_nik) setKtpNumber(emp.ktp_nik); if (emp.address) setEmployeeAddress(emp.address) }}
-                          className="flex w-full items-center justify-between px-3 py-2 text-left text-sm transition-colors" style={{ color: 'var(--color-text)' }}
-                          onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
-                          onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
-                        >
-                          <span>{emp.name}</span>
-                          {primaryDept(emp) && <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{primaryDept(emp)}</span>}
-                        </button>
-                      ))
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Quick-fill fields */}
-          <div className="border-t pt-4" style={{ borderColor: 'var(--color-border)' }}>
-            <h3 className="mb-3 text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
-              {t.contractDetails}
-              <span className="ml-2 font-normal text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.allFieldsEditableLater}</span>
-            </h3>
-
-            <div className="space-y-3">
-              {/* Employee details */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.ktpNikNumberLabel}</label>
-                  <input type="text" value={ktpNumber} onChange={e => setKtpNumber(e.target.value)} placeholder="3171..." className="w-full rounded-lg border px-3 py-1.5 text-sm" style={inputStyle} />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.workLocationLabel}</label>
-                  <input type="text" value={workLocation} onChange={e => setWorkLocation(e.target.value)} placeholder={t.workLocationPlaceholder} className="w-full rounded-lg border px-3 py-1.5 text-sm" style={inputStyle} />
-                </div>
-              </div>
-
-              <div>
-                <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.employeeAddressLabel}</label>
-                <input type="text" value={employeeAddress} onChange={e => setEmployeeAddress(e.target.value)} placeholder={t.fullAddressPlaceholder} className="w-full rounded-lg border px-3 py-1.5 text-sm" style={inputStyle} />
-              </div>
-
-              {/* Dates */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.startDateLabel}</label>
-                  <DateTimePicker mode="date" value={startDate} onChange={setStartDate} />
-                </div>
-                {contractType === 'pkwt' ? (
-                  <div>
-                    <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.endDateLabel}</label>
-                    <DateTimePicker mode="date" value={endDate} onChange={setEndDate} />
-                  </div>
-                ) : (
-                  <div>
-                    <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.probationMonthsLabel}</label>
-                    <select value={probationMonths} onChange={e => setProbationMonths(e.target.value)} className="w-full rounded-lg border px-3 py-1.5 text-sm" style={inputStyle}>
-                      <option value="1">{t.monthOption(1)}</option>
-                      <option value="2">{t.monthOption(2)}</option>
-                      <option value="3">{t.monthOption(3)}</option>
-                    </select>
-                  </div>
-                )}
-              </div>
-
-              {/* Compensation */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                    {t.baseWageLabel}
-                    <span className="ml-1" style={{ color: 'var(--color-text-tertiary)' }}>{t.perMonth}</span>
-                  </label>
-                  <div className="relative">
-                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>Rp</span>
-                    <input type="text" inputMode="numeric" value={formatCurrency(baseSalary)} onChange={e => setBaseSalary(e.target.value.replace(/\D/g, ''))}
-                      placeholder="5,000,000" className="w-full rounded-lg border py-1.5 pl-8 pr-3 text-sm" style={inputStyle} />
-                  </div>
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                    {t.allowanceLabel}
-                    <span className="ml-1" style={{ color: 'var(--color-text-tertiary)' }}>{t.perMonth}</span>
-                  </label>
-                  <div className="relative">
-                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>Rp</span>
-                    <input type="text" inputMode="numeric" value={formatCurrency(allowance)} onChange={e => setAllowance(e.target.value.replace(/\D/g, ''))}
-                      placeholder="1,000,000" className="w-full rounded-lg border py-1.5 pl-8 pr-3 text-sm" style={inputStyle} />
-                  </div>
-                </div>
-              </div>
-
-              {/* Working hours */}
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.hoursPerDayLabel}</label>
-                  <select value={hoursPerDay} onChange={e => setHoursPerDay(e.target.value)} className="w-full rounded-lg border px-3 py-1.5 text-sm" style={inputStyle}>
-                    <option value="7">{t.hoursOption(7)}</option>
-                    <option value="8">{t.hoursOption(8)}</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.daysPerWeekLabel}</label>
-                  <select value={daysPerWeek} onChange={e => setDaysPerWeek(e.target.value)} className="w-full rounded-lg border px-3 py-1.5 text-sm" style={inputStyle}>
-                    <option value="5">{t.daysOption(5)}</option>
-                    <option value="6">{t.daysOption(6)}</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.annualLeaveLabel}</label>
-                  <select value={annualLeave} onChange={e => setAnnualLeave(e.target.value)} className="w-full rounded-lg border px-3 py-1.5 text-sm" style={inputStyle}>
-                    <option value="12">{t.daysOption(12)}</option>
-                    <option value="14">{t.daysOption(14)}</option>
-                    <option value="15">{t.daysOption(15)}</option>
-                    <option value="20">{t.daysOption(20)}</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 border-t pt-4" style={{ borderColor: 'var(--color-border)' }}>
-            <button onClick={handleCreate} disabled={creating || !title.trim()} className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50" style={{ backgroundColor: 'var(--color-primary)' }}>
-              {creating ? t.creating : t.createContract}
-            </button>
-            <button onClick={onClose} className="rounded-lg border px-4 py-2 text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>{t.cancel}</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function CreateContractButton({ disabled, disabledTitle, onFromScratch, onFromTemplate }: {
-  disabled: boolean
-  disabledTitle?: string
-  onFromScratch: () => void
-  onFromTemplate: () => void
-}) {
-  const { t } = useLang()
-  const [open, setOpen] = useState(false)
-  const containerRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-    function handleClick(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false)
-    }
-    function handleKey(e: KeyboardEvent) { if (e.key === 'Escape') setOpen(false) }
-    document.addEventListener('mousedown', handleClick)
-    document.addEventListener('keydown', handleKey)
-    return () => {
-      document.removeEventListener('mousedown', handleClick)
-      document.removeEventListener('keydown', handleKey)
-    }
-  }, [open])
-
-  return (
-    <div ref={containerRef} className="relative">
-      <button
-        type="button"
-        onClick={() => !disabled && setOpen(o => !o)}
-        disabled={disabled}
-        title={disabledTitle}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
-        style={{ backgroundColor: 'var(--color-primary)' }}
-      >
-        <span>{t.createContract}</span>
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
-      </button>
-      {open && (
-        <div
-          role="menu"
-          className="absolute right-0 top-full z-30 mt-1 min-w-[200px] overflow-hidden rounded-lg border py-1 shadow-lg"
-          style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-elevated, var(--color-bg))' }}
-        >
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => { setOpen(false); onFromScratch() }}
-            className="flex w-full items-center px-3 py-2 text-left text-sm transition-colors"
-            style={{ color: 'var(--color-text)' }}
-            onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
-            onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
-          >
-            {t.createContractFromScratch}
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => { setOpen(false); onFromTemplate() }}
-            className="flex w-full items-center px-3 py-2 text-left text-sm transition-colors"
-            style={{ color: 'var(--color-text)' }}
-            onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
-            onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
-          >
-            {t.createContractFromTemplate}
-          </button>
-        </div>
-      )}
-    </div>
-  )
-}
 
 function PickTemplateModal({ templates, onClose, onPick }: {
   templates: DocumentTemplate[]

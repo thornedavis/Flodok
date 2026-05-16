@@ -180,11 +180,21 @@ export function buildPkwtStarterDoc(type: PkwtType): DocumentDoc {
         block(
           [
             para(text('This Agreement commences on '), mergeField('contract_start_date'), text(' and continues indefinitely until terminated by either party in accordance with the terms herein.')),
-            para(bold('Probation. '), text('The Employee is subject to a probation period of three (3) months from the commencement date. During probation, either party may terminate this Agreement with seven (7) days\' written notice.')),
+            para(
+              bold('Probation. '),
+              text('The Employee is subject to a probation period of '),
+              mergeField('probation_months'),
+              text(' months from the commencement date. During probation, either party may terminate this Agreement with seven (7) days\' written notice.'),
+            ),
           ],
           [
             para(text('Perjanjian ini berlaku mulai '), mergeField('contract_start_date'), text(' dan berlangsung untuk waktu yang tidak ditentukan, sampai diakhiri oleh salah satu pihak sesuai ketentuan Perjanjian ini.')),
-            para(bold('Masa percobaan. '), text('Pekerja menjalani masa percobaan selama tiga (3) bulan terhitung sejak tanggal mulai. Selama masa percobaan, salah satu pihak dapat mengakhiri Perjanjian ini dengan pemberitahuan tertulis 7 (tujuh) hari sebelumnya.')),
+            para(
+              bold('Masa percobaan. '),
+              text('Pekerja menjalani masa percobaan selama '),
+              mergeField('probation_months'),
+              text(' bulan terhitung sejak tanggal mulai. Selama masa percobaan, salah satu pihak dapat mengakhiri Perjanjian ini dengan pemberitahuan tertulis 7 (tujuh) hari sebelumnya.'),
+            ),
           ],
         ),
       ])
@@ -251,13 +261,21 @@ export function buildPkwtStarterDoc(type: PkwtType): DocumentDoc {
   const leave = section('Leave', 'Cuti', [
     block(
       [
-        para(bold('Annual leave. '), text('Twelve (12) working days of paid annual leave per year, after completing twelve (12) months of continuous service.')),
+        para(
+          bold('Annual leave. '),
+          mergeField('annual_leave_days'),
+          text(' working days of paid annual leave per year, after completing twelve (12) months of continuous service.'),
+        ),
         para(bold('Sick leave. '), text('As per applicable law, with a valid medical certificate.')),
         para(bold('Maternity leave. '), text('Three (3) months total (1.5 months before and 1.5 months after delivery) with full pay, as per UU 13/2003.')),
         para(bold('Other leave. '), text('As stipulated under applicable Indonesian labour law.')),
       ],
       [
-        para(bold('Cuti tahunan. '), text('Dua belas (12) hari kerja cuti tahunan berbayar setelah dua belas (12) bulan masa kerja terus-menerus.')),
+        para(
+          bold('Cuti tahunan. '),
+          mergeField('annual_leave_days'),
+          text(' hari kerja cuti tahunan berbayar setelah dua belas (12) bulan masa kerja terus-menerus.'),
+        ),
         para(bold('Cuti sakit. '), text('Sesuai peraturan yang berlaku, dengan surat keterangan dokter yang sah.')),
         para(bold('Cuti melahirkan. '), text('Total tiga (3) bulan (1,5 bulan sebelum dan 1,5 bulan setelah melahirkan) dengan upah penuh, sesuai UU 13/2003.')),
         para(bold('Cuti lain. '), text('Sebagaimana diatur dalam peraturan ketenagakerjaan Indonesia yang berlaku.')),

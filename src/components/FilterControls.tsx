@@ -10,6 +10,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
+import { DatePicker } from './DatePicker'
 
 // ─── FilterPill ─────────────────────────────────────────
 
@@ -293,6 +294,20 @@ export type FilterPanelSection =
       onChange: (next: string) => void
       headerAction?: { label: string; onClick: () => void }
     }
+  | {
+      type: 'daterange'
+      key: string
+      label: string
+      icon?: ReactNode
+      /** ISO date string (YYYY-MM-DD) or empty for unset. */
+      from: string
+      to: string
+      onFromChange: (next: string) => void
+      onToChange: (next: string) => void
+      fromLabel: string
+      toLabel: string
+      headerAction?: { label: string; onClick: () => void }
+    }
 
 export function FilterPanel({
   sections, onReset, triggerLabel,
@@ -315,6 +330,7 @@ export function FilterPanel({
   const activeCount = sections.reduce((n, s) => {
     if (s.type === 'multiselect') return n + s.value.length
     if (s.type === 'select' && s.defaultValue !== undefined && s.value !== s.defaultValue) return n + 1
+    if (s.type === 'daterange' && (s.from || s.to)) return n + 1
     return n
   }, 0)
   const active = activeCount > 0
@@ -438,9 +454,9 @@ export function FilterPanel({
                   </div>
                   {!isCollapsed && (
                     <div className="px-2 pb-2">
-                      {section.type === 'multiselect'
-                        ? <SectionMultiSelect section={section} />
-                        : <SectionSelect section={section} />}
+                      {section.type === 'multiselect' && <SectionMultiSelect section={section} />}
+                      {section.type === 'select' && <SectionSelect section={section} />}
+                      {section.type === 'daterange' && <SectionDateRange section={section} />}
                     </div>
                   )}
                 </div>
@@ -564,6 +580,38 @@ function SectionSelect({ section }: {
         )
       })}
     </>
+  )
+}
+
+function SectionDateRange({ section }: {
+  section: Extract<FilterPanelSection, { type: 'daterange' }>
+}) {
+  const hasValue = !!section.from || !!section.to
+  return (
+    <div className="space-y-2 px-1 pt-1">
+      <div>
+        <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-tertiary)' }}>
+          {section.fromLabel}
+        </label>
+        <DatePicker value={section.from} onChange={section.onFromChange} />
+      </div>
+      <div>
+        <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-tertiary)' }}>
+          {section.toLabel}
+        </label>
+        <DatePicker value={section.to} onChange={section.onToChange} />
+      </div>
+      {hasValue && (
+        <button
+          type="button"
+          onClick={() => { section.onFromChange(''); section.onToChange('') }}
+          className="text-xs font-medium"
+          style={{ color: 'var(--color-text-tertiary)' }}
+        >
+          Clear
+        </button>
+      )}
+    </div>
   )
 }
 

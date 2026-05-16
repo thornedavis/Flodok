@@ -72,6 +72,9 @@ export type MergeFieldKey =
   | 'allowance_idr'
   | 'hours_per_day'
   | 'days_per_week'
+  | 'annual_leave_days'
+  | 'probation_months'
+  | 'contract_type'
   | 'employee_signature'
   | 'employee_sign_date'
   | 'employer_name'
@@ -267,6 +270,32 @@ export const MERGE_FIELDS: Record<MergeFieldKey, MergeFieldDef> = {
     label: { en: 'Days per week', id: 'Hari per minggu' },
     description: { en: 'Contracted working days per week', id: 'Hari kerja per minggu sesuai kontrak' },
     resolve: ctx => ctx.contract?.days_per_week?.toString() ?? null,
+  },
+  annual_leave_days: {
+    key: 'annual_leave_days',
+    scope: 'contract',
+    label: { en: 'Annual leave (days)', id: 'Cuti tahunan (hari)' },
+    description: { en: 'Annual leave entitlement in days', id: 'Jumlah cuti tahunan dalam hari' },
+    resolve: ctx => ctx.contract?.annual_leave_days?.toString() ?? null,
+  },
+  probation_months: {
+    key: 'probation_months',
+    scope: 'contract',
+    label: { en: 'Probation (months)', id: 'Masa percobaan (bulan)' },
+    description: { en: 'Probation period in months; PKWTT contracts only', id: 'Masa percobaan dalam bulan; hanya untuk PKWTT' },
+    resolve: ctx => ctx.contract?.probation_months?.toString() ?? null,
+  },
+  contract_type: {
+    key: 'contract_type',
+    scope: 'contract',
+    label: { en: 'Contract type', id: 'Jenis kontrak' },
+    description: { en: 'PKWT (fixed-term) or PKWTT (permanent)', id: 'PKWT (waktu tertentu) atau PKWTT (tetap)' },
+    resolve: ctx => {
+      const v = ctx.contract?.contract_type
+      if (v === 'pkwt') return ctx.lang === 'id' ? 'PKWT (Waktu Tertentu)' : 'PKWT (Fixed-term)'
+      if (v === 'pkwtt') return ctx.lang === 'id' ? 'PKWTT (Tetap)' : 'PKWTT (Permanent)'
+      return null
+    },
   },
   employee_signature: {
     key: 'employee_signature',

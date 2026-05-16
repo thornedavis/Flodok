@@ -12,6 +12,7 @@ import { formatIdrDigits } from '../../lib/credits'
 import { InfoTooltip } from '../../components/InfoTooltip'
 import { writeSnapshot } from '../../lib/snapshotApi'
 import { emptyDocumentDoc, type DocumentDoc } from '../../lib/documentDoc'
+import { buildPkwtStarterDoc, type PkwtType } from '../../lib/pkwtStarterDoc'
 import { buildContractDocumentHash, captureSignatureIp, currentAuthToken, getUserAgent } from '../../lib/signatureFingerprint'
 import { SIGNATURE_FONTS, ensureSignatureFontsLoaded } from '../../lib/signatureFonts'
 import { DateTimePicker } from '../../components/DateTimePicker'
@@ -53,6 +54,9 @@ export function ContractEdit({ user }: { user: User }) {
   const [daysPerWeek, setDaysPerWeek] = useState<string>('')
   const [startDate, setStartDate] = useState<string>('')
   const [endDate, setEndDate] = useState<string>('')
+  const [contractType, setContractType] = useState<PkwtType>('pkwt')
+  const [annualLeaveDays, setAnnualLeaveDays] = useState<string>('')
+  const [probationMonths, setProbationMonths] = useState<string>('')
   const [templateForPosition, setTemplateForPosition] = useState<string>('')
   const [jobPositions, setJobPositions] = useState<string[]>([])
   const [changeSummary] = useState('')
@@ -111,6 +115,9 @@ export function ContractEdit({ user }: { user: User }) {
         setDaysPerWeek(contractResult.data.days_per_week?.toString() ?? '')
         setStartDate(contractResult.data.start_date ?? '')
         setEndDate(contractResult.data.end_date ?? '')
+        setContractType((contractResult.data.contract_type === 'pkwtt' ? 'pkwtt' : 'pkwt') as PkwtType)
+        setAnnualLeaveDays(contractResult.data.annual_leave_days?.toString() ?? '')
+        setProbationMonths(contractResult.data.probation_months?.toString() ?? '')
         setTemplateForPosition(contractResult.data.template_for_position ?? '')
 
         if (contractResult.data.employee_id) {
@@ -124,6 +131,34 @@ export function ContractEdit({ user }: { user: User }) {
     }
     load()
   }, [id, user.org_id])
+
+  // Flipping PKWT ↔ PKWTT swaps two whole sections of the starter doc
+  // (the duration/probation block, plus any other type-conditional content).
+  // We confirm before regenerating so manual prose edits aren't silently
+  // overwritten. The regen replaces content_doc wholesale with the new
+  // type's starter — which is what the user wants, but it does mean any
+  // hand-edited prose in this contract is lost.
+  function handleContractTypeChange(next: PkwtType) {
+    if (next === contractType) return
+    if (contract) {
+      const confirmed = window.confirm(t.contractTypeFlipConfirm)
+      if (!confirmed) return
+    }
+    setContractType(next)
+    // PKWT contracts don't carry probation; PKWTT defaults to the legal max.
+    if (next === 'pkwt') {
+      setProbationMonths('')
+      setEndDate(prev => prev) // keep end date input visible/editable
+    } else {
+      setProbationMonths(prev => prev.trim() === '' ? '3' : prev)
+      setEndDate('')
+    }
+    // Regenerate the structured doc from the new starter. Merge-field tokens
+    // inside resolve at render time from the current row values, so the user
+    // sees their wage/leave/probation values reflected immediately without
+    // a save round-trip.
+    setContentDoc(buildPkwtStarterDoc(next))
+  }
 
   function toggleTag(tagId: string) {
     setSelectedTagIds(prev => {
@@ -154,6 +189,12 @@ export function ContractEdit({ user }: { user: User }) {
   const parsedAllowance = allowanceIdr.trim() === '' ? null : Number(allowanceIdr)
   const parsedHoursPerDay = hoursPerDay.trim() === '' ? null : Number(hoursPerDay)
   const parsedDaysPerWeek = daysPerWeek.trim() === '' ? null : Number(daysPerWeek)
+  const parsedAnnualLeave = annualLeaveDays.trim() === '' ? null : Number(annualLeaveDays)
+  // PKWT contracts have no probation period; force-clear so a switched-from-PKWTT
+  // contract doesn't carry stale probation data.
+  const parsedProbationMonths = contractType === 'pkwt'
+    ? null
+    : (probationMonths.trim() === '' ? null : Number(probationMonths))
   const docChanged = useMemo(
     () => JSON.stringify(contentDoc) !== JSON.stringify(savedContentDoc),
     [contentDoc, savedContentDoc],
@@ -169,8 +210,13 @@ export function ContractEdit({ user }: { user: User }) {
     (startDate || null) !== (contract.start_date || null) ||
     (endDate || null) !== (contract.end_date || null)
   ) : false
+  const structuredChanged = contract ? (
+    contractType !== (contract.contract_type === 'pkwtt' ? 'pkwtt' : 'pkwt') ||
+    parsedAnnualLeave !== contract.annual_leave_days ||
+    parsedProbationMonths !== contract.probation_months
+  ) : false
   const hasChanges = contract ? (
-    docChanged || employeeChanged || wagesChanged || datesChanged ||
+    docChanged || employeeChanged || wagesChanged || datesChanged || structuredChanged ||
     title !== contract.title ||
     status !== contract.status ||
     changeSummary !== ''
@@ -189,7 +235,10 @@ export function ContractEdit({ user }: { user: User }) {
 
     // Contracts snapshot their structured wage/hours/employee state alongside
     // content. Without this, wage edits that leave the doc untouched would
-    // silently overwrite the live row with no version trail.
+    // silently overwrite the live row with no version trail. Contract-type /
+    // leave / probation changes don't need a snapshot — they re-render the
+    // existing merge-field tokens, the structured-doc representation is
+    // unchanged.
     const structuralChanged = wagesChanged || employeeChanged
     const snapshotNeeded = docChanged || structuralChanged
 
@@ -208,6 +257,9 @@ export function ContractEdit({ user }: { user: User }) {
         status: nextStatus,
         start_date: startDate || null,
         end_date: endDate || null,
+        contract_type: contractType,
+        annual_leave_days: parsedAnnualLeave,
+        probation_months: parsedProbationMonths,
         template_for_position: contract.is_template ? (templateForPosition || null) : contract.template_for_position,
         updated_at: new Date().toISOString(),
       })
@@ -225,7 +277,16 @@ export function ContractEdit({ user }: { user: User }) {
     setStatus(nextStatus)
 
     if (!snapshotNeeded) {
-      setContract({ ...contract, title, status: nextStatus, start_date: startDate || null, end_date: endDate || null })
+      setContract({
+        ...contract,
+        title,
+        status: nextStatus,
+        start_date: startDate || null,
+        end_date: endDate || null,
+        contract_type: contractType,
+        annual_leave_days: parsedAnnualLeave,
+        probation_months: parsedProbationMonths,
+      })
       setSaving(false)
       return { versionNumber: null }
     }
@@ -271,6 +332,9 @@ export function ContractEdit({ user }: { user: User }) {
       days_per_week: parsedDaysPerWeek,
       start_date: startDate || null,
       end_date: endDate || null,
+      contract_type: contractType,
+      annual_leave_days: parsedAnnualLeave,
+      probation_months: parsedProbationMonths,
     })
 
     if (employeeId) {
@@ -320,6 +384,9 @@ export function ContractEdit({ user }: { user: User }) {
           hours_per_day: parsedHoursPerDay,
           days_per_week: parsedDaysPerWeek,
           employee_id: employeeId,
+          contract_type: contractType,
+          annual_leave_days: parsedAnnualLeave,
+          probation_months: parsedProbationMonths,
         } : null,
         today: new Date(),
         signer: { name: user.name, title: user.title },
@@ -569,15 +636,70 @@ export function ContractEdit({ user }: { user: User }) {
         </div>
 
         <div className="py-4">
+          {/* Contract type — drives the starter-doc shape and whether the
+              end-date / probation field below is meaningful. Flipping after
+              creation prompts the user before regenerating the body. */}
+          {!contract?.is_template && (
+            <div className="mb-4">
+              <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.contractTypeLabel}</label>
+              <div className="inline-flex rounded-lg border p-0.5" style={{ borderColor: 'var(--color-border)' }}>
+                <button
+                  type="button"
+                  onClick={() => handleContractTypeChange('pkwt')}
+                  aria-pressed={contractType === 'pkwt'}
+                  className="rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
+                  style={{
+                    backgroundColor: contractType === 'pkwt' ? 'color-mix(in srgb, var(--color-primary) 12%, transparent)' : 'transparent',
+                    color: contractType === 'pkwt' ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+                  }}
+                >
+                  {t.contractTypeFixedTerm}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleContractTypeChange('pkwtt')}
+                  aria-pressed={contractType === 'pkwtt'}
+                  className="rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
+                  style={{
+                    backgroundColor: contractType === 'pkwtt' ? 'color-mix(in srgb, var(--color-primary) 12%, transparent)' : 'transparent',
+                    color: contractType === 'pkwtt' ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+                  }}
+                >
+                  {t.contractTypePermanent}
+                </button>
+              </div>
+              <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                {contractType === 'pkwt' ? t.contractTypePkwtDesc : t.contractTypePkwttDesc}
+              </p>
+            </div>
+          )}
+
           <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
               <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.startDateLabel}</label>
               <DateTimePicker mode="date" value={startDate} onChange={setStartDate} />
             </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.endDateLabel}</label>
-              <DateTimePicker mode="date" value={endDate} onChange={setEndDate} />
-            </div>
+            {contractType === 'pkwt' ? (
+              <div>
+                <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.endDateLabel}</label>
+                <DateTimePicker mode="date" value={endDate} onChange={setEndDate} />
+              </div>
+            ) : (
+              <div>
+                <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.probationMonthsLabel}</label>
+                <select
+                  value={probationMonths}
+                  onChange={e => setProbationMonths(e.target.value)}
+                  className="w-full rounded-lg border px-3 py-2 text-sm"
+                  style={inputStyle}
+                >
+                  <option value="">—</option>
+                  <option value="1">{t.monthOption(1)}</option>
+                  <option value="2">{t.monthOption(2)}</option>
+                  <option value="3">{t.monthOption(3)}</option>
+                </select>
+              </div>
+            )}
           </div>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
@@ -668,6 +790,21 @@ export function ContractEdit({ user }: { user: User }) {
                 <option value="7">{t.daysOption(7)}</option>
               </select>
             </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.annualLeaveLabel}</label>
+              <select
+                value={annualLeaveDays}
+                onChange={e => setAnnualLeaveDays(e.target.value)}
+                className="w-full rounded-lg border px-3 py-2 text-sm"
+                style={inputStyle}
+              >
+                <option value="">—</option>
+                <option value="12">{t.annualLeaveOption(12)}</option>
+                <option value="14">{t.annualLeaveOption(14)}</option>
+                <option value="15">{t.annualLeaveOption(15)}</option>
+                <option value="20">{t.annualLeaveOption(20)}</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -697,6 +834,9 @@ export function ContractEdit({ user }: { user: User }) {
                   hours_per_day: parsedHoursPerDay,
                   days_per_week: parsedDaysPerWeek,
                   employee_id: employeeId,
+                  contract_type: contractType,
+                  annual_leave_days: parsedAnnualLeave,
+                  probation_months: parsedProbationMonths,
                 } : null,
                 today: new Date(),
                 lang: 'en',
