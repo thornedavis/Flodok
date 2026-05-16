@@ -65,6 +65,7 @@ export function SectionView({ node, updateAttributes }: NodeViewProps) {
   return (
     <NodeViewWrapper
       className="bilingual-section"
+      data-id={attrs.id}
       data-numbering={attrs.numberingStyle || 'decimal'}
       data-boxed={attrs.boxed ? 'true' : undefined}
       data-has-accent={attrs.accentColor ? 'true' : undefined}

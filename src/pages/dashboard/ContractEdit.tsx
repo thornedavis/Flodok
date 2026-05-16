@@ -2,11 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { DocumentEditor } from '../../components/editor/bilingual/DocumentEditor'
+import { SectionOutline } from '../../components/editor/SectionOutline'
 import { useLang } from '../../contexts/LanguageContext'
-import { primaryDept, type EmpDeptShape } from '../../lib/employee'
+import { type EmpDeptShape } from '../../lib/employee'
 import { bucketReferenceValues, referenceNames } from '../../lib/companyReference'
 import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning'
 import { useDocumentViewPref } from '../../hooks/useDocumentViewPref'
+import { useAutoCollapseSidebar, useFullWidthLayout } from '../../components/Layout'
 import { exportDocumentPdf } from '../../lib/pdfExport'
 import { formatIdrDigits } from '../../lib/credits'
 import { InfoTooltip } from '../../components/InfoTooltip'
@@ -16,9 +18,17 @@ import { buildPkwtStarterDoc, type PkwtType } from '../../lib/pkwtStarterDoc'
 import { buildContractDocumentHash, captureSignatureIp, currentAuthToken, getUserAgent } from '../../lib/signatureFingerprint'
 import { SIGNATURE_FONTS, ensureSignatureFontsLoaded } from '../../lib/signatureFonts'
 import { DateTimePicker } from '../../components/DateTimePicker'
+import { EmployeeSelect } from '../../components/EmployeeSelect'
 import { useBilling } from '../../contexts/BillingContext'
 import { documentHistoryPath, documentsIndexPath } from '../../lib/documentTypes'
 import type { User, Contract, Tag, Employee, Organization } from '../../types/aliases'
+
+// Stacked sticky-positioning offsets. The DashboardLayout header sits at
+// top-0 (h-14 = 56px). Our page top bar sits below it. Anything inside
+// the editor pane that wants to stick below both uses APP_HEADER + PAGE_TOP_BAR.
+const PAGE_TOP_BAR_HEIGHT = 56
+const APP_HEADER_HEIGHT = 56
+const EDITOR_STICKY_TOP_PX = APP_HEADER_HEIGHT + PAGE_TOP_BAR_HEIGHT
 
 type EmployeeWithDepartments = Employee & EmpDeptShape
 
@@ -27,12 +37,45 @@ const EMPLOYEE_WITH_DEPTS_SELECT =
 
 ensureSignatureFontsLoaded()
 
+// File shape with a signature scribble inside — the same icon used
+// for contracts in the employee Portal (Portal.tsx:180). Repeated here
+// rather than imported because Portal lives in a different routing
+// tree and exposing its internal helpers would couple the two pages.
+// SOPEdit / JDEdit will grow their own type-specific icons when they
+// get the same edit-page treatment.
+function ContractTypeIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+      <polyline points="14 2 14 8 20 8"/>
+      <path d="M7 16q2-3 4 0t4 0"/>
+    </svg>
+  )
+}
+
+function readLocalBool(key: string, fallback: boolean): boolean {
+  if (typeof window === 'undefined') return fallback
+  const v = window.localStorage.getItem(key)
+  if (v === '1') return true
+  if (v === '0') return false
+  return fallback
+}
+function writeLocalBool(key: string, value: boolean) {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(key, value ? '1' : '0')
+}
+
 export function ContractEdit({ user }: { user: User }) {
   const { t } = useLang()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { canWrite } = useBilling()
   const { view, setView } = useDocumentViewPref('contract', id ?? null)
+  // Focus-the-canvas: collapse the main nav and break out of the
+  // max-w-6xl page container so the editor + sidebar get full width.
+  // Both hooks auto-restore on unmount.
+  useAutoCollapseSidebar()
+  useFullWidthLayout()
   const [contract, setContract] = useState<Contract | null>(null)
   const [organization, setOrganization] = useState<Organization | null>(null)
   const [, setEmployee] = useState<EmployeeWithDepartments | null>(null)
@@ -82,6 +125,38 @@ export function ContractEdit({ user }: { user: User }) {
   const [signerFont, setSignerFont] = useState(user.signature_font || SIGNATURE_FONTS[0].name)
   const [signing, setSigning] = useState(false)
   const signPanelRef = useRef<HTMLDivElement>(null)
+
+  // Inline-editable title in the page top bar (Google Docs style). The
+  // value lives in the same `title` state the rest of the page uses;
+  // this just toggles between display and edit modes. Editing on focus
+  // is handled by autoFocus + onBlur/Escape; we keep a snapshot for
+  // Escape so users can bail out of a partial edit.
+  const [editingTitle, setEditingTitle] = useState(false)
+  const titleSnapshotRef = useRef<string>('')
+
+  // Sidebar visibility + collapsible-section state. Persisted to
+  // localStorage so the user's preference survives reloads (Google
+  // Docs–style: once they hide the outline pane it stays hidden until
+  // they explicitly bring it back).
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => readLocalBool('flodok:contractEdit:sidebarOpen', true))
+  const [detailsOpen, setDetailsOpen] = useState<boolean>(() => readLocalBool('flodok:contractEdit:detailsOpen', true))
+  const [outlineOpen, setOutlineOpen] = useState<boolean>(() => readLocalBool('flodok:contractEdit:outlineOpen', true))
+  useEffect(() => writeLocalBool('flodok:contractEdit:sidebarOpen', sidebarOpen), [sidebarOpen])
+  useEffect(() => writeLocalBool('flodok:contractEdit:detailsOpen', detailsOpen), [detailsOpen])
+  useEffect(() => writeLocalBool('flodok:contractEdit:outlineOpen', outlineOpen), [outlineOpen])
+
+  function startEditingTitle() {
+    if (!canWrite) return
+    titleSnapshotRef.current = title
+    setEditingTitle(true)
+  }
+  function commitTitle() {
+    setEditingTitle(false)
+  }
+  function revertTitle() {
+    setTitle(titleSnapshotRef.current)
+    setEditingTitle(false)
+  }
 
   useEffect(() => {
     async function load() {
@@ -148,15 +223,11 @@ export function ContractEdit({ user }: { user: User }) {
     // PKWT contracts don't carry probation; PKWTT defaults to the legal max.
     if (next === 'pkwt') {
       setProbationMonths('')
-      setEndDate(prev => prev) // keep end date input visible/editable
+      setEndDate(prev => prev)
     } else {
       setProbationMonths(prev => prev.trim() === '' ? '3' : prev)
       setEndDate('')
     }
-    // Regenerate the structured doc from the new starter. Merge-field tokens
-    // inside resolve at render time from the current row values, so the user
-    // sees their wage/leave/probation values reflected immediately without
-    // a save round-trip.
     setContentDoc(buildPkwtStarterDoc(next))
   }
 
@@ -179,11 +250,6 @@ export function ContractEdit({ user }: { user: User }) {
       setNewTagName('')
     }
   }
-
-  // Phase C.2 note: handleTranslate (whole-doc) and handleGenerate
-  // (AI markdown generation) were removed when the markdown editor was
-  // replaced. Per-block translation comes back in Phase E; AI gen will
-  // return as a structured-doc producer in a follow-up.
 
   const parsedBaseWage = baseWageIdr.trim() === '' ? null : Number(baseWageIdr)
   const parsedAllowance = allowanceIdr.trim() === '' ? null : Number(allowanceIdr)
@@ -215,6 +281,30 @@ export function ContractEdit({ user }: { user: User }) {
     parsedAnnualLeave !== contract.annual_leave_days ||
     parsedProbationMonths !== contract.probation_months
   ) : false
+
+  // Required-field gating for Activate & sign. Templates are exempt
+  // because they're never activated — they only get saved as templates.
+  // Legal-floor fields for an Indonesian employment contract: title,
+  // linked employee, dates (end_date for PKWT, probation for PKWTT),
+  // wage, hours, days. Annual leave defaults to 12 so it's effectively
+  // always set.
+  const missingRequiredFields: { key: string; label: string }[] = useMemo(() => {
+    if (contract?.is_template) return []
+    const out: { key: string; label: string }[] = []
+    if (!title.trim()) out.push({ key: 'title', label: t.titleLabel })
+    if (!employeeId) out.push({ key: 'employee', label: t.employeeLabel })
+    if (!startDate) out.push({ key: 'startDate', label: t.startDateLabel })
+    if (contractType === 'pkwt' && !endDate) out.push({ key: 'endDate', label: t.endDateLabel })
+    if (contractType === 'pkwtt' && parsedProbationMonths === null) out.push({ key: 'probationMonths', label: t.probationMonthsLabel })
+    if (parsedBaseWage === null) out.push({ key: 'baseWage', label: t.baseWageLabel })
+    if (parsedHoursPerDay === null) out.push({ key: 'hoursPerDay', label: t.hoursPerDayLabel })
+    if (parsedDaysPerWeek === null) out.push({ key: 'daysPerWeek', label: t.daysPerWeekLabel })
+    return out
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contract?.is_template, title, employeeId, startDate, endDate, contractType, parsedProbationMonths, parsedBaseWage, parsedHoursPerDay, parsedDaysPerWeek])
+
+  const missingKeys = new Set(missingRequiredFields.map(f => f.key))
+
   const hasChanges = contract ? (
     docChanged || employeeChanged || wagesChanged || datesChanged || structuredChanged ||
     title !== contract.title ||
@@ -404,10 +494,6 @@ export function ContractEdit({ user }: { user: User }) {
     setDownloading(false)
   }
 
-  // Editing an active contract auto-bumps to a new (draft) version on save.
-  // The save here keeps status at 'draft' — only the signature confirmation
-  // below flips it to 'active'. If there are no changes (e.g. the contract
-  // was already a clean draft awaiting signature), skip straight to the panel.
   async function handleActivateAndSign() {
     setSavingMode('activate')
     try {
@@ -431,10 +517,6 @@ export function ContractEdit({ user }: { user: User }) {
     setSigning(true)
     setError('')
 
-    // Document hash signs the latest derived markdown projection — content
-    // lives in content_markdown after the snapshot helper derives it from
-    // content_doc on save. Phase F may switch this to hash content_doc
-    // directly for clauses-level fidelity.
     const documentHash = await buildContractDocumentHash(contract.content_markdown ?? '', contract.current_version)
     const { data: sigRow, error: sigError } = await supabase
       .from('contract_signatures')
@@ -456,7 +538,6 @@ export function ContractEdit({ user }: { user: User }) {
 
     if (sigError || !sigRow) { setError(sigError?.message || 'sign failed'); setSigning(false); return }
 
-    // Best-effort: stamp the signer's public IP server-side.
     const token = await currentAuthToken()
     if (token) captureSignatureIp(sigRow.id, { type: 'jwt', token })
 
@@ -483,66 +564,158 @@ export function ContractEdit({ user }: { user: User }) {
     archived: 'var(--color-text-tertiary)',
   }
 
+  const activateDisabled = saving || signing || !canWrite || missingRequiredFields.length > 0
+  const activateTitle = !canWrite
+    ? t.dunningWriteBlocked
+    : missingRequiredFields.length > 0
+      ? t.activateMissingFieldsTooltip(missingRequiredFields.map(f => f.label).join(', '))
+      : undefined
+
+  function missingDot(key: string) {
+    if (!missingKeys.has(key)) return null
+    return (
+      <span
+        aria-hidden="true"
+        title={t.activateMissingFieldHint}
+        className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
+        style={{ backgroundColor: 'var(--color-danger)' }}
+      />
+    )
+  }
+
   return (
-    <div>
-      <div className="mb-6 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{contract.is_template ? t.editTemplateTitle : t.editContractTitle}</h1>
-          {/* Read-only status pill — replaces the old dropdown. Status now
-              advances via the explicit "Activate & sign" action below; the
-              dropdown lied because flipping to active didn't actually sign. */}
+    <div className="flex flex-col" style={{ minHeight: `calc(100vh - ${APP_HEADER_HEIGHT}px)` }}>
+      {/* ── Page top bar — sticky beneath the app header ────────────── */}
+      <div
+        className="sticky z-20 flex flex-wrap items-center justify-between gap-3 border-b px-6 md:px-8"
+        style={{
+          top: `${APP_HEADER_HEIGHT}px`,
+          minHeight: `${PAGE_TOP_BAR_HEIGHT}px`,
+          borderColor: 'var(--color-border)',
+          backgroundColor: 'var(--color-bg)',
+        }}
+      >
+        <div className="flex min-w-0 items-center gap-3">
+          {/* Doc-type icon — gives the user a glanceable cue about
+              which kind of document they're editing. Contracts get
+              the success-tinted file-with-signature glyph. */}
+          <span
+            aria-hidden="true"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md"
+            style={{
+              backgroundColor: 'color-mix(in srgb, var(--color-success) 16%, transparent)',
+              color: 'var(--color-success)',
+            }}
+          >
+            <ContractTypeIcon />
+          </span>
+          {editingTitle ? (
+            <input
+              type="text"
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              onBlur={commitTitle}
+              onFocus={e => e.currentTarget.select()}
+              onKeyDown={e => {
+                if (e.key === 'Enter') { e.preventDefault(); commitTitle() }
+                if (e.key === 'Escape') { e.preventDefault(); revertTitle() }
+              }}
+              placeholder={t.titleEmptyPlaceholder}
+              autoFocus
+              className="min-w-0 max-w-[40vw] rounded-md border px-2 py-1 text-lg font-semibold outline-none"
+              style={{
+                borderColor: 'var(--color-primary)',
+                backgroundColor: 'var(--color-bg)',
+                color: 'var(--color-text)',
+              }}
+            />
+          ) : (
+            /* Inline-editable title — hover shows a subtle border + "Rename"
+               badge as a click affordance. Click anywhere on the title
+               switches to the input above. Templates remain editable too. */
+            <button
+              type="button"
+              onClick={startEditingTitle}
+              disabled={!canWrite}
+              title={canWrite ? t.renameTitle : undefined}
+              className="group/title relative inline-flex min-w-0 cursor-text items-center rounded-md border px-2 py-1 text-lg font-semibold transition-colors disabled:cursor-not-allowed"
+              style={{
+                borderColor: 'transparent',
+                color: title.trim() ? 'var(--color-text)' : 'var(--color-text-tertiary)',
+              }}
+              onMouseOver={e => { if (canWrite) e.currentTarget.style.borderColor = 'var(--color-border)' }}
+              onMouseOut={e => { e.currentTarget.style.borderColor = 'transparent' }}
+            >
+              <span className="truncate">
+                {title.trim() || t.titleEmptyPlaceholder}
+              </span>
+              {canWrite && (
+                <span
+                  className="pointer-events-none absolute left-1/2 top-full z-30 mt-1 -translate-x-1/2 whitespace-nowrap rounded-md px-2 py-1 text-[10px] font-medium opacity-0 transition-opacity group-hover/title:opacity-100"
+                  style={{
+                    backgroundColor: 'var(--color-text)',
+                    color: 'var(--color-bg)',
+                  }}
+                >
+                  {t.renameTitle}
+                </span>
+              )}
+            </button>
+          )}
           {contract.is_template ? (
             <span
-              className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium"
+              className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium"
               style={{ backgroundColor: 'color-mix(in srgb, var(--color-primary) 14%, transparent)', color: 'var(--color-primary)' }}
             >
               {t.contractTemplateBadge}
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium"
+            <span className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium"
               style={{ borderColor: 'var(--color-border)', color: statusColors[status], backgroundColor: 'var(--color-bg-secondary, var(--color-bg))' }}>
               <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: statusColors[status] }} />
               {status === 'active' ? t.statusActive : status === 'archived' ? t.statusArchived : t.statusDraft}
             </span>
           )}
           {status === 'active' && hasChanges && (
-            <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+            <span className="hidden text-xs md:inline" style={{ color: 'var(--color-text-tertiary)' }}>
               {t.editingActiveWillBumpVersion}
             </span>
           )}
         </div>
-        <div className="flex items-center gap-3">
-          <Link to={documentHistoryPath('contract', contract.id)} className="rounded-lg border px-4 py-2 text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>{t.historyLinkLabel}</Link>
-          <button onClick={handleDownloadPdf} disabled={downloading} className="inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm disabled:opacity-50" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>
+        <div className="flex items-center gap-2">
+          <Link to={documentHistoryPath('contract', contract.id)} className="rounded-lg border px-3 py-1.5 text-xs font-medium" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>{t.historyLinkLabel}</Link>
+          <button onClick={handleDownloadPdf} disabled={downloading} className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-50" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>
             {downloading && (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
                 <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
               </svg>
             )}
             {downloading ? t.generatingPdf : t.downloadPdf}
           </button>
-          <button onClick={() => navigate(documentsIndexPath('contract'))} className="rounded-lg border px-4 py-2 text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>{t.cancel}</button>
+          <button onClick={() => navigate(documentsIndexPath('contract'))} className="rounded-lg border px-3 py-1.5 text-xs font-medium" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>{t.cancel}</button>
           {contract.is_template ? (
             <button onClick={handleSaveAsDraft} disabled={saving || !canWrite || !hasChanges} title={!canWrite ? t.dunningWriteBlocked : undefined}
-              className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50" style={{ backgroundColor: 'var(--color-primary)' }}>
+              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50" style={{ backgroundColor: 'var(--color-primary)' }}>
               {savingMode === 'draft' ? (
-                <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>{translating ? t.savingTranslating : t.saving}</>
+                <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>{translating ? t.savingTranslating : t.saving}</>
               ) : t.saveTemplate}
             </button>
           ) : (
             <>
               <button onClick={handleSaveAsDraft} disabled={saving || !canWrite || (!hasChanges && status === 'draft')} title={!canWrite ? t.dunningWriteBlocked : undefined}
-                className="flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium disabled:opacity-50"
+                className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-50"
                 style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
                 {savingMode === 'draft' ? (
-                  <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>{translating ? t.savingTranslating : t.saving}</>
+                  <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>{translating ? t.savingTranslating : t.saving}</>
                 ) : t.saveAsDraft}
               </button>
-              <button onClick={handleActivateAndSign} disabled={saving || signing || !canWrite} title={!canWrite ? t.dunningWriteBlocked : undefined}
-                className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50" style={{ backgroundColor: 'var(--color-primary)' }}>
+              <button onClick={handleActivateAndSign} disabled={activateDisabled} title={activateTitle}
+                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50" style={{ backgroundColor: 'var(--color-primary)' }}>
                 {savingMode === 'activate' ? (
-                  <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>{translating ? t.savingTranslating : t.saving}</>
-                ) : t.activateAndSign}
+                  <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>{translating ? t.savingTranslating : t.saving}</>
+                ) : missingRequiredFields.length > 0
+                  ? t.activateNeedsFields(missingRequiredFields.length)
+                  : t.activateAndSign}
               </button>
             </>
           )}
@@ -550,143 +723,207 @@ export function ContractEdit({ user }: { user: User }) {
       </div>
 
       {error && (
-        <div className="mb-4 rounded-md px-3 py-2 text-sm" style={{ backgroundColor: 'var(--color-diff-remove)', color: 'var(--color-danger)' }}>{error}</div>
+        <div className="mx-6 mt-4 rounded-md px-3 py-2 text-sm md:mx-8" style={{ backgroundColor: 'var(--color-diff-remove)', color: 'var(--color-danger)' }}>{error}</div>
       )}
 
-      <div className="space-y-4">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <div>
-            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.titleLabel}</label>
-            <input type="text" value={title} onChange={e => setTitle(e.target.value)} className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
-          </div>
-
-          {contract?.is_template ? (
-            <div>
-              <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.contractTemplateForPositionLabel}</label>
-              <div className="relative">
-                <select
-                  value={templateForPosition}
-                  onChange={e => setTemplateForPosition(e.target.value)}
-                  className="w-full appearance-none rounded-lg border px-3 py-2 pr-8 text-sm"
-                  style={inputStyle}
-                >
-                  <option value="">{t.contractTemplateNoneForPosition}</option>
-                  {jobPositions.map(p => <option key={p} value={p}>{p}</option>)}
-                </select>
-                <svg className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-text-tertiary)' }}>
-                  <polyline points="6 9 12 15 18 9" />
+      {/* ── Two-pane area: structured-fields sidebar + editor canvas ── */}
+      <div className="flex min-h-0 flex-1">
+        <aside
+          className={`${sidebarOpen ? 'w-80' : 'w-12'} shrink-0 overflow-y-auto border-r transition-[width]`}
+          style={{
+            position: 'sticky',
+            top: `${EDITOR_STICKY_TOP_PX}px`,
+            height: `calc(100vh - ${EDITOR_STICKY_TOP_PX}px)`,
+            borderColor: 'var(--color-border)',
+            backgroundColor: 'var(--color-bg-secondary, var(--color-bg))',
+          }}
+        >
+          {!sidebarOpen ? (
+            // Collapsed: just an expand button at the top. Click reveals
+            // the full sidebar with its collapsible sections.
+            <div className="flex justify-center pt-3">
+              <button
+                type="button"
+                onClick={() => setSidebarOpen(true)}
+                title={t.sidebarShow}
+                aria-label={t.sidebarShow}
+                className="flex h-8 w-8 items-center justify-center rounded-md transition-colors"
+                style={{ color: 'var(--color-text-secondary)' }}
+                onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
+                onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="3" y1="6" x2="21" y2="6" />
+                  <line x1="3" y1="12" x2="21" y2="12" />
+                  <line x1="3" y1="18" x2="21" y2="18" />
                 </svg>
-              </div>
-              <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.contractTemplateForPositionHelp}</p>
+              </button>
             </div>
           ) : (
-            <div>
-              <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.employeeLabel}</label>
-              <div className="relative">
-                <select
-                  value={employeeId || ''}
-                  onChange={e => {
-                    const val = e.target.value
-                    setEmployeeId(val || null)
-                    setEmployee(allEmployees.find(emp => emp.id === val) || null)
-                  }}
-                  className="w-full appearance-none rounded-lg border px-3 py-2 pr-8 text-sm"
-                  style={inputStyle}
-                >
-                  <option value="">{t.noEmployeeLinked}</option>
-                  {allEmployees.map(emp => (
-                    <option key={emp.id} value={emp.id}>{emp.name}{primaryDept(emp) ? ` (${primaryDept(emp)})` : ''}</option>
-                  ))}
-                </select>
-                <svg className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-text-tertiary)' }}>
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
-              </div>
-            </div>
-          )}
+          <>
+          {/* Header: back-arrow button hides the sidebar. Outlined so
+              it reads as a real button, not just a floating icon. */}
+          <div className="flex items-center px-3 pt-3">
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(false)}
+              title={t.sidebarHide}
+              aria-label={t.sidebarHide}
+              className="flex h-8 w-8 items-center justify-center rounded-md border transition-colors"
+              style={{
+                color: 'var(--color-text-secondary)',
+                borderColor: 'var(--color-border)',
+                backgroundColor: 'var(--color-bg)',
+              }}
+              onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
+              onMouseOut={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg)' }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+            </button>
+          </div>
 
-          <div>
-            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.tagsLabel}</label>
-            <div className="flex flex-wrap gap-2">
-              {allTags.map(tag => {
-                const isSelected = selectedTagIds.has(tag.id)
-                return (
-                  <button key={tag.id} type="button" onClick={() => toggleTag(tag.id)}
-                    className="rounded-full border px-3 py-1 text-xs font-medium transition-all"
+          {/* ── Details section (collapsible) ── */}
+          <div className="px-4 pt-3">
+            <button
+              type="button"
+              onClick={() => setDetailsOpen(o => !o)}
+              aria-expanded={detailsOpen}
+              className="flex w-full items-center gap-1.5 rounded-md py-1.5 text-left text-[11px] font-semibold uppercase tracking-wider transition-colors"
+              style={{ color: 'var(--color-text-tertiary)' }}
+              onMouseOver={e => { e.currentTarget.style.color = 'var(--color-text-secondary)' }}
+              onMouseOut={e => { e.currentTarget.style.color = 'var(--color-text-tertiary)' }}
+            >
+              <svg
+                width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                style={{ transform: detailsOpen ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }}
+              >
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+              <span>{t.sidebarSectionDetails}</span>
+              {missingRequiredFields.length > 0 && !detailsOpen && (
+                <span
+                  className="ml-auto rounded-full px-1.5 text-[10px] font-semibold tabular-nums"
+                  style={{ backgroundColor: 'var(--color-danger)', color: 'white' }}
+                >
+                  {missingRequiredFields.length}
+                </span>
+              )}
+            </button>
+          </div>
+
+          {detailsOpen && (
+          <div
+            className="mx-4 mt-2 border-t px-0 pb-2 pt-4"
+            style={{ borderColor: 'var(--color-border)' }}
+          >
+          <div className="space-y-5">
+            {/* Title lives in the page top bar as an inline-editable
+                heading (click-to-rename, Google Docs style). It's not
+                duplicated here. The missing-required red dot for an
+                empty title is reflected via the activate-button label. */}
+
+            {/* Employee (contract) or template-position (template) */}
+            {contract?.is_template ? (
+              <div>
+                <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>{t.contractTemplateForPositionLabel}</label>
+                <div className="relative">
+                  <select
+                    value={templateForPosition}
+                    onChange={e => setTemplateForPosition(e.target.value)}
+                    className="w-full appearance-none rounded-lg border px-3 py-2 pr-8 text-sm"
+                    style={inputStyle}
+                  >
+                    <option value="">{t.contractTemplateNoneForPosition}</option>
+                    {jobPositions.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                  <svg className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-text-tertiary)' }}>
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </div>
+                <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.contractTemplateForPositionHelp}</p>
+              </div>
+            ) : (
+              <div>
+                <label className="mb-1 flex items-center gap-1.5 text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>
+                  {t.employeeLabel}
+                  {missingDot('employee')}
+                </label>
+                <EmployeeSelect
+                  value={employeeId}
+                  onChange={next => {
+                    setEmployeeId(next)
+                    setEmployee(next ? allEmployees.find(emp => emp.id === next) || null : null)
+                  }}
+                  employees={allEmployees}
+                />
+              </div>
+            )}
+
+            {/* Contract type (real contracts only) — the per-type
+                description has been demoted from always-visible subtext
+                to an InfoTooltip on the heading; it stays accessible
+                without eating vertical space in the sidebar. */}
+            {!contract?.is_template && (
+              <div>
+                <label className="mb-1 flex items-center gap-1.5 text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>
+                  {t.contractTypeLabel}
+                  <InfoTooltip text={contractType === 'pkwt' ? t.contractTypePkwtDesc : t.contractTypePkwttDesc} />
+                </label>
+                <div className="inline-flex w-full rounded-lg border p-0.5" style={{ borderColor: 'var(--color-border)' }}>
+                  <button
+                    type="button"
+                    onClick={() => handleContractTypeChange('pkwt')}
+                    aria-pressed={contractType === 'pkwt'}
+                    className="flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-colors"
                     style={{
-                      borderColor: isSelected ? 'var(--color-primary)' : 'var(--color-border)',
-                      backgroundColor: isSelected ? 'color-mix(in srgb, var(--color-primary) 12%, transparent)' : 'transparent',
-                      color: isSelected ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+                      backgroundColor: contractType === 'pkwt' ? 'color-mix(in srgb, var(--color-primary) 12%, transparent)' : 'transparent',
+                      color: contractType === 'pkwt' ? 'var(--color-primary)' : 'var(--color-text-secondary)',
                     }}
                   >
-                    {tag.name}
+                    {t.contractTypeFixedTerm}
                   </button>
-                )
-              })}
-              <div className="flex items-center gap-1">
-                <input type="text" value={newTagName} onChange={e => setNewTagName(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleCreateTag() } }}
-                  placeholder={t.newTagPlaceholder} className="w-24 rounded-full border px-3 py-1 text-xs outline-none" style={inputStyle} />
-                {newTagName.trim() && (
-                  <button type="button" onClick={handleCreateTag} className="rounded-full px-2 py-1 text-xs font-medium" style={{ color: 'var(--color-primary)' }}>{t.addShort}</button>
-                )}
+                  <button
+                    type="button"
+                    onClick={() => handleContractTypeChange('pkwtt')}
+                    aria-pressed={contractType === 'pkwtt'}
+                    className="flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-colors"
+                    style={{
+                      backgroundColor: contractType === 'pkwtt' ? 'color-mix(in srgb, var(--color-primary) 12%, transparent)' : 'transparent',
+                      color: contractType === 'pkwtt' ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+                    }}
+                  >
+                    {t.contractTypePermanent}
+                  </button>
+                </div>
               </div>
-            </div>
-          </div>
-        </div>
+            )}
 
-        <div className="py-4">
-          {/* Contract type — drives the starter-doc shape and whether the
-              end-date / probation field below is meaningful. Flipping after
-              creation prompts the user before regenerating the body. */}
-          {!contract?.is_template && (
-            <div className="mb-4">
-              <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.contractTypeLabel}</label>
-              <div className="inline-flex rounded-lg border p-0.5" style={{ borderColor: 'var(--color-border)' }}>
-                <button
-                  type="button"
-                  onClick={() => handleContractTypeChange('pkwt')}
-                  aria-pressed={contractType === 'pkwt'}
-                  className="rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
-                  style={{
-                    backgroundColor: contractType === 'pkwt' ? 'color-mix(in srgb, var(--color-primary) 12%, transparent)' : 'transparent',
-                    color: contractType === 'pkwt' ? 'var(--color-primary)' : 'var(--color-text-secondary)',
-                  }}
-                >
-                  {t.contractTypeFixedTerm}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleContractTypeChange('pkwtt')}
-                  aria-pressed={contractType === 'pkwtt'}
-                  className="rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
-                  style={{
-                    backgroundColor: contractType === 'pkwtt' ? 'color-mix(in srgb, var(--color-primary) 12%, transparent)' : 'transparent',
-                    color: contractType === 'pkwtt' ? 'var(--color-primary)' : 'var(--color-text-secondary)',
-                  }}
-                >
-                  {t.contractTypePermanent}
-                </button>
-              </div>
-              <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                {contractType === 'pkwt' ? t.contractTypePkwtDesc : t.contractTypePkwttDesc}
-              </p>
-            </div>
-          )}
-
-          <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+            {/* Start date */}
             <div>
-              <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.startDateLabel}</label>
+              <label className="mb-1 flex items-center gap-1.5 text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>
+                {t.startDateLabel}
+                {missingDot('startDate')}
+              </label>
               <DateTimePicker mode="date" value={startDate} onChange={setStartDate} />
             </div>
+
+            {/* End date (PKWT) or probation (PKWTT) */}
             {contractType === 'pkwt' ? (
               <div>
-                <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.endDateLabel}</label>
+                <label className="mb-1 flex items-center gap-1.5 text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>
+                  {t.endDateLabel}
+                  {missingDot('endDate')}
+                </label>
                 <DateTimePicker mode="date" value={endDate} onChange={setEndDate} />
               </div>
             ) : (
               <div>
-                <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.probationMonthsLabel}</label>
+                <label className="mb-1 flex items-center gap-1.5 text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>
+                  {t.probationMonthsLabel}
+                  {missingDot('probationMonths')}
+                </label>
                 <select
                   value={probationMonths}
                   onChange={e => setProbationMonths(e.target.value)}
@@ -700,27 +937,13 @@ export function ContractEdit({ user }: { user: User }) {
                 </select>
               </div>
             )}
-          </div>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+
+            {/* Base wage */}
             <div>
-              <label className="mb-1 flex items-center gap-1 text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+              <label className="mb-1 flex items-center gap-1.5 text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>
                 {t.baseWageLabel}
                 <InfoTooltip text={t.baseWageHelp} />
-                <a
-                  href="https://satudata.kemnaker.go.id/data/kumpulan-data/3005"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  title={t.baseWageReferenceLink}
-                  aria-label={t.baseWageReferenceLink}
-                  className="ml-1 inline-flex items-center transition-opacity hover:opacity-70"
-                  style={{ color: 'var(--color-text-tertiary)' }}
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                    <polyline points="15 3 21 3 21 9" />
-                    <line x1="10" y1="14" x2="21" y2="3" />
-                  </svg>
-                </a>
+                {missingDot('baseWage')}
               </label>
               <div className="relative">
                 <input
@@ -735,8 +958,10 @@ export function ContractEdit({ user }: { user: User }) {
                 <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.idr}</span>
               </div>
             </div>
+
+            {/* Allowance */}
             <div>
-              <label className="mb-1 flex items-center text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+              <label className="mb-1 flex items-center gap-1.5 text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>
                 {t.allowanceLabel}
                 <InfoTooltip text={t.allowanceHelp} />
               </label>
@@ -753,45 +978,51 @@ export function ContractEdit({ user }: { user: User }) {
                 <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.idr}</span>
               </div>
             </div>
-            <div>
-              <label className="mb-1 flex items-center text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
-                {t.hoursPerDayLabel}
-                <InfoTooltip text={t.hoursPerDayHelp} />
-              </label>
-              <select
-                value={hoursPerDay}
-                onChange={e => setHoursPerDay(e.target.value)}
-                className="w-full rounded-lg border px-3 py-2 text-sm"
-                style={inputStyle}
-              >
-                <option value="">—</option>
-                <option value="6">{t.hoursOption(6)}</option>
-                <option value="7">{t.hoursOption(7)}</option>
-                <option value="8">{t.hoursOption(8)}</option>
-                <option value="9">{t.hoursOption(9)}</option>
-                <option value="10">{t.hoursOption(10)}</option>
-              </select>
+
+            {/* Hours + days side-by-side */}
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="mb-1 flex items-center gap-1.5 text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>
+                  {t.hoursPerDayLabel}
+                  {missingDot('hoursPerDay')}
+                </label>
+                <select
+                  value={hoursPerDay}
+                  onChange={e => setHoursPerDay(e.target.value)}
+                  className="w-full rounded-lg border px-2 py-2 text-sm"
+                  style={inputStyle}
+                >
+                  <option value="">—</option>
+                  <option value="6">{t.hoursOption(6)}</option>
+                  <option value="7">{t.hoursOption(7)}</option>
+                  <option value="8">{t.hoursOption(8)}</option>
+                  <option value="9">{t.hoursOption(9)}</option>
+                  <option value="10">{t.hoursOption(10)}</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 flex items-center gap-1.5 text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>
+                  {t.daysPerWeekLabel}
+                  {missingDot('daysPerWeek')}
+                </label>
+                <select
+                  value={daysPerWeek}
+                  onChange={e => setDaysPerWeek(e.target.value)}
+                  className="w-full rounded-lg border px-2 py-2 text-sm"
+                  style={inputStyle}
+                >
+                  <option value="">—</option>
+                  <option value="4">{t.daysOption(4)}</option>
+                  <option value="5">{t.daysOption(5)}</option>
+                  <option value="6">{t.daysOption(6)}</option>
+                  <option value="7">{t.daysOption(7)}</option>
+                </select>
+              </div>
             </div>
+
+            {/* Annual leave */}
             <div>
-              <label className="mb-1 flex items-center text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
-                {t.daysPerWeekLabel}
-                <InfoTooltip text={t.daysPerWeekHelp} />
-              </label>
-              <select
-                value={daysPerWeek}
-                onChange={e => setDaysPerWeek(e.target.value)}
-                className="w-full rounded-lg border px-3 py-2 text-sm"
-                style={inputStyle}
-              >
-                <option value="">—</option>
-                <option value="4">{t.daysOption(4)}</option>
-                <option value="5">{t.daysOption(5)}</option>
-                <option value="6">{t.daysOption(6)}</option>
-                <option value="7">{t.daysOption(7)}</option>
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.annualLeaveLabel}</label>
+              <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>{t.annualLeaveLabel}</label>
               <select
                 value={annualLeaveDays}
                 onChange={e => setAnnualLeaveDays(e.target.value)}
@@ -805,96 +1036,156 @@ export function ContractEdit({ user }: { user: User }) {
                 <option value="20">{t.annualLeaveOption(20)}</option>
               </select>
             </div>
-          </div>
-        </div>
 
-        <div>
-          <div className="mb-2 flex items-center justify-between">
-            <label className="block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.contentLabel}</label>
-          </div>
-          {/* Bilingual editor — both EN and ID slots authored side-by-side
-              within the same canvas. EN/ID switcher, whole-doc translate,
-              and AI Generate are all gone in C.2; per-block translation
-              returns in Phase E and AI gen will return as a structured-doc
-              producer in a follow-up. */}
-          <DocumentEditor
-            initialDoc={contentDoc}
-            onChange={setContentDoc}
-            view={view}
-            onViewChange={setView}
-            mergeFields={{
-              scope: 'contract',
-              getContext: () => ({
-                employee: allEmployees.find(e => e.id === employeeId) ?? null,
-                organization,
-                contract: contract ? {
-                  ...contract,
-                  base_wage_idr: parsedBaseWage,
-                  allowance_idr: parsedAllowance,
-                  hours_per_day: parsedHoursPerDay,
-                  days_per_week: parsedDaysPerWeek,
-                  employee_id: employeeId,
-                  contract_type: contractType,
-                  annual_leave_days: parsedAnnualLeave,
-                  probation_months: parsedProbationMonths,
-                } : null,
-                today: new Date(),
-                lang: 'en',
-                signer: { name: user.name, title: user.title },
-              }),
-            }}
-            aiGenerate={{ docType: 'contract', title }}
-          />
-        </div>
-
-        {showSignPanel && (
-          <div ref={signPanelRef} className="rounded-xl border p-5" style={{ borderColor: 'var(--color-primary)', backgroundColor: 'var(--color-bg-secondary, var(--color-bg))' }}>
-            <h3 className="mb-1 text-base font-semibold" style={{ color: 'var(--color-text)' }}>{t.signAsEmployer}</h3>
-            <p className="mb-4 text-sm" style={{ color: 'var(--color-text-secondary)' }}>{t.signAsEmployerDesc}</p>
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.signerNameLabel}</label>
-                <input type="text" value={signerName} onChange={e => setSignerName(e.target.value)} className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.signerTitleLabel}</label>
-                <input type="text" value={signerTitle} onChange={e => setSignerTitle(e.target.value)} placeholder={t.signerTitlePlaceholder} className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
+            {/* Tags */}
+            <div>
+              <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>{t.tagsLabel}</label>
+              <div className="flex flex-wrap gap-1.5">
+                {allTags.map(tag => {
+                  const isSelected = selectedTagIds.has(tag.id)
+                  return (
+                    <button key={tag.id} type="button" onClick={() => toggleTag(tag.id)}
+                      className="rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-all"
+                      style={{
+                        borderColor: isSelected ? 'var(--color-primary)' : 'var(--color-border)',
+                        backgroundColor: isSelected ? 'color-mix(in srgb, var(--color-primary) 12%, transparent)' : 'transparent',
+                        color: isSelected ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+                      }}
+                    >
+                      {tag.name}
+                    </button>
+                  )
+                })}
+                <div className="flex items-center gap-1">
+                  <input type="text" value={newTagName} onChange={e => setNewTagName(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleCreateTag() } }}
+                    placeholder={t.newTagPlaceholder} className="w-20 rounded-full border px-2.5 py-0.5 text-[11px] outline-none" style={inputStyle} />
+                  {newTagName.trim() && (
+                    <button type="button" onClick={handleCreateTag} className="rounded-full px-1.5 py-0.5 text-[11px] font-medium" style={{ color: 'var(--color-primary)' }}>{t.addShort}</button>
+                  )}
+                </div>
               </div>
             </div>
-            <p className="mb-2 mt-4 text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>{t.chooseSignatureStyle}</p>
-            <div className="mb-4 grid grid-cols-2 gap-2 md:grid-cols-4">
-              {SIGNATURE_FONTS.map(font => (
-                <button
-                  key={font.name}
-                  type="button"
-                  onClick={() => setSignerFont(font.name)}
-                  className="rounded-xl border px-4 py-3 text-left transition-colors"
-                  style={{
-                    borderColor: signerFont === font.name ? 'var(--color-primary)' : 'var(--color-border)',
-                    backgroundColor: signerFont === font.name ? 'var(--color-bg)' : 'transparent',
-                  }}
-                >
-                  <span className="block truncate text-xl" style={{ fontFamily: `'${font.name}', cursive`, color: 'var(--color-text)' }}>
-                    {signerName || user.name}
-                  </span>
-                  <span className="mt-0.5 block text-[10px]" style={{ color: 'var(--color-text-tertiary)' }}>{font.label}</span>
-                </button>
-              ))}
-            </div>
-            <div className="flex items-center gap-2">
-              <button onClick={handleConfirmSign} disabled={signing || !signerName.trim()}
-                className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-                style={{ backgroundColor: 'var(--color-primary)' }}>
-                {signing && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>}
-                {signing ? t.signing : t.confirmAndActivate}
-              </button>
-              <button onClick={() => setShowSignPanel(false)} disabled={signing} className="rounded-lg border px-4 py-2 text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>
-                {t.cancel}
-              </button>
-            </div>
-          </div>
-        )}
 
+          </div>
+          </div>
+          )}
+
+          {/* ── Outline section (collapsible) ── */}
+          <div className="px-4 pt-3">
+            <button
+              type="button"
+              onClick={() => setOutlineOpen(o => !o)}
+              aria-expanded={outlineOpen}
+              className="flex w-full items-center gap-1.5 rounded-md py-1.5 text-left text-[11px] font-semibold uppercase tracking-wider transition-colors"
+              style={{ color: 'var(--color-text-tertiary)' }}
+              onMouseOver={e => { e.currentTarget.style.color = 'var(--color-text-secondary)' }}
+              onMouseOut={e => { e.currentTarget.style.color = 'var(--color-text-tertiary)' }}
+            >
+              <svg
+                width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                style={{ transform: outlineOpen ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }}
+              >
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+              <span>{t.documentOutlineLabel}</span>
+            </button>
+          </div>
+          {outlineOpen && (
+            <div
+              className="mx-4 mt-2 border-t pb-5 pt-3"
+              style={{ borderColor: 'var(--color-border)' }}
+            >
+              <SectionOutline doc={contentDoc} topOffsetPx={EDITOR_STICKY_TOP_PX} />
+            </div>
+          )}
+          </>
+          )}
+        </aside>
+
+        {/* Editor canvas — fills the rest of the row, edge-to-edge with
+            no extra wrapper padding. The DocumentEditor's own internal
+            spacing (1.5rem inside .tiptap) keeps prose readable. */}
+        <div className="flex min-w-0 flex-1 flex-col">
+            <DocumentEditor
+              initialDoc={contentDoc}
+              onChange={setContentDoc}
+              view={view}
+              onViewChange={setView}
+              stickyToolbar
+              stickyToolbarOffset={`${EDITOR_STICKY_TOP_PX}px`}
+              mergeFields={{
+                scope: 'contract',
+                getContext: () => ({
+                  employee: allEmployees.find(e => e.id === employeeId) ?? null,
+                  organization,
+                  contract: contract ? {
+                    ...contract,
+                    base_wage_idr: parsedBaseWage,
+                    allowance_idr: parsedAllowance,
+                    hours_per_day: parsedHoursPerDay,
+                    days_per_week: parsedDaysPerWeek,
+                    employee_id: employeeId,
+                    contract_type: contractType,
+                    annual_leave_days: parsedAnnualLeave,
+                    probation_months: parsedProbationMonths,
+                  } : null,
+                  today: new Date(),
+                  lang: 'en',
+                  signer: { name: user.name, title: user.title },
+                }),
+              }}
+              aiGenerate={{ docType: 'contract', title }}
+            />
+
+            {showSignPanel && (
+              <div ref={signPanelRef} className="mt-6 rounded-xl border p-5" style={{ borderColor: 'var(--color-primary)', backgroundColor: 'var(--color-bg-secondary, var(--color-bg))' }}>
+                <h3 className="mb-1 text-base font-semibold" style={{ color: 'var(--color-text)' }}>{t.signAsEmployer}</h3>
+                <p className="mb-4 text-sm" style={{ color: 'var(--color-text-secondary)' }}>{t.signAsEmployerDesc}</p>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.signerNameLabel}</label>
+                    <input type="text" value={signerName} onChange={e => setSignerName(e.target.value)} className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.signerTitleLabel}</label>
+                    <input type="text" value={signerTitle} onChange={e => setSignerTitle(e.target.value)} placeholder={t.signerTitlePlaceholder} className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
+                  </div>
+                </div>
+                <p className="mb-2 mt-4 text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>{t.chooseSignatureStyle}</p>
+                <div className="mb-4 grid grid-cols-2 gap-2 md:grid-cols-4">
+                  {SIGNATURE_FONTS.map(font => (
+                    <button
+                      key={font.name}
+                      type="button"
+                      onClick={() => setSignerFont(font.name)}
+                      className="rounded-xl border px-4 py-3 text-left transition-colors"
+                      style={{
+                        borderColor: signerFont === font.name ? 'var(--color-primary)' : 'var(--color-border)',
+                        backgroundColor: signerFont === font.name ? 'var(--color-bg)' : 'transparent',
+                      }}
+                    >
+                      <span className="block truncate text-xl" style={{ fontFamily: `'${font.name}', cursive`, color: 'var(--color-text)' }}>
+                        {signerName || user.name}
+                      </span>
+                      <span className="mt-0.5 block text-[10px]" style={{ color: 'var(--color-text-tertiary)' }}>{font.label}</span>
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button onClick={handleConfirmSign} disabled={signing || !signerName.trim()}
+                    className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                    style={{ backgroundColor: 'var(--color-primary)' }}>
+                    {signing && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>}
+                    {signing ? t.signing : t.confirmAndActivate}
+                  </button>
+                  <button onClick={() => setShowSignPanel(false)} disabled={signing} className="rounded-lg border px-4 py-2 text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>
+                    {t.cancel}
+                  </button>
+                </div>
+              </div>
+            )}
+        </div>
       </div>
     </div>
   )

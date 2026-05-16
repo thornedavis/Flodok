@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useTheme } from '../hooks/useTheme'
 import { useLang } from '../contexts/LanguageContext'
@@ -87,10 +87,90 @@ export type DashboardOutletContext = {
   org: Organization | null
 }
 
+// ─── Dashboard layout — shared state ─────────────────────────────────
+//
+// Two layout concerns are exposed here so individual pages can opt into
+// "focus the canvas" UX without prop-drilling:
+//
+//   - sidebar collapsed: the main-nav rail shrinks to icons-only. Used
+//     by document edit pages so the editor gets the screen.
+//   - full-width: the page renders edge-to-edge, escaping the default
+//     max-w-6xl + horizontal padding constraints. Used by Google Docs–
+//     style edit pages where a 1152px cap is too narrow.
+//
+// `useSidebar` returns the collapse state directly; the hooks below are
+// the convenience patterns for pages that want to enter forced state on
+// mount and restore the user's previous state on unmount.
+
+const SIDEBAR_COLLAPSED_KEY = 'flodok:sidebarCollapsed'
+
+type LayoutContextValue = {
+  collapsed: boolean
+  setCollapsed: (next: boolean) => void
+  fullWidth: boolean
+  setFullWidth: (next: boolean) => void
+}
+
+const LayoutContext = createContext<LayoutContextValue | null>(null)
+
+export function useSidebar(): { collapsed: boolean; setCollapsed: (next: boolean) => void } {
+  const ctx = useContext(LayoutContext)
+  if (!ctx) throw new Error('useSidebar must be used within DashboardLayout')
+  return { collapsed: ctx.collapsed, setCollapsed: ctx.setCollapsed }
+}
+
+/**
+ * Hook for pages that want the main nav collapsed while mounted. The
+ * user's previous state is captured on mount and restored on unmount,
+ * so leaving the page doesn't permanently change their preference.
+ * The user can still manually toggle the sidebar while on the page.
+ */
+export function useAutoCollapseSidebar() {
+  const ctx = useContext(LayoutContext)
+  // Snapshot lives in a ref so we don't re-run the effect when collapsed
+  // toggles mid-session — that would clobber the user's manual toggle.
+  const previousRef = useRef<boolean | null>(null)
+  useEffect(() => {
+    if (!ctx) return
+    previousRef.current = ctx.collapsed
+    ctx.setCollapsed(true)
+    return () => {
+      if (previousRef.current !== null) ctx.setCollapsed(previousRef.current)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+}
+
+/**
+ * Hook for pages that want the main content area to render edge-to-edge.
+ * DashboardLayout drops the `max-w-6xl` constraint and the horizontal
+ * `px-*` padding while this flag is set. Auto-restored on unmount.
+ */
+export function useFullWidthLayout() {
+  const ctx = useContext(LayoutContext)
+  useEffect(() => {
+    if (!ctx) return
+    ctx.setFullWidth(true)
+    return () => ctx.setFullWidth(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+}
+
 export function DashboardLayout({ user, onSignOut }: { user: User; onSignOut: () => void }) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [org, setOrg] = useState<Organization | null>(null)
   const location = useLocation()
+
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false
+    return window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1'
+  })
+  const [fullWidth, setFullWidth] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? '1' : '0')
+  }, [collapsed])
 
   useEffect(() => { setMobileOpen(false) }, [location.pathname])
 
@@ -105,20 +185,22 @@ export function DashboardLayout({ user, onSignOut }: { user: User; onSignOut: ()
   return (
     <BreadcrumbProvider>
       <BillingProvider orgId={user.org_id}>
-        <div className="flex min-h-screen" style={{ backgroundColor: 'var(--color-bg)' }}>
-          <Sidebar user={user} mobileOpen={mobileOpen} onCloseMobile={() => setMobileOpen(false)} />
+        <LayoutContext.Provider value={{ collapsed, setCollapsed, fullWidth, setFullWidth }}>
+          <div className="flex min-h-screen" style={{ backgroundColor: 'var(--color-bg)' }}>
+            <Sidebar user={user} mobileOpen={mobileOpen} onCloseMobile={() => setMobileOpen(false)} />
 
-          <div className="flex min-w-0 flex-1 flex-col">
-            <Header user={user} org={org} onSignOut={onSignOut} onOpenMenu={() => setMobileOpen(true)} />
+            <div className="flex min-w-0 flex-1 flex-col">
+              <Header user={user} org={org} onSignOut={onSignOut} onOpenMenu={() => setMobileOpen(true)} />
 
-            <main className="flex-1 px-6 py-8 md:px-10">
-              <div className="mx-auto max-w-6xl">
-                <DunningBanner user={user} />
-                <Outlet context={{ org } satisfies DashboardOutletContext} />
-              </div>
-            </main>
+              <main className={`flex-1 ${fullWidth ? '' : 'px-6 py-8 md:px-10'}`}>
+                <div className={fullWidth ? '' : 'mx-auto max-w-6xl'}>
+                  <DunningBanner user={user} />
+                  <Outlet context={{ org } satisfies DashboardOutletContext} />
+                </div>
+              </main>
+            </div>
           </div>
-        </div>
+        </LayoutContext.Provider>
       </BillingProvider>
     </BreadcrumbProvider>
   )
@@ -131,8 +213,6 @@ export function PublicLayout() {
 
 // ─── Sidebar ────────────────────────────────────────────
 
-const SIDEBAR_COLLAPSED_KEY = 'flodok:sidebarCollapsed'
-
 function Sidebar({ user, mobileOpen, onCloseMobile }: {
   user: User
   mobileOpen: boolean
@@ -143,15 +223,7 @@ function Sidebar({ user, mobileOpen, onCloseMobile }: {
   const location = useLocation()
   const navigate = useNavigate()
   const [userCount, setUserCount] = useState<number | null>(null)
-  const [collapsed, setCollapsed] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false
-    return window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1'
-  })
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? '1' : '0')
-  }, [collapsed])
+  const { collapsed, setCollapsed } = useSidebar()
 
   useEffect(() => {
     if (!isAdmin) return

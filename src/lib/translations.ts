@@ -721,7 +721,7 @@ export const translations = {
     searchContractsPlaceholder: 'Search contracts...',
     filterByContractStatus: 'Filter by contract status.',
     deleteContractConfirm: (title: string) => `Delete "${title}"? This cannot be undone.`,
-    contractTypeLabel: 'Contract Type',
+    contractTypeLabel: 'Contract type',
     contractTypeFixedTerm: 'Fixed Term (PKWT)',
     contractTypePermanent: 'Permanent (PKWTT)',
     contractTypePkwtDesc:
@@ -736,8 +736,8 @@ export const translations = {
     workLocationPlaceholder: 'e.g. Jl. Raya Ubud',
     employeeAddressLabel: 'Employee Address',
     fullAddressPlaceholder: 'Full address',
-    startDateLabel: 'Start Date',
-    endDateLabel: 'End Date',
+    startDateLabel: 'Start date',
+    endDateLabel: 'End date',
     probationMonthsLabel: 'Probation (months)',
     monthOption: (n: number) => `${n} month${n === 1 ? '' : 's'}`,
     baseSalaryLabel: 'Base Salary',
@@ -752,6 +752,15 @@ export const translations = {
     annualLeaveOption: (n: number) => `${n} days`,
     contractTypeFlipConfirm:
       'Switching contract type will regenerate the entire contract from the new PKWT/PKWTT starter. Any manual edits you have made to the body will be lost. Continue?',
+    activateNeedsFields: (n: number) => n === 1 ? '1 field needed' : `${n} fields needed`,
+    activateMissingFieldsTooltip: (fields: string) => `Fill these to activate: ${fields}`,
+    activateMissingFieldHint: 'Required to activate this contract',
+    documentOutlineLabel: 'Outline',
+    renameTitle: 'Rename',
+    titleEmptyPlaceholder: 'Untitled contract',
+    sidebarHide: 'Hide sidebar',
+    sidebarShow: 'Show sidebar',
+    sidebarSectionDetails: 'Contract details',
 
     // Manager app — Pending page
     pendingUpdatesTitle: 'Pending Updates',
@@ -840,6 +849,7 @@ export const translations = {
     // Manager app — SOP Edit page
     editSopTitle: 'Edit SOP',
     noEmployeeLinked: 'No employee linked',
+    noEmployeesMatch: 'No employees match',
     newTagPlaceholder: 'New tag...',
     addShort: '+ Add',
     contentLabel: 'Content',
@@ -2638,7 +2648,7 @@ export const translations = {
     searchContractsPlaceholder: 'Cari kontrak...',
     filterByContractStatus: 'Filter berdasarkan status kontrak.',
     deleteContractConfirm: (title: string) => `Hapus "${title}"? Tindakan ini tidak dapat dibatalkan.`,
-    contractTypeLabel: 'Jenis Kontrak',
+    contractTypeLabel: 'Jenis kontrak',
     contractTypeFixedTerm: 'Kontrak Waktu Tertentu (PKWT)',
     contractTypePermanent: 'Kontrak Tetap (PKWTT)',
     contractTypePkwtDesc:
@@ -2653,8 +2663,8 @@ export const translations = {
     workLocationPlaceholder: 'mis. Jl. Raya Ubud',
     employeeAddressLabel: 'Alamat Karyawan',
     fullAddressPlaceholder: 'Alamat lengkap',
-    startDateLabel: 'Tanggal Mulai',
-    endDateLabel: 'Tanggal Berakhir',
+    startDateLabel: 'Tanggal mulai',
+    endDateLabel: 'Tanggal berakhir',
     probationMonthsLabel: 'Masa Percobaan (bulan)',
     monthOption: (n: number) => `${n} bulan`,
     baseSalaryLabel: 'Gaji Pokok',
@@ -2669,6 +2679,15 @@ export const translations = {
     annualLeaveOption: (n: number) => `${n} hari`,
     contractTypeFlipConfirm:
       'Mengubah jenis kontrak akan membangun ulang seluruh isi kontrak dari templat PKWT/PKWTT yang baru. Suntingan manual pada isi kontrak akan hilang. Lanjutkan?',
+    activateNeedsFields: (n: number) => n === 1 ? '1 isian dibutuhkan' : `${n} isian dibutuhkan`,
+    activateMissingFieldsTooltip: (fields: string) => `Lengkapi untuk mengaktifkan: ${fields}`,
+    activateMissingFieldHint: 'Wajib diisi untuk mengaktifkan kontrak',
+    documentOutlineLabel: 'Garis besar',
+    renameTitle: 'Ganti nama',
+    titleEmptyPlaceholder: 'Kontrak tanpa judul',
+    sidebarHide: 'Sembunyikan bilah samping',
+    sidebarShow: 'Tampilkan bilah samping',
+    sidebarSectionDetails: 'Detail kontrak',
 
     // Manager app — Pending page
     pendingUpdatesTitle: 'Pembaruan Tertunda',
@@ -2757,6 +2776,7 @@ export const translations = {
     // Manager app — SOP Edit page
     editSopTitle: 'Edit SOP',
     noEmployeeLinked: 'Tidak ada karyawan terkait',
+    noEmployeesMatch: 'Tidak ada karyawan yang cocok',
     newTagPlaceholder: 'Tag baru...',
     addShort: '+ Tambah',
     contentLabel: 'Konten',

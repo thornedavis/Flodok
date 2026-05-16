@@ -27,8 +27,22 @@ export function InfoTooltip({ text }: { text: string }) {
       </button>
       {show && (
         <div
-          className="fixed z-50 w-64 -translate-x-1/2 rounded-lg border p-3 text-xs shadow-lg"
-          style={{ top: pos.top, left: pos.left, backgroundColor: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
+          className="fixed z-50 w-64 -translate-x-1/2 rounded-lg border p-3 text-xs leading-relaxed shadow-lg"
+          // The popover is frequently rendered inside `<label>` elements
+          // that carry `uppercase tracking-wider font-medium` for the
+          // field caption. CSS inheritance applies even across fixed
+          // positioning, so the tooltip body would render shouty unless
+          // we reset those text properties here.
+          style={{
+            top: pos.top,
+            left: pos.left,
+            backgroundColor: 'var(--color-bg)',
+            borderColor: 'var(--color-border)',
+            color: 'var(--color-text-secondary)',
+            textTransform: 'none',
+            letterSpacing: 'normal',
+            fontWeight: 400,
+          }}
         >
           {text}
         </div>

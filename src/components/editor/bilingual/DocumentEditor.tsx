@@ -82,9 +82,25 @@ interface DocumentEditorProps {
     docType: 'sop' | 'contract'
     title?: string
   }
+  // When true the toolbar pins to the top of the nearest scroll container.
+  // Used by the full-height edit-page layouts (ContractEdit) so the toolbar
+  // stays visible as the user scrolls through a long contract body.
+  // `stickyToolbarOffset` is the CSS `top` value (e.g. "0", "56px") —
+  // useful when there's a page header above the editor.
+  stickyToolbar?: boolean
+  stickyToolbarOffset?: string
 }
 
-export function DocumentEditor({ initialDoc, onChange, view = 'stacked', onViewChange, mergeFields, aiGenerate }: DocumentEditorProps) {
+export function DocumentEditor({
+  initialDoc,
+  onChange,
+  view = 'stacked',
+  onViewChange,
+  mergeFields,
+  aiGenerate,
+  stickyToolbar = false,
+  stickyToolbarOffset = '0px',
+}: DocumentEditorProps) {
   // Bind React NodeViews at editor-creation time rather than baking
   // JSX into nodes.ts — keeps the schema file framework-agnostic.
   const SectionWithView = SectionNode.extend({
@@ -339,6 +355,8 @@ export function DocumentEditor({ initialDoc, onChange, view = 'stacked', onViewC
         view={view}
         onViewChange={onViewChange}
         onGenerate={aiGenerate ? () => setGenerateOpen(true) : undefined}
+        sticky={stickyToolbar}
+        stickyOffset={stickyToolbarOffset}
       />
       {aiGenerate && generateOpen && (
         <GenerateModal
@@ -393,20 +411,26 @@ export function DocumentEditor({ initialDoc, onChange, view = 'stacked', onViewC
 
 // ─── Toolbar ──────────────────────────────────────────────────────
 
-function Toolbar({ editor, onSetLink, onAddBlock, onAddSection, mergeFields, view, onViewChange, onGenerate }: {
+function Toolbar({ editor, onSetLink, onAddBlock, onAddSection, mergeFields, view, onViewChange, onGenerate, sticky = false, stickyOffset = '0px' }: {
   editor: Editor
   onSetLink: () => void
   onAddBlock: () => void
   onAddSection: () => void
   mergeFields?: DocumentEditorMergeFields
   view: DocumentEditorView
+  sticky?: boolean
+  stickyOffset?: string
   onViewChange?: (next: DocumentEditorView) => void
   onGenerate?: () => void
 }) {
   return (
     <div
-      className="flex flex-wrap items-center gap-0.5 rounded-t-xl border px-2 py-1.5"
-      style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)' }}
+      className={`flex flex-wrap items-center gap-0.5 border px-2 py-1.5 ${sticky ? 'z-30' : 'rounded-t-xl'}`}
+      style={{
+        borderColor: 'var(--color-border)',
+        backgroundColor: 'var(--color-bg-secondary)',
+        ...(sticky ? { position: 'sticky', top: stickyOffset } : null),
+      }}
     >
       <BlockTypeSelect editor={editor} />
       <Divider />
