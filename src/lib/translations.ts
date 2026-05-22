@@ -765,7 +765,7 @@ export const translations = {
     sidebarHide: 'Hide sidebar',
     sidebarShow: 'Show sidebar',
     sidebarSectionDetails: 'Contract details',
-    sidebarDetails: 'Details',
+    sidebarDetails: 'Properties',
 
     // Manager app — Pending page
     pendingUpdatesTitle: 'Pending Updates',
@@ -2697,7 +2697,7 @@ export const translations = {
     sidebarHide: 'Sembunyikan bilah samping',
     sidebarShow: 'Tampilkan bilah samping',
     sidebarSectionDetails: 'Detail kontrak',
-    sidebarDetails: 'Detail',
+    sidebarDetails: 'Properti',
 
     // Manager app — Pending page
     pendingUpdatesTitle: 'Pembaruan Tertunda',

@@ -21,6 +21,8 @@ import { useBreadcrumbTrailing } from '../../contexts/BreadcrumbContext'
 import { DocumentEditor } from '../../components/editor/bilingual/DocumentEditor'
 import { DocumentEditShell, EDITOR_STICKY_TOP_PX } from '../../components/editor/DocumentEditShell'
 import { DateTimePicker } from '../../components/DateTimePicker'
+import { EmployeeSelect } from '../../components/EmployeeSelect'
+import { type EmpDeptShape } from '../../lib/employee'
 import { docAsJson, type DocumentDoc, type ViewMode } from '../../lib/documentDoc'
 import { documentEditPath } from '../../lib/documentTypes'
 import {
@@ -28,9 +30,14 @@ import {
   publishJobDescription, suggestDocVersion,
   type JobDescriptionStatus,
 } from '../../lib/jobDescriptions'
-import type { User, JobDescription, CompanyDepartment, HiringRequest } from '../../types/aliases'
+import type { User, JobDescription, CompanyDepartment, HiringRequest, Employee } from '../../types/aliases'
 
 type DepartmentOption = Pick<CompanyDepartment, 'id' | 'name'>
+
+type EmployeeWithDepartments = Employee & EmpDeptShape
+
+const EMPLOYEE_WITH_DEPTS_SELECT =
+  '*, employee_departments(is_primary, department:company_departments(id, name))'
 
 type FormState = {
   title: string
@@ -56,7 +63,6 @@ const DEFAULT_FORM: FormState = {
   doc_version: '',
 }
 
-type EmployeeOption = { id: string; name: string }
 
 export function JobDescriptionEdit({ user }: { user: User }) {
   const { t } = useLang()
@@ -70,7 +76,7 @@ export function JobDescriptionEdit({ user }: { user: User }) {
 
   const [form, setForm] = useState<FormState>(DEFAULT_FORM)
   const [departments, setDepartments] = useState<DepartmentOption[]>([])
-  const [employees, setEmployees] = useState<EmployeeOption[]>([])
+  const [employees, setEmployees] = useState<EmployeeWithDepartments[]>([])
   const [content, setContent] = useState<DocumentDoc>(buildJobDescriptionSeedDoc)
   const [status, setStatus] = useState<JobDescriptionStatus>('draft')
   const [currentVersion, setCurrentVersion] = useState(1)
@@ -96,7 +102,7 @@ export function JobDescriptionEdit({ user }: { user: User }) {
         .order('display_order')
         .order('name')
       const empsPromise = supabase.from('employees')
-        .select('id, name')
+        .select(EMPLOYEE_WITH_DEPTS_SELECT)
         .eq('org_id', user.org_id)
         .order('name')
 
@@ -123,7 +129,7 @@ export function JobDescriptionEdit({ user }: { user: User }) {
         if (cancelled) return
 
         setDepartments(deptsResult.data ?? [])
-        setEmployees(empsResult.data ?? [])
+        setEmployees((empsResult.data ?? []) as EmployeeWithDepartments[])
 
         // Start from either the template's content_doc or the seed doc.
         const seeded = (tplResult.data?.content_doc as DocumentDoc | null) ?? buildJobDescriptionSeedDoc()
@@ -173,7 +179,7 @@ export function JobDescriptionEdit({ user }: { user: User }) {
       if (cancelled) return
 
       setDepartments(deptsResult.data ?? [])
-      setEmployees(empsResult.data ?? [])
+      setEmployees((empsResult.data ?? []) as EmployeeWithDepartments[])
 
       if (jdResult.error || !jdResult.data) {
         setError(jdResult.error?.message ?? t.jdNotFound)
@@ -415,16 +421,13 @@ export function JobDescriptionEdit({ user }: { user: User }) {
     <>
       {/* Title lives in the page top bar as an inline-editable heading. */}
       <Field label={t.jdFieldAssignee}>
-        <select
-          value={form.assignee_employee_id}
-          onChange={e => update('assignee_employee_id', e.target.value)}
+        <EmployeeSelect
+          value={form.assignee_employee_id || null}
+          onChange={v => update('assignee_employee_id', v ?? '')}
+          employees={employees}
           disabled={readOnly}
-          className="w-full rounded-lg border px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
-          style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
-        >
-          <option value="">{t.jdFieldAssigneeNone}</option>
-          {employees.map(emp => <option key={emp.id} value={emp.id}>{emp.name}</option>)}
-        </select>
+          emptyLabel={t.jdFieldAssigneeNone}
+        />
       </Field>
       <Field label={t.jdFieldDepartment} required>
         <select

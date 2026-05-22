@@ -1000,7 +1000,7 @@ function RecentGrid({
           >
             {/* Page preview — title heading plus the first lines of body,
                 with a status pill floated top-right. */}
-            <div className="relative aspect-[3/4] overflow-hidden px-4 py-4" style={{ backgroundColor: 'var(--color-bg-secondary)' }}>
+            <div className="relative aspect-[3/4] overflow-hidden px-4 py-4" style={{ backgroundColor: 'var(--color-bg)' }}>
               <span
                 className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9px] font-medium capitalize"
                 style={{
@@ -1035,7 +1035,7 @@ function RecentGrid({
 
             {/* Footer — filename flush-left on its own line, then a meta
                 row with the type icon bottom-left and the kebab menu. */}
-            <div className="border-t px-3 py-2.5" style={{ borderColor: 'var(--color-border)' }}>
+            <div className="border-t px-3 py-2.5" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)' }}>
               <div className="truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>
                 {title}
               </div>
