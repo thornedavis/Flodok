@@ -22,13 +22,20 @@ export function EmployeeSelect({
   onChange,
   employees,
   disabled,
+  emptyLabel,
 }: {
   value: string | null
   onChange: (next: string | null) => void
   employees: EmployeeWithDepartments[]
   disabled?: boolean
+  // Label for the "no selection" state — both the trigger when nothing is
+  // picked and the clear option at the top of the list. Defaults to
+  // "No employee linked" (assignment context); a filter passes e.g.
+  // "All employees".
+  emptyLabel?: string
 }) {
   const { t } = useLang()
+  const noneLabel = emptyLabel ?? t.noEmployeeLinked
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const containerRef = useRef<HTMLDivElement>(null)
@@ -74,7 +81,7 @@ export function EmployeeSelect({
   const selected = value ? employees.find(e => e.id === value) ?? null : null
   const triggerLabel = selected
     ? `${selected.name}${primaryDept(selected) ? ` (${primaryDept(selected)})` : ''}`
-    : t.noEmployeeLinked
+    : noneLabel
 
   function pick(id: string | null) {
     onChange(id)
@@ -147,7 +154,7 @@ export function EmployeeSelect({
               onClick={() => pick(null)}
               muted
             >
-              {t.noEmployeeLinked}
+              {noneLabel}
             </OptionRow>
 
             {filtered.length === 0 ? (

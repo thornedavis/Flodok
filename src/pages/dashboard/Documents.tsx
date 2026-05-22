@@ -37,9 +37,16 @@ import { JobDescriptionsList } from './JobDescriptions'
 import { useFullWidthLayout } from '../../components/Layout'
 import { FilterPanel, FilterSearchInput } from '../../components/FilterControls'
 import type { FilterPanelSection } from '../../components/FilterControls'
+import { EmployeeSelect } from '../../components/EmployeeSelect'
 import { buildPkwtStarterDoc } from '../../lib/pkwtStarterDoc'
 import { docAsJson, docPreviewLines, emptyDocumentDoc } from '../../lib/documentDoc'
-import type { User } from '../../types/aliases'
+import { type EmpDeptShape } from '../../lib/employee'
+import type { Employee, User } from '../../types/aliases'
+
+type EmployeeWithDepartments = Employee & EmpDeptShape
+
+const EMPLOYEE_WITH_DEPTS_SELECT =
+  '*, employee_departments(is_primary, department:company_departments(id, name))'
 
 type DocumentsTab = 'all' | DocumentType
 
@@ -135,6 +142,10 @@ type AllDocItem = {
   current_version: number
   updated_at: string
   created_at: string
+  // The assigned employee, for the employee filter. Contracts and SOPs
+  // carry employee_id; job descriptions describe a role, not a person, so
+  // theirs is always null (they never match an employee filter).
+  employee_id: string | null
   // First few lines of the document body, derived from content_doc at
   // load time and used to paint the page-thumbnail preview in grid view.
   preview: string[]
@@ -160,12 +171,15 @@ function AllDocumentsView({ user, shell }: { user: User; shell: string }) {
   // themselves with `shell`. Auto-restored on unmount (e.g. switching tabs).
   useFullWidthLayout()
   const [items, setItems] = useState<AllDocItem[]>([])
+  const [employees, setEmployees] = useState<EmployeeWithDepartments[]>([])
   const [loading, setLoading] = useState(true)
 
   const [viewMode, setViewMode] = useState<ViewMode>(loadViewMode)
   // Empty array = no type filter (show all). Multi-select so users can
   // narrow to e.g. SOPs+JDs without losing one or the other.
   const [typeFilter, setTypeFilter] = useState<DocumentType[]>([])
+  // A single selected employee id, or null for "all employees".
+  const [employeeFilter, setEmployeeFilter] = useState<string | null>(null)
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [search, setSearch] = useState('')
@@ -179,21 +193,28 @@ function AllDocumentsView({ user, shell }: { user: User; shell: string }) {
 
   useEffect(() => {
     async function load() {
-      const [sopResult, contractResult, jdResult] = await Promise.all([
+      const [sopResult, contractResult, jdResult, employeeResult] = await Promise.all([
         supabase
           .from('sops')
-          .select('id, title, status, current_version, updated_at, created_at, content_doc')
+          .select('id, title, status, current_version, updated_at, created_at, content_doc, employee_id')
           .eq('org_id', user.org_id),
         supabase
           .from('contracts')
-          .select('id, title, status, current_version, updated_at, created_at, content_doc')
+          .select('id, title, status, current_version, updated_at, created_at, content_doc, employee_id')
           .eq('org_id', user.org_id)
           .eq('is_template', false),
         supabase
           .from('job_descriptions')
           .select('id, title, status, current_version, updated_at, created_at, content_doc')
           .eq('org_id', user.org_id),
+        supabase
+          .from('employees')
+          .select(EMPLOYEE_WITH_DEPTS_SELECT)
+          .eq('org_id', user.org_id)
+          .order('name'),
       ])
+
+      setEmployees((employeeResult.data || []) as unknown as EmployeeWithDepartments[])
 
       // Derive a short text snapshot from the structured body. Prefer the
       // English projection; fall back to Indonesian if the doc is ID-only.
@@ -210,6 +231,7 @@ function AllDocumentsView({ user, shell }: { user: User; shell: string }) {
         current_version: s.current_version,
         updated_at: s.updated_at,
         created_at: s.created_at,
+        employee_id: s.employee_id ?? null,
         preview: previewOf(s.content_doc),
       }))
       const contracts: AllDocItem[] = (contractResult.data || []).map(c => ({
@@ -220,6 +242,7 @@ function AllDocumentsView({ user, shell }: { user: User; shell: string }) {
         current_version: c.current_version,
         updated_at: c.updated_at,
         created_at: c.created_at,
+        employee_id: c.employee_id ?? null,
         preview: previewOf(c.content_doc),
       }))
       const jds: AllDocItem[] = (jdResult.data || []).map(j => ({
@@ -230,6 +253,7 @@ function AllDocumentsView({ user, shell }: { user: User; shell: string }) {
         current_version: j.current_version,
         updated_at: j.updated_at,
         created_at: j.created_at,
+        employee_id: null,
         preview: previewOf(j.content_doc),
       }))
 
@@ -257,13 +281,16 @@ function AllDocumentsView({ user, shell }: { user: User; shell: string }) {
     const typeSet = new Set(typeFilter)
     return items.filter(item => {
       if (typeSet.size > 0 && !typeSet.has(item.type)) return false
+      // Documents with no assigned employee (including all JDs) never match
+      // an active employee filter.
+      if (employeeFilter && item.employee_id !== employeeFilter) return false
       const updated = item.updated_at || item.created_at
       if (dateFrom && updated && updated.slice(0, 10) < dateFrom) return false
       if (dateTo && updated && updated.slice(0, 10) > dateTo) return false
       if (q && !item.title.toLowerCase().includes(q)) return false
       return true
     })
-  }, [items, typeFilter, dateFrom, dateTo, search])
+  }, [items, typeFilter, employeeFilter, dateFrom, dateTo, search])
 
   // Free-frozen orgs see a capped list; the limit applies AFTER filtering
   // so the cap reflects what the user actually wants to see, not raw row
@@ -277,7 +304,7 @@ function AllDocumentsView({ user, shell }: { user: User; shell: string }) {
   // an empty page after narrowing the result set.
   useEffect(() => {
     setCurrentPage(1)
-  }, [typeFilter, dateFrom, dateTo, search, pageSize])
+  }, [typeFilter, employeeFilter, dateFrom, dateTo, search, pageSize])
 
   // Snap back to the last valid page if pagination state goes out of range
   // (e.g. after items load or after deletes shrink the list).
@@ -285,10 +312,11 @@ function AllDocumentsView({ user, shell }: { user: User; shell: string }) {
     if (currentPage > totalPages) setCurrentPage(totalPages)
   }, [currentPage, totalPages])
 
-  const hasFilters = typeFilter.length > 0 || !!dateFrom || !!dateTo || !!search
+  const hasFilters = typeFilter.length > 0 || !!employeeFilter || !!dateFrom || !!dateTo || !!search
 
   function clearFilters() {
     setTypeFilter([])
+    setEmployeeFilter(null)
     setDateFrom('')
     setDateTo('')
     setSearch('')
@@ -338,15 +366,20 @@ function AllDocumentsView({ user, shell }: { user: User; shell: string }) {
   async function duplicateItem(item: AllDocItem) {
     if (!canWrite) return
     const table = tableForType(item.type)
-    const { data: src, error: fetchError } = await supabase
+    const { data: fetched, error: fetchError } = await supabase
       .from(table)
       .select('*')
       .eq('id', item.id)
       .single()
-    if (fetchError || !src) {
+    if (fetchError || !fetched) {
       window.alert(fetchError?.message ?? 'Could not duplicate.')
       return
     }
+    // `table` is a union ('sops' | 'contracts' | 'job_descriptions'), so the
+    // fetched row is typed as the union of all three. We read type-specific
+    // columns below guarded by item.type, so view it through a permissive
+    // shape covering every column we touch.
+    const src = fetched as Record<string, unknown>
     const copyTitle = t.copyOfName(item.title.trim() || t.documentsUntitled)
 
     let insertObj: Record<string, unknown>
@@ -432,6 +465,9 @@ function AllDocumentsView({ user, shell }: { user: User; shell: string }) {
           typeFilter={typeFilter}
           onTypeChange={setTypeFilter}
           countByType={countByType}
+          employeeFilter={employeeFilter}
+          onEmployeeChange={setEmployeeFilter}
+          employees={employees}
           dateFrom={dateFrom}
           dateTo={dateTo}
           onDateFromChange={setDateFrom}
@@ -675,6 +711,9 @@ function RecentFilters({
   typeFilter,
   onTypeChange,
   countByType,
+  employeeFilter,
+  onEmployeeChange,
+  employees,
   dateFrom,
   dateTo,
   onDateFromChange,
@@ -688,6 +727,9 @@ function RecentFilters({
   typeFilter: DocumentType[]
   onTypeChange: (next: DocumentType[]) => void
   countByType: Record<DocumentType, number>
+  employeeFilter: string | null
+  onEmployeeChange: (next: string | null) => void
+  employees: EmployeeWithDepartments[]
   dateFrom: string
   dateTo: string
   onDateFromChange: (next: string) => void
@@ -732,6 +774,16 @@ function RecentFilters({
         sections={sections}
         onReset={onReset}
       />
+      {employees.length > 0 && (
+        <div className="w-full sm:w-56">
+          <EmployeeSelect
+            value={employeeFilter}
+            onChange={onEmployeeChange}
+            employees={employees}
+            emptyLabel={t.documentsFilterAllEmployees}
+          />
+        </div>
+      )}
       <div className="ml-auto w-full sm:w-64">
         <FilterSearchInput
           value={search}
