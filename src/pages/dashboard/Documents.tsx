@@ -58,6 +58,17 @@ function isDocumentsTab(value: unknown): value is DocumentsTab {
   return value === 'all' || isDocumentType(value)
 }
 
+// The All view runs in full-bleed layout (so the "Start a new document"
+// band can span the whole content area), which drops the dashboard's own
+// padding + max-width. We re-create them here — but as TWO nested classes,
+// matching the standard layout (Layout.tsx): padding on a full-width
+// wrapper, the max-width cap on an inner element. Combining both on one
+// element (the previous approach) put the padding INSIDE the cap, leaving
+// the content ~80px narrower than every other page once the cap kicks in
+// (i.e. when the sidebar is collapsed and the area is wide).
+const SHELL_PAD = 'px-6 md:px-10'
+const SHELL_INNER = 'mx-auto max-w-6xl'
+
 export function Documents({ user }: { user: User }) {
   const { t } = useLang()
   const navigate = useNavigate()
@@ -82,37 +93,42 @@ export function Documents({ user }: { user: User }) {
   // The All view renders full-bleed (see AllDocumentsView's
   // useFullWidthLayout) so its "Start a new document" band can span the
   // whole content area. That drops the layout's own padding/centering, so
-  // here we re-apply the standard page shell to the header and hand the
-  // same class down for the constrained sections inside the All view.
+  // the All view re-creates them via SHELL_PAD + SHELL_INNER (padding
+  // outside the cap, matching every other page).
   const isAll = activeTab === 'all'
-  const shell = 'mx-auto max-w-6xl px-6 md:px-10'
+
+  const headerBlock = (
+    <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+      <div>
+        {activeTab !== 'all' && (
+          <button
+            type="button"
+            onClick={() => navigate('/dashboard/documents')}
+            className="mb-1 inline-flex items-center gap-1 text-xs font-medium transition-colors"
+            style={{ color: 'var(--color-text-tertiary)' }}
+            onMouseOver={e => { e.currentTarget.style.color = 'var(--color-text-secondary)' }}
+            onMouseOut={e => { e.currentTarget.style.color = 'var(--color-text-tertiary)' }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+            <span>{t.documentsTitle}</span>
+          </button>
+        )}
+        <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>
+          {activeTab === 'all' ? t.documentsTitle : tabLabels[activeTab]}
+        </h1>
+      </div>
+    </div>
+  )
 
   return (
     <div className={isAll ? 'py-8' : undefined}>
-      <div className={`mb-6 flex flex-wrap items-center justify-between gap-3${isAll ? ` ${shell}` : ''}`}>
-        <div>
-          {activeTab !== 'all' && (
-            <button
-              type="button"
-              onClick={() => navigate('/dashboard/documents')}
-              className="mb-1 inline-flex items-center gap-1 text-xs font-medium transition-colors"
-              style={{ color: 'var(--color-text-tertiary)' }}
-              onMouseOver={e => { e.currentTarget.style.color = 'var(--color-text-secondary)' }}
-              onMouseOut={e => { e.currentTarget.style.color = 'var(--color-text-tertiary)' }}
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="15 18 9 12 15 6" />
-              </svg>
-              <span>{t.documentsTitle}</span>
-            </button>
-          )}
-          <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>
-            {activeTab === 'all' ? t.documentsTitle : tabLabels[activeTab]}
-          </h1>
-        </div>
-      </div>
+      {isAll
+        ? <div className={SHELL_PAD}><div className={SHELL_INNER}>{headerBlock}</div></div>
+        : headerBlock}
 
-      {isAll && <AllDocumentsView user={user} shell={shell} />}
+      {isAll && <AllDocumentsView user={user} />}
       {activeTab === 'sop' && <SOPs user={user} embedded />}
       {activeTab === 'contract' && <Contracts user={user} embedded />}
       {activeTab === 'job_description' && <JobDescriptionsList user={user} embedded />}
@@ -163,14 +179,15 @@ function loadViewMode(): ViewMode {
   return stored === 'list' ? 'list' : 'grid'
 }
 
-function AllDocumentsView({ user, shell }: { user: User; shell: string }) {
+function AllDocumentsView({ user }: { user: User }) {
   const { t } = useLang()
   const navigate = useNavigate()
   const [, setSearchParams] = useSearchParams()
   const { visibleItemLimit, state: dunning, canWrite } = useBilling()
   // Render edge-to-edge so the "Start a new document" band can span the
   // full content width; the header and recent section re-constrain
-  // themselves with `shell`. Auto-restored on unmount (e.g. switching tabs).
+  // themselves with SHELL_PAD + SHELL_INNER. Auto-restored on unmount
+  // (e.g. switching tabs).
   useFullWidthLayout()
   const [items, setItems] = useState<AllDocItem[]>([])
   const [employees, setEmployees] = useState<EmployeeWithDepartments[]>([])
@@ -465,14 +482,14 @@ function AllDocumentsView({ user, shell }: { user: User; shell: string }) {
   return (
     <>
       <StartNewSection
-        shell={shell}
         onStart={startCreate}
         onCreateBlankContract={createBlankContract}
         onOpenTemplates={() => navigate('/dashboard/templates')}
         canWrite={canWrite}
       />
 
-      <section className={`${shell} pt-8`}>
+      <section className={`${SHELL_PAD} pt-8`}>
+        <div className={SHELL_INNER}>
         <h2 className="mb-4 text-base font-semibold" style={{ color: 'var(--color-text)' }}>
           {t.documentsRecent}
         </h2>
@@ -536,6 +553,7 @@ function AllDocumentsView({ user, shell }: { user: User; shell: string }) {
             />
           </>
         )}
+        </div>
       </section>
     </>
   )
@@ -544,13 +562,11 @@ function AllDocumentsView({ user, shell }: { user: User; shell: string }) {
 // ─── Start a new document ───────────────────────────────────────────
 
 function StartNewSection({
-  shell,
   onStart,
   onCreateBlankContract,
   onOpenTemplates,
   canWrite,
 }: {
-  shell: string
   onStart: (type: DocumentType, mode: 'scratch' | 'template') => void
   onCreateBlankContract: () => void
   onOpenTemplates: () => void
@@ -563,7 +579,8 @@ function StartNewSection({
       className="border-y py-6"
       style={{ backgroundColor: 'var(--color-bg-secondary)', borderColor: 'var(--color-border)' }}
     >
-      <div className={shell}>
+      <div className={SHELL_PAD}>
+      <div className={SHELL_INNER}>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>
           {t.documentsStartNew}
@@ -602,6 +619,7 @@ function StartNewSection({
           disabled={!canWrite}
           onClick={() => onStart('job_description', 'scratch')}
         />
+      </div>
       </div>
       </div>
     </section>

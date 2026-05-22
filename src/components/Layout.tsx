@@ -258,7 +258,7 @@ function Sidebar({ user, mobileOpen, onCloseMobile }: {
 
       <aside
         className={`no-print fixed inset-y-0 left-0 z-50 flex flex-col border-r transition-[width,transform] md:sticky md:top-0 md:h-screen md:translate-x-0 ${
-          isCollapsed ? 'w-16' : 'w-64'
+          isCollapsed ? 'w-16' : 'w-56'
         } ${mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}
         style={{
           borderColor: 'var(--color-border)',
@@ -435,6 +435,23 @@ function deriveBreadcrumbs(pathname: string, orgName: string, t: Translations, t
   const segments = pathname.split('/').filter(Boolean)
   if (pathname === '/dashboard' || segments.length <= 1) {
     return [{ label: orgName }]
+  }
+
+  // Templates live under Documents conceptually (reached via the "Template
+  // gallery" link), but their routes don't nest under /dashboard/documents.
+  // Map both the gallery and the slim template editor back into the
+  // Documents trail so the breadcrumb reads Org / Documents / Templates[ / Edit].
+  const documentsCrumb: Crumb = { label: t.navDocuments, href: '/dashboard/documents' }
+  if (segments[1] === 'templates') {
+    return [rootCrumb, documentsCrumb, { label: t.templatesBreadcrumb }]
+  }
+  if (segments[1] === 'document-templates') {
+    return [
+      rootCrumb,
+      documentsCrumb,
+      { label: t.templatesBreadcrumb, href: '/dashboard/templates' },
+      { label: trailing ?? t.breadcrumbEdit },
+    ]
   }
 
   const sectionMap: Record<string, { label: string; href: string }> = {

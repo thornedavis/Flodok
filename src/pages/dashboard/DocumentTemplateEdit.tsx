@@ -12,6 +12,7 @@ import { supabase } from '../../lib/supabase'
 import { DocumentEditor } from '../../components/editor/bilingual/DocumentEditor'
 import { useLang } from '../../contexts/LanguageContext'
 import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning'
+import { useBreadcrumbTrailing } from '../../contexts/BreadcrumbContext'
 import { bucketReferenceValues, referenceNames } from '../../lib/companyReference'
 import { useBilling } from '../../contexts/BillingContext'
 import { formatIdrDigits } from '../../lib/credits'
@@ -40,6 +41,8 @@ export function DocumentTemplateEdit({ user }: { user: User }) {
   const [view, setView] = useState<'stacked' | 'side_by_side'>('side_by_side')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+
+  useBreadcrumbTrailing(title.trim() || null)
 
   useEffect(() => {
     async function load() {

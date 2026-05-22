@@ -550,6 +550,10 @@ export function ContractEdit({ user }: { user: User }) {
     if (statusError) { setError(statusError.message); setSigning(false); return }
 
     setStatus('active')
+    // Sync the loaded row's status too, otherwise `hasChanges` (which
+    // compares `status` to `contract.status`) would read as dirty right
+    // after signing and keep the Activate/Save buttons live.
+    setContract({ ...contract, status: 'active' })
     setSigning(false)
     setShowSignPanel(false)
   }
@@ -564,7 +568,11 @@ export function ContractEdit({ user }: { user: User }) {
     archived: 'var(--color-text-tertiary)',
   }
 
+  // Already-active contracts with nothing pending have nothing to
+  // re-activate — only re-enable once the user makes an edit (which bumps
+  // a new version on the next sign).
   const activateDisabled = saving || signing || !canWrite || missingRequiredFields.length > 0
+    || (status === 'active' && !hasChanges)
   const activateTitle = !canWrite
     ? t.dunningWriteBlocked
     : missingRequiredFields.length > 0
