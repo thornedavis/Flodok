@@ -34,7 +34,7 @@ import type { DocNode, DocumentDoc } from '../_shared/documentDoc.ts'
 
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions'
 
-type DocType = 'sop' | 'contract'
+type DocType = 'sop' | 'contract' | 'job_description'
 
 type IntermediateBlock = {
   en: string[]
@@ -89,6 +89,12 @@ Document type: Indonesian employment contract.
 - Reference Indonesian labour law where relevant (UU 13/2003, UU 11/2020 Cipta Kerja, PP 35/2021).
 - Keep clauses concise — orgs will customise the boilerplate.`
 
+const JOB_DESCRIPTION_PROMPT_TAIL = `
+Document type: Job description.
+- Standard sections: Job Overview / Key Responsibilities / Required Qualifications / Preferred Qualifications / Reporting & Working Relationships — but tailor to the request.
+- Describe the role, not a specific person. Use clear, outcome-focused language for responsibilities.
+- Qualifications should be concrete and screenable (skills, experience, certifications).`
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -121,7 +127,10 @@ Deno.serve(async (req: Request) => {
   if (typeof body.prompt !== 'string' || !body.prompt.trim()) {
     return jsonResponse({ error: 'Missing prompt' }, 400)
   }
-  const docType: DocType = body.doc_type === 'contract' ? 'contract' : 'sop'
+  const docType: DocType =
+    body.doc_type === 'contract' ? 'contract'
+    : body.doc_type === 'job_description' ? 'job_description'
+    : 'sop'
   const title = typeof body.title === 'string' ? body.title.trim() : ''
   const prompt = body.prompt.trim()
 
@@ -131,7 +140,11 @@ Deno.serve(async (req: Request) => {
   }
   const model = Deno.env.get('OPENROUTER_GENERATION_MODEL') || 'openai/gpt-5.4-mini'
 
-  const systemPrompt = SYSTEM_PROMPT_BASE + (docType === 'sop' ? SOP_PROMPT_TAIL : CONTRACT_PROMPT_TAIL)
+  const promptTail =
+    docType === 'contract' ? CONTRACT_PROMPT_TAIL
+    : docType === 'job_description' ? JOB_DESCRIPTION_PROMPT_TAIL
+    : SOP_PROMPT_TAIL
+  const systemPrompt = SYSTEM_PROMPT_BASE + promptTail
   let userMessage = ''
   if (title) userMessage += `Document title: ${title}\n\n`
   userMessage += `Request: ${prompt}`

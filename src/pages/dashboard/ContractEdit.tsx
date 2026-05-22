@@ -2,13 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { DocumentEditor } from '../../components/editor/bilingual/DocumentEditor'
-import { SectionOutline } from '../../components/editor/SectionOutline'
+import { DocumentEditShell, EDITOR_STICKY_TOP_PX } from '../../components/editor/DocumentEditShell'
 import { useLang } from '../../contexts/LanguageContext'
 import { type EmpDeptShape } from '../../lib/employee'
 import { bucketReferenceValues, referenceNames } from '../../lib/companyReference'
 import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning'
 import { useDocumentViewPref } from '../../hooks/useDocumentViewPref'
-import { useAutoCollapseSidebar, useFullWidthLayout } from '../../components/Layout'
 import { exportDocumentPdf } from '../../lib/pdfExport'
 import { formatIdrDigits } from '../../lib/credits'
 import { InfoTooltip } from '../../components/InfoTooltip'
@@ -22,13 +21,6 @@ import { EmployeeSelect } from '../../components/EmployeeSelect'
 import { useBilling } from '../../contexts/BillingContext'
 import { documentHistoryPath } from '../../lib/documentTypes'
 import type { User, Contract, Tag, Employee, Organization } from '../../types/aliases'
-
-// Stacked sticky-positioning offsets. The DashboardLayout header sits at
-// top-0 (h-14 = 56px). Our page top bar sits below it. Anything inside
-// the editor pane that wants to stick below both uses APP_HEADER + PAGE_TOP_BAR.
-const PAGE_TOP_BAR_HEIGHT = 56
-const APP_HEADER_HEIGHT = 56
-const EDITOR_STICKY_TOP_PX = APP_HEADER_HEIGHT + PAGE_TOP_BAR_HEIGHT
 
 type EmployeeWithDepartments = Employee & EmpDeptShape
 
@@ -53,28 +45,11 @@ function ContractTypeIcon() {
   )
 }
 
-function readLocalBool(key: string, fallback: boolean): boolean {
-  if (typeof window === 'undefined') return fallback
-  const v = window.localStorage.getItem(key)
-  if (v === '1') return true
-  if (v === '0') return false
-  return fallback
-}
-function writeLocalBool(key: string, value: boolean) {
-  if (typeof window === 'undefined') return
-  window.localStorage.setItem(key, value ? '1' : '0')
-}
-
 export function ContractEdit({ user }: { user: User }) {
   const { t } = useLang()
   const { id } = useParams<{ id: string }>()
   const { canWrite } = useBilling()
   const { view, setView } = useDocumentViewPref('contract', id ?? null)
-  // Focus-the-canvas: collapse the main nav and break out of the
-  // max-w-6xl page container so the editor + sidebar get full width.
-  // Both hooks auto-restore on unmount.
-  useAutoCollapseSidebar()
-  useFullWidthLayout()
   const [contract, setContract] = useState<Contract | null>(null)
   const [organization, setOrganization] = useState<Organization | null>(null)
   const [, setEmployee] = useState<EmployeeWithDepartments | null>(null)
@@ -124,38 +99,6 @@ export function ContractEdit({ user }: { user: User }) {
   const [signerFont, setSignerFont] = useState(user.signature_font || SIGNATURE_FONTS[0].name)
   const [signing, setSigning] = useState(false)
   const signPanelRef = useRef<HTMLDivElement>(null)
-
-  // Inline-editable title in the page top bar (Google Docs style). The
-  // value lives in the same `title` state the rest of the page uses;
-  // this just toggles between display and edit modes. Editing on focus
-  // is handled by autoFocus + onBlur/Escape; we keep a snapshot for
-  // Escape so users can bail out of a partial edit.
-  const [editingTitle, setEditingTitle] = useState(false)
-  const titleSnapshotRef = useRef<string>('')
-
-  // Sidebar visibility + collapsible-section state. Persisted to
-  // localStorage so the user's preference survives reloads (Google
-  // Docs–style: once they hide the outline pane it stays hidden until
-  // they explicitly bring it back).
-  const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => readLocalBool('flodok:contractEdit:sidebarOpen', true))
-  const [detailsOpen, setDetailsOpen] = useState<boolean>(() => readLocalBool('flodok:contractEdit:detailsOpen', true))
-  const [outlineOpen, setOutlineOpen] = useState<boolean>(() => readLocalBool('flodok:contractEdit:outlineOpen', true))
-  useEffect(() => writeLocalBool('flodok:contractEdit:sidebarOpen', sidebarOpen), [sidebarOpen])
-  useEffect(() => writeLocalBool('flodok:contractEdit:detailsOpen', detailsOpen), [detailsOpen])
-  useEffect(() => writeLocalBool('flodok:contractEdit:outlineOpen', outlineOpen), [outlineOpen])
-
-  function startEditingTitle() {
-    if (!canWrite) return
-    titleSnapshotRef.current = title
-    setEditingTitle(true)
-  }
-  function commitTitle() {
-    setEditingTitle(false)
-  }
-  function revertTitle() {
-    setTitle(titleSnapshotRef.current)
-    setEditingTitle(false)
-  }
 
   useEffect(() => {
     async function load() {
@@ -591,241 +534,72 @@ export function ContractEdit({ user }: { user: User }) {
     )
   }
 
-  return (
-    <div className="flex flex-col" style={{ minHeight: `calc(100vh - ${APP_HEADER_HEIGHT}px)` }}>
-      {/* ── Page top bar — sticky beneath the app header ────────────── */}
-      <div
-        className="sticky z-20 flex flex-wrap items-center justify-between gap-3 border-b px-6 md:px-8"
-        style={{
-          top: `${APP_HEADER_HEIGHT}px`,
-          minHeight: `${PAGE_TOP_BAR_HEIGHT}px`,
-          borderColor: 'var(--color-border)',
-          backgroundColor: 'var(--color-bg)',
-        }}
-      >
-        <div className="flex min-w-0 items-center gap-3">
-          {/* Doc-type icon — gives the user a glanceable cue about
-              which kind of document they're editing. Contracts get
-              the success-tinted file-with-signature glyph. */}
-          <span
-            aria-hidden="true"
-            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md"
-            style={{
-              backgroundColor: 'color-mix(in srgb, var(--color-success) 16%, transparent)',
-              color: 'var(--color-success)',
-            }}
-          >
-            <ContractTypeIcon />
-          </span>
-          {editingTitle ? (
-            <input
-              type="text"
-              value={title}
-              onChange={e => setTitle(e.target.value)}
-              onBlur={commitTitle}
-              onFocus={e => e.currentTarget.select()}
-              onKeyDown={e => {
-                if (e.key === 'Enter') { e.preventDefault(); commitTitle() }
-                if (e.key === 'Escape') { e.preventDefault(); revertTitle() }
-              }}
-              placeholder={t.titleEmptyPlaceholder}
-              autoFocus
-              className="min-w-0 max-w-[40vw] rounded-md border px-2 py-1 text-lg font-semibold outline-none"
-              style={{
-                borderColor: 'var(--color-primary)',
-                backgroundColor: 'var(--color-bg)',
-                color: 'var(--color-text)',
-              }}
-            />
-          ) : (
-            /* Inline-editable title — hover shows a subtle border + "Rename"
-               badge as a click affordance. Click anywhere on the title
-               switches to the input above. Templates remain editable too. */
-            <button
-              type="button"
-              onClick={startEditingTitle}
-              disabled={!canWrite}
-              title={canWrite ? t.renameTitle : undefined}
-              className="group/title relative inline-flex min-w-0 cursor-text items-center rounded-md border px-2 py-1 text-lg font-semibold transition-colors disabled:cursor-not-allowed"
-              style={{
-                borderColor: 'transparent',
-                color: title.trim() ? 'var(--color-text)' : 'var(--color-text-tertiary)',
-              }}
-              onMouseOver={e => { if (canWrite) e.currentTarget.style.borderColor = 'var(--color-border)' }}
-              onMouseOut={e => { e.currentTarget.style.borderColor = 'transparent' }}
-            >
-              <span className="truncate">
-                {title.trim() || t.titleEmptyPlaceholder}
-              </span>
-              {canWrite && (
-                <span
-                  className="pointer-events-none absolute left-1/2 top-full z-30 mt-1 -translate-x-1/2 whitespace-nowrap rounded-md px-2 py-1 text-[10px] font-medium opacity-0 transition-opacity group-hover/title:opacity-100"
-                  style={{
-                    backgroundColor: 'var(--color-text)',
-                    color: 'var(--color-bg)',
-                  }}
-                >
-                  {t.renameTitle}
-                </span>
-              )}
-            </button>
-          )}
-          {contract.is_template ? (
-            <span
-              className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium"
-              style={{ backgroundColor: 'color-mix(in srgb, var(--color-primary) 14%, transparent)', color: 'var(--color-primary)' }}
-            >
-              {t.contractTemplateBadge}
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium"
-              style={{ borderColor: 'var(--color-border)', color: statusColors[status], backgroundColor: 'var(--color-bg-secondary, var(--color-bg))' }}>
-              <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: statusColors[status] }} />
-              {status === 'active' ? t.statusActive : status === 'archived' ? t.statusArchived : t.statusDraft}
-            </span>
-          )}
-          {status === 'active' && hasChanges && (
-            <span className="hidden text-xs md:inline" style={{ color: 'var(--color-text-tertiary)' }}>
-              {t.editingActiveWillBumpVersion}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          <Link to={documentHistoryPath('contract', contract.id)} className="rounded-lg border px-3 py-1.5 text-xs font-medium" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>{t.historyLinkLabel}</Link>
-          <button onClick={handleDownloadPdf} disabled={downloading} className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-50" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>
-            {downloading && (
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
-                <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-              </svg>
-            )}
-            {downloading ? t.generatingPdf : t.downloadPdf}
+  const badge = contract.is_template ? (
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium"
+      style={{ backgroundColor: 'color-mix(in srgb, var(--color-primary) 14%, transparent)', color: 'var(--color-primary)' }}
+    >
+      {t.contractTemplateBadge}
+    </span>
+  ) : (
+    <span className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium"
+      style={{ borderColor: 'var(--color-border)', color: statusColors[status], backgroundColor: 'var(--color-bg-secondary, var(--color-bg))' }}>
+      <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: statusColors[status] }} />
+      {status === 'active' ? t.statusActive : status === 'archived' ? t.statusArchived : t.statusDraft}
+    </span>
+  )
+
+  const detailsBadge = missingRequiredFields.length > 0 ? (
+    <span
+      className="rounded-full px-1.5 text-[10px] font-semibold tabular-nums"
+      style={{ backgroundColor: 'var(--color-danger)', color: 'white' }}
+    >
+      {missingRequiredFields.length}
+    </span>
+  ) : undefined
+
+  const actions = (
+    <>
+      <Link to={documentHistoryPath('contract', contract.id)} className="rounded-lg border px-3 py-1.5 text-xs font-medium" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>{t.historyLinkLabel}</Link>
+      <button onClick={handleDownloadPdf} disabled={downloading} className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-50" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>
+        {downloading && (
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
+            <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+          </svg>
+        )}
+        {downloading ? t.generatingPdf : t.downloadPdf}
+      </button>
+      {contract.is_template ? (
+        <button onClick={handleSaveAsDraft} disabled={saving || !canWrite || !hasChanges} title={!canWrite ? t.dunningWriteBlocked : undefined}
+          className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50" style={{ backgroundColor: 'var(--color-primary)' }}>
+          {savingMode === 'draft' ? (
+            <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>{translating ? t.savingTranslating : t.saving}</>
+          ) : t.saveTemplate}
+        </button>
+      ) : (
+        <>
+          <button onClick={handleSaveAsDraft} disabled={saving || !canWrite || (!hasChanges && status === 'draft')} title={!canWrite ? t.dunningWriteBlocked : undefined}
+            className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+            {savingMode === 'draft' ? (
+              <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>{translating ? t.savingTranslating : t.saving}</>
+            ) : t.saveAsDraft}
           </button>
-          {contract.is_template ? (
-            <button onClick={handleSaveAsDraft} disabled={saving || !canWrite || !hasChanges} title={!canWrite ? t.dunningWriteBlocked : undefined}
-              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50" style={{ backgroundColor: 'var(--color-primary)' }}>
-              {savingMode === 'draft' ? (
-                <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>{translating ? t.savingTranslating : t.saving}</>
-              ) : t.saveTemplate}
-            </button>
-          ) : (
-            <>
-              <button onClick={handleSaveAsDraft} disabled={saving || !canWrite || (!hasChanges && status === 'draft')} title={!canWrite ? t.dunningWriteBlocked : undefined}
-                className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-50"
-                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-                {savingMode === 'draft' ? (
-                  <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>{translating ? t.savingTranslating : t.saving}</>
-                ) : t.saveAsDraft}
-              </button>
-              <button onClick={handleActivateAndSign} disabled={activateDisabled} title={activateTitle}
-                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50" style={{ backgroundColor: 'var(--color-primary)' }}>
-                {savingMode === 'activate' ? (
-                  <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>{translating ? t.savingTranslating : t.saving}</>
-                ) : missingRequiredFields.length > 0
-                  ? t.activateNeedsFields(missingRequiredFields.length)
-                  : t.activateAndSign}
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-
-      {error && (
-        <div className="mx-6 mt-4 rounded-md px-3 py-2 text-sm md:mx-8" style={{ backgroundColor: 'var(--color-diff-remove)', color: 'var(--color-danger)' }}>{error}</div>
+          <button onClick={handleActivateAndSign} disabled={activateDisabled} title={activateTitle}
+            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50" style={{ backgroundColor: 'var(--color-primary)' }}>
+            {savingMode === 'activate' ? (
+              <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>{translating ? t.savingTranslating : t.saving}</>
+            ) : missingRequiredFields.length > 0
+              ? t.activateNeedsFields(missingRequiredFields.length)
+              : t.activateAndSign}
+          </button>
+        </>
       )}
+    </>
+  )
 
-      {/* ── Two-pane area: structured-fields sidebar + editor canvas ── */}
-      <div className="flex min-h-0 flex-1">
-        <aside
-          className={`${sidebarOpen ? 'w-80' : 'w-12'} shrink-0 overflow-y-auto border-r transition-[width]`}
-          style={{
-            position: 'sticky',
-            top: `${EDITOR_STICKY_TOP_PX}px`,
-            height: `calc(100vh - ${EDITOR_STICKY_TOP_PX}px)`,
-            borderColor: 'var(--color-border)',
-            backgroundColor: 'var(--color-bg-secondary, var(--color-bg))',
-          }}
-        >
-          {!sidebarOpen ? (
-            // Collapsed: just an expand button at the top. Click reveals
-            // the full sidebar with its collapsible sections.
-            <div className="flex justify-center pt-3">
-              <button
-                type="button"
-                onClick={() => setSidebarOpen(true)}
-                title={t.sidebarShow}
-                aria-label={t.sidebarShow}
-                className="flex h-8 w-8 items-center justify-center rounded-md transition-colors"
-                style={{ color: 'var(--color-text-secondary)' }}
-                onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
-                onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="3" y1="6" x2="21" y2="6" />
-                  <line x1="3" y1="12" x2="21" y2="12" />
-                  <line x1="3" y1="18" x2="21" y2="18" />
-                </svg>
-              </button>
-            </div>
-          ) : (
-          <>
-          {/* Header: back-arrow button hides the sidebar. Outlined so
-              it reads as a real button, not just a floating icon. */}
-          <div className="flex items-center px-3 pt-3">
-            <button
-              type="button"
-              onClick={() => setSidebarOpen(false)}
-              title={t.sidebarHide}
-              aria-label={t.sidebarHide}
-              className="flex h-8 w-8 items-center justify-center rounded-md border transition-colors"
-              style={{
-                color: 'var(--color-text-secondary)',
-                borderColor: 'var(--color-border)',
-                backgroundColor: 'var(--color-bg)',
-              }}
-              onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
-              onMouseOut={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg)' }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="15 18 9 12 15 6" />
-              </svg>
-            </button>
-          </div>
-
-          {/* ── Details section (collapsible) ── */}
-          <div className="px-4 pt-3">
-            <button
-              type="button"
-              onClick={() => setDetailsOpen(o => !o)}
-              aria-expanded={detailsOpen}
-              className="flex w-full items-center gap-1.5 rounded-md py-1.5 text-left text-[11px] font-semibold uppercase tracking-wider transition-colors"
-              style={{ color: 'var(--color-text-tertiary)' }}
-              onMouseOver={e => { e.currentTarget.style.color = 'var(--color-text-secondary)' }}
-              onMouseOut={e => { e.currentTarget.style.color = 'var(--color-text-tertiary)' }}
-            >
-              <svg
-                width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-                style={{ transform: detailsOpen ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }}
-              >
-                <polyline points="6 9 12 15 18 9" />
-              </svg>
-              <span>{t.sidebarSectionDetails}</span>
-              {missingRequiredFields.length > 0 && !detailsOpen && (
-                <span
-                  className="ml-auto rounded-full px-1.5 text-[10px] font-semibold tabular-nums"
-                  style={{ backgroundColor: 'var(--color-danger)', color: 'white' }}
-                >
-                  {missingRequiredFields.length}
-                </span>
-              )}
-            </button>
-          </div>
-
-          {detailsOpen && (
-          <div
-            className="mx-4 mt-2 border-t px-0 pb-2 pt-4"
-            style={{ borderColor: 'var(--color-border)' }}
-          >
-          <div className="space-y-5">
+  const sidebar = (
+    <>
             {/* Title lives in the page top bar as an inline-editable
                 heading (click-to-rename, Google Docs style). It's not
                 duplicated here. The missing-required red dot for an
@@ -1074,46 +848,25 @@ export function ContractEdit({ user }: { user: User }) {
               </div>
             </div>
 
-          </div>
-          </div>
-          )}
+    </>
+  )
 
-          {/* ── Outline section (collapsible) ── */}
-          <div className="px-4 pt-3">
-            <button
-              type="button"
-              onClick={() => setOutlineOpen(o => !o)}
-              aria-expanded={outlineOpen}
-              className="flex w-full items-center gap-1.5 rounded-md py-1.5 text-left text-[11px] font-semibold uppercase tracking-wider transition-colors"
-              style={{ color: 'var(--color-text-tertiary)' }}
-              onMouseOver={e => { e.currentTarget.style.color = 'var(--color-text-secondary)' }}
-              onMouseOut={e => { e.currentTarget.style.color = 'var(--color-text-tertiary)' }}
-            >
-              <svg
-                width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-                style={{ transform: outlineOpen ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }}
-              >
-                <polyline points="6 9 12 15 18 9" />
-              </svg>
-              <span>{t.documentOutlineLabel}</span>
-            </button>
-          </div>
-          {outlineOpen && (
-            <div
-              className="mx-4 mt-2 border-t pb-5 pt-3"
-              style={{ borderColor: 'var(--color-border)' }}
-            >
-              <SectionOutline doc={contentDoc} topOffsetPx={EDITOR_STICKY_TOP_PX} />
-            </div>
-          )}
-          </>
-          )}
-        </aside>
-
-        {/* Editor canvas — fills the rest of the row, edge-to-edge with
-            no extra wrapper padding. The DocumentEditor's own internal
-            spacing (1.5rem inside .tiptap) keeps prose readable. */}
-        <div className="flex min-w-0 flex-1 flex-col">
+  return (
+    <DocumentEditShell
+      storageKey="contractEdit"
+      icon={<ContractTypeIcon />}
+      accent="var(--color-success)"
+      title={title}
+      onTitleChange={setTitle}
+      canEditTitle={canWrite}
+      badge={badge}
+      headerHint={status === 'active' && hasChanges ? t.editingActiveWillBumpVersion : undefined}
+      detailsBadge={detailsBadge}
+      actions={actions}
+      error={error}
+      sidebar={sidebar}
+      outlineDoc={contentDoc}
+    >
             <DocumentEditor
               initialDoc={contentDoc}
               onChange={setContentDoc}
@@ -1192,8 +945,6 @@ export function ContractEdit({ user }: { user: User }) {
                 </div>
               </div>
             )}
-        </div>
-      </div>
-    </div>
+    </DocumentEditShell>
   )
 }

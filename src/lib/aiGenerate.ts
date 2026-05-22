@@ -10,7 +10,7 @@ import type { DocumentDoc } from './documentDoc'
 
 export type GenerateDocumentInput = {
   prompt: string
-  docType: 'sop' | 'contract'
+  docType: 'sop' | 'contract' | 'job_description'
   title?: string
 }
 

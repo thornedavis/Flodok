@@ -1,7 +1,7 @@
 // Editor for contract templates living in `public.document_templates`
-// (Phase G.1). A slim relative of ContractEdit: same bilingual editor
-// and structured fields, minus everything that doesn't apply to a
-// reusable starter — no employee link, no signing, no versioning, no
+// (Phase G.1). A slim relative of ContractEdit: same Google Docs–style
+// edit shell and bilingual editor, minus everything that doesn't apply to
+// a reusable starter — no employee link, no signing, no versioning, no
 // snapshot/translation pipeline. Templates are authored bilingually
 // directly in the editor (the BubbleMenu still offers per-selection
 // translation), and the save path is a plain UPDATE.
@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { DocumentEditor } from '../../components/editor/bilingual/DocumentEditor'
+import { DocumentEditShell, EDITOR_STICKY_TOP_PX } from '../../components/editor/DocumentEditShell'
 import { useLang } from '../../contexts/LanguageContext'
 import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning'
 import { useBreadcrumbTrailing } from '../../contexts/BreadcrumbContext'
@@ -18,8 +19,61 @@ import { useBilling } from '../../contexts/BillingContext'
 import { formatIdrDigits } from '../../lib/credits'
 import { InfoTooltip } from '../../components/InfoTooltip'
 import { docAsJson, emptyDocumentDoc, type DocumentDoc } from '../../lib/documentDoc'
-import { documentsIndexPath } from '../../lib/documentTypes'
+import { documentsIndexPath, type DocumentType } from '../../lib/documentTypes'
 import type { User, DocumentTemplate, Organization } from '../../types/aliases'
+
+// Per-type accent for the top-bar icon chip, matching the document card
+// colour language (SOPs=primary, contracts=success, JDs=warning).
+const TYPE_ACCENT: Record<DocumentType, string> = {
+  sop: 'var(--color-primary)',
+  contract: 'var(--color-success)',
+  job_description: 'var(--color-warning)',
+}
+
+// Templates can be any document type; map the stored `type` string to the
+// Documents index tab to return to on cancel/save.
+function indexTypeFor(type: string): DocumentType {
+  return type === 'sop' ? 'sop' : type === 'job_description' ? 'job_description' : 'contract'
+}
+
+function TemplateTypeIcon({ type }: { type: DocumentType }) {
+  const common = {
+    width: 18,
+    height: 18,
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 2,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+  }
+  if (type === 'sop') {
+    return (
+      <svg {...common}>
+        <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+        <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+        <path d="M9 12h6" />
+        <path d="M9 16h6" />
+      </svg>
+    )
+  }
+  if (type === 'job_description') {
+    return (
+      <svg {...common}>
+        <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
+        <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+      </svg>
+    )
+  }
+  // Contract — file with a signature scribble.
+  return (
+    <svg {...common}>
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+      <path d="M7 16q2-3 4 0t4 0" />
+    </svg>
+  )
+}
 
 export function DocumentTemplateEdit({ user }: { user: User }) {
   const { t } = useLang()
@@ -117,88 +171,82 @@ export function DocumentTemplateEdit({ user }: { user: User }) {
     setTemplate(data)
     setSavedContentDoc(contentDoc)
     bypassUnsavedWarning()
-    navigate(documentsIndexPath('contract'))
+    navigate(documentsIndexPath(indexTypeFor(data.type)))
   }
 
   if (!template) return <div style={{ color: 'var(--color-text-secondary)' }}>{t.loading}</div>
 
   const inputStyle = { borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' } as React.CSSProperties
-  // Type-aware bits — the template can be for any document type now.
-  // Wage / hours fields only make sense for contracts; the others
-  // (title, position) work for SOPs + JDs too.
-  const isContractTemplate = template.type === 'contract'
-  const indexType: 'sop' | 'contract' | 'job_description' =
-    template.type === 'sop' ? 'sop'
-    : template.type === 'job_description' ? 'job_description'
-    : 'contract'
+  // Type-aware bits — the template can be for any document type now. Wage /
+  // hours fields only make sense for contracts; the others (title, position)
+  // work for SOPs + JDs too.
+  const type = template.type as DocumentType
+  const isContractTemplate = type === 'contract'
+  const indexType = indexTypeFor(template.type)
   const badgeLabel = isContractTemplate
     ? t.contractTemplateBadge
-    : template.type === 'job_description'
+    : type === 'job_description'
       ? t.jdTemplateBadge
       : t.sopTemplateBadge
 
-  return (
-    <div>
-      <div className="mb-6 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.editTemplateTitle}</h1>
-          <span
-            className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium"
-            style={{ backgroundColor: 'color-mix(in srgb, var(--color-primary) 14%, transparent)', color: 'var(--color-primary)' }}
+  const badge = (
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium"
+      style={{ backgroundColor: 'color-mix(in srgb, var(--color-primary) 14%, transparent)', color: 'var(--color-primary)' }}
+    >
+      {badgeLabel}
+    </span>
+  )
+
+  const actions = (
+    <>
+      <button onClick={() => navigate(documentsIndexPath(indexType))} className="rounded-lg border px-3 py-1.5 text-xs font-medium" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>
+        {t.cancel}
+      </button>
+      <button
+        onClick={handleSave}
+        disabled={saving || !canWrite || !hasChanges}
+        title={!canWrite ? t.dunningWriteBlocked : undefined}
+        className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+        style={{ backgroundColor: 'var(--color-primary)' }}
+      >
+        {saving ? (
+          <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>{t.saving}</>
+        ) : t.saveTemplate}
+      </button>
+    </>
+  )
+
+  const sidebar = (
+    <>
+      {/* Title lives in the page top bar as an inline-editable heading
+          (click-to-rename, Google Docs style); it's not duplicated here. */}
+
+      {/* For-position */}
+      <div>
+        <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>{t.contractTemplateForPositionLabel}</label>
+        <div className="relative">
+          <select
+            value={position}
+            onChange={e => setPosition(e.target.value)}
+            className="w-full appearance-none rounded-lg border px-3 py-2 pr-8 text-sm"
+            style={inputStyle}
           >
-            {badgeLabel}
-          </span>
+            <option value="">{t.contractTemplateNoneForPosition}</option>
+            {jobPositions.map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+          <svg className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-text-tertiary)' }}>
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
         </div>
-        <div className="flex items-center gap-3">
-          <button onClick={() => navigate(documentsIndexPath(indexType))} className="rounded-lg border px-4 py-2 text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>{t.cancel}</button>
-          <button
-            onClick={handleSave}
-            disabled={saving || !canWrite || !hasChanges}
-            title={!canWrite ? t.dunningWriteBlocked : undefined}
-            className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-            style={{ backgroundColor: 'var(--color-primary)' }}
-          >
-            {saving ? (
-              <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>{t.saving}</>
-            ) : t.saveTemplate}
-          </button>
-        </div>
+        <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.contractTemplateForPositionHelp}</p>
       </div>
 
-      {error && (
-        <div className="mb-4 rounded-md px-3 py-2 text-sm" style={{ backgroundColor: 'var(--color-diff-remove)', color: 'var(--color-danger)' }}>{error}</div>
-      )}
-
-      <div className="space-y-4">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      {isContractTemplate && (
+        <>
+          {/* Base wage */}
           <div>
-            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.titleLabel}</label>
-            <input type="text" value={title} onChange={e => setTitle(e.target.value)} className="w-full rounded-lg border px-3 py-2 text-sm" style={inputStyle} />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.contractTemplateForPositionLabel}</label>
-            <div className="relative">
-              <select
-                value={position}
-                onChange={e => setPosition(e.target.value)}
-                className="w-full appearance-none rounded-lg border px-3 py-2 pr-8 text-sm"
-                style={inputStyle}
-              >
-                <option value="">{t.contractTemplateNoneForPosition}</option>
-                {jobPositions.map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
-              <svg className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-text-tertiary)' }}>
-                <polyline points="6 9 12 15 18 9" />
-              </svg>
-            </div>
-            <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.contractTemplateForPositionHelp}</p>
-          </div>
-        </div>
-
-        {isContractTemplate && (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div>
-            <label className="mb-1 flex items-center gap-1 text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+            <label className="mb-1 flex items-center gap-1.5 text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>
               {t.baseWageLabel}
               <InfoTooltip text={t.baseWageHelp} />
             </label>
@@ -215,8 +263,10 @@ export function DocumentTemplateEdit({ user }: { user: User }) {
               <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.idr}</span>
             </div>
           </div>
+
+          {/* Allowance */}
           <div>
-            <label className="mb-1 flex items-center text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+            <label className="mb-1 flex items-center gap-1.5 text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>
               {t.allowanceLabel}
               <InfoTooltip text={t.allowanceHelp} />
             </label>
@@ -233,75 +283,90 @@ export function DocumentTemplateEdit({ user }: { user: User }) {
               <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.idr}</span>
             </div>
           </div>
-          <div>
-            <label className="mb-1 flex items-center text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
-              {t.hoursPerDayLabel}
-              <InfoTooltip text={t.hoursPerDayHelp} />
-            </label>
-            <select
-              value={hoursPerDay}
-              onChange={e => setHoursPerDay(e.target.value)}
-              className="w-full rounded-lg border px-3 py-2 text-sm"
-              style={inputStyle}
-            >
-              <option value="">—</option>
-              <option value="6">{t.hoursOption(6)}</option>
-              <option value="7">{t.hoursOption(7)}</option>
-              <option value="8">{t.hoursOption(8)}</option>
-              <option value="9">{t.hoursOption(9)}</option>
-              <option value="10">{t.hoursOption(10)}</option>
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 flex items-center text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
-              {t.daysPerWeekLabel}
-              <InfoTooltip text={t.daysPerWeekHelp} />
-            </label>
-            <select
-              value={daysPerWeek}
-              onChange={e => setDaysPerWeek(e.target.value)}
-              className="w-full rounded-lg border px-3 py-2 text-sm"
-              style={inputStyle}
-            >
-              <option value="">—</option>
-              <option value="4">{t.daysOption(4)}</option>
-              <option value="5">{t.daysOption(5)}</option>
-              <option value="6">{t.daysOption(6)}</option>
-              <option value="7">{t.daysOption(7)}</option>
-            </select>
-          </div>
-        </div>
-        )}
 
-        <div>
-          <div className="mb-2 flex items-center justify-between">
-            <label className="block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.contentLabel}</label>
+          {/* Hours + days side-by-side */}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="mb-1 flex items-center gap-1.5 text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>
+                {t.hoursPerDayLabel}
+                <InfoTooltip text={t.hoursPerDayHelp} />
+              </label>
+              <select
+                value={hoursPerDay}
+                onChange={e => setHoursPerDay(e.target.value)}
+                className="w-full rounded-lg border px-2 py-2 text-sm"
+                style={inputStyle}
+              >
+                <option value="">—</option>
+                <option value="6">{t.hoursOption(6)}</option>
+                <option value="7">{t.hoursOption(7)}</option>
+                <option value="8">{t.hoursOption(8)}</option>
+                <option value="9">{t.hoursOption(9)}</option>
+                <option value="10">{t.hoursOption(10)}</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 flex items-center gap-1.5 text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>
+                {t.daysPerWeekLabel}
+                <InfoTooltip text={t.daysPerWeekHelp} />
+              </label>
+              <select
+                value={daysPerWeek}
+                onChange={e => setDaysPerWeek(e.target.value)}
+                className="w-full rounded-lg border px-2 py-2 text-sm"
+                style={inputStyle}
+              >
+                <option value="">—</option>
+                <option value="4">{t.daysOption(4)}</option>
+                <option value="5">{t.daysOption(5)}</option>
+                <option value="6">{t.daysOption(6)}</option>
+                <option value="7">{t.daysOption(7)}</option>
+              </select>
+            </div>
           </div>
-          {/* Templates are authored bilingually — both EN and ID side
-              by side. No auto-translation on save: the snapshot helper
-              that powers contract translation only knows about the
-              `contracts` table. Per-selection translation via the
-              editor's BubbleMenu still works. */}
-          <DocumentEditor
-            initialDoc={contentDoc}
-            onChange={setContentDoc}
-            view={view}
-            onViewChange={setView}
-            mergeFields={{
-              scope: 'contract',
-              getContext: () => ({
-                employee: null,
-                organization,
-                contract: null,
-                today: new Date(),
-                lang: 'en',
-                signer: { name: user.name, title: user.title },
-              }),
-            }}
-            aiGenerate={{ docType: 'contract', title }}
-          />
-        </div>
-      </div>
-    </div>
+        </>
+      )}
+    </>
+  )
+
+  return (
+    <DocumentEditShell
+      storageKey="templateEdit"
+      icon={<TemplateTypeIcon type={type} />}
+      accent={TYPE_ACCENT[type] ?? 'var(--color-primary)'}
+      title={title}
+      onTitleChange={setTitle}
+      canEditTitle={canWrite}
+      badge={badge}
+      actions={actions}
+      error={error}
+      sidebar={sidebar}
+      outlineDoc={contentDoc}
+    >
+      {/* Templates are authored bilingually — both EN and ID side by side.
+          No auto-translation on save: the snapshot helper that powers
+          contract translation only knows about the `contracts` table.
+          Per-selection translation via the editor's BubbleMenu still works. */}
+      <DocumentEditor
+        initialDoc={contentDoc}
+        onChange={setContentDoc}
+        view={view}
+        onViewChange={setView}
+        stickyToolbar
+        stickyToolbarOffset={`${EDITOR_STICKY_TOP_PX}px`}
+        mergeFields={{
+          scope: 'contract',
+          getContext: () => ({
+            employee: null,
+            organization,
+            contract: null,
+            today: new Date(),
+            lang: 'en',
+            signer: { name: user.name, title: user.title },
+          }),
+        }}
+        aiGenerate={{ docType: 'contract', title }}
+      />
+    </DocumentEditShell>
   )
 }

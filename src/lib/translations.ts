@@ -401,6 +401,8 @@ export const translations = {
     jdSectionBody: 'Body',
     jdFieldTitle: 'Position title',
     jdFieldTitlePlaceholder: 'e.g. Senior Backend Engineer',
+    jdFieldAssignee: 'Assignee',
+    jdFieldAssigneeNone: 'Unassigned',
     jdFieldDepartment: 'Department',
     jdFieldDepartmentPlaceholder: 'Select department…',
     jdFieldReportingLine: 'Reports to',
@@ -763,6 +765,7 @@ export const translations = {
     sidebarHide: 'Hide sidebar',
     sidebarShow: 'Show sidebar',
     sidebarSectionDetails: 'Contract details',
+    sidebarDetails: 'Details',
 
     // Manager app — Pending page
     pendingUpdatesTitle: 'Pending Updates',
@@ -2336,6 +2339,8 @@ export const translations = {
     jdSectionBody: 'Isi',
     jdFieldTitle: 'Judul posisi',
     jdFieldTitlePlaceholder: 'contoh: Senior Backend Engineer',
+    jdFieldAssignee: 'Ditugaskan ke',
+    jdFieldAssigneeNone: 'Belum ditugaskan',
     jdFieldDepartment: 'Departemen',
     jdFieldDepartmentPlaceholder: 'Pilih departemen…',
     jdFieldReportingLine: 'Melapor kepada',
@@ -2692,6 +2697,7 @@ export const translations = {
     sidebarHide: 'Sembunyikan bilah samping',
     sidebarShow: 'Tampilkan bilah samping',
     sidebarSectionDetails: 'Detail kontrak',
+    sidebarDetails: 'Detail',
 
     // Manager app — Pending page
     pendingUpdatesTitle: 'Pembaruan Tertunda',

@@ -1722,6 +1722,7 @@ export type Database = {
       }
       job_description_versions: {
         Row: {
+          assignee_employee_id: string | null
           change_summary: string | null
           changed_by: string | null
           content_doc: Json | null
@@ -1739,6 +1740,7 @@ export type Database = {
           work_location: string | null
         }
         Insert: {
+          assignee_employee_id?: string | null
           change_summary?: string | null
           changed_by?: string | null
           content_doc?: Json | null
@@ -1756,6 +1758,7 @@ export type Database = {
           work_location?: string | null
         }
         Update: {
+          assignee_employee_id?: string | null
           change_summary?: string | null
           changed_by?: string | null
           content_doc?: Json | null
@@ -1799,6 +1802,7 @@ export type Database = {
       job_descriptions: {
         Row: {
           archived_at: string | null
+          assignee_employee_id: string | null
           content_doc: Json | null
           created_at: string
           created_by: string | null
@@ -1820,6 +1824,7 @@ export type Database = {
         }
         Insert: {
           archived_at?: string | null
+          assignee_employee_id?: string | null
           content_doc?: Json | null
           created_at?: string
           created_by?: string | null
@@ -1841,6 +1846,7 @@ export type Database = {
         }
         Update: {
           archived_at?: string | null
+          assignee_employee_id?: string | null
           content_doc?: Json | null
           created_at?: string
           created_by?: string | null

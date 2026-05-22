@@ -19,6 +19,7 @@ import { useLang } from '../../contexts/LanguageContext'
 import { useBilling } from '../../contexts/BillingContext'
 import { useBreadcrumbTrailing } from '../../contexts/BreadcrumbContext'
 import { DocumentEditor } from '../../components/editor/bilingual/DocumentEditor'
+import { DocumentEditShell, EDITOR_STICKY_TOP_PX } from '../../components/editor/DocumentEditShell'
 import { DateTimePicker } from '../../components/DateTimePicker'
 import { docAsJson, type DocumentDoc, type ViewMode } from '../../lib/documentDoc'
 import { documentEditPath } from '../../lib/documentTypes'
@@ -33,6 +34,7 @@ type DepartmentOption = Pick<CompanyDepartment, 'id' | 'name'>
 
 type FormState = {
   title: string
+  assignee_employee_id: string
   department_id: string
   reporting_line: string
   job_level: string
@@ -44,6 +46,7 @@ type FormState = {
 
 const DEFAULT_FORM: FormState = {
   title: '',
+  assignee_employee_id: '',
   department_id: '',
   reporting_line: '',
   job_level: '',
@@ -52,6 +55,8 @@ const DEFAULT_FORM: FormState = {
   effective_date: '',
   doc_version: '',
 }
+
+type EmployeeOption = { id: string; name: string }
 
 export function JobDescriptionEdit({ user }: { user: User }) {
   const { t } = useLang()
@@ -65,6 +70,7 @@ export function JobDescriptionEdit({ user }: { user: User }) {
 
   const [form, setForm] = useState<FormState>(DEFAULT_FORM)
   const [departments, setDepartments] = useState<DepartmentOption[]>([])
+  const [employees, setEmployees] = useState<EmployeeOption[]>([])
   const [content, setContent] = useState<DocumentDoc>(buildJobDescriptionSeedDoc)
   const [status, setStatus] = useState<JobDescriptionStatus>('draft')
   const [currentVersion, setCurrentVersion] = useState(1)
@@ -89,6 +95,10 @@ export function JobDescriptionEdit({ user }: { user: User }) {
         .eq('org_id', user.org_id)
         .order('display_order')
         .order('name')
+      const empsPromise = supabase.from('employees')
+        .select('id, name')
+        .eq('org_id', user.org_id)
+        .order('name')
 
       if (isNew) {
         // For new JDs, optionally seed from an approved hiring request and/or
@@ -109,10 +119,11 @@ export function JobDescriptionEdit({ user }: { user: User }) {
               .single()
           : Promise.resolve({ data: null as { title: string; template_for_position: string | null; content_doc: unknown } | null, error: null })
 
-        const [deptsResult, reqResult, tplResult] = await Promise.all([deptsPromise, reqPromise, tplPromise])
+        const [deptsResult, empsResult, reqResult, tplResult] = await Promise.all([deptsPromise, empsPromise, reqPromise, tplPromise])
         if (cancelled) return
 
         setDepartments(deptsResult.data ?? [])
+        setEmployees(empsResult.data ?? [])
 
         // Start from either the template's content_doc or the seed doc.
         const seeded = (tplResult.data?.content_doc as DocumentDoc | null) ?? buildJobDescriptionSeedDoc()
@@ -154,13 +165,15 @@ export function JobDescriptionEdit({ user }: { user: User }) {
       }
 
       // Existing JD
-      const [deptsResult, jdResult] = await Promise.all([
+      const [deptsResult, empsResult, jdResult] = await Promise.all([
         deptsPromise,
+        empsPromise,
         supabase.from('job_descriptions').select('*').eq('id', id!).single(),
       ])
       if (cancelled) return
 
       setDepartments(deptsResult.data ?? [])
+      setEmployees(empsResult.data ?? [])
 
       if (jdResult.error || !jdResult.data) {
         setError(jdResult.error?.message ?? t.jdNotFound)
@@ -173,6 +186,7 @@ export function JobDescriptionEdit({ user }: { user: User }) {
       setHiringRequestId(jd.hiring_request_id)
       setForm({
         title: jd.title,
+        assignee_employee_id: jd.assignee_employee_id ?? '',
         department_id: jd.department_id ?? '',
         reporting_line: jd.reporting_line ?? '',
         job_level: jd.job_level ?? '',
@@ -217,6 +231,7 @@ export function JobDescriptionEdit({ user }: { user: User }) {
   function payloadFromForm() {
     return {
       title: form.title.trim(),
+      assignee_employee_id: form.assignee_employee_id || null,
       department_id: form.department_id || null,
       reporting_line: form.reporting_line.trim() || null,
       job_level: form.job_level.trim() || null,
@@ -279,6 +294,7 @@ export function JobDescriptionEdit({ user }: { user: User }) {
       job_description_id: newId,
       version_number: currentVersion,
       title: form.title.trim(),
+      assignee_employee_id: form.assignee_employee_id || null,
       department_id: form.department_id || null,
       reporting_line: form.reporting_line.trim() || null,
       job_level: form.job_level.trim() || null,
@@ -348,178 +364,182 @@ export function JobDescriptionEdit({ user }: { user: User }) {
     return <div style={{ color: 'var(--color-text-secondary)' }}>{t.loading}</div>
   }
 
-  return (
-    <div>
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="mb-1 text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--color-text-tertiary)' }}>
-            {statusBadgeText(status, t)}
-          </div>
-          <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>
-            {isNew ? t.jdNewTitle : (form.title || t.jdEditTitle)}
-          </h1>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {status === 'draft' && (
-            <>
-              {!isNew && (
-                <button
-                  type="button"
-                  onClick={handleDelete}
-                  disabled={saving || !canWrite}
-                  title={writeDisabledTitle}
-                  className="rounded-lg border px-3 py-1.5 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
-                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-danger)' }}
-                >
-                  {t.jdActionDelete}
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={handleSaveDraft}
-                disabled={saving || !canWrite}
-                title={writeDisabledTitle}
-                className="rounded-lg border px-3 py-1.5 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
-                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-              >
-                {saving ? t.jdSaving : t.jdActionSaveDraft}
-              </button>
-              <button
-                type="button"
-                onClick={handlePublish}
-                disabled={saving || !canWrite}
-                title={writeDisabledTitle}
-                className="rounded-lg px-3 py-1.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
-                style={{ backgroundColor: 'var(--color-primary)' }}
-              >
-                {t.jdActionPublish}
-              </button>
-            </>
-          )}
-          {status === 'published' && (
-            <button
-              type="button"
-              onClick={handleArchive}
-              disabled={saving || !canWrite}
-              title={writeDisabledTitle}
-              className="rounded-lg border px-3 py-1.5 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
-              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-            >
-              {t.jdActionArchive}
+  const statusColors: Record<JobDescriptionStatus, string> = {
+    draft: 'var(--color-warning)',
+    published: 'var(--color-success)',
+    archived: 'var(--color-text-tertiary)',
+  }
+
+  const badge = (
+    <span className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium"
+      style={{ borderColor: 'var(--color-border)', color: statusColors[status], backgroundColor: 'var(--color-bg-secondary, var(--color-bg))' }}>
+      <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: statusColors[status] }} />
+      {statusBadgeText(status, t)}
+    </span>
+  )
+
+  const actions = (
+    <>
+      {status === 'draft' && (
+        <>
+          {!isNew && (
+            <button type="button" onClick={handleDelete} disabled={saving || !canWrite} title={writeDisabledTitle}
+              className="rounded-lg border px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-danger)' }}>
+              {t.jdActionDelete}
             </button>
           )}
-        </div>
-      </div>
-
-      {error && (
-        <div className="mb-4 rounded-md px-3 py-2 text-sm" style={{ backgroundColor: 'var(--color-diff-remove)', color: 'var(--color-danger)' }}>
-          {error}
-        </div>
+          <button type="button" onClick={handleSaveDraft} disabled={saving || !canWrite} title={writeDisabledTitle}
+            className="rounded-lg border px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+            {saving ? t.jdSaving : t.jdActionSaveDraft}
+          </button>
+          <button type="button" onClick={handlePublish} disabled={saving || !canWrite} title={writeDisabledTitle}
+            className="rounded-lg px-3 py-1.5 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+            style={{ backgroundColor: 'var(--color-primary)' }}>
+            {t.jdActionPublish}
+          </button>
+        </>
       )}
+      {status === 'published' && (
+        <button type="button" onClick={handleArchive} disabled={saving || !canWrite} title={writeDisabledTitle}
+          className="rounded-lg border px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
+          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+          {t.jdActionArchive}
+        </button>
+      )}
+    </>
+  )
 
-      <Section title={t.jdSectionMetadata}>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label={t.jdFieldTitle} required>
-            <input
-              type="text"
-              value={form.title}
-              onChange={e => update('title', e.target.value)}
-              placeholder={t.jdFieldTitlePlaceholder}
-              disabled={readOnly}
-              className="w-full rounded-lg border px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
-              style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
-            />
-          </Field>
-          <Field label={t.jdFieldDepartment} required>
-            <select
-              value={form.department_id}
-              onChange={e => update('department_id', e.target.value)}
-              disabled={readOnly}
-              className="w-full rounded-lg border px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
-              style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
-            >
-              <option value="">{t.jdFieldDepartmentPlaceholder}</option>
-              {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-            </select>
-          </Field>
-          <Field label={t.jdFieldReportingLine}>
-            <input
-              type="text"
-              value={form.reporting_line}
-              onChange={e => update('reporting_line', e.target.value)}
-              placeholder={t.jdFieldReportingLinePlaceholder}
-              disabled={readOnly}
-              className="w-full rounded-lg border px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
-              style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
-            />
-          </Field>
-          <Field label={t.jdFieldJobLevel}>
-            <input
-              type="text"
-              value={form.job_level}
-              onChange={e => update('job_level', e.target.value)}
-              placeholder={t.jdFieldJobLevelPlaceholder}
-              disabled={readOnly}
-              className="w-full rounded-lg border px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
-              style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
-            />
-          </Field>
-          <Field label={t.jdFieldSupervisedTeam}>
-            <input
-              type="text"
-              value={form.supervised_team}
-              onChange={e => update('supervised_team', e.target.value)}
-              placeholder={t.jdFieldSupervisedTeamPlaceholder}
-              disabled={readOnly}
-              className="w-full rounded-lg border px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
-              style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
-            />
-          </Field>
-          <Field label={t.jdFieldWorkLocation}>
-            <input
-              type="text"
-              value={form.work_location}
-              onChange={e => update('work_location', e.target.value)}
-              placeholder={t.jdFieldWorkLocationPlaceholder}
-              disabled={readOnly}
-              className="w-full rounded-lg border px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
-              style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
-            />
-          </Field>
-          <Field label={t.jdFieldEffectiveDate}>
-            <DateTimePicker
-              mode="date"
-              value={form.effective_date}
-              onChange={v => update('effective_date', v)}
-              disabled={readOnly}
-            />
-          </Field>
-          <Field label={t.jdFieldDocVersion} hint={t.jdFieldDocVersionHint}>
-            <input
-              type="text"
-              value={form.doc_version}
-              onChange={e => update('doc_version', e.target.value)}
-              placeholder={docVersionPlaceholder}
-              disabled={readOnly}
-              className="w-full rounded-lg border px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
-              style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
-            />
-          </Field>
-        </div>
-      </Section>
+  const sidebar = (
+    <>
+      {/* Title lives in the page top bar as an inline-editable heading. */}
+      <Field label={t.jdFieldAssignee}>
+        <select
+          value={form.assignee_employee_id}
+          onChange={e => update('assignee_employee_id', e.target.value)}
+          disabled={readOnly}
+          className="w-full rounded-lg border px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+          style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+        >
+          <option value="">{t.jdFieldAssigneeNone}</option>
+          {employees.map(emp => <option key={emp.id} value={emp.id}>{emp.name}</option>)}
+        </select>
+      </Field>
+      <Field label={t.jdFieldDepartment} required>
+        <select
+          value={form.department_id}
+          onChange={e => update('department_id', e.target.value)}
+          disabled={readOnly}
+          className="w-full rounded-lg border px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+          style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+        >
+          <option value="">{t.jdFieldDepartmentPlaceholder}</option>
+          {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+        </select>
+      </Field>
+      <Field label={t.jdFieldReportingLine}>
+        <input
+          type="text"
+          value={form.reporting_line}
+          onChange={e => update('reporting_line', e.target.value)}
+          placeholder={t.jdFieldReportingLinePlaceholder}
+          disabled={readOnly}
+          className="w-full rounded-lg border px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+          style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+        />
+      </Field>
+      <Field label={t.jdFieldJobLevel}>
+        <input
+          type="text"
+          value={form.job_level}
+          onChange={e => update('job_level', e.target.value)}
+          placeholder={t.jdFieldJobLevelPlaceholder}
+          disabled={readOnly}
+          className="w-full rounded-lg border px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+          style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+        />
+      </Field>
+      <Field label={t.jdFieldSupervisedTeam}>
+        <input
+          type="text"
+          value={form.supervised_team}
+          onChange={e => update('supervised_team', e.target.value)}
+          placeholder={t.jdFieldSupervisedTeamPlaceholder}
+          disabled={readOnly}
+          className="w-full rounded-lg border px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+          style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+        />
+      </Field>
+      <Field label={t.jdFieldWorkLocation}>
+        <input
+          type="text"
+          value={form.work_location}
+          onChange={e => update('work_location', e.target.value)}
+          placeholder={t.jdFieldWorkLocationPlaceholder}
+          disabled={readOnly}
+          className="w-full rounded-lg border px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+          style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+        />
+      </Field>
+      <Field label={t.jdFieldEffectiveDate}>
+        <DateTimePicker
+          mode="date"
+          value={form.effective_date}
+          onChange={v => update('effective_date', v)}
+          disabled={readOnly}
+        />
+      </Field>
+      <Field label={t.jdFieldDocVersion} hint={t.jdFieldDocVersionHint}>
+        <input
+          type="text"
+          value={form.doc_version}
+          onChange={e => update('doc_version', e.target.value)}
+          placeholder={docVersionPlaceholder}
+          disabled={readOnly}
+          className="w-full rounded-lg border px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+          style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+        />
+      </Field>
+    </>
+  )
 
-      <div className="mt-6">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-tertiary)' }}>{t.jdSectionBody}</h2>
-        <div className={readOnly ? 'pointer-events-none opacity-90' : ''}>
-          <DocumentEditor
-            initialDoc={content}
-            onChange={handleDocChange}
-            view={view}
-            onViewChange={setView}
-          />
-        </div>
+  return (
+    <DocumentEditShell
+      storageKey="jdEdit"
+      icon={<JdIcon />}
+      accent="var(--color-warning)"
+      title={form.title}
+      onTitleChange={v => update('title', v)}
+      titlePlaceholder={t.jdFieldTitlePlaceholder}
+      canEditTitle={!readOnly && canWrite}
+      badge={badge}
+      actions={actions}
+      error={error}
+      sidebar={sidebar}
+      outlineDoc={content}
+    >
+      <div className={readOnly ? 'pointer-events-none opacity-90' : ''}>
+        <DocumentEditor
+          initialDoc={content}
+          onChange={handleDocChange}
+          view={view}
+          onViewChange={setView}
+          stickyToolbar
+          stickyToolbarOffset={`${EDITOR_STICKY_TOP_PX}px`}
+          aiGenerate={readOnly ? undefined : { docType: 'job_description', title: form.title }}
+        />
       </div>
-    </div>
+    </DocumentEditShell>
+  )
+}
+
+function JdIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
+      <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+    </svg>
   )
 }
 
@@ -535,17 +555,6 @@ function statusBadgeText(status: JobDescriptionStatus, t: { jdStatusDraft: strin
 
 // ─── UI primitives ──────────────────────────────────────────────────────
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-tertiary)' }}>{title}</h2>
-      <div className="rounded-xl border p-5" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)' }}>
-        {children}
-      </div>
-    </div>
-  )
-}
-
 function Field({ label, hint, required, children }: {
   label: string
   hint?: string
@@ -554,7 +563,7 @@ function Field({ label, hint, required, children }: {
 }) {
   return (
     <div>
-      <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+      <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>
         {label}
         {required && <span className="ml-0.5" style={{ color: 'var(--color-danger)' }}>*</span>}
       </label>

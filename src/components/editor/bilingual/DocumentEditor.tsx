@@ -79,7 +79,7 @@ interface DocumentEditorProps {
   // replaces the editor's content with the generated structured doc.
   // Omit to hide the button (e.g. on read-only surfaces).
   aiGenerate?: {
-    docType: 'sop' | 'contract'
+    docType: 'sop' | 'contract' | 'job_description'
     title?: string
   }
   // When true the toolbar pins to the top of the nearest scroll container.
@@ -612,7 +612,7 @@ function SparklesIcon() { return <svg {...s}><path d="M12 3v3M12 18v3M3 12h3M18 
 // ─── AI Generate modal ─────────────────────────────────────────────
 
 function GenerateModal({ docType, generating, error, onClose, onSubmit }: {
-  docType: 'sop' | 'contract'
+  docType: 'sop' | 'contract' | 'job_description'
   generating: boolean
   error: string
   onClose: () => void
@@ -621,7 +621,9 @@ function GenerateModal({ docType, generating, error, onClose, onSubmit }: {
   const [prompt, setPrompt] = useState('')
   const placeholder = docType === 'contract'
     ? 'e.g. PKWTT contract for a senior chef, 6-month probation, weekly off on Mondays'
-    : 'e.g. SOP for opening checklist at a coffee shop — covers cleaning, prep, register float'
+    : docType === 'job_description'
+      ? 'e.g. Job description for a Marketing Director — leads brand, demand-gen, and a team of 5'
+      : 'e.g. SOP for opening checklist at a coffee shop — covers cleaning, prep, register float'
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
