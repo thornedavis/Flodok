@@ -360,14 +360,6 @@ export function JobDescriptionEdit({ user }: { user: User }) {
           </h1>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => navigate('/dashboard/documents')}
-            className="rounded-lg border px-3 py-1.5 text-sm font-medium"
-            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-          >
-            {t.backToDocuments}
-          </button>
           {status === 'draft' && (
             <>
               {!isNew && (

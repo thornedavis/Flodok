@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { DocumentEditor } from '../../components/editor/bilingual/DocumentEditor'
 import { useLang } from '../../contexts/LanguageContext'
@@ -21,7 +21,6 @@ const EMPLOYEE_WITH_DEPTS_SELECT =
 export function SOPEdit({ user }: { user: User }) {
   const { t } = useLang()
   const { id } = useParams<{ id: string }>()
-  const navigate = useNavigate()
   const { canWrite } = useBilling()
   const { view, setView } = useDocumentViewPref('sop', id ?? null)
   const [sop, setSOP] = useState<Sop | null>(null)
@@ -319,13 +318,6 @@ export function SOPEdit({ user }: { user: User }) {
               </svg>
             )}
             {downloading ? t.generatingPdf : t.downloadPdf}
-          </button>
-          <button
-            onClick={() => navigate('/dashboard/documents')}
-            className="rounded-lg border px-4 py-2 text-sm"
-            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
-          >
-            {t.backToDocuments}
           </button>
           <button
             onClick={handleSaveAsDraft}

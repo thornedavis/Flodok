@@ -38,6 +38,7 @@ import { useFullWidthLayout } from '../../components/Layout'
 import { FilterPanel, FilterSearchInput } from '../../components/FilterControls'
 import type { FilterPanelSection } from '../../components/FilterControls'
 import { EmployeeSelect } from '../../components/EmployeeSelect'
+import { Modal } from '../../components/Modal'
 import { buildPkwtStarterDoc } from '../../lib/pkwtStarterDoc'
 import { docAsJson, docPreviewLines, emptyDocumentDoc } from '../../lib/documentDoc'
 import { type EmpDeptShape } from '../../lib/employee'
@@ -444,6 +445,22 @@ function AllDocumentsView({ user, shell }: { user: User; shell: string }) {
     setItems(prev => prev.filter(i => !(i.type === item.type && i.id === item.id)))
   }
 
+  async function renameItem(item: AllDocItem, nextTitle: string) {
+    if (!canWrite) return
+    const title = nextTitle.trim()
+    const { error } = await supabase
+      .from(tableForType(item.type))
+      .update({ title, updated_at: new Date().toISOString() })
+      .eq('id', item.id)
+    if (error) {
+      window.alert(error.message)
+      return
+    }
+    setItems(prev => prev.map(i =>
+      i.type === item.type && i.id === item.id ? { ...i, title } : i,
+    ))
+  }
+
   return (
     <>
       <StartNewSection
@@ -505,6 +522,7 @@ function AllDocumentsView({ user, shell }: { user: User; shell: string }) {
                   onOpen={item => navigate(documentEditPath(item.type, item.id))}
                   onDuplicate={duplicateItem}
                   onDelete={deleteItem}
+                  onRename={renameItem}
                 />
               : <RecentList items={paginatedItems} onOpen={item => navigate(documentEditPath(item.type, item.id))} />}
             <PaginationFooter
@@ -849,15 +867,19 @@ function RecentGrid({
   onOpen,
   onDuplicate,
   onDelete,
+  onRename,
 }: {
   items: AllDocItem[]
   canWrite: boolean
   onOpen: (item: AllDocItem) => void
   onDuplicate: (item: AllDocItem) => void
   onDelete: (item: AllDocItem) => void
+  onRename: (item: AllDocItem, nextTitle: string) => void
 }) {
   const { t } = useLang()
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
+  const [renameTarget, setRenameTarget] = useState<AllDocItem | null>(null)
+  const [renameValue, setRenameValue] = useState('')
 
   const statusColors: Record<string, string> = {
     active: 'var(--color-success)',
@@ -979,6 +1001,16 @@ function RecentGrid({
                       <MenuItem onClick={() => { setMenuOpenId(null); onOpen(item) }}>{t.edit}</MenuItem>
                       <MenuItem
                         disabled={!canWrite}
+                        onClick={() => {
+                          setMenuOpenId(null)
+                          setRenameValue(item.title)
+                          setRenameTarget(item)
+                        }}
+                      >
+                        {t.renameTitle}
+                      </MenuItem>
+                      <MenuItem
+                        disabled={!canWrite}
                         onClick={() => { setMenuOpenId(null); onDuplicate(item) }}
                       >
                         {t.duplicate}
@@ -999,6 +1031,51 @@ function RecentGrid({
           </div>
         )
       })}
+
+      <Modal
+        open={renameTarget !== null}
+        onClose={() => setRenameTarget(null)}
+        title={t.renameTitle}
+      >
+        <form
+          onSubmit={e => {
+            e.preventDefault()
+            if (!renameTarget) return
+            onRename(renameTarget, renameValue)
+            setRenameTarget(null)
+          }}
+        >
+          <p className="mb-2 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+            {t.documentsRenamePrompt}
+          </p>
+          <input
+            type="text"
+            value={renameValue}
+            onChange={e => setRenameValue(e.target.value)}
+            autoFocus
+            onFocus={e => e.currentTarget.select()}
+            className="w-full rounded-lg border px-3 py-2 text-sm outline-none"
+            style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+          />
+          <div className="mt-4 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setRenameTarget(null)}
+              className="rounded-lg border px-3 py-1.5 text-sm font-medium"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
+            >
+              {t.cancel}
+            </button>
+            <button
+              type="submit"
+              className="rounded-lg px-3 py-1.5 text-sm font-medium text-white"
+              style={{ backgroundColor: 'var(--color-primary)' }}
+            >
+              {t.save}
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   )
 }

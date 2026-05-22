@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { DocumentEditor } from '../../components/editor/bilingual/DocumentEditor'
 import { SectionOutline } from '../../components/editor/SectionOutline'
@@ -68,7 +68,6 @@ function writeLocalBool(key: string, value: boolean) {
 export function ContractEdit({ user }: { user: User }) {
   const { t } = useLang()
   const { id } = useParams<{ id: string }>()
-  const navigate = useNavigate()
   const { canWrite } = useBilling()
   const { view, setView } = useDocumentViewPref('contract', id ?? null)
   // Focus-the-canvas: collapse the main nav and break out of the
@@ -693,7 +692,6 @@ export function ContractEdit({ user }: { user: User }) {
             )}
             {downloading ? t.generatingPdf : t.downloadPdf}
           </button>
-          <button onClick={() => navigate('/dashboard/documents')} className="rounded-lg border px-3 py-1.5 text-xs font-medium" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>{t.backToDocuments}</button>
           {contract.is_template ? (
             <button onClick={handleSaveAsDraft} disabled={saving || !canWrite || !hasChanges} title={!canWrite ? t.dunningWriteBlocked : undefined}
               className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50" style={{ backgroundColor: 'var(--color-primary)' }}>
