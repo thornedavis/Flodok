@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
 import { getEmployeeDepts, primaryDept, type EmpDeptShape } from '../../lib/employee'
 import { FilterPill, FilterPanel, FilterSearchInput } from '../../components/FilterControls'
+import { DocumentCardGridSkeleton } from '../../components/Skeleton'
 import type { FilterPanelSection } from '../../components/FilterControls'
 import { useBilling } from '../../contexts/BillingContext'
 import { documentEditPath } from '../../lib/documentTypes'
@@ -163,7 +164,7 @@ export function SOPs({ user, embedded = false }: { user: User; embedded?: boolea
     setMenuOpenId(null)
   }
 
-  if (loading) return <div style={{ color: 'var(--color-text-secondary)' }}>{t.loading}</div>
+  if (loading) return <DocumentCardGridSkeleton />
 
   const statusColors: Record<string, string> = {
     active: 'var(--color-success)',

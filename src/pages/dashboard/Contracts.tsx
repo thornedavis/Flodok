@@ -6,6 +6,7 @@ import { getEmployeeDepts, type EmpDeptShape } from '../../lib/employee'
 import { bucketReferenceValues, referenceNames } from '../../lib/companyReference'
 import { FilterPill, FilterPanel, FilterSearchInput } from '../../components/FilterControls'
 import type { FilterPanelSection } from '../../components/FilterControls'
+import { DocumentCardGridSkeleton } from '../../components/Skeleton'
 import { useBilling } from '../../contexts/BillingContext'
 import { documentEditPath, documentTemplateEditPath, documentsIndexPath } from '../../lib/documentTypes'
 import { docAsJson, emptyDocumentDoc } from '../../lib/documentDoc'
@@ -224,7 +225,7 @@ export function Contracts({ user, embedded = false }: { user: User; embedded?: b
     setMenuOpenId(null)
   }
 
-  if (loading) return <div style={{ color: 'var(--color-text-secondary)' }}>{t.loading}</div>
+  if (loading) return <DocumentCardGridSkeleton />
 
   const statusColors: Record<string, string> = {
     active: 'var(--color-success)',

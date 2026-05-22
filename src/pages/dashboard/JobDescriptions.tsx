@@ -15,6 +15,7 @@ import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
 import { useRole } from '../../hooks/useRole'
 import { FilterPill, FilterSearchInput } from '../../components/FilterControls'
+import { Skeleton } from '../../components/Skeleton'
 import { jdStatusTone, type JobDescriptionStatus } from '../../lib/jobDescriptions'
 import { documentEditPath } from '../../lib/documentTypes'
 import type { Translations } from '../../lib/translations'
@@ -125,7 +126,7 @@ export function JobDescriptionsList({ user, embedded = false }: { user: User; em
       </div>
 
       {loading ? (
-        <div className="py-12 text-center text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{t.loading}</div>
+        <JdTableSkeleton />
       ) : filtered.length === 0 ? (
         <EmptyState message={searchActive ? t.hiringRequestsNoMatches : t.jdListEmpty} />
       ) : (
@@ -177,6 +178,31 @@ function EmptyState({ message }: { message: string }) {
   return (
     <div className="rounded-lg border py-12 text-center text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-tertiary)' }}>
       {message}
+    </div>
+  )
+}
+
+// Skeleton mirroring the JD table (header strip + a few rows) while the
+// list loads.
+function JdTableSkeleton({ rows = 6 }: { rows?: number }) {
+  return (
+    <div className="overflow-hidden rounded-lg border" style={{ borderColor: 'var(--color-border)' }} role="status" aria-busy="true">
+      <div className="px-4 py-2.5" style={{ backgroundColor: 'var(--color-bg-tertiary)' }}>
+        <Skeleton className="h-2.5 w-24" />
+      </div>
+      {Array.from({ length: rows }).map((_, i) => (
+        <div
+          key={i}
+          className="flex items-center gap-4 border-t px-4 py-3.5"
+          style={{ borderColor: 'var(--color-border)' }}
+        >
+          <Skeleton className="h-3 w-1/3" />
+          <Skeleton className="h-3 w-24" />
+          <Skeleton className="h-3 w-10" />
+          <Skeleton className="ml-auto h-3 w-20" />
+          <Skeleton className="h-5 w-16 rounded-full" />
+        </div>
+      ))}
     </div>
   )
 }

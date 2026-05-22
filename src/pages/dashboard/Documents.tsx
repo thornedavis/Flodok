@@ -39,6 +39,7 @@ import { FilterPanel, FilterSearchInput } from '../../components/FilterControls'
 import type { FilterPanelSection } from '../../components/FilterControls'
 import { EmployeeSelect } from '../../components/EmployeeSelect'
 import { Modal } from '../../components/Modal'
+import { Skeleton } from '../../components/Skeleton'
 import { buildPkwtStarterDoc } from '../../lib/pkwtStarterDoc'
 import { docAsJson, docPreviewLines, emptyDocumentDoc } from '../../lib/documentDoc'
 import { type EmpDeptShape } from '../../lib/employee'
@@ -504,7 +505,7 @@ function AllDocumentsView({ user, shell }: { user: User; shell: string }) {
         )}
 
         {loading ? (
-          <div style={{ color: 'var(--color-text-secondary)' }}>{t.loading}</div>
+          viewMode === 'grid' ? <RecentGridSkeleton count={8} /> : <RecentListSkeleton count={6} />
         ) : items.length === 0 ? (
           <p className="py-12 text-center text-sm" style={{ color: 'var(--color-text-secondary)' }}>
             {t.documentsAllEmpty}
@@ -858,6 +859,61 @@ function DocTypeIcon({ type }: { type: DocumentType }) {
       <line x1="16" y1="17" x2="8" y2="17" />
       <line x1="10" y1="9" x2="8" y2="9" />
     </svg>
+  )
+}
+
+// Skeleton placeholders shown while the recent documents load — sized to
+// mirror the real grid cards / list rows so the layout doesn't jump.
+function RecentGridSkeleton({ count }: { count: number }) {
+  return (
+    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4" role="status" aria-busy="true">
+      {Array.from({ length: count }).map((_, i) => (
+        <div
+          key={i}
+          className="overflow-hidden rounded-lg border"
+          style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }}
+        >
+          <div className="aspect-[3/4] px-4 py-4" style={{ backgroundColor: 'var(--color-bg-secondary)' }}>
+            <Skeleton className="h-3 w-2/3" />
+            <div className="mt-3 space-y-2">
+              <Skeleton className="h-2 w-full" />
+              <Skeleton className="h-2 w-11/12" />
+              <Skeleton className="h-2 w-4/6" />
+            </div>
+          </div>
+          <div className="border-t px-3 py-2.5" style={{ borderColor: 'var(--color-border)' }}>
+            <Skeleton className="h-3 w-3/4" />
+            <div className="mt-2 flex items-center gap-2">
+              <Skeleton className="h-4 w-4" />
+              <Skeleton className="h-2 w-9" />
+              <Skeleton className="h-2 w-14" />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function RecentListSkeleton({ count }: { count: number }) {
+  return (
+    <div
+      className="overflow-hidden rounded-xl border"
+      style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }}
+      role="status"
+      aria-busy="true"
+    >
+      <ul className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
+        {Array.from({ length: count }).map((_, i) => (
+          <li key={i} className="flex items-center gap-4 px-4 py-3">
+            <Skeleton className="h-5 w-16 rounded-full" />
+            <Skeleton className="h-3 w-2/5" />
+            <Skeleton className="ml-auto h-2 w-10" />
+            <Skeleton className="h-2 w-16" />
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }
 
