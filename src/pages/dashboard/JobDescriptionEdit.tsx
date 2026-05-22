@@ -282,8 +282,14 @@ export function JobDescriptionEdit({ user }: { user: User }) {
     if (!newId) return
     // Stay in the editor — saving is decoupled from navigation. A brand-new
     // JD was just inserted on the `/new` URL, so route to its real edit path
-    // (flips isNew off) instead of re-inserting on the next save.
-    if (isNew) navigate(documentEditPath('job_description', newId))
+    // (flips isNew off) instead of re-inserting on the next save. Carry the
+    // `?from=` origin through so the breadcrumb keeps pointing where the user
+    // came from (Documents vs. Hiring).
+    if (isNew) {
+      const from = searchParams.get('from')
+      const editPath = documentEditPath('job_description', newId)
+      navigate(from ? `${editPath}?from=${from}` : editPath)
+    }
   }
 
   async function handlePublish() {

@@ -5,6 +5,7 @@ import { useLang } from '../../contexts/LanguageContext'
 import { useBilling } from '../../contexts/BillingContext'
 import { useRole } from '../../hooks/useRole'
 import { AvatarUpload } from '../../components/AvatarUpload'
+import { Skeleton } from '../../components/Skeleton'
 import { PhoneInput } from '../../components/PhoneInput'
 import { AddressFields, type AddressValue } from '../../components/AddressFields'
 import { isValidE164 } from '../../lib/phone'
@@ -94,6 +95,27 @@ export function Company({ user }: { user: User }) {
       {tab === 'structure' && <CompanyStructureTab user={user} />}
       {tab === 'assets' && <Placeholder title={t.companyTabAssets} body={t.companyAssetsPlaceholder} />}
       {tab === 'activity' && <Placeholder title={t.companyTabActivity} body={t.companyActivityPlaceholder} />}
+    </div>
+  )
+}
+
+// Branded loading state for the profile form: a logo block + a grid of field
+// placeholders so the form doesn't pop in once the org loads.
+function CompanyFormSkeleton() {
+  return (
+    <div className="space-y-8" role="status" aria-busy="true">
+      <Skeleton className="h-5 w-40" />
+      <section className="space-y-5">
+        <Skeleton className="h-16 w-16 rounded-full" />
+        <div className="grid gap-5 md:grid-cols-2">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i}>
+              <Skeleton className="h-3 w-28" />
+              <Skeleton className="mt-2 h-9 w-full rounded-lg" />
+            </div>
+          ))}
+        </div>
+      </section>
     </div>
   )
 }
@@ -195,7 +217,7 @@ function CompanyProfileTab({ user }: { user: User }) {
     setForm(profileFormFromOrg(org))
   }
 
-  if (!org) return <div style={{ color: 'var(--color-text-secondary)' }}>{t.loading}</div>
+  if (!org) return <CompanyFormSkeleton />
 
   return (
     <form id="company-profile-form" onSubmit={handleSave} className="space-y-8">
@@ -340,6 +362,28 @@ type SavingTarget = CompanyReferenceKind | DepartmentSection | null
  *  a department's manager. We require the user link because the manager
  *  needs to be able to log in and act on approval items. */
 type ManagerCandidate = { employee_id: string; user_name: string; employee_name: string }
+
+// Branded loading state for the structure tab: a hint strip + a two-column grid
+// of section-card placeholders matching the departments/branches layout.
+function CompanyStructureSkeleton() {
+  return (
+    <div role="status" aria-busy="true">
+      <Skeleton className="mb-6 h-12 w-full rounded-lg" />
+      <div className="grid gap-5 lg:grid-cols-2">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="rounded-xl border p-4" style={{ borderColor: 'var(--color-border)' }}>
+            <Skeleton className="h-4 w-1/3" />
+            <Skeleton className="mt-2 h-2.5 w-2/3" />
+            <div className="mt-4 space-y-2">
+              <Skeleton className="h-8 w-full rounded-lg" />
+              <Skeleton className="h-8 w-full rounded-lg" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 function CompanyStructureTab({ user }: { user: User }) {
   const { t } = useLang()
@@ -640,7 +684,7 @@ function CompanyStructureTab({ user }: { user: User }) {
     loadData()
   }
 
-  if (loading) return <div style={{ color: 'var(--color-text-secondary)' }}>{t.loading}</div>
+  if (loading) return <CompanyStructureSkeleton />
 
   return (
     <div>

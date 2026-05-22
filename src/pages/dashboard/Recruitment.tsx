@@ -19,6 +19,7 @@ import {
 } from '../../lib/candidateProfile'
 import { FilterPanel, FilterSearchInput, MultiSelectDropdown } from '../../components/FilterControls'
 import type { FilterPanelSection } from '../../components/FilterControls'
+import { Skeleton } from '../../components/Skeleton'
 import type { Employee, Organization, User } from '../../types/aliases'
 import type { Translations } from '../../lib/translations'
 
@@ -306,7 +307,7 @@ export function Recruitment({ user }: { user: User }) {
       </div>
 
       {loading ? (
-        <div style={{ color: 'var(--color-text-secondary)' }}>{t.loading}</div>
+        <CandidateTableSkeleton colCount={visibleColumnKeys.length} />
       ) : visible.length === 0 ? (
         <div className="rounded-lg border p-8 text-center text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>
           {t.hiringEmpty}
@@ -355,6 +356,40 @@ export function Recruitment({ user }: { user: User }) {
         />
       )}
 
+    </div>
+  )
+}
+
+// Pulsing placeholder mirroring the candidate table (name + dynamic columns +
+// actions) while the list loads, so the layout doesn't jump when data arrives.
+function CandidateTableSkeleton({ colCount, rows = 6 }: { colCount: number; rows?: number }) {
+  return (
+    <div className="overflow-hidden rounded-lg border" style={{ borderColor: 'var(--color-border)' }} role="status" aria-busy="true">
+      <div
+        className="flex items-center gap-4 border-b px-4 py-2.5"
+        style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-tertiary)' }}
+      >
+        <Skeleton className="h-2.5 w-24" />
+        {Array.from({ length: colCount }).map((_, i) => (
+          <Skeleton key={i} className="h-2.5 w-16" />
+        ))}
+      </div>
+      {Array.from({ length: rows }).map((_, r) => (
+        <div
+          key={r}
+          className="flex items-center gap-4 border-t px-4 py-3.5 first:border-t-0"
+          style={{ borderColor: 'var(--color-border)' }}
+        >
+          <div className="flex min-w-0 items-center gap-2.5">
+            <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
+            <Skeleton className="h-3 w-32" />
+          </div>
+          {Array.from({ length: colCount }).map((_, i) => (
+            <Skeleton key={i} className="h-3 w-16" />
+          ))}
+          <Skeleton className="ml-auto h-3 w-6" />
+        </div>
+      ))}
     </div>
   )
 }

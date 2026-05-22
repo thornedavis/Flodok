@@ -6,6 +6,7 @@ import { useRole } from '../../hooks/useRole'
 import { getAvatarGradient } from '../../lib/avatar'
 import { BadgeGlyph } from '../../components/BadgeGlyph'
 import { BadgePicker } from '../../components/BadgePicker'
+import { Skeleton } from '../../components/Skeleton'
 import { formatIdrDigits } from '../../lib/credits'
 import { AvatarUpload } from '../../components/AvatarUpload'
 import { PhoneInput } from '../../components/PhoneInput'
@@ -453,7 +454,7 @@ function TeamMembersSection({ user, t }: { user: User; t: Translations }) {
       </div>
 
       {loading ? (
-        <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{t.loading}</p>
+        <SettingsListSkeleton />
       ) : (
         <div className="divide-y rounded-xl border" style={{ borderColor: 'var(--color-border)' }}>
           {members.map(m => {
@@ -1205,7 +1206,7 @@ function CreditsTab({ user, t }: { user: User; t: Translations }) {
     setSavingMax(false)
   }
 
-  if (loading) return <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{t.loading}</p>
+  if (loading) return <SettingsSectionSkeleton />
 
   return (
     <div className="space-y-5">
@@ -1318,7 +1319,7 @@ function BonusesTab({ user, t }: { user: User; t: Translations }) {
     setSavingMax(false)
   }
 
-  if (loading) return <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{t.loading}</p>
+  if (loading) return <SettingsSectionSkeleton />
 
   return (
     <div className="space-y-5">
@@ -1571,7 +1572,7 @@ function AchievementsTab({ user, t }: { user: User; t: Translations }) {
       </div>
 
       {loading ? (
-        <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{t.loading}</p>
+        <SettingsListSkeleton />
       ) : defs.length === 0 ? (
         <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{t.noAchievementsYet}</p>
       ) : (
@@ -2217,3 +2218,38 @@ const badgesIcon = (
     <path d="m9 12 2 2 4-4"/>
   </svg>
 )
+
+// Gently-pulsing rows inside a bordered container — used while member and
+// achievement lists load, so the section doesn't pop in.
+function SettingsListSkeleton({ rows = 4 }: { rows?: number }) {
+  return (
+    <div className="divide-y rounded-xl border" style={{ borderColor: 'var(--color-border)' }} role="status" aria-busy="true">
+      {Array.from({ length: rows }).map((_, i) => (
+        <div key={i} className="flex items-center gap-3 px-4 py-3.5">
+          <Skeleton className="h-9 w-9 shrink-0 rounded-full" />
+          <div className="min-w-0 flex-1">
+            <Skeleton className="h-3.5 w-1/4" />
+            <Skeleton className="mt-2 h-2.5 w-1/3" />
+          </div>
+          <Skeleton className="h-7 w-20 rounded-lg" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// Banner + a couple of field placeholders — used while the credits/bonuses
+// settings sections load.
+function SettingsSectionSkeleton() {
+  return (
+    <div className="space-y-5" role="status" aria-busy="true">
+      <Skeleton className="h-16 w-full rounded-xl" />
+      {Array.from({ length: 2 }).map((_, i) => (
+        <div key={i}>
+          <Skeleton className="h-3 w-32" />
+          <Skeleton className="mt-2 h-9 w-full rounded-lg" />
+        </div>
+      ))}
+    </div>
+  )
+}

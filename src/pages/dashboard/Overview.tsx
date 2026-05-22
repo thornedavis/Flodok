@@ -17,6 +17,7 @@ import { getEmployeeDepts, type EmployeeDepartmentRow } from '../../lib/employee
 import { formatIdr } from '../../lib/credits'
 import { documentsIndexPath } from '../../lib/documentTypes'
 import { BadgeGlyph } from '../../components/BadgeGlyph'
+import { Skeleton } from '../../components/Skeleton'
 import type { Translations } from '../../lib/translations'
 import type { FeedEvent, User } from '../../types/aliases'
 
@@ -106,7 +107,7 @@ export function Overview({ user }: { user: User }) {
   useEffect(() => { loadDashboard(user.org_id).then(setData) }, [user.org_id])
 
   if (!data) {
-    return <div style={{ color: 'var(--color-text-secondary)' }}>{t.loading}</div>
+    return <OverviewSkeleton title={t.navOverview} />
   }
 
   return (
@@ -259,6 +260,47 @@ async function loadDashboard(orgId: string): Promise<DashboardData> {
 }
 
 // ─── Quick actions ──────────────────────────────────────
+
+// Branded loading state: keeps the title and approximates the dashboard layout
+// (stat-card row + two large panels) with gently-pulsing placeholders so the
+// page doesn't pop in section by section.
+function OverviewSkeleton({ title }: { title: string }) {
+  return (
+    <div className="space-y-6" role="status" aria-busy="true">
+      <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{title}</h1>
+
+      <div className="flex flex-wrap gap-2">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-9 w-32 rounded-lg" />
+        ))}
+      </div>
+
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div
+            key={i}
+            className="rounded-xl border p-5"
+            style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)' }}
+          >
+            <Skeleton className="h-3 w-2/3" />
+            <Skeleton className="mt-3 h-7 w-12" />
+          </div>
+        ))}
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="rounded-xl border p-5 lg:col-span-2" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)' }}>
+          <Skeleton className="h-3.5 w-40" />
+          <Skeleton className="mt-4 h-40 w-full" />
+        </div>
+        <div className="rounded-xl border p-5" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)' }}>
+          <Skeleton className="h-3.5 w-32" />
+          <Skeleton className="mt-4 h-40 w-full" />
+        </div>
+      </div>
+    </div>
+  )
+}
 
 function QuickActions({ t }: { t: Translations }) {
   const navigate = useNavigate()
@@ -1040,7 +1082,11 @@ function CompensationTotal({ orgId, t, lang }: { orgId: string; t: Translations;
     return (
       <Card>
         <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{t.compensationTotalTitle}</h3>
-        <p className="mt-3 text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{t.loading}</p>
+        <div className="mt-3 space-y-2" role="status" aria-busy="true">
+          <Skeleton className="h-7 w-32" />
+          <Skeleton className="h-2.5 w-full" />
+          <Skeleton className="h-2.5 w-2/3" />
+        </div>
       </Card>
     )
   }

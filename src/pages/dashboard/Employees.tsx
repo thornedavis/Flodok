@@ -15,6 +15,7 @@ import { FREE_EMPLOYEE_LIMIT, PRO_MIN_SEATS } from '../../lib/pricing'
 import { UpgradeModal } from '../../components/UpgradeModal'
 import { ImportEmployeesModal } from '../../components/ImportEmployeesModal'
 import { buildExportFile } from '../../lib/employeeImport'
+import { Skeleton } from '../../components/Skeleton'
 import { useBilling } from '../../contexts/BillingContext'
 import { deriveEmployeeStatus, type DerivedStatus } from '../../lib/employeeStatus'
 import type { Translations } from '../../lib/translations'
@@ -120,14 +121,14 @@ const LIST_COLUMN_DEFS: Record<ColumnKey, ListColumn> = {
   class:           { key: 'class',           label: t => t.empFieldClass,           width: 'w-28', sortField: 'class',           render: ({ emp }) => textCell(emp.class) },
   employment_type: { key: 'employment_type', label: t => t.empFieldEmploymentType,  width: 'w-32', sortField: 'employment_type', render: ({ emp }) => textCell(emp.employment_type) },
   status: {
-    key: 'status', label: t => t.statusLabel, width: 'w-24', sortField: 'status', alignRight: true,
+    key: 'status', label: t => t.statusLabel, width: 'w-24', sortField: 'status',
     render: ({ emp, t }) => {
       const derived = deriveEmployeeStatus(emp)
       return <DerivedStatusBadge status={derived} label={derivedStatusLabel(derived, t)} />
     },
   },
   phone: {
-    key: 'phone', label: t => t.phoneWhatsAppLabel, width: 'w-36', sortField: 'phone', alignRight: true,
+    key: 'phone', label: t => t.phoneWhatsAppLabel, width: 'w-36', sortField: 'phone',
     render: ({ emp }) => emp.phone ? formatPhone(emp.phone) : emptyCell(),
   },
   join_date:           { key: 'join_date',           label: t => t.empFieldJoinDate,            width: 'w-28', sortField: 'join_date', render: ({ emp }) => textCell(emp.join_date) },
@@ -482,7 +483,8 @@ export function Employees({ user }: { user: User }) {
     }
   }
 
-  if (loading) return <div style={{ color: 'var(--color-text-secondary)' }}>{t.loading}</div>
+  if (loading) return <EmployeesSkeleton view={view} title={t.employeesTitle} />
+
 
   const departmentOptions = departments.map(d => ({ id: d, label: d, count: getDepartmentCount(d) }))
 
@@ -1571,6 +1573,75 @@ function PaginationFooter({ t, total, pageSize, currentPage, totalPages, onPageC
           </svg>
         </button>
       </div>
+    </div>
+  )
+}
+
+// Branded loading state: keeps the page title + filter-bar shape and swaps the
+// listing for gently-pulsing placeholders so the layout doesn't jump when data
+// arrives. Mirrors the active view (table rows vs. card grid).
+function EmployeesSkeleton({ view, title, rows = 6 }: { view: EmployeesView; title: string; rows?: number }) {
+  return (
+    <div>
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{title}</h1>
+        <div className="flex shrink-0 items-center gap-2">
+          <Skeleton className="h-9 w-24 rounded-lg" />
+          <Skeleton className="h-9 w-28 rounded-lg" />
+        </div>
+      </div>
+
+      <div className="mb-5 flex w-full flex-wrap items-center gap-2">
+        <Skeleton className="h-9 w-20 rounded-lg" />
+        <Skeleton className="h-9 w-24 rounded-lg" />
+        {view === 'list' && <Skeleton className="h-9 w-28 rounded-lg" />}
+        <Skeleton className="ml-auto h-9 w-full rounded-lg sm:w-64" />
+      </div>
+
+      {view === 'cards' ? (
+        <div className="grid gap-4 sm:grid-cols-2" role="status" aria-busy="true">
+          {Array.from({ length: rows }).map((_, i) => (
+            <div
+              key={i}
+              className="rounded-xl border p-4"
+              style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }}
+            >
+              <div className="flex items-center gap-3">
+                <Skeleton className="h-10 w-10 rounded-full" />
+                <div className="min-w-0 flex-1">
+                  <Skeleton className="h-3.5 w-1/2" />
+                  <Skeleton className="mt-2 h-2.5 w-1/3" />
+                </div>
+                <Skeleton className="h-5 w-16 rounded-full" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div
+          className="overflow-hidden rounded-xl border"
+          style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }}
+          role="status"
+          aria-busy="true"
+        >
+          <div className="px-4 py-3" style={{ backgroundColor: 'var(--color-bg-tertiary)' }}>
+            <Skeleton className="h-2.5 w-24" />
+          </div>
+          {Array.from({ length: rows }).map((_, i) => (
+            <div
+              key={i}
+              className="flex items-center gap-4 border-t px-4 py-3.5"
+              style={{ borderColor: 'var(--color-border)' }}
+            >
+              <Skeleton className="h-9 w-9 shrink-0 rounded-full" />
+              <Skeleton className="h-3 w-1/4" />
+              <Skeleton className="h-5 w-16 rounded-full" />
+              <Skeleton className="h-3 w-28" />
+              <Skeleton className="ml-auto h-3 w-24" />
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

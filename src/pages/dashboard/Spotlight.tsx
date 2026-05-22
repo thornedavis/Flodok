@@ -5,6 +5,7 @@ import { useLang } from '../../contexts/LanguageContext'
 import { formatRelativeTime } from '../../lib/relativeTime'
 import { FilterPill, FilterPanel, FilterSearchInput } from '../../components/FilterControls'
 import type { FilterPanelSection } from '../../components/FilterControls'
+import { Skeleton } from '../../components/Skeleton'
 import type { Lang, Translations } from '../../lib/translations'
 import { useBilling } from '../../contexts/BillingContext'
 import type { User, SpotlightPost, SpotlightStatus, SpotlightPriority } from '../../types/aliases'
@@ -155,7 +156,7 @@ export function Spotlight({ user }: { user: User }) {
     },
   ]
 
-  if (loading) return <div style={{ color: 'var(--color-text-secondary)' }}>{t.loading}</div>
+  if (loading) return <SpotlightSkeleton title={t.spotlightTitle} subtitle={t.spotlightSubtitle} />
 
   return (
     <div>
@@ -226,6 +227,47 @@ export function Spotlight({ user }: { user: User }) {
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+// Branded loading state: keeps the title + filter-bar shape and swaps the post
+// list for gently-pulsing card placeholders so the layout doesn't jump.
+function SpotlightSkeleton({ title, subtitle, rows = 5 }: { title: string; subtitle: string; rows?: number }) {
+  return (
+    <div>
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{title}</h1>
+          <p className="mt-1 text-sm" style={{ color: 'var(--color-text-secondary)' }}>{subtitle}</p>
+        </div>
+        <Skeleton className="h-9 w-28 rounded-lg" />
+      </div>
+
+      <div className="mb-5 flex flex-wrap items-center gap-2">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <Skeleton key={i} className="h-7 w-20 rounded-full" />
+        ))}
+        <Skeleton className="ml-auto h-9 w-full rounded-lg sm:w-64" />
+      </div>
+
+      <div className="space-y-3" role="status" aria-busy="true">
+        {Array.from({ length: rows }).map((_, i) => (
+          <div
+            key={i}
+            className="rounded-xl border p-4"
+            style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)' }}
+          >
+            <div className="mb-2 flex items-center gap-2">
+              <Skeleton className="h-5 w-16 rounded-full" />
+              <Skeleton className="h-5 w-20 rounded-full" />
+            </div>
+            <Skeleton className="h-4 w-1/3" />
+            <Skeleton className="mt-2 h-3 w-2/3" />
+            <Skeleton className="mt-2.5 h-2.5 w-28" />
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

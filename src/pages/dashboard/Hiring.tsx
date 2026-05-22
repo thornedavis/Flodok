@@ -16,6 +16,7 @@ import { useLang } from '../../contexts/LanguageContext'
 import { useBilling } from '../../contexts/BillingContext'
 import { useRole } from '../../hooks/useRole'
 import { FilterPill, FilterSearchInput } from '../../components/FilterControls'
+import { Skeleton } from '../../components/Skeleton'
 import { isEditableByRequester, pendingApprover, statusTone, submitHiringRequest, type RequestStatus } from '../../lib/hiringRequests'
 import { JobDescriptionsList } from './JobDescriptions'
 import type { Translations } from '../../lib/translations'
@@ -298,7 +299,7 @@ function RequestsView({ user }: { user: User }) {
       </div>
 
       {loading ? (
-        <div className="py-12 text-center text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{t.loading}</div>
+        <RequestsTableSkeleton />
       ) : visible.length === 0 ? (
         <EmptyState message={searchActive ? t.hiringRequestsNoMatches : emptyMessage(tab, t)} />
       ) : (
@@ -377,6 +378,36 @@ function EmptyState({ message }: { message: string }) {
   return (
     <div className="rounded-lg border py-12 text-center text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-tertiary)' }}>
       {message}
+    </div>
+  )
+}
+
+// Pulsing placeholder mirroring the requests table (5 columns + actions) while
+// the list loads, so the layout doesn't jump when data arrives.
+function RequestsTableSkeleton({ rows = 6 }: { rows?: number }) {
+  return (
+    <div className="overflow-hidden rounded-lg border" style={{ borderColor: 'var(--color-border)' }} role="status" aria-busy="true">
+      <div className="flex items-center gap-4 px-4 py-2.5" style={{ backgroundColor: 'var(--color-bg-tertiary)' }}>
+        <Skeleton className="h-2.5 w-24" />
+        <Skeleton className="h-2.5 w-20" />
+        <Skeleton className="h-2.5 w-20" />
+        <Skeleton className="h-2.5 w-16" />
+        <Skeleton className="h-2.5 w-16" />
+      </div>
+      {Array.from({ length: rows }).map((_, i) => (
+        <div
+          key={i}
+          className="flex items-center gap-4 border-t px-4 py-3.5"
+          style={{ borderColor: 'var(--color-border)' }}
+        >
+          <Skeleton className="h-3 w-1/4" />
+          <Skeleton className="h-3 w-24" />
+          <Skeleton className="h-3 w-20" />
+          <Skeleton className="h-3 w-20" />
+          <Skeleton className="h-5 w-20 rounded-full" />
+          <Skeleton className="ml-auto h-3 w-6" />
+        </div>
+      ))}
     </div>
   )
 }

@@ -6,6 +6,7 @@ import { Modal } from '../../components/Modal'
 import { getAvatarGradient } from '../../lib/avatar'
 import { creditToIdr, formatIdr } from '../../lib/credits'
 import { BadgeGlyph } from '../../components/BadgeGlyph'
+import { Skeleton } from '../../components/Skeleton'
 import { useBilling } from '../../contexts/BillingContext'
 import type { User, AchievementDefinition } from '../../types/aliases'
 
@@ -167,7 +168,19 @@ export function Performance({ user }: { user: User }) {
       </div>
 
       {loading ? (
-        <p className="py-8 text-center text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{t.loading}</p>
+        <ul className="space-y-2" role="status" aria-busy="true">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <li key={i} className="rounded-xl border p-3" style={{ borderColor: 'var(--color-border)' }}>
+              <div className="flex items-center gap-3">
+                <Skeleton className="h-10 w-10 shrink-0 rounded-full" />
+                <div className="min-w-0 flex-1">
+                  <Skeleton className="h-3.5 w-1/3" />
+                  <Skeleton className="mt-2 h-2.5 w-1/2" />
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
       ) : filtered.length === 0 ? (
         <p className="py-8 text-center text-sm" style={{ color: 'var(--color-text-tertiary)' }}>
           {roster && roster.rows.length === 0 ? t.performanceEmptyNoMembers : t.performanceEmptyNoMatch}

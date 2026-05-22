@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
 import { FilterPill, FilterSearchInput } from '../../components/FilterControls'
+import { Skeleton } from '../../components/Skeleton'
 import { useInboxItems } from '../../hooks/useInboxItems'
 import {
   ALL_CATEGORIES,
@@ -54,7 +55,7 @@ export function Inbox({ user }: { user: User }) {
     setRefreshKey(k => k + 1)
   }
 
-  if (loading) return <div style={{ color: 'var(--color-text-secondary)' }}>{t.loading}</div>
+  if (loading) return <InboxSkeleton title={t.inboxTitle} />
 
   const bucketTabs: { key: InboxBucketSelection; count: number; label: string }[] = [
     { key: 'all', count: items.length, label: t.inboxTabAll },
@@ -171,6 +172,45 @@ export function Inbox({ user }: { user: User }) {
           ))}
         </ul>
       )}
+    </div>
+  )
+}
+
+// Branded loading state: keeps the title + tab/pill shape and swaps the item
+// list for gently-pulsing row placeholders so the layout doesn't jump.
+function InboxSkeleton({ title, rows = 6 }: { title: string; rows?: number }) {
+  return (
+    <div>
+      <div className="mb-6">
+        <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{title}</h1>
+      </div>
+      <div className="mb-4 flex flex-wrap gap-3 border-b pb-2" style={{ borderColor: 'var(--color-border)' }}>
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-5 w-24" />
+        ))}
+      </div>
+      <div className="mb-5 flex flex-wrap items-center gap-2">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-7 w-20 rounded-full" />
+        ))}
+        <Skeleton className="ml-auto h-9 w-full rounded-lg sm:w-64" />
+      </div>
+      <ul className="space-y-2" role="status" aria-busy="true">
+        {Array.from({ length: rows }).map((_, i) => (
+          <li
+            key={i}
+            className="flex items-center gap-3 rounded-xl border p-4"
+            style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }}
+          >
+            <Skeleton className="h-9 w-9 shrink-0 rounded-lg" />
+            <div className="min-w-0 flex-1">
+              <Skeleton className="h-3.5 w-1/3" />
+              <Skeleton className="mt-2 h-2.5 w-1/4" />
+            </div>
+            <Skeleton className="h-7 w-20 rounded-md" />
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }

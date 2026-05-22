@@ -496,11 +496,25 @@ interface Crumb {
   href?: string
 }
 
-function deriveBreadcrumbs(pathname: string, orgName: string, t: Translations, trailing: string | null): Crumb[] {
+function deriveBreadcrumbs(pathname: string, search: string, orgName: string, t: Translations, trailing: string | null): Crumb[] {
   const rootCrumb: Crumb = { label: orgName, href: '/dashboard' }
   const segments = pathname.split('/').filter(Boolean)
   if (pathname === '/dashboard' || segments.length <= 1) {
     return [{ label: orgName }]
+  }
+
+  // Job-description authoring lives under /dashboard/hiring/jds/* but is
+  // reachable from two places. The breadcrumb should reflect where the user
+  // came from, signalled by `?from=`: the Documents dashboard (create/open a
+  // JD there) vs. the Hiring section (the default). The editor preserves the
+  // param across its own first-save redirect so the trail stays stable.
+  if (segments[1] === 'hiring' && segments[2] === 'jds') {
+    const from = new URLSearchParams(search).get('from')
+    const parent: Crumb = from === 'documents'
+      ? { label: t.navDocuments, href: '/dashboard/documents' }
+      : { label: t.navHiring, href: '/dashboard/hiring' }
+    const isHistory = segments[segments.length - 1] === 'history'
+    return [rootCrumb, parent, { label: trailing ?? (isHistory ? t.breadcrumbHistory : t.breadcrumbEdit) }]
   }
 
   // Templates live under Documents conceptually (reached via the "Template
@@ -568,7 +582,7 @@ function Header({ user, org, onSignOut, onOpenMenu }: {
   const { theme, toggle: toggleTheme } = useTheme()
   const location = useLocation()
   const { trailing } = useBreadcrumb()
-  const crumbs = deriveBreadcrumbs(location.pathname, org?.display_name || org?.name || 'Flodok', t, trailing)
+  const crumbs = deriveBreadcrumbs(location.pathname, location.search, org?.display_name || org?.name || 'Flodok', t, trailing)
 
   return (
     <div

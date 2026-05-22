@@ -2,22 +2,22 @@
 // descriptions today, with offer letters / policies slotting in as
 // additional tabs in later phases.
 //
-// Shell responsibilities:
-//   - Page H1 ("Documents") and the type-tab strip
-//   - URL contract: `?type=all|sop|contract|job_description` (default `all`)
-//   - The Google Docs–style "All Documents" landing — a tiles row for
-//     creating new documents + a "Template gallery" button leading to
-//     `/dashboard/templates`, with a filtered/sorted recent-documents
-//     section below (grid/list toggle, type pills, date-range filter)
-//   - The global "New Document" menu in the header; when an item is
-//     picked we route to the matching tab and set `?new=...` so the
-//     embedded listing opens the right create modal on mount
+// There is exactly one view: the Google Docs–style "All Documents"
+// landing — a tiles row for creating new documents + a "Template gallery"
+// button leading to `/dashboard/templates`, with a filtered/sorted
+// recent-documents section below (grid/list toggle, type pills,
+// date-range filter). The old per-type tab views are gone; type is just
+// a filter here now.
 //
-// Per-type listings stay where they live (`SOPs`, `Contracts`,
-// `JobDescriptionsList`) and are rendered in `embedded` mode here,
-// which suppresses their own page title and their own create button so
-// the global menu is the single entry point. Their internal sub-tabs
-// (status pills for SOPs, contracts/templates for contracts) stay put.
+// New documents are created in place and open straight in their editor:
+// SOPs and contracts INSERT a blank draft and route to the edit page; job
+// descriptions route to the JD editor under Hiring. Nothing detours
+// through a per-type listing.
+//
+// The `?type=` URL param is still honoured as a one-shot pre-seed of the
+// type filter, so inbound links like `documentsIndexPath('contract')`
+// (and the legacy `/dashboard/contracts` redirect) land on the unified
+// list pre-filtered to that type.
 
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -31,9 +31,6 @@ import {
   tableForType,
   type DocumentType,
 } from '../../lib/documentTypes'
-import { SOPs } from './SOPs'
-import { Contracts } from './Contracts'
-import { JobDescriptionsList } from './JobDescriptions'
 import { useFullWidthLayout } from '../../components/Layout'
 import { FilterPanel, FilterSearchInput } from '../../components/FilterControls'
 import type { FilterPanelSection } from '../../components/FilterControls'
@@ -50,14 +47,6 @@ type EmployeeWithDepartments = Employee & EmpDeptShape
 const EMPLOYEE_WITH_DEPTS_SELECT =
   '*, employee_departments(is_primary, department:company_departments(id, name))'
 
-type DocumentsTab = 'all' | DocumentType
-
-const DEFAULT_TAB: DocumentsTab = 'all'
-
-function isDocumentsTab(value: unknown): value is DocumentsTab {
-  return value === 'all' || isDocumentType(value)
-}
-
 // The All view runs in full-bleed layout (so the "Start a new document"
 // band can span the whole content area), which drops the dashboard's own
 // padding + max-width. We re-create them here — but as TWO nested classes,
@@ -71,67 +60,19 @@ const SHELL_INNER = 'mx-auto max-w-6xl'
 
 export function Documents({ user }: { user: User }) {
   const { t } = useLang()
-  const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
-
-  // The `?type=` URL contract still drives which view renders so existing
-  // tile-click create flows ("?type=sop&new=1") keep working — but the
-  // type-tab strip is gone. Type-based filtering now lives in the Filter
-  // dropdown on the All view, and per-type listings are only reached
-  // transiently when a tile-click opens their create modal. A small
-  // back-link gives users a way out if they cancel the modal.
-  const rawType = searchParams.get('type')
-  const activeTab: DocumentsTab = isDocumentsTab(rawType) ? rawType : DEFAULT_TAB
-
-  const tabLabels: Record<DocumentsTab, string> = {
-    all: t.documentsTabAll,
-    sop: t.documentsTabSops,
-    contract: t.documentsTabContracts,
-    job_description: t.documentsTabJobDescriptions,
-  }
-
-  // The All view renders full-bleed (see AllDocumentsView's
-  // useFullWidthLayout) so its "Start a new document" band can span the
-  // whole content area. That drops the layout's own padding/centering, so
-  // the All view re-creates them via SHELL_PAD + SHELL_INNER (padding
-  // outside the cap, matching every other page).
-  const isAll = activeTab === 'all'
-
-  const headerBlock = (
-    <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-      <div>
-        {activeTab !== 'all' && (
-          <button
-            type="button"
-            onClick={() => navigate('/dashboard/documents')}
-            className="mb-1 inline-flex items-center gap-1 text-xs font-medium transition-colors"
-            style={{ color: 'var(--color-text-tertiary)' }}
-            onMouseOver={e => { e.currentTarget.style.color = 'var(--color-text-secondary)' }}
-            onMouseOut={e => { e.currentTarget.style.color = 'var(--color-text-tertiary)' }}
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="15 18 9 12 15 6" />
-            </svg>
-            <span>{t.documentsTitle}</span>
-          </button>
-        )}
-        <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>
-          {activeTab === 'all' ? t.documentsTitle : tabLabels[activeTab]}
-        </h1>
-      </div>
-    </div>
-  )
 
   return (
-    <div className={isAll ? 'py-8' : undefined}>
-      {isAll
-        ? <div className={SHELL_PAD}><div className={SHELL_INNER}>{headerBlock}</div></div>
-        : headerBlock}
-
-      {isAll && <AllDocumentsView user={user} />}
-      {activeTab === 'sop' && <SOPs user={user} embedded />}
-      {activeTab === 'contract' && <Contracts user={user} embedded />}
-      {activeTab === 'job_description' && <JobDescriptionsList user={user} embedded />}
+    <div className="py-8">
+      <div className={SHELL_PAD}>
+        <div className={SHELL_INNER}>
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+            <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>
+              {t.documentsTitle}
+            </h1>
+          </div>
+        </div>
+      </div>
+      <AllDocumentsView user={user} />
     </div>
   )
 }
@@ -182,7 +123,7 @@ function loadViewMode(): ViewMode {
 function AllDocumentsView({ user }: { user: User }) {
   const { t } = useLang()
   const navigate = useNavigate()
-  const [, setSearchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { visibleItemLimit, state: dunning, canWrite } = useBilling()
   // Render edge-to-edge so the "Start a new document" band can span the
   // full content width; the header and recent section re-constrain
@@ -195,8 +136,13 @@ function AllDocumentsView({ user }: { user: User }) {
 
   const [viewMode, setViewMode] = useState<ViewMode>(loadViewMode)
   // Empty array = no type filter (show all). Multi-select so users can
-  // narrow to e.g. SOPs+JDs without losing one or the other.
-  const [typeFilter, setTypeFilter] = useState<DocumentType[]>([])
+  // narrow to e.g. SOPs+JDs without losing one or the other. A `?type=`
+  // URL param (from inbound links like documentsIndexPath('contract') or
+  // the legacy /dashboard/contracts redirect) pre-seeds this once.
+  const [typeFilter, setTypeFilter] = useState<DocumentType[]>(() => {
+    const initial = searchParams.get('type')
+    return isDocumentType(initial) ? [initial] : []
+  })
   // A single selected employee id, or null for "all employees".
   const [employeeFilter, setEmployeeFilter] = useState<string | null>(null)
   const [dateFrom, setDateFrom] = useState('')
@@ -209,6 +155,21 @@ function AllDocumentsView({ user }: { user: User }) {
     if (typeof window === 'undefined') return
     window.localStorage.setItem(VIEW_MODE_KEY, viewMode)
   }, [viewMode])
+
+  // The `?type=`/`?new=` params are only meaningful at mount (type pre-seeds
+  // the filter above; `new` is a dead signal now that creation is in place).
+  // Strip them so the URL reflects the single unified view and a refresh
+  // doesn't re-pin the filter.
+  useEffect(() => {
+    if (searchParams.has('type') || searchParams.has('new')) {
+      const params = new URLSearchParams(searchParams)
+      params.delete('type')
+      params.delete('new')
+      setSearchParams(params, { replace: true })
+    }
+    // Run once on mount; later filter changes manage their own state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     async function load() {
@@ -341,8 +302,36 @@ function AllDocumentsView({ user }: { user: User }) {
     setSearch('')
   }
 
-  function startCreate(type: DocumentType, mode: 'scratch' | 'template') {
-    setSearchParams({ type, new: mode === 'template' ? 'template' : '1' })
+  // Open a document in its editor. Job descriptions live under
+  // /dashboard/hiring/jds/*, so we tag the origin with `?from=documents`
+  // to keep the breadcrumb pointing back to Documents rather than Hiring.
+  // Contracts/SOPs edit under /dashboard/documents already, so no tag.
+  function openDoc(type: DocumentType, id: string) {
+    const path = documentEditPath(type, id)
+    navigate(type === 'job_description' ? `${path}?from=documents` : path)
+  }
+
+  // SOPs create like contracts: INSERT a blank draft (empty title + empty
+  // structured doc) and open it straight in the editor, where title and
+  // assignee are set. This replaces the old create modal — it only
+  // collected a title and optional employee, both editable in the editor.
+  async function createBlankSop() {
+    if (!canWrite) return
+    const { data, error } = await supabase
+      .from('sops')
+      .insert({
+        org_id: user.org_id,
+        title: '',
+        status: 'draft' as const,
+        content_doc: docAsJson(emptyDocumentDoc()),
+      })
+      .select()
+      .single()
+    if (error || !data) {
+      window.alert(error?.message ?? 'Could not create SOP.')
+      return
+    }
+    navigate(documentEditPath('sop', data.id))
   }
 
   // Contracts get their own create path: we INSERT the row directly here
@@ -449,7 +438,7 @@ function AllDocumentsView({ user }: { user: User }) {
       window.alert(error?.message ?? 'Could not duplicate.')
       return
     }
-    navigate(documentEditPath(item.type, data.id))
+    openDoc(item.type, data.id)
   }
 
   async function deleteItem(item: AllDocItem) {
@@ -482,8 +471,9 @@ function AllDocumentsView({ user }: { user: User }) {
   return (
     <>
       <StartNewSection
-        onStart={startCreate}
-        onCreateBlankContract={createBlankContract}
+        onCreateSop={createBlankSop}
+        onCreateContract={createBlankContract}
+        onCreateJobDescription={() => navigate('/dashboard/hiring/jds/new?from=documents')}
         onOpenTemplates={() => navigate('/dashboard/templates')}
         canWrite={canWrite}
       />
@@ -537,12 +527,12 @@ function AllDocumentsView({ user }: { user: User }) {
               ? <RecentGrid
                   items={paginatedItems}
                   canWrite={canWrite}
-                  onOpen={item => navigate(documentEditPath(item.type, item.id))}
+                  onOpen={item => openDoc(item.type, item.id)}
                   onDuplicate={duplicateItem}
                   onDelete={deleteItem}
                   onRename={renameItem}
                 />
-              : <RecentList items={paginatedItems} onOpen={item => navigate(documentEditPath(item.type, item.id))} />}
+              : <RecentList items={paginatedItems} onOpen={item => openDoc(item.type, item.id)} />}
             <PaginationFooter
               total={visibleItems.length}
               pageSize={pageSize}
@@ -562,13 +552,15 @@ function AllDocumentsView({ user }: { user: User }) {
 // ─── Start a new document ───────────────────────────────────────────
 
 function StartNewSection({
-  onStart,
-  onCreateBlankContract,
+  onCreateSop,
+  onCreateContract,
+  onCreateJobDescription,
   onOpenTemplates,
   canWrite,
 }: {
-  onStart: (type: DocumentType, mode: 'scratch' | 'template') => void
-  onCreateBlankContract: () => void
+  onCreateSop: () => void
+  onCreateContract: () => void
+  onCreateJobDescription: () => void
   onOpenTemplates: () => void
   canWrite: boolean
 }) {
@@ -605,19 +597,19 @@ function StartNewSection({
           label={t.documentsNewSop}
           accent="var(--color-primary)"
           disabled={!canWrite}
-          onClick={() => onStart('sop', 'scratch')}
+          onClick={onCreateSop}
         />
         <CreateTile
           label={t.documentsNewContract}
           accent="var(--color-success)"
           disabled={!canWrite}
-          onClick={onCreateBlankContract}
+          onClick={onCreateContract}
         />
         <CreateTile
           label={t.documentsNewJobDescription}
           accent="var(--color-warning)"
           disabled={!canWrite}
-          onClick={() => onStart('job_description', 'scratch')}
+          onClick={onCreateJobDescription}
         />
       </div>
       </div>

@@ -5,6 +5,7 @@ import { DiffPanel } from '../../components/DiffPanel'
 import { useLang } from '../../contexts/LanguageContext'
 import { writeSnapshot } from '../../lib/snapshotApi'
 import { useBilling } from '../../contexts/BillingContext'
+import { Skeleton } from '../../components/Skeleton'
 import type { User, PendingUpdate, Employee, Sop } from '../../types/aliases'
 
 type Change = { section?: string; summary?: string; content_markdown?: string; change_type?: string }
@@ -52,6 +53,33 @@ function getChangeSummaries(update: PendingUpdate): string[] {
 }
 
 const ROUTER_URL = 'https://flodok-router.thorne-davis.workers.dev'
+
+// Branded loading state: keeps the section title and swaps the update list for
+// gently-pulsing card placeholders (avatar + two text lines) so the layout
+// doesn't jump when data arrives.
+function PendingSkeleton({ title, rows = 5 }: { title: string; rows?: number }) {
+  return (
+    <div>
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>{title}</h2>
+        <Skeleton className="h-9 w-36 rounded-lg" />
+      </div>
+      <div className="space-y-3" role="status" aria-busy="true">
+        {Array.from({ length: rows }).map((_, i) => (
+          <div key={i} className="rounded-xl border px-5 py-4" style={{ borderColor: 'var(--color-border)' }}>
+            <div className="flex items-center gap-3">
+              <Skeleton className="h-10 w-10 shrink-0 rounded-full" />
+              <div className="min-w-0 flex-1">
+                <Skeleton className="h-4 w-1/3" />
+                <Skeleton className="mt-2 h-2.5 w-1/4" />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 export function Pending({ user }: { user: User }) {
   const { t } = useLang()
@@ -366,7 +394,7 @@ export function Pending({ user }: { user: User }) {
     return items
   }, [allPending, pendingFilterEmployee, pendingSort])
 
-  if (loading) return <div style={{ color: 'var(--color-text-secondary)' }}>{t.loading}</div>
+  if (loading) return <PendingSkeleton title={t.pendingUpdatesTitle} />
 
   const statusColors: Record<string, string> = {
     pending: 'var(--color-warning)',
