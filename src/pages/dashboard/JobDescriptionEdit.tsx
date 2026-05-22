@@ -21,6 +21,7 @@ import { useBreadcrumbTrailing } from '../../contexts/BreadcrumbContext'
 import { DocumentEditor } from '../../components/editor/bilingual/DocumentEditor'
 import { DateTimePicker } from '../../components/DateTimePicker'
 import { docAsJson, type DocumentDoc, type ViewMode } from '../../lib/documentDoc'
+import { documentEditPath } from '../../lib/documentTypes'
 import {
   archiveJobDescription, buildJobDescriptionSeedDoc, isJdEditable,
   publishJobDescription, suggestDocVersion,
@@ -257,7 +258,11 @@ export function JobDescriptionEdit({ user }: { user: User }) {
     setSaving(true)
     const newId = await persist()
     setSaving(false)
-    if (newId) navigate('/dashboard/hiring?view=jds')
+    if (!newId) return
+    // Stay in the editor — saving is decoupled from navigation. A brand-new
+    // JD was just inserted on the `/new` URL, so route to its real edit path
+    // (flips isNew off) instead of re-inserting on the next save.
+    if (isNew) navigate(documentEditPath('job_description', newId))
   }
 
   async function handlePublish() {
@@ -291,7 +296,9 @@ export function JobDescriptionEdit({ user }: { user: User }) {
     }
     try {
       await publishJobDescription(newId)
-      navigate('/dashboard/hiring?view=jds')
+      // Publishing makes a JD read-only, so this is a terminal action —
+      // return to the unified documents dashboard.
+      navigate('/dashboard/documents')
     } catch (e) {
       setError((e as Error).message)
     } finally {
@@ -306,7 +313,7 @@ export function JobDescriptionEdit({ user }: { user: User }) {
     setError('')
     try {
       await archiveJobDescription(id)
-      navigate('/dashboard/hiring?view=jds')
+      navigate('/dashboard/documents')
     } catch (e) {
       setError((e as Error).message)
     } finally {
@@ -321,7 +328,7 @@ export function JobDescriptionEdit({ user }: { user: User }) {
     const { error } = await supabase.from('job_descriptions').delete().eq('id', id)
     setSaving(false)
     if (error) { setError(error.message); return }
-    navigate('/dashboard/hiring?view=jds')
+    navigate('/dashboard/documents')
   }
 
   const writeDisabledTitle = !canWrite ? t.dunningWriteBlocked : undefined
@@ -355,11 +362,11 @@ export function JobDescriptionEdit({ user }: { user: User }) {
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={() => navigate('/dashboard/hiring?view=jds')}
+            onClick={() => navigate('/dashboard/documents')}
             className="rounded-lg border px-3 py-1.5 text-sm font-medium"
             style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
           >
-            {t.cancel}
+            {t.backToDocuments}
           </button>
           {status === 'draft' && (
             <>

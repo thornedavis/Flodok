@@ -10,7 +10,7 @@ import { writeSnapshot } from '../../lib/snapshotApi'
 import { emptyDocumentDoc, type DocumentDoc } from '../../lib/documentDoc'
 import { exportDocumentPdf } from '../../lib/pdfExport'
 import { useBilling } from '../../contexts/BillingContext'
-import { documentHistoryPath, documentsIndexPath } from '../../lib/documentTypes'
+import { documentHistoryPath } from '../../lib/documentTypes'
 import type { User, Sop, Tag, Employee, Organization } from '../../types/aliases'
 
 type EmployeeWithDepartments = Employee & EmpDeptShape
@@ -134,7 +134,9 @@ export function SOPEdit({ user }: { user: User }) {
     changeSummary !== ''
   ) : false
 
-  const bypassUnsavedWarning = useUnsavedChangesWarning(hasChanges, t.unsavedChangesPrompt)
+  // Registers the navigation guard; the header exit link trips it when
+  // there are unsaved changes.
+  useUnsavedChangesWarning(hasChanges, t.unsavedChangesPrompt)
 
   // Persists the SOP at the given target status. Same shape as the contract
   // editor: replaces the old status dropdown + Save with explicit
@@ -173,8 +175,6 @@ export function SOPEdit({ user }: { user: User }) {
     if (!docChanged) {
       setSOP({ ...sop, title, employee_id: employeeId, status: nextStatus })
       setSaving(false)
-      bypassUnsavedWarning()
-      navigate(documentsIndexPath('sop'))
       return
     }
 
@@ -226,8 +226,8 @@ export function SOPEdit({ user }: { user: User }) {
       return
     }
 
-    bypassUnsavedWarning()
-    navigate(documentsIndexPath('sop'))
+    // Persist and stay — saving is decoupled from navigation. Leaving is
+    // an explicit action via the header exit link.
   }
 
   async function handleSaveAsDraft() {
@@ -321,11 +321,11 @@ export function SOPEdit({ user }: { user: User }) {
             {downloading ? t.generatingPdf : t.downloadPdf}
           </button>
           <button
-            onClick={() => navigate(documentsIndexPath('sop'))}
+            onClick={() => navigate('/dashboard/documents')}
             className="rounded-lg border px-4 py-2 text-sm"
             style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
           >
-            {t.cancel}
+            {t.backToDocuments}
           </button>
           <button
             onClick={handleSaveAsDraft}

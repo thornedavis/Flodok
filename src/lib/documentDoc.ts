@@ -170,6 +170,53 @@ export function docToMarkdown(doc: DocNode | unknown, lang: 'en' | 'id'): string
   return lines.join('\n').trim() + (lines.length ? '\n' : '')
 }
 
+// ─── docPreviewLines ────────────────────────────────────────────────
+//
+// Plain-text projection for thumbnails — one string per block-level node
+// (section titles + paragraph/heading/list/etc. text), with markdown
+// syntax stripped so the snippet reads like the rendered page rather than
+// source. Stops once `maxLines` non-empty lines are collected so we never
+// walk a whole long document just to fill a card.
+
+export function docPreviewLines(doc: DocNode | unknown, lang: 'en' | 'id', maxLines = 6): string[] {
+  if (!isDocumentDoc(doc)) return []
+  const lines: string[] = []
+  const push = (s: string) => {
+    const trimmed = s.replace(/\s+/g, ' ').trim()
+    if (trimmed) lines.push(trimmed)
+  }
+  for (const section of doc.content || []) {
+    if (section.type !== 'section') continue
+    if (lines.length >= maxLines) break
+    const attrs = (section.attrs || {}) as Partial<SectionAttrs>
+    const title = lang === 'en' ? attrs.titleEn : attrs.titleId
+    if (typeof title === 'string') push(title)
+    for (const block of section.content || []) {
+      if (lines.length >= maxLines) break
+      if (block.type !== 'bilingualBlock') continue
+      const body = (block.content || []).find(
+        b => b.type === 'blockBody' && b.attrs?.lang === lang,
+      )
+      if (!body) continue
+      for (const node of body.content || []) {
+        if (lines.length >= maxLines) break
+        push(collectPlainText(node))
+      }
+    }
+  }
+  return lines.slice(0, maxLines)
+}
+
+function collectPlainText(node: DocNode): string {
+  if (node.type === 'text') return node.text || ''
+  if (node.type === 'hardBreak') return ' '
+  if (node.type === 'mergeField') {
+    const key = (node.attrs?.key as string) || ''
+    return key ? `{{${key}}}` : ''
+  }
+  return (node.content || []).map(collectPlainText).join(node.type === 'paragraph' ? '' : ' ')
+}
+
 function renderBlockNode(node: DocNode): string {
   switch (node.type) {
     case 'paragraph':

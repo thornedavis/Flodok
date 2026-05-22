@@ -20,7 +20,7 @@ import { SIGNATURE_FONTS, ensureSignatureFontsLoaded } from '../../lib/signature
 import { DateTimePicker } from '../../components/DateTimePicker'
 import { EmployeeSelect } from '../../components/EmployeeSelect'
 import { useBilling } from '../../contexts/BillingContext'
-import { documentHistoryPath, documentsIndexPath } from '../../lib/documentTypes'
+import { documentHistoryPath } from '../../lib/documentTypes'
 import type { User, Contract, Tag, Employee, Organization } from '../../types/aliases'
 
 // Stacked sticky-positioning offsets. The DashboardLayout header sits at
@@ -312,7 +312,9 @@ export function ContractEdit({ user }: { user: User }) {
     changeSummary !== ''
   ) : false
 
-  const bypassUnsavedWarning = useUnsavedChangesWarning(hasChanges, t.unsavedChangesPrompt)
+  // Registers the beforeunload / in-app navigation guard. Exits go through
+  // the header link, which trips this guard when there are unsaved changes.
+  useUnsavedChangesWarning(hasChanges, t.unsavedChangesPrompt)
 
   // Persists the contract with the given target status. Used by both
   // "Save as draft" and "Activate & sign" — the latter passes 'draft' here
@@ -451,10 +453,10 @@ export function ContractEdit({ user }: { user: User }) {
   async function handleSaveAsDraft() {
     setSavingMode('draft')
     try {
-      const result = await persistContract('draft')
-      if (!result) return
-      bypassUnsavedWarning()
-      navigate(documentsIndexPath('contract'))
+      // Persist and stay in the editor — saving is decoupled from
+      // navigation. The status badge + disabled Save button signal the
+      // saved state; leaving is an explicit action (the header exit link).
+      await persistContract('draft')
     } finally {
       setSavingMode(null)
     }
@@ -550,8 +552,7 @@ export function ContractEdit({ user }: { user: User }) {
 
     setStatus('active')
     setSigning(false)
-    bypassUnsavedWarning()
-    navigate(documentsIndexPath('contract'))
+    setShowSignPanel(false)
   }
 
   if (!contract) return <div style={{ color: 'var(--color-text-secondary)' }}>{t.loading}</div>
@@ -692,7 +693,7 @@ export function ContractEdit({ user }: { user: User }) {
             )}
             {downloading ? t.generatingPdf : t.downloadPdf}
           </button>
-          <button onClick={() => navigate(documentsIndexPath('contract'))} className="rounded-lg border px-3 py-1.5 text-xs font-medium" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>{t.cancel}</button>
+          <button onClick={() => navigate('/dashboard/documents')} className="rounded-lg border px-3 py-1.5 text-xs font-medium" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>{t.backToDocuments}</button>
           {contract.is_template ? (
             <button onClick={handleSaveAsDraft} disabled={saving || !canWrite || !hasChanges} title={!canWrite ? t.dunningWriteBlocked : undefined}
               className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50" style={{ backgroundColor: 'var(--color-primary)' }}>
