@@ -21,7 +21,7 @@ import {
   type Lang,
   type MergeContext,
 } from '../../../lib/mergeFields'
-import type { DocNode, DocumentDoc, SectionAttrs } from '../../../lib/documentDoc'
+import { normalizeDoc, type DocNode, type DocumentDoc } from '../../../lib/documentDoc'
 
 export type DocumentRendererProps = {
   doc: DocumentDoc | DocNode | null | undefined
@@ -44,45 +44,15 @@ export function DocumentRenderer({ doc, lang, mergeContext, className }: Documen
 
   const ctx: MergeContext = mergeContext ? { ...mergeContext, lang } : { lang }
 
+  // Flatten legacy section-nested docs to the flat block stream.
+  const flat = normalizeDoc(root)
+
   return (
     <div className={`doc-renderer ${className ?? ''}`}>
-      {root.content.map((section, i) => (
-        <SectionRender key={(section.attrs?.id as string) ?? i} section={section} lang={lang} ctx={ctx} />
+      {(flat.content || []).map((block, i) => (
+        <BlockRender key={(block.attrs?.id as string) ?? i} block={block} lang={lang} ctx={ctx} />
       ))}
     </div>
-  )
-}
-
-function SectionRender({ section, lang, ctx }: { section: DocNode; lang: Lang; ctx: MergeContext }) {
-  if (section.type !== 'section') return null
-  const attrs = (section.attrs || {}) as Partial<SectionAttrs>
-  const title = lang === 'en' ? attrs.titleEn : attrs.titleId
-  // Mirror the editor's accent-color channel — same `--section-accent`
-  // CSS custom property so the rendered surface picks up the same hue
-  // as the authoring surface without duplicating per-section CSS rules.
-  const style: React.CSSProperties = attrs.accentColor
-    ? ({ ['--section-accent' as 'color']: attrs.accentColor } as React.CSSProperties)
-    : {}
-  return (
-    <section
-      className="doc-section"
-      data-numbering={attrs.numberingStyle || 'decimal'}
-      data-boxed={attrs.boxed ? 'true' : undefined}
-      data-has-accent={attrs.accentColor ? 'true' : undefined}
-      style={style}
-    >
-      {title && title.trim() && (
-        <h2 className="doc-section-title">
-          <span className="doc-section-number" />
-          {title}
-        </h2>
-      )}
-      <div className="doc-section-body">
-        {(section.content || []).map((block, i) => (
-          <BlockRender key={(block.attrs?.id as string) ?? i} block={block} lang={lang} ctx={ctx} />
-        ))}
-      </div>
-    </section>
   )
 }
 
@@ -90,8 +60,9 @@ function BlockRender({ block, lang, ctx }: { block: DocNode; lang: Lang; ctx: Me
   if (block.type !== 'bilingualBlock') return null
   const body = (block.content || []).find(b => b.type === 'blockBody' && b.attrs?.lang === lang)
   if (!body || !Array.isArray(body.content)) return null
+  const numbering = (block.attrs?.numbering as string | null) ?? null
   return (
-    <div className="doc-block">
+    <div className="doc-block" data-numbering={numbering ?? undefined}>
       {body.content.map((node, i) => <BlockNodeRender key={i} node={node} ctx={ctx} />)}
     </div>
   )
@@ -103,7 +74,7 @@ function BlockNodeRender({ node, ctx }: { node: DocNode; ctx: MergeContext }) {
       return <p><InlineRender content={node.content} ctx={ctx} /></p>
     case 'heading': {
       const level = (node.attrs?.level as number) || 3
-      const Tag = (level === 4 ? 'h4' : 'h3') as 'h3' | 'h4'
+      const Tag = (level === 2 ? 'h2' : level === 4 ? 'h4' : 'h3') as 'h2' | 'h3' | 'h4'
       return <Tag><InlineRender content={node.content} ctx={ctx} /></Tag>
     }
     case 'bulletList':
@@ -203,57 +174,39 @@ export const DOCUMENT_RENDERER_STYLES = `
   color: var(--color-text);
   font-size: 0.9375rem;
   line-height: 1.7;
-  counter-reset: doc-section;
-}
-
-.doc-section {
-  margin: 0 0 1.5rem;
-  counter-increment: doc-section;
-}
-
-.doc-section-title {
-  font-size: 1.35rem;
-  font-weight: 600;
-  margin: 0 0 0.5rem;
-  line-height: 1.3;
-  display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
-}
-
-.doc-section[data-has-accent="true"] .doc-section-title {
-  color: var(--section-accent);
-}
-
-.doc-section-number { color: var(--color-text-tertiary); font-weight: 600; }
-.doc-section[data-has-accent="true"] .doc-section-number { color: var(--section-accent); }
-.doc-section[data-numbering="decimal"] .doc-section-number::before {
-  content: counter(doc-section) ".";
-}
-.doc-section[data-numbering="roman"] .doc-section-number::before {
-  content: counter(doc-section, upper-roman) ".";
-}
-.doc-section[data-numbering="alpha"] .doc-section-number::before {
-  content: counter(doc-section, upper-alpha) ".";
-}
-.doc-section[data-numbering="none"] .doc-section-number { display: none; }
-
-.doc-section[data-boxed="true"] {
-  border: 1px solid var(--color-primary);
-  border-radius: 0.75rem;
-  padding: 1rem;
-}
-
-.doc-section[data-boxed="true"][data-has-accent="true"] {
-  border-color: var(--section-accent);
-}
-
-.doc-section[data-boxed="true"] .doc-section-title {
-  margin-bottom: 0.75rem;
+  counter-reset: doc-clause;
 }
 
 .doc-block {
   margin: 0.75rem 0;
+}
+
+/* Clause headings — the rehomed section counter. Increment per
+ * numbered block so the rendered numbers match the old per-section
+ * output exactly. "none" still increments but shows no prefix. */
+.doc-block[data-numbering] {
+  counter-increment: doc-clause;
+  margin-top: 1.25rem;
+}
+
+.doc-block[data-numbering] h2 {
+  font-size: 1.35rem;
+  font-weight: 600;
+  margin: 0 0 0.5rem;
+  line-height: 1.3;
+}
+
+.doc-block[data-numbering="decimal"] h2::before {
+  content: counter(doc-clause) ". ";
+  color: var(--color-text-tertiary);
+}
+.doc-block[data-numbering="roman"] h2::before {
+  content: counter(doc-clause, upper-roman) ". ";
+  color: var(--color-text-tertiary);
+}
+.doc-block[data-numbering="alpha"] h2::before {
+  content: counter(doc-clause, upper-alpha) ". ";
+  color: var(--color-text-tertiary);
 }
 
 .doc-block p {

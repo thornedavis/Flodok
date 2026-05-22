@@ -24,7 +24,9 @@ export function BilingualBlockView({ node, updateAttributes }: NodeViewProps) {
   return (
     <NodeViewWrapper
       className="bilingual-block-wrap"
+      data-id={attrs.id}
       data-needs-review={attrs.needsReview ? 'true' : undefined}
+      data-numbering={attrs.numbering ?? undefined}
     >
       {attrs.needsReview && (
         <div className="bilingual-block-review-banner" contentEditable={false}>

@@ -1,17 +1,25 @@
 // Document outline (TOC) for the bilingual structured editor.
 //
-// Walks the top-level `content` array of a DocumentDoc and renders one
-// entry per section node, using the user's current language for the
-// title. Clicking jumps to the matching `<section data-id="...">` in
-// the editor DOM (sections render with that data attribute via
-// nodes.ts:renderHTML).
+// Walks the flat block stream and renders one entry per clause-heading
+// block (a bilingualBlock carrying a `numbering` attr — the flat-schema
+// successor to section titles), using the user's current language for
+// the title. Clicking jumps to the matching `.bilingual-block-wrap
+// [data-id="..."]` in the editor DOM (BilingualBlockView sets data-id).
 //
 // Designed for the left-sidebar of full-height edit-page layouts
 // (ContractEdit first, SOPEdit / JDEdit later). Renders nothing when
-// the doc has no sections.
+// the doc has no clause headings.
 
 import { useLang } from '../../contexts/LanguageContext'
-import type { DocNode, DocumentDoc, SectionAttrs } from '../../lib/documentDoc'
+import { normalizeDoc, type DocNode, type DocumentDoc } from '../../lib/documentDoc'
+
+// Plain text of the first heading node in the given language body.
+function clauseTitle(block: DocNode, lang: 'en' | 'id'): string {
+  const body = (block.content ?? []).find(b => b.type === 'blockBody' && b.attrs?.lang === lang)
+  const heading = (body?.content ?? []).find(n => n.type === 'heading')
+  if (!heading) return ''
+  return (heading.content ?? []).map(n => n.text ?? '').join('').trim()
+}
 
 export function SectionOutline({
   doc,
@@ -19,29 +27,27 @@ export function SectionOutline({
 }: {
   doc: DocumentDoc
   /** Sticky chrome height in px (app header + page bar + editor toolbar).
-   *  Without this, scrollIntoView lands the section behind the sticky
+   *  Without this, scrollIntoView lands the heading behind the sticky
    *  bars and the user sees nothing happen. */
   topOffsetPx?: number
 }) {
   const { lang } = useLang()
 
-  const sections = (doc.content ?? [])
-    .filter((node: DocNode) => node.type === 'section')
+  const flat = normalizeDoc(doc)
+  const sections = (flat.content ?? [])
+    .filter((node: DocNode) => node.type === 'bilingualBlock' && node.attrs?.numbering)
     .map((node, idx) => {
-      const attrs = (node.attrs ?? {}) as Partial<SectionAttrs>
-      return {
-        id: attrs.id ?? `section-${idx}`,
-        title: (lang === 'id' ? attrs.titleId : attrs.titleEn) || (attrs.titleEn || attrs.titleId || ''),
-        idx,
-      }
+      const id = (node.attrs?.id as string) ?? `clause-${idx}`
+      const title = clauseTitle(node, lang === 'id' ? 'id' : 'en')
+        || clauseTitle(node, lang === 'id' ? 'en' : 'id')
+      return { id, title, idx }
     })
 
   function jumpTo(id: string) {
     if (typeof document === 'undefined' || typeof window === 'undefined') return
-    // Section nodes render via a React NodeView (NodeViewWrapper → div),
-    // not a raw <section> element — so we match on the data-id attribute
-    // that SectionView.tsx puts on the wrapper, not a tag selector.
-    const target = document.querySelector(`.bilingual-section[data-id="${id}"]`) as HTMLElement | null
+    // Blocks render via a React NodeView (NodeViewWrapper → div) carrying
+    // data-id — match on that attribute, not a tag selector.
+    const target = document.querySelector(`.bilingual-block-wrap[data-id="${id}"]`) as HTMLElement | null
     if (!target) return
     // Measure the toolbar (first child of the editor) at click time so
     // we don't rely on a hard-coded height that drifts as the toolbar

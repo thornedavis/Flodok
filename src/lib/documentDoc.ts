@@ -49,6 +49,10 @@ export type SectionAttrs = {
 export type BilingualBlockAttrs = {
   id: string
   needsReview: boolean
+  // Clause-heading numbering style; null for ordinary blocks. Drives
+  // the CSS clause counter. Set by normalizeDoc from the old section
+  // numberingStyle.
+  numbering: 'decimal' | 'roman' | 'alpha' | 'none' | null
 }
 
 export type BlockBodyAttrs = {
@@ -78,10 +82,74 @@ export function newBlockId() { return newId('blk') }
 export function emptyBlock(): DocNode {
   return {
     type: 'bilingualBlock',
-    attrs: { id: newBlockId(), needsReview: false },
+    attrs: { id: newBlockId(), needsReview: false, numbering: null },
     content: [
       { type: 'blockBody', attrs: { lang: 'en' }, content: [{ type: 'paragraph' }] },
       { type: 'blockBody', attrs: { lang: 'id' }, content: [{ type: 'paragraph' }] },
+    ],
+  }
+}
+
+// ─── buildBlock ─────────────────────────────────────────────────────
+//
+// Factory for the inline "+" / slash block menu. Returns a fresh
+// bilingualBlock whose EN and ID bodies are seeded with the SAME empty
+// skeleton — so structure mirrors across languages at creation time
+// (text stays per-language). The clause-heading type ('h2') also sets
+// the `numbering` attr so it joins the decimal counter.
+
+export type InsertBlockType =
+  | 'text' | 'h2' | 'h3' | 'h4'
+  | 'bulletList' | 'orderedList' | 'table' | 'callout'
+
+function blockSkeleton(type: InsertBlockType): DocNode[] {
+  switch (type) {
+    case 'h2':
+      return [{ type: 'heading', attrs: { level: 2 } }]
+    case 'h3':
+      return [{ type: 'heading', attrs: { level: 3 } }]
+    case 'h4':
+      return [{ type: 'heading', attrs: { level: 4 } }]
+    case 'bulletList':
+      return [{ type: 'bulletList', content: [{ type: 'listItem', content: [{ type: 'paragraph' }] }] }]
+    case 'orderedList':
+      return [{ type: 'orderedList', content: [{ type: 'listItem', content: [{ type: 'paragraph' }] }] }]
+    case 'callout':
+      return [{ type: 'callout', attrs: { variant: 'info' }, content: [{ type: 'paragraph' }] }]
+    case 'table':
+      return [emptyTable(3, 3)]
+    case 'text':
+    default:
+      return [{ type: 'paragraph' }]
+  }
+}
+
+function emptyTable(rows: number, cols: number): DocNode {
+  const makeRow = (header: boolean): DocNode => ({
+    type: 'tableRow',
+    content: Array.from({ length: cols }, () => ({
+      type: header ? 'tableHeader' : 'tableCell',
+      content: [{ type: 'paragraph' }],
+    })),
+  })
+  return {
+    type: 'table',
+    content: [makeRow(true), ...Array.from({ length: Math.max(0, rows - 1) }, () => makeRow(false))],
+  }
+}
+
+export function buildBlock(type: InsertBlockType): DocNode {
+  const skeleton = blockSkeleton(type)
+  return {
+    type: 'bilingualBlock',
+    attrs: {
+      id: newBlockId(),
+      needsReview: false,
+      numbering: type === 'h2' ? 'decimal' : null,
+    },
+    content: [
+      { type: 'blockBody', attrs: { lang: 'en' }, content: structuredClone(skeleton) },
+      { type: 'blockBody', attrs: { lang: 'id' }, content: structuredClone(skeleton) },
     ],
   }
 }
@@ -102,7 +170,81 @@ export function emptySection(): DocNode {
 }
 
 export function emptyDocumentDoc(): DocumentDoc {
-  return { type: 'document', content: [emptySection()] }
+  return { type: 'document', content: [emptyBlock()] }
+}
+
+// ─── normalizeDoc ───────────────────────────────────────────────────
+//
+// Migrates a legacy section-nested document into the flat block stream
+// the editor now uses. Idempotent: a doc with no `section` nodes is
+// returned unchanged (structurally — same object identity is NOT
+// guaranteed, callers should treat the result as the canonical doc).
+//
+// Transform: each `section` is unwrapped into
+//   [ clause-heading bilingualBlock, ...the section's existing blocks ]
+// where the clause-heading block carries the section's two titles as
+// level-2 headings (EN / ID) and inherits its `numberingStyle` as a
+// `numbering` attr. The CSS section counter that produced "1." "2." …
+// is rehomed onto these heading blocks (see styles), so a heading block
+// is emitted for EVERY section — even an untitled one — to keep the
+// running count byte-identical to the section-based output.
+//
+// `accentColor` and `boxed` are intentionally dropped: per-section
+// theming retires with the flat model.
+
+export type BlockNumbering = NonNullable<SectionAttrs['numberingStyle']>
+
+// Marks a bilingualBlock as a numbered clause heading. Read by the
+// renderer/editor CSS to drive the section-counter prefix. Normal
+// blocks omit it.
+export type ClauseHeadingAttrs = {
+  numbering: BlockNumbering
+}
+
+function headingBody(lang: 'en' | 'id', title: string): DocNode {
+  const heading: DocNode = {
+    type: 'heading',
+    attrs: { level: 2 },
+    content: title.trim() ? [{ type: 'text', text: title.trim() }] : [],
+  }
+  return { type: 'blockBody', attrs: { lang }, content: [heading] }
+}
+
+function clauseHeadingBlock(section: DocNode): DocNode {
+  const attrs = (section.attrs || {}) as Partial<SectionAttrs>
+  return {
+    type: 'bilingualBlock',
+    attrs: {
+      id: typeof attrs.id === 'string' ? attrs.id : newBlockId(),
+      needsReview: false,
+      numbering: (attrs.numberingStyle as BlockNumbering) || 'decimal',
+    },
+    content: [
+      headingBody('en', attrs.titleEn || ''),
+      headingBody('id', attrs.titleId || ''),
+    ],
+  }
+}
+
+export function normalizeDoc(doc: DocNode | unknown): DocumentDoc {
+  if (!isDocumentDoc(doc)) return { type: 'document', content: [] }
+  const content = doc.content || []
+  const hasSections = content.some(node => node.type === 'section')
+  if (!hasSections) return { type: 'document', content }
+
+  const flat: DocNode[] = []
+  for (const node of content) {
+    if (node.type !== 'section') {
+      // Already-flat block sitting alongside legacy sections — keep it.
+      flat.push(node)
+      continue
+    }
+    flat.push(clauseHeadingBlock(node))
+    for (const block of node.content || []) {
+      if (block.type === 'bilingualBlock') flat.push(block)
+    }
+  }
+  return { type: 'document', content: flat }
 }
 
 // Supabase-typed insert/update helper. The auto-generated database
@@ -146,25 +288,20 @@ export function isDocumentDoc(value: unknown): value is DocumentDoc {
 
 export function docToMarkdown(doc: DocNode | unknown, lang: 'en' | 'id'): string {
   if (!isDocumentDoc(doc)) return ''
+  // Normalize first so both legacy section-nested docs and flat docs
+  // project identically — clause headings (former section titles) are
+  // level-2 headings, which renderBlockNode emits as "## title".
+  const flat = normalizeDoc(doc)
   const lines: string[] = []
-  for (const section of doc.content || []) {
-    if (section.type !== 'section') continue
-    const attrs = (section.attrs || {}) as Partial<SectionAttrs>
-    const title = lang === 'en' ? attrs.titleEn : attrs.titleId
-    if (typeof title === 'string' && title.trim()) {
-      lines.push(`## ${title.trim()}`)
-      lines.push('')
-    }
-    for (const block of section.content || []) {
-      if (block.type !== 'bilingualBlock') continue
-      const body = (block.content || []).find(
-        b => b.type === 'blockBody' && (b.attrs?.lang === lang),
-      )
-      if (!body) continue
-      for (const node of body.content || []) {
-        const rendered = renderBlockNode(node)
-        if (rendered) lines.push(rendered)
-      }
+  for (const block of flat.content || []) {
+    if (block.type !== 'bilingualBlock') continue
+    const body = (block.content || []).find(
+      b => b.type === 'blockBody' && (b.attrs?.lang === lang),
+    )
+    if (!body) continue
+    for (const node of body.content || []) {
+      const rendered = renderBlockNode(node)
+      if (rendered) lines.push(rendered)
     }
   }
   return lines.join('\n').trim() + (lines.length ? '\n' : '')
@@ -180,28 +317,22 @@ export function docToMarkdown(doc: DocNode | unknown, lang: 'en' | 'id'): string
 
 export function docPreviewLines(doc: DocNode | unknown, lang: 'en' | 'id', maxLines = 6): string[] {
   if (!isDocumentDoc(doc)) return []
+  const flat = normalizeDoc(doc)
   const lines: string[] = []
   const push = (s: string) => {
     const trimmed = s.replace(/\s+/g, ' ').trim()
     if (trimmed) lines.push(trimmed)
   }
-  for (const section of doc.content || []) {
-    if (section.type !== 'section') continue
+  for (const block of flat.content || []) {
     if (lines.length >= maxLines) break
-    const attrs = (section.attrs || {}) as Partial<SectionAttrs>
-    const title = lang === 'en' ? attrs.titleEn : attrs.titleId
-    if (typeof title === 'string') push(title)
-    for (const block of section.content || []) {
+    if (block.type !== 'bilingualBlock') continue
+    const body = (block.content || []).find(
+      b => b.type === 'blockBody' && b.attrs?.lang === lang,
+    )
+    if (!body) continue
+    for (const node of body.content || []) {
       if (lines.length >= maxLines) break
-      if (block.type !== 'bilingualBlock') continue
-      const body = (block.content || []).find(
-        b => b.type === 'blockBody' && b.attrs?.lang === lang,
-      )
-      if (!body) continue
-      for (const node of body.content || []) {
-        if (lines.length >= maxLines) break
-        push(collectPlainText(node))
-      }
+      push(collectPlainText(node))
     }
   }
   return lines.slice(0, maxLines)

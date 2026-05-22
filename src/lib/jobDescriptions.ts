@@ -2,7 +2,7 @@
 // document builder, doc-number suggestion.
 
 import { supabase } from './supabase'
-import { emptyBlock, newSectionId, type DocumentDoc } from './documentDoc'
+import { emptyBlock, newSectionId, normalizeDoc, type DocumentDoc } from './documentDoc'
 import type { JobDescription } from '../types/aliases'
 
 export const JD_STATUSES = ['draft', 'published', 'archived'] as const
@@ -39,7 +39,8 @@ const JD_SECTIONS: ReadonlyArray<{ titleEn: string; titleId: string }> = [
 ]
 
 export function buildJobDescriptionSeedDoc(): DocumentDoc {
-  return {
+  // Authored as sections, flattened to the live schema on the way out.
+  return normalizeDoc({
     type: 'document',
     content: JD_SECTIONS.map(s => ({
       type: 'section',
@@ -53,7 +54,7 @@ export function buildJobDescriptionSeedDoc(): DocumentDoc {
       },
       content: [emptyBlock()],
     })),
-  }
+  })
 }
 
 // ─── Doc-number suggestion ──────────────────────────────────────────────

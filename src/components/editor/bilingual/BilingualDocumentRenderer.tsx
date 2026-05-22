@@ -20,7 +20,7 @@ import {
   type Lang,
   type MergeContext,
 } from '../../../lib/mergeFields'
-import type { DocNode, DocumentDoc, SectionAttrs, ViewMode } from '../../../lib/documentDoc'
+import { normalizeDoc, type DocNode, type DocumentDoc, type ViewMode } from '../../../lib/documentDoc'
 
 export type BilingualDocumentRendererProps = {
   doc: DocumentDoc | DocNode | null | undefined
@@ -41,56 +41,17 @@ export function BilingualDocumentRenderer({ doc, view, contextEn, contextId, cla
   const ctxEn: MergeContext = contextEn ? { ...contextEn, lang: 'en' } : { lang: 'en' }
   const ctxId: MergeContext = contextId ? { ...contextId, lang: 'id' } : { lang: 'id' }
 
+  // Flatten legacy section-nested docs so the renderer only has to walk
+  // a flat block stream. Clause-heading blocks carry a `numbering` attr
+  // that drives the rehomed section counter.
+  const flat = normalizeDoc(root)
+
   return (
     <div className={`bidoc-renderer bidoc-${view} ${className ?? ''}`}>
-      {root.content.map((section, i) => (
-        <SectionRender
-          key={(section.attrs?.id as string) ?? i}
-          section={section}
-          view={view}
-          ctxEn={ctxEn}
-          ctxId={ctxId}
-        />
+      {(flat.content || []).map((block, i) => (
+        <BlockRender key={(block.attrs?.id as string) ?? i} block={block} ctxEn={ctxEn} ctxId={ctxId} />
       ))}
     </div>
-  )
-}
-
-function SectionRender({ section, ctxEn, ctxId }: { section: DocNode; view: ViewMode; ctxEn: MergeContext; ctxId: MergeContext }) {
-  if (section.type !== 'section') return null
-  const attrs = (section.attrs || {}) as Partial<SectionAttrs>
-  const style: React.CSSProperties = attrs.accentColor
-    ? ({ ['--section-accent' as 'color']: attrs.accentColor } as React.CSSProperties)
-    : {}
-  const titleEn = attrs.titleEn?.trim() || ''
-  const titleId = attrs.titleId?.trim() || ''
-  const hasTitles = !!(titleEn || titleId)
-
-  return (
-    <section
-      className="bidoc-section"
-      data-numbering={attrs.numberingStyle || 'decimal'}
-      data-boxed={attrs.boxed ? 'true' : undefined}
-      data-has-accent={attrs.accentColor ? 'true' : undefined}
-      style={style}
-    >
-      {hasTitles && (
-        <header className="bidoc-section-header">
-          <div className="bidoc-cell bidoc-lang-en">
-            <span className="bidoc-number" />
-            <h2>{titleEn}</h2>
-          </div>
-          <div className="bidoc-cell bidoc-lang-id">
-            <h2>{titleId}</h2>
-          </div>
-        </header>
-      )}
-      <div className="bidoc-section-body">
-        {(section.content || []).map((block, i) => (
-          <BlockRender key={(block.attrs?.id as string) ?? i} block={block} ctxEn={ctxEn} ctxId={ctxId} />
-        ))}
-      </div>
-    </section>
   )
 }
 
@@ -98,8 +59,9 @@ function BlockRender({ block, ctxEn, ctxId }: { block: DocNode; ctxEn: MergeCont
   if (block.type !== 'bilingualBlock') return null
   const enBody = (block.content || []).find(b => b.type === 'blockBody' && b.attrs?.lang === 'en')
   const idBody = (block.content || []).find(b => b.type === 'blockBody' && b.attrs?.lang === 'id')
+  const numbering = (block.attrs?.numbering as string | null) ?? null
   return (
-    <div className="bidoc-block">
+    <div className="bidoc-block" data-numbering={numbering ?? undefined}>
       <div className="bidoc-cell bidoc-lang-en">
         {enBody && (enBody.content || []).map((node, i) => <BlockNodeRender key={i} node={node} ctx={ctxEn} />)}
       </div>
@@ -116,7 +78,7 @@ function BlockNodeRender({ node, ctx }: { node: DocNode; ctx: MergeContext }) {
       return <p><InlineRender content={node.content} ctx={ctx} /></p>
     case 'heading': {
       const level = (node.attrs?.level as number) || 3
-      const Tag = (level === 4 ? 'h4' : 'h3') as 'h3' | 'h4'
+      const Tag = (level === 2 ? 'h2' : level === 4 ? 'h4' : 'h3') as 'h2' | 'h3' | 'h4'
       return <Tag><InlineRender content={node.content} ctx={ctx} /></Tag>
     }
     case 'bulletList':
@@ -211,75 +173,7 @@ export const BILINGUAL_DOCUMENT_RENDERER_STYLES = `
   color: var(--color-text);
   font-size: 0.9375rem;
   line-height: 1.6;
-  counter-reset: bidoc-section;
-}
-
-.bidoc-section {
-  margin: 0 0 1.5rem;
-  counter-increment: bidoc-section;
-  break-inside: avoid;
-}
-
-.bidoc-section-header {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem;
-  margin: 0 0 0.5rem;
-  padding-bottom: 0.4rem;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.bidoc-section[data-has-accent="true"] .bidoc-section-header {
-  border-bottom-color: var(--section-accent);
-}
-
-.bidoc-section-header h2 {
-  font-size: 1.25rem;
-  font-weight: 600;
-  margin: 0;
-  line-height: 1.3;
-  display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
-}
-
-.bidoc-section[data-has-accent="true"] .bidoc-section-header h2 {
-  color: var(--section-accent);
-}
-
-.bidoc-number {
-  font-weight: 600;
-  color: var(--color-text-tertiary);
-}
-
-.bidoc-section[data-has-accent="true"] .bidoc-number {
-  color: var(--section-accent);
-}
-
-.bidoc-section[data-numbering="decimal"] .bidoc-number::before {
-  content: counter(bidoc-section) ".";
-}
-.bidoc-section[data-numbering="roman"] .bidoc-number::before {
-  content: counter(bidoc-section, upper-roman) ".";
-}
-.bidoc-section[data-numbering="alpha"] .bidoc-number::before {
-  content: counter(bidoc-section, upper-alpha) ".";
-}
-.bidoc-section[data-numbering="none"] .bidoc-number { display: none; }
-
-.bidoc-section[data-boxed="true"] {
-  border: 1px solid var(--color-primary);
-  border-radius: 0.5rem;
-  padding: 0.75rem 1rem;
-}
-.bidoc-section[data-boxed="true"][data-has-accent="true"] {
-  border-color: var(--section-accent);
-}
-
-.bidoc-section-body {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+  counter-reset: bidoc-clause;
 }
 
 /* ─── Block layout: side-by-side vs stacked ───────────── */
@@ -287,6 +181,7 @@ export const BILINGUAL_DOCUMENT_RENDERER_STYLES = `
 .bidoc-block {
   display: grid;
   gap: 0.6rem 1rem;
+  margin: 0 0 0.5rem;
   break-inside: avoid;
 }
 
@@ -298,19 +193,47 @@ export const BILINGUAL_DOCUMENT_RENDERER_STYLES = `
   grid-template-columns: 1fr;
 }
 
-.bidoc-renderer.bidoc-stacked .bidoc-section-header {
-  grid-template-columns: 1fr;
-  gap: 0.1rem;
+.bidoc-cell {
+  min-width: 0;
 }
 
-.bidoc-renderer.bidoc-stacked .bidoc-cell.bidoc-lang-id h2 {
+/* ─── Clause headings (rehomed section counter) ───────── */
+
+/* Every clause-heading block carries data-numbering; the counter
+ * increments per block so the rendered numbers match the old
+ * per-section counter exactly. The prefix renders on the h2 in BOTH
+ * language cells. "none" still increments but shows no prefix. */
+.bidoc-block[data-numbering] {
+  counter-increment: bidoc-clause;
+  margin-top: 1rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.bidoc-block[data-numbering] .bidoc-cell h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0;
+  line-height: 1.3;
+}
+
+.bidoc-block[data-numbering="decimal"] .bidoc-cell h2::before {
+  content: counter(bidoc-clause) ". ";
+  color: var(--color-text-tertiary);
+}
+.bidoc-block[data-numbering="roman"] .bidoc-cell h2::before {
+  content: counter(bidoc-clause, upper-roman) ". ";
+  color: var(--color-text-tertiary);
+}
+.bidoc-block[data-numbering="alpha"] .bidoc-cell h2::before {
+  content: counter(bidoc-clause, upper-alpha) ". ";
+  color: var(--color-text-tertiary);
+}
+
+.bidoc-renderer.bidoc-stacked .bidoc-block[data-numbering] .bidoc-cell.bidoc-lang-id h2 {
   font-weight: 500;
   font-size: 1.1rem;
   color: var(--color-text-secondary);
-}
-
-.bidoc-cell {
-  min-width: 0;
 }
 
 /* Small EN/ID badge on each cell so readers can tell the languages
@@ -328,7 +251,9 @@ export const BILINGUAL_DOCUMENT_RENDERER_STYLES = `
 .bidoc-cell.bidoc-lang-en::before { content: "EN"; }
 .bidoc-cell.bidoc-lang-id::before { content: "ID"; }
 
-.bidoc-renderer.bidoc-stacked .bidoc-section-header .bidoc-cell::before {
+/* Clause-heading blocks render a numbered title — no EN/ID badge over
+ * the heading, matching the old section-header treatment. */
+.bidoc-block[data-numbering] .bidoc-cell::before {
   display: none;
 }
 

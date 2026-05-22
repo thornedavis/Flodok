@@ -40,27 +40,80 @@ export function isDocumentDoc(value: unknown): value is DocumentDoc {
   return v.type === 'document' && Array.isArray(v.content)
 }
 
+// ─── normalizeDoc ───────────────────────────────────────────────────
+//
+// Deno twin of src/lib/documentDoc.ts:normalizeDoc. Migrates legacy
+// section-nested docs to the flat block stream. See the browser copy
+// for the full rationale. Idempotent on already-flat docs.
+
+export type BlockNumbering = NonNullable<SectionAttrs['numberingStyle']>
+
+function newBlockId(): string {
+  const random = Math.random().toString(36).slice(2, 10)
+  const time = Date.now().toString(36).slice(-4)
+  return `blk_${time}${random}`
+}
+
+function headingBody(lang: 'en' | 'id', title: string): DocNode {
+  const heading: DocNode = {
+    type: 'heading',
+    attrs: { level: 2 },
+    content: title.trim() ? [{ type: 'text', text: title.trim() }] : [],
+  }
+  return { type: 'blockBody', attrs: { lang }, content: [heading] }
+}
+
+function clauseHeadingBlock(section: DocNode): DocNode {
+  const attrs = (section.attrs || {}) as Partial<SectionAttrs>
+  return {
+    type: 'bilingualBlock',
+    attrs: {
+      id: typeof attrs.id === 'string' ? attrs.id : newBlockId(),
+      needsReview: false,
+      numbering: (attrs.numberingStyle as BlockNumbering) || 'decimal',
+    },
+    content: [
+      headingBody('en', attrs.titleEn || ''),
+      headingBody('id', attrs.titleId || ''),
+    ],
+  }
+}
+
+export function normalizeDoc(doc: DocNode | unknown): DocumentDoc {
+  if (!isDocumentDoc(doc)) return { type: 'document', content: [] }
+  const content = doc.content || []
+  const hasSections = content.some(node => node.type === 'section')
+  if (!hasSections) return { type: 'document', content }
+
+  const flat: DocNode[] = []
+  for (const node of content) {
+    if (node.type !== 'section') {
+      flat.push(node)
+      continue
+    }
+    flat.push(clauseHeadingBlock(node))
+    for (const block of node.content || []) {
+      if (block.type === 'bilingualBlock') flat.push(block)
+    }
+  }
+  return { type: 'document', content: flat }
+}
+
 export function docToMarkdown(doc: DocNode | unknown, lang: 'en' | 'id'): string {
   if (!isDocumentDoc(doc)) return ''
+  // Normalize first so legacy section-nested and flat docs project
+  // identically (clause headings become "## title").
+  const flat = normalizeDoc(doc)
   const lines: string[] = []
-  for (const section of doc.content || []) {
-    if (section.type !== 'section') continue
-    const attrs = (section.attrs || {}) as Partial<SectionAttrs>
-    const title = lang === 'en' ? attrs.titleEn : attrs.titleId
-    if (typeof title === 'string' && title.trim()) {
-      lines.push(`## ${title.trim()}`)
-      lines.push('')
-    }
-    for (const block of section.content || []) {
-      if (block.type !== 'bilingualBlock') continue
-      const body = (block.content || []).find(
-        b => b.type === 'blockBody' && (b.attrs?.lang === lang),
-      )
-      if (!body) continue
-      for (const node of body.content || []) {
-        const rendered = renderBlockNode(node)
-        if (rendered) lines.push(rendered)
-      }
+  for (const block of flat.content || []) {
+    if (block.type !== 'bilingualBlock') continue
+    const body = (block.content || []).find(
+      b => b.type === 'blockBody' && (b.attrs?.lang === lang),
+    )
+    if (!body) continue
+    for (const node of body.content || []) {
+      const rendered = renderBlockNode(node)
+      if (rendered) lines.push(rendered)
     }
   }
   return lines.join('\n').trim() + (lines.length ? '\n' : '')

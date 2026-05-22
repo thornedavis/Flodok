@@ -26,22 +26,21 @@ import { useCallback, useEffect, useState } from 'react'
 import type { Editor } from '@tiptap/core'
 import {
   DocumentNode,
-  SectionNode,
   BilingualBlockNode,
   BlockBodyNode,
   CalloutNode,
   emptyBlock,
-  emptySection,
 } from './nodes'
-import { SectionView } from './SectionView'
 import { BilingualBlockView } from './BilingualBlockView'
+import { BlockGutter } from './BlockGutter'
+import { SelectionBubble } from './SelectionBubble'
 import { BilingualMergeFieldExtension } from './BilingualMergeField'
 import { MergeFieldButton } from '../MergeFieldButton'
 import { MERGE_FIELD_STYLES } from '../MergeField'
 import { DOCUMENT_EDITOR_STYLES } from './styles'
 import { supabase } from '../../../lib/supabase'
 import { generateDocument } from '../../../lib/aiGenerate'
-import type { DocumentDoc } from '../../../lib/documentDoc'
+import { normalizeDoc, type DocumentDoc } from '../../../lib/documentDoc'
 import type { MergeContext } from '../../../lib/mergeFields'
 
 export type DocumentEditorView = 'side_by_side' | 'stacked'
@@ -101,18 +100,18 @@ export function DocumentEditor({
   stickyToolbar = false,
   stickyToolbarOffset = '0px',
 }: DocumentEditorProps) {
-  // Bind React NodeViews at editor-creation time rather than baking
+  // Bind the React NodeView at editor-creation time rather than baking
   // JSX into nodes.ts — keeps the schema file framework-agnostic.
-  const SectionWithView = SectionNode.extend({
-    addNodeView() {
-      return ReactNodeViewRenderer(SectionView)
-    },
-  })
   const BilingualBlockWithView = BilingualBlockNode.extend({
     addNodeView() {
       return ReactNodeViewRenderer(BilingualBlockView)
     },
   })
+
+  // Normalize once at mount so legacy section-nested docs render in the
+  // flat schema. The effect below re-normalizes on every initialDoc
+  // change for the async-load case.
+  const normalizedInitial = normalizeDoc(initialDoc)
 
   // State for the per-selection translate action. Tracks the in-flight
   // request so we can show a spinner on the BubbleMenu button.
@@ -130,16 +129,15 @@ export function DocumentEditor({
       StarterKit.configure({
         // Replace StarterKit's default top node with our `document`.
         document: false,
-        // Block content schema constraints: no h1/h2 (those are
-        // sections), no blockquote, no horizontal rule. Anything not
-        // in our allowed set is disabled here so paste/parse can't
-        // sneak it in.
-        heading: { levels: [3, 4] },
+        // Block content schema constraints. h2 is the clause-heading
+        // level (formerly section titles); h3/h4 are sub-headings. h1,
+        // blockquote, and horizontal rule stay disabled so paste/parse
+        // can't sneak them in.
+        heading: { levels: [2, 3, 4] },
         blockquote: false,
         horizontalRule: false,
       }),
       DocumentNode,
-      SectionWithView,
       BilingualBlockWithView,
       BlockBodyNode,
       CalloutNode,
@@ -162,7 +160,7 @@ export function DocumentEditor({
         ? [BilingualMergeFieldExtension.configure({ getContext: mergeFields.getContext })]
         : []),
     ],
-    content: initialDoc as Record<string, unknown>,
+    content: normalizedInitial as Record<string, unknown>,
     onUpdate: ({ editor }) => {
       if (!onChange) return
       onChange(editor.getJSON() as unknown as DocumentDoc)
@@ -179,39 +177,18 @@ export function DocumentEditor({
   // ping-ponging back through onChange.
   useEffect(() => {
     if (!editor) return
+    const next = normalizeDoc(initialDoc)
     const current = editor.getJSON()
-    if (JSON.stringify(current) === JSON.stringify(initialDoc)) return
-    editor.commands.setContent(initialDoc as Record<string, unknown>, { emitUpdate: false })
+    if (JSON.stringify(current) === JSON.stringify(next)) return
+    editor.commands.setContent(next as Record<string, unknown>, { emitUpdate: false })
   }, [editor, initialDoc])
 
-  const addBlock = useCallback(() => {
+  // Trailing "Add block" affordance — always appends at the very end of
+  // the document and drops the caret into the new block's EN side.
+  const addBlockAtEnd = useCallback(() => {
     if (!editor) return
-    // Insert a new bilingualBlock at the end of the section the cursor
-    // is currently inside. Walk up the resolved position looking for a
-    // `section` ancestor, then insert at the position right after the
-    // current bilingualBlock (or at the section's end if not in one).
-    const { state } = editor
-    const { $from } = state.selection
-    let sectionPos: number | null = null
-    let sectionEnd: number | null = null
-    for (let d = $from.depth; d > 0; d--) {
-      if ($from.node(d).type.name === 'section') {
-        sectionPos = $from.before(d)
-        sectionEnd = $from.after(d)
-        break
-      }
-    }
-    if (sectionPos === null || sectionEnd === null) return
-    // Insert just before the section's closing token so the new block
-    // appends to the end of that section.
-    editor.chain().focus().insertContentAt(sectionEnd - 1, emptyBlock()).run()
-  }, [editor])
-
-  const addSection = useCallback(() => {
-    if (!editor) return
-    // Append a new section at the very end of the document.
-    const docSize = editor.state.doc.content.size
-    editor.chain().focus().insertContentAt(docSize, emptySection()).run()
+    const end = editor.state.doc.content.size
+    editor.chain().focus().insertContentAt(end, emptyBlock()).run()
   }, [editor])
 
   const setLink = useCallback(() => {
@@ -330,7 +307,7 @@ export function DocumentEditor({
     setGenerateError('')
     try {
       const doc = await generateDocument({ prompt, docType: aiGenerate.docType, title: aiGenerate.title })
-      editor.commands.setContent(doc as unknown as Record<string, unknown>)
+      editor.commands.setContent(normalizeDoc(doc) as unknown as Record<string, unknown>)
       // setContent doesn't fire onUpdate, so push the change explicitly
       // so the parent's saved-state tracker sees the new doc.
       if (onChange) onChange(editor.getJSON() as unknown as DocumentDoc)
@@ -349,8 +326,6 @@ export function DocumentEditor({
       <Toolbar
         editor={editor}
         onSetLink={setLink}
-        onAddBlock={addBlock}
-        onAddSection={addSection}
         mergeFields={mergeFields}
         view={view}
         onViewChange={onViewChange}
@@ -368,42 +343,23 @@ export function DocumentEditor({
         />
       )}
       <BubbleMenu editor={editor}>
-        <div
-          className="flex items-center gap-0.5 rounded-lg border p-1 shadow-lg"
-          style={{ backgroundColor: 'var(--color-bg)', borderColor: 'var(--color-border)' }}
-        >
-          <ToolbarButton active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()} title="Bold">
-            <BoldIcon />
-          </ToolbarButton>
-          <ToolbarButton active={editor.isActive('italic')} onClick={() => editor.chain().focus().toggleItalic().run()} title="Italic">
-            <ItalicIcon />
-          </ToolbarButton>
-          <ToolbarButton active={editor.isActive('underline')} onClick={() => editor.chain().focus().toggleUnderline().run()} title="Underline">
-            <UnderlineIcon />
-          </ToolbarButton>
-          <Divider />
-          <button
-            type="button"
-            onClick={translateSelection}
-            disabled={translating}
-            title="Translate selection and insert into the paired language side"
-            className="flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors disabled:opacity-50"
-            style={{ color: 'var(--color-text-secondary)' }}
-            onMouseOver={e => { if (!translating) e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
-            onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
-          >
-            {translating ? (
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
-                <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-              </svg>
-            ) : (
-              <TranslateIcon />
-            )}
-            <span>{translating ? 'Translating…' : 'Translate'}</span>
-          </button>
-        </div>
+        <SelectionBubble
+          editor={editor}
+          onSetLink={setLink}
+          onTranslate={translateSelection}
+          translating={translating}
+        />
       </BubbleMenu>
+      <BlockGutter editor={editor} />
       <EditorContent editor={editor} />
+      <button
+        type="button"
+        className="doc-editor-add-trailing"
+        onClick={addBlockAtEnd}
+        title="Add a block at the end of the document"
+      >
+        <span>+</span> Add block
+      </button>
       <style>{DOCUMENT_EDITOR_STYLES}{MERGE_FIELD_STYLES}</style>
     </div>
   )
@@ -411,11 +367,9 @@ export function DocumentEditor({
 
 // ─── Toolbar ──────────────────────────────────────────────────────
 
-function Toolbar({ editor, onSetLink, onAddBlock, onAddSection, mergeFields, view, onViewChange, onGenerate, sticky = false, stickyOffset = '0px' }: {
+function Toolbar({ editor, onSetLink, mergeFields, view, onViewChange, onGenerate, sticky = false, stickyOffset = '0px' }: {
   editor: Editor
   onSetLink: () => void
-  onAddBlock: () => void
-  onAddSection: () => void
   mergeFields?: DocumentEditorMergeFields
   view: DocumentEditorView
   sticky?: boolean
@@ -466,29 +420,6 @@ function Toolbar({ editor, onSetLink, onAddBlock, onAddSection, mergeFields, vie
       <ToolbarButton active={editor.isActive('codeBlock')} onClick={() => editor.chain().focus().toggleCodeBlock().run()} title="Code block">
         <CodeBlockIcon />
       </ToolbarButton>
-      <Divider />
-      <button
-        type="button"
-        onClick={onAddBlock}
-        className="rounded-md px-2.5 h-8 text-xs font-medium transition-colors"
-        style={{ color: 'var(--color-text-secondary)', backgroundColor: 'transparent' }}
-        onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
-        onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
-        title="Add a new paragraph block to the current section"
-      >
-        + Block
-      </button>
-      <button
-        type="button"
-        onClick={onAddSection}
-        className="rounded-md px-2.5 h-8 text-xs font-medium transition-colors"
-        style={{ color: 'var(--color-text-secondary)', backgroundColor: 'transparent' }}
-        onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
-        onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
-        title="Append a new section at the end of the document"
-      >
-        + Section
-      </button>
       {mergeFields && (
         <>
           <Divider />
@@ -606,7 +537,6 @@ function TableIcon() { return <svg {...s}><rect x="3" y="3" width="18" height="1
 function CodeBlockIcon() { return <svg {...s}><rect x="2" y="3" width="20" height="18" rx="2"/><polyline points="10 8 6 12 10 16"/><polyline points="14 8 18 12 14 16"/></svg> }
 function SideBySideIcon() { return <svg {...s}><rect x="3" y="4" width="8" height="16" rx="1"/><rect x="13" y="4" width="8" height="16" rx="1"/></svg> }
 function StackedIcon() { return <svg {...s}><rect x="3" y="3" width="18" height="8" rx="1"/><rect x="3" y="13" width="18" height="8" rx="1"/></svg> }
-function TranslateIcon() { return <svg {...s}><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg> }
 function SparklesIcon() { return <svg {...s}><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg> }
 
 // ─── AI Generate modal ─────────────────────────────────────────────

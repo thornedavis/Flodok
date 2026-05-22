@@ -20,7 +20,7 @@
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { translateSOP } from './translate.ts';
 import { renderMergeFields } from './mergeFields.ts';
-import { docToMarkdown, isDocumentDoc, type DocNode, type DocumentDoc } from './documentDoc.ts';
+import { docToMarkdown, isDocumentDoc, normalizeDoc, type DocNode, type DocumentDoc } from './documentDoc.ts';
 
 export type SnapshotTable = 'sops' | 'contracts';
 export type TranslationStatus = 'complete' | 'failed';
@@ -88,114 +88,87 @@ async function translateMissingSides(
   supabase: SupabaseClient,
   orgId: string,
 ): Promise<{ doc: DocumentDoc; error: string | null }> {
-  const out = JSON.parse(JSON.stringify(newDoc)) as DocumentDoc;
+  // Normalize both sides to the flat schema so legacy section-nested
+  // docs (older saves, or an existing doc not yet backfilled) align with
+  // the flat docs the editor now produces. Block ids are stable across
+  // normalization (a former section's id becomes its clause-heading
+  // block id), so the diff-by-id below still matches.
+  const out = normalizeDoc(newDoc);
+  const flatExisting = existingDoc ? normalizeDoc(existingDoc) : null;
   let firstError: string | null = null;
 
-  // Map existing sections / blocks by id so we can detect changes per node.
-  const existingSections = new Map<string, DocNode>();
+  // Map existing blocks by id so we can detect changes per block. The
+  // tree is flat now — clause headings are just bilingualBlocks whose
+  // body is an h2, so the per-block translation path below handles
+  // section titles and body content uniformly.
   const existingBlocks = new Map<string, DocNode>();
-  for (const s of existingDoc?.content || []) {
-    const sid = s.attrs?.id as string | undefined;
-    if (s.type === 'section' && sid) {
-      existingSections.set(sid, s);
-      for (const b of s.content || []) {
-        const bid = b.attrs?.id as string | undefined;
-        if (b.type === 'bilingualBlock' && bid) existingBlocks.set(bid, b);
-      }
-    }
+  for (const b of flatExisting?.content || []) {
+    const bid = b.attrs?.id as string | undefined;
+    if (b.type === 'bilingualBlock' && bid) existingBlocks.set(bid, b);
   }
 
-  for (const section of out.content || []) {
-    if (section.type !== 'section' || !section.attrs) continue;
-    const attrs = section.attrs as Record<string, unknown>;
-    const sid = typeof attrs.id === 'string' ? attrs.id : '';
-    const prevSection = sid ? existingSections.get(sid) : undefined;
-    const prevAttrs = (prevSection?.attrs || {}) as Record<string, unknown>;
+  for (const block of out.content || []) {
+    if (block.type !== 'bilingualBlock' || !Array.isArray(block.content)) continue;
+    const bid = block.attrs?.id as string | undefined;
+    const prevBlock = bid ? existingBlocks.get(bid) : undefined;
+    const enBody = block.content.find(b => b.type === 'blockBody' && b.attrs?.lang === 'en');
+    const idBody = block.content.find(b => b.type === 'blockBody' && b.attrs?.lang === 'id');
+    if (!enBody || !idBody) continue;
+    const prevContent = prevBlock?.content as DocNode[] | undefined;
+    const prevEnBody = prevContent?.find(b => b.type === 'blockBody' && b.attrs?.lang === 'en');
+    const prevIdBody = prevContent?.find(b => b.type === 'blockBody' && b.attrs?.lang === 'id');
 
-    const titleEn = typeof attrs.titleEn === 'string' ? attrs.titleEn.trim() : '';
-    const titleId = typeof attrs.titleId === 'string' ? attrs.titleId.trim() : '';
-    const prevEn = typeof prevAttrs.titleEn === 'string' ? prevAttrs.titleEn.trim() : '';
-    const prevId = typeof prevAttrs.titleId === 'string' ? prevAttrs.titleId.trim() : '';
-    const enChanged = titleEn !== prevEn;
-    const idChanged = titleId !== prevId;
+    const enEmpty = isBodyEmpty(enBody.content || []);
+    const idEmpty = isBodyEmpty(idBody.content || []);
+    const enChangedBlock = !sameBodyContent(enBody, prevEnBody);
+    const idChangedBlock = !sameBodyContent(idBody, prevIdBody);
 
-    if (titleEn && !titleId && (enChanged || !prevSection)) {
-      try {
-        attrs.titleId = await translateWithCache(titleEn, 'en-to-id', supabase, orgId);
-      } catch (err) {
-        if (!firstError) firstError = (err instanceof Error ? err.message : 'translation failed');
-      }
-    } else if (titleId && !titleEn && (idChanged || !prevSection)) {
-      try {
-        attrs.titleEn = await translateWithCache(titleId, 'id-to-en', supabase, orgId);
-      } catch (err) {
-        if (!firstError) firstError = (err instanceof Error ? err.message : 'translation failed');
-      }
+    const blockAttrs: Record<string, unknown> = (block.attrs && typeof block.attrs === 'object'
+      ? (block.attrs as Record<string, unknown>)
+      : {});
+
+    // Both sides edited in the same save — user is intentionally
+    // authoring both languages; leave both as written and flag for
+    // review so they can confirm consistency in the editor.
+    if (enChangedBlock && idChangedBlock && !enEmpty && !idEmpty) {
+      blockAttrs.needsReview = true;
+      continue;
     }
 
-    for (const block of section.content || []) {
-      if (block.type !== 'bilingualBlock' || !Array.isArray(block.content)) continue;
-      const bid = block.attrs?.id as string | undefined;
-      const prevBlock = bid ? existingBlocks.get(bid) : undefined;
-      const enBody = block.content.find(b => b.type === 'blockBody' && b.attrs?.lang === 'en');
-      const idBody = block.content.find(b => b.type === 'blockBody' && b.attrs?.lang === 'id');
-      if (!enBody || !idBody) continue;
-      const prevContent = prevBlock?.content as DocNode[] | undefined;
-      const prevEnBody = prevContent?.find(b => b.type === 'blockBody' && b.attrs?.lang === 'en');
-      const prevIdBody = prevContent?.find(b => b.type === 'blockBody' && b.attrs?.lang === 'id');
-
-      const enEmpty = isBodyEmpty(enBody.content || []);
-      const idEmpty = isBodyEmpty(idBody.content || []);
-      const enChangedBlock = !sameBodyContent(enBody, prevEnBody);
-      const idChangedBlock = !sameBodyContent(idBody, prevIdBody);
-
-      const blockAttrs: Record<string, unknown> = (block.attrs && typeof block.attrs === 'object'
-        ? (block.attrs as Record<string, unknown>)
-        : {});
-
-      // Both sides edited in the same save — user is intentionally
-      // authoring both languages; leave both as written and flag for
-      // review so they can confirm consistency in the editor.
-      if (enChangedBlock && idChangedBlock && !enEmpty && !idEmpty) {
-        blockAttrs.needsReview = true;
-        continue;
-      }
-
-      // EN edited → re-translate ID from the new EN (overwriting any
-      // prior auto-translation). The previous behavior preserved ID
-      // whenever it had any content, which meant edits on EN never
-      // reflected on the ID side once an initial translation had run.
-      // Surgical preservation of manual ID edits is a Phase F concern
-      // (per-selection translate via BubbleMenu); the default model
-      // here is "EN is source, ID mirrors it".
-      if (enChangedBlock && !enEmpty) {
-        try {
-          idBody.content = await translateBodyContent(enBody.content || [], 'en-to-id', supabase, orgId);
-          // The block is no longer in a "both edited / needs review"
-          // state — clear any stale flag so the editor's orange
-          // indicator doesn't linger past the resolution.
-          blockAttrs.needsReview = false;
-        } catch (err) {
-          if (!firstError) firstError = (err instanceof Error ? err.message : 'translation failed');
-        }
-      } else if (idChangedBlock && !idEmpty && enEmpty) {
-        // ID edited from-scratch with no EN content yet → seed EN.
-        // We don't auto-flip ID-edits-to-EN when EN already exists
-        // because typical authoring is EN-first; surfacing an
-        // intentional ID-only edit shouldn't clobber the EN body.
-        try {
-          enBody.content = await translateBodyContent(idBody.content || [], 'id-to-en', supabase, orgId);
-          blockAttrs.needsReview = false;
-        } catch (err) {
-          if (!firstError) firstError = (err instanceof Error ? err.message : 'translation failed');
-        }
-      } else if (!enChangedBlock && !idChangedBlock) {
-        // Genuinely unchanged block — clear any stale needsReview flag
-        // a previous save may have set incorrectly (e.g. before the
-        // diff comparison was hardened against TipTap's attr-order
-        // shuffling).
+    // EN edited → re-translate ID from the new EN (overwriting any
+    // prior auto-translation). The previous behavior preserved ID
+    // whenever it had any content, which meant edits on EN never
+    // reflected on the ID side once an initial translation had run.
+    // Surgical preservation of manual ID edits is a Phase F concern
+    // (per-selection translate via BubbleMenu); the default model
+    // here is "EN is source, ID mirrors it".
+    if (enChangedBlock && !enEmpty) {
+      try {
+        idBody.content = await translateBodyContent(enBody.content || [], 'en-to-id', supabase, orgId);
+        // The block is no longer in a "both edited / needs review"
+        // state — clear any stale flag so the editor's orange
+        // indicator doesn't linger past the resolution.
         blockAttrs.needsReview = false;
+      } catch (err) {
+        if (!firstError) firstError = (err instanceof Error ? err.message : 'translation failed');
       }
+    } else if (idChangedBlock && !idEmpty && enEmpty) {
+      // ID edited from-scratch with no EN content yet → seed EN.
+      // We don't auto-flip ID-edits-to-EN when EN already exists
+      // because typical authoring is EN-first; surfacing an
+      // intentional ID-only edit shouldn't clobber the EN body.
+      try {
+        enBody.content = await translateBodyContent(idBody.content || [], 'id-to-en', supabase, orgId);
+        blockAttrs.needsReview = false;
+      } catch (err) {
+        if (!firstError) firstError = (err instanceof Error ? err.message : 'translation failed');
+      }
+    } else if (!enChangedBlock && !idChangedBlock) {
+      // Genuinely unchanged block — clear any stale needsReview flag
+      // a previous save may have set incorrectly (e.g. before the
+      // diff comparison was hardened against TipTap's attr-order
+      // shuffling).
+      blockAttrs.needsReview = false;
     }
   }
 

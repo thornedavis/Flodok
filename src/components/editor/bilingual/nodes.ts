@@ -28,81 +28,9 @@ import { Node, mergeAttributes } from '@tiptap/core'
 export const DocumentNode = Node.create({
   name: 'document',
   topNode: true,
-  content: 'section+',
-})
-
-// ─── Section ────────────────────────────────────────────────────────
-//
-// A titled run of bilingual blocks. Titles are plain strings (one per
-// language) carried as attrs; the section header renders editable
-// `<input>` fields wired to those attrs in the NodeView.
-
-export type SectionAttrs = {
-  id: string
-  titleEn: string
-  titleId: string
-  // Visual style — all optional; renderer applies defaults when omitted.
-  // Wired into the schema now so future authoring UI can flip these
-  // attrs without a schema migration.
-  accentColor: string | null
-  numberingStyle: 'decimal' | 'roman' | 'alpha' | 'none'
-  boxed: boolean
-}
-
-export const SectionNode = Node.create({
-  name: 'section',
-  group: 'block',
+  // Flat block stream — sections retired (see normalizeDoc). Clause
+  // headers are now ordinary bilingualBlocks whose bodies hold an h2.
   content: 'bilingualBlock+',
-  // Sections aren't selectable as a block — the title fields and child
-  // blocks own the cursor. This prevents the user from accidentally
-  // backspacing a whole section away when navigating between titles.
-  selectable: false,
-  // But they ARE draggable (Phase D will add reorder handles).
-  draggable: false,
-
-  addAttributes() {
-    return {
-      id: {
-        default: null,
-        // Auto-fill when a section is inserted without an id.
-        parseHTML: el => el.getAttribute('data-id'),
-        renderHTML: attrs => attrs.id ? { 'data-id': attrs.id } : {},
-      },
-      titleEn: {
-        default: '',
-        parseHTML: el => el.getAttribute('data-title-en') || '',
-        renderHTML: attrs => ({ 'data-title-en': attrs.titleEn }),
-      },
-      titleId: {
-        default: '',
-        parseHTML: el => el.getAttribute('data-title-id') || '',
-        renderHTML: attrs => ({ 'data-title-id': attrs.titleId }),
-      },
-      accentColor: {
-        default: null,
-        parseHTML: el => el.getAttribute('data-accent-color'),
-        renderHTML: attrs => attrs.accentColor ? { 'data-accent-color': attrs.accentColor } : {},
-      },
-      numberingStyle: {
-        default: 'decimal',
-        parseHTML: el => el.getAttribute('data-numbering') || 'decimal',
-        renderHTML: attrs => ({ 'data-numbering': attrs.numberingStyle }),
-      },
-      boxed: {
-        default: false,
-        parseHTML: el => el.getAttribute('data-boxed') === 'true',
-        renderHTML: attrs => attrs.boxed ? { 'data-boxed': 'true' } : {},
-      },
-    }
-  },
-
-  parseHTML() {
-    return [{ tag: 'section[data-bilingual-section]' }]
-  },
-
-  renderHTML({ HTMLAttributes }) {
-    return ['section', mergeAttributes(HTMLAttributes, { 'data-bilingual-section': 'true' }), 0]
-  },
 })
 
 // ─── Bilingual block ────────────────────────────────────────────────
@@ -119,6 +47,11 @@ export type BilingualBlockAttrs = {
   // in Phase E. Held here so the editor can surface a "needs review"
   // indicator without a sidecar table.
   needsReview: boolean
+  // Clause-heading numbering. Only meaningful when the block is a
+  // clause heading (its bodies hold an h2); drives the CSS section
+  // counter prefix. `null` for ordinary blocks. Inherited from the
+  // old section `numberingStyle` by normalizeDoc.
+  numbering: 'decimal' | 'roman' | 'alpha' | 'none' | null
 }
 
 export const BilingualBlockNode = Node.create({
@@ -126,10 +59,12 @@ export const BilingualBlockNode = Node.create({
   group: 'block',
   content: 'blockBody blockBody',
   // The block as a whole isn't directly editable — only its body
-  // children are. Treating it as a "node selection" prevents the
-  // caret from landing on the wrapper itself.
+  // children are (isolating keeps the caret inside a blockBody). But
+  // it IS selectable + draggable so the gutter drag handle can grab
+  // the whole EN/ID pair and reorder it as one unit.
   isolating: true,
-  selectable: false,
+  selectable: true,
+  draggable: true,
 
   addAttributes() {
     return {
@@ -142,6 +77,11 @@ export const BilingualBlockNode = Node.create({
         default: false,
         parseHTML: el => el.getAttribute('data-needs-review') === 'true',
         renderHTML: attrs => attrs.needsReview ? { 'data-needs-review': 'true' } : {},
+      },
+      numbering: {
+        default: null,
+        parseHTML: el => el.getAttribute('data-numbering'),
+        renderHTML: attrs => attrs.numbering ? { 'data-numbering': attrs.numbering } : {},
       },
     }
   },
