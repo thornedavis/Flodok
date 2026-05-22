@@ -4,33 +4,48 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
 import { useBilling } from '../../contexts/BillingContext'
-import { normalizePhone, isValidE164 } from '../../lib/phone'
 import { generateUniqueSlug, generateAccessToken } from '../../lib/slug'
 import { getAvatarGradient } from '../../lib/avatar'
-import { bucketReferenceValues, referenceNames } from '../../lib/companyReference'
-import { setEmployeePrimaryDepartment, type DepartmentOption } from '../../lib/departments'
-import { primaryDept, type EmpDeptShape } from '../../lib/employee'
+import { getEmployeeDepts, type EmpDeptShape } from '../../lib/employee'
 import { findTemplateForPosition, buildContractFromTemplate } from '../../lib/contractTemplates'
-import { documentEditPath, documentsIndexPath } from '../../lib/documentTypes'
+import { documentEditPath } from '../../lib/documentTypes'
 import { docAsJson, emptyDocumentDoc } from '../../lib/documentDoc'
 import { advanceSignedToActiveForOrg } from '../../lib/lifecycleAdvance'
 import {
   CANDIDATE_SOURCE_OPTIONS,
+  candidateSourceLabel,
   profileCompletionPercentFromEmployee,
   type CandidateSourceOption,
 } from '../../lib/candidateProfile'
-import { PhoneInput } from '../../components/PhoneInput'
-import { FilterSearchInput, MultiSelectDropdown } from '../../components/FilterControls'
+import { FilterPanel, FilterSearchInput, MultiSelectDropdown } from '../../components/FilterControls'
+import type { FilterPanelSection } from '../../components/FilterControls'
 import type { Employee, Organization, User } from '../../types/aliases'
 import type { Translations } from '../../lib/translations'
 
 type RecruitmentStage = 'prospective' | 'shortlisted' | 'offered' | 'signed' | 'talent_pool'
-type RecruitmentTab = 'all' | RecruitmentStage
 type Candidate = Employee & EmpDeptShape
 
+type ColumnKey = 'position' | 'phone' | 'department' | 'source' | 'stage' | 'added'
+type SortValue = 'created_at|desc' | 'created_at|asc' | 'name|asc' | 'name|desc'
+
 const RECRUITMENT_STAGES: RecruitmentStage[] = ['prospective', 'shortlisted', 'offered', 'signed', 'talent_pool']
-const MAX_PHOTO_SIZE = 2 * 1024 * 1024
-const ALLOWED_PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp']
+// Display order in the row + the order options appear in the Columns picker.
+// Name (identity) and the actions cell are always present and live outside this list.
+const COLUMN_ORDER: ColumnKey[] = ['position', 'phone', 'department', 'source', 'stage', 'added']
+const DEFAULT_VISIBLE_COLUMNS: ColumnKey[] = ['position', 'phone', 'stage', 'added']
+const COLUMNS_STORAGE_KEY = 'flodok.recruitment.columns'
+const DEFAULT_SORT: SortValue = 'created_at|desc'
+
+function columnLabel(key: ColumnKey, t: Translations): string {
+  switch (key) {
+    case 'position': return t.hiringColPosition
+    case 'phone': return t.hiringFieldPhone
+    case 'department': return t.hiringFieldDepartments
+    case 'source': return t.candidateFieldSource
+    case 'stage': return t.hiringColStage
+    case 'added': return t.hiringColAdded
+  }
+}
 
 const CANDIDATE_WITH_DEPTS_SELECT =
   '*, employee_departments(is_primary, department:company_departments(id, name))'
@@ -42,51 +57,76 @@ export function Recruitment({ user }: { user: User }) {
 
   const [candidates, setCandidates] = useState<Candidate[]>([])
   const [org, setOrg] = useState<Organization | null>(null)
-  const [jobPositions, setJobPositions] = useState<string[]>([])
-  const [availableDepartments, setAvailableDepartments] = useState<DepartmentOption[]>([])
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<RecruitmentTab>('all')
   const [search, setSearch] = useState('')
   const [stageFilter, setStageFilter] = useState<RecruitmentStage[]>([])
-  const [modalCandidate, setModalCandidate] = useState<Candidate | null>(null)
+  const [positionFilter, setPositionFilter] = useState<string[]>([])
+  const [deptFilter, setDeptFilter] = useState<string[]>([])
+  const [sourceFilter, setSourceFilter] = useState<string[]>([])
+  const [sort, setSort] = useState<SortValue>(DEFAULT_SORT)
+  const [visibleColumns, setVisibleColumns] = useState<Set<ColumnKey>>(() => {
+    if (typeof window === 'undefined') return new Set(DEFAULT_VISIBLE_COLUMNS)
+    try {
+      const saved = window.localStorage.getItem(COLUMNS_STORAGE_KEY)
+      if (!saved) return new Set(DEFAULT_VISIBLE_COLUMNS)
+      const parsed = JSON.parse(saved) as unknown
+      if (!Array.isArray(parsed)) return new Set(DEFAULT_VISIBLE_COLUMNS)
+      return new Set(parsed.filter((c): c is ColumnKey => COLUMN_ORDER.includes(c as ColumnKey)))
+    } catch {
+      return new Set(DEFAULT_VISIBLE_COLUMNS)
+    }
+  })
   const [makeOfferCandidate, setMakeOfferCandidate] = useState<Employee | null>(null)
-  const [showAdd, setShowAdd] = useState(false)
+  const [adding, setAdding] = useState(false)
 
   useEffect(() => { loadData() }, [user.org_id])
+
+  useEffect(() => {
+    try { window.localStorage.setItem(COLUMNS_STORAGE_KEY, JSON.stringify([...visibleColumns])) } catch { /* storage unavailable */ }
+  }, [visibleColumns])
 
   async function loadData() {
     setLoading(true)
     // Graduate any 'signed' candidates whose start date has arrived before
     // we read — keeps the Recruitment page consistent with reality.
     await advanceSignedToActiveForOrg(user.org_id)
-    const [empResult, orgResult, refResult, departmentsResult] = await Promise.all([
+    const [empResult, orgResult] = await Promise.all([
       supabase.from('employees')
         .select(CANDIDATE_WITH_DEPTS_SELECT)
         .eq('org_id', user.org_id)
         .in('lifecycle_stage', RECRUITMENT_STAGES)
         .order('created_at', { ascending: false }),
       supabase.from('organizations').select('*').eq('id', user.org_id).single(),
-      supabase.from('company_reference_values')
-        .select('*')
-        .eq('org_id', user.org_id)
-        .order('display_order')
-        .order('name'),
-      supabase.from('company_departments')
-        .select('id, name')
-        .eq('org_id', user.org_id)
-        .order('display_order')
-        .order('name'),
     ])
     setCandidates((empResult.data || []) as Candidate[])
     setOrg(orgResult.data || null)
-    if (refResult.data) {
-      const buckets = bucketReferenceValues(refResult.data)
-      setJobPositions(referenceNames(buckets.job_position))
-    }
-    if (departmentsResult.data) {
-      setAvailableDepartments(departmentsResult.data)
-    }
     setLoading(false)
+  }
+
+  async function handleAddCandidate() {
+    if (!canWrite || adding) return
+    setAdding(true)
+    const placeholderName = t.hiringNewPlaceholderName
+    const slug = generateUniqueSlug(placeholderName)
+    const token = generateAccessToken()
+    const { data: created, error } = await supabase
+      .from('employees')
+      .insert({
+        org_id: user.org_id,
+        name: placeholderName,
+        phone: '',
+        slug,
+        access_token: token,
+        lifecycle_stage: 'prospective',
+      })
+      .select()
+      .single()
+    setAdding(false)
+    if (error || !created) {
+      alert(error?.message || t.hiringCreateError)
+      return
+    }
+    navigate(`/dashboard/recruitment/${created.id}/edit?new=1`)
   }
 
   const counts = useMemo(() => {
@@ -98,22 +138,102 @@ export function Recruitment({ user }: { user: User }) {
     return out
   }, [candidates])
 
+  // Filter dimensions derived from the loaded candidates. Sections only appear
+  // in the Filter panel when they have options (mirrors the Employees page).
+  const positionOptions = useMemo(
+    () => [...new Set(candidates.map(c => c.job_position).filter((v): v is string => !!v))].sort(),
+    [candidates],
+  )
+  const departmentOptions = useMemo(
+    () => [...new Set(candidates.flatMap(c => getEmployeeDepts(c)))].sort(),
+    [candidates],
+  )
+  const sourceOptions = useMemo(
+    () => CANDIDATE_SOURCE_OPTIONS.filter(s => candidates.some(c => c.source === s)),
+    [candidates],
+  )
+
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase()
-    const filterSet = new Set(stageFilter)
+    const stageSet = new Set(stageFilter)
+    const positionSet = new Set(positionFilter)
+    const deptSet = new Set(deptFilter)
+    const sourceSet = new Set(sourceFilter)
+    const [sortField, sortDir] = sort.split('|') as ['created_at' | 'name', 'asc' | 'desc']
     return candidates.filter(c => {
-      if (tab !== 'all' && c.lifecycle_stage !== tab) return false
-      if (filterSet.size > 0 && !filterSet.has(c.lifecycle_stage as RecruitmentStage)) return false
+      if (stageSet.size > 0 && !stageSet.has(c.lifecycle_stage as RecruitmentStage)) return false
+      if (positionSet.size > 0 && !(c.job_position && positionSet.has(c.job_position))) return false
+      if (deptSet.size > 0 && !getEmployeeDepts(c).some(d => deptSet.has(d))) return false
+      if (sourceSet.size > 0 && !(c.source && sourceSet.has(c.source))) return false
       if (!q) return true
       return (
         c.name.toLowerCase().includes(q) ||
         (c.phone || '').toLowerCase().includes(q) ||
         (c.job_position || '').toLowerCase().includes(q)
       )
+    }).sort((a, b) => {
+      const cmp = sortField === 'name'
+        ? a.name.localeCompare(b.name)
+        : a.created_at.localeCompare(b.created_at)
+      return sortDir === 'asc' ? cmp : -cmp
     })
-  }, [candidates, tab, stageFilter, search])
+  }, [candidates, stageFilter, positionFilter, deptFilter, sourceFilter, sort, search])
 
   const stageLabels = stageLabelMap(t)
+  const visibleColumnKeys = COLUMN_ORDER.filter(k => visibleColumns.has(k))
+
+  const goManageStructure = () => navigate('/dashboard/company?tab=structure')
+
+  const filterSections: FilterPanelSection[] = [
+    {
+      type: 'multiselect' as const,
+      key: 'stage',
+      label: t.hiringFilterStagesLabel,
+      value: stageFilter,
+      options: RECRUITMENT_STAGES.map(s => ({ id: s, label: stageLabels[s], count: counts[s] })),
+      onChange: (next: string[]) => setStageFilter(next as RecruitmentStage[]),
+    },
+    ...(positionOptions.length > 0 ? [{
+      type: 'multiselect' as const,
+      key: 'position',
+      label: t.hiringColPosition,
+      value: positionFilter,
+      options: positionOptions.map(p => ({ id: p, label: p, count: candidates.filter(c => c.job_position === p).length })),
+      onChange: setPositionFilter,
+      headerAction: { label: t.hiringFieldManage, onClick: goManageStructure },
+    }] : []),
+    ...(departmentOptions.length > 0 ? [{
+      type: 'multiselect' as const,
+      key: 'department',
+      label: t.hiringFieldDepartments,
+      value: deptFilter,
+      options: departmentOptions.map(d => ({ id: d, label: d, count: candidates.filter(c => getEmployeeDepts(c).includes(d)).length })),
+      onChange: setDeptFilter,
+      headerAction: { label: t.hiringFieldManage, onClick: goManageStructure },
+    }] : []),
+    ...(sourceOptions.length > 0 ? [{
+      type: 'multiselect' as const,
+      key: 'source',
+      label: t.candidateFieldSource,
+      value: sourceFilter,
+      options: sourceOptions.map(s => ({ id: s, label: candidateSourceLabel(s, t), count: candidates.filter(c => c.source === s).length })),
+      onChange: setSourceFilter,
+    }] : []),
+    {
+      type: 'select' as const,
+      key: 'sort',
+      label: t.sortLabel,
+      value: sort,
+      defaultValue: DEFAULT_SORT,
+      options: [
+        { id: 'created_at|desc', label: t.sortRecentlyAdded },
+        { id: 'created_at|asc', label: t.sortOldest },
+        { id: 'name|asc', label: t.sortNameAsc },
+        { id: 'name|desc', label: t.sortNameDesc },
+      ],
+      onChange: (next: string) => setSort(next as SortValue),
+    },
+  ]
 
   async function changeStage(candidate: Employee, nextStage: RecruitmentStage) {
     // Transitions into 'offered' open the Make offer modal — that's where
@@ -153,8 +273,8 @@ export function Recruitment({ user }: { user: User }) {
         </div>
         <button
           type="button"
-          onClick={() => setShowAdd(true)}
-          disabled={!canWrite}
+          onClick={handleAddCandidate}
+          disabled={!canWrite || adding}
           className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
           style={{ backgroundColor: 'var(--color-primary)' }}
         >
@@ -162,25 +282,27 @@ export function Recruitment({ user }: { user: User }) {
         </button>
       </div>
 
-      <div className="mb-4 flex flex-wrap items-center gap-1 border-b" style={{ borderColor: 'var(--color-border)' }}>
-        <TabButton active={tab === 'all'} onClick={() => setTab('all')} label={t.hiringTabAll} count={counts.all} />
-        <TabButton active={tab === 'prospective'} onClick={() => setTab('prospective')} label={t.hiringTabProspective} count={counts.prospective} />
-        <TabButton active={tab === 'shortlisted'} onClick={() => setTab('shortlisted')} label={t.hiringTabShortlisted} count={counts.shortlisted} />
-        <TabButton active={tab === 'offered'} onClick={() => setTab('offered')} label={t.hiringTabOffered} count={counts.offered} />
-        <TabButton active={tab === 'signed'} onClick={() => setTab('signed')} label={t.hiringTabSigned} count={counts.signed} />
-        <TabButton active={tab === 'talent_pool'} onClick={() => setTab('talent_pool')} label={t.hiringTabTalentPool} count={counts.talent_pool} />
-      </div>
-
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="min-w-0 max-w-md flex-1">
+      <div className="mb-4 flex w-full flex-wrap items-center gap-2">
+        <FilterPanel
+          triggerLabel={t.filterButtonLabel}
+          sections={filterSections}
+          onReset={() => {
+            setStageFilter([])
+            setPositionFilter([])
+            setDeptFilter([])
+            setSourceFilter([])
+            setSort(DEFAULT_SORT)
+          }}
+        />
+        <MultiSelectDropdown
+          label={t.columnsButtonLabel}
+          value={[...visibleColumns]}
+          onChange={next => setVisibleColumns(new Set(next as ColumnKey[]))}
+          options={COLUMN_ORDER.map(key => ({ id: key, label: columnLabel(key, t) }))}
+        />
+        <div className="ml-auto w-full sm:w-64">
           <FilterSearchInput value={search} onChange={setSearch} placeholder={t.hiringSearchPlaceholder} />
         </div>
-        <MultiSelectDropdown
-          label={t.hiringFilterStagesLabel}
-          value={stageFilter}
-          onChange={next => setStageFilter(next as RecruitmentStage[])}
-          options={RECRUITMENT_STAGES.map(s => ({ id: s, label: stageLabels[s], count: counts[s] }))}
-        />
       </div>
 
       {loading ? (
@@ -195,10 +317,9 @@ export function Recruitment({ user }: { user: User }) {
             <thead>
               <tr className="border-b text-left text-[11px] font-semibold uppercase tracking-wide" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-tertiary)', backgroundColor: 'var(--color-bg-tertiary)' }}>
                 <th className="px-4 py-2.5">{t.hiringFieldName}</th>
-                <th className="px-4 py-2.5">{t.hiringColPosition}</th>
-                <th className="px-4 py-2.5">{t.hiringFieldPhone}</th>
-                <th className="px-4 py-2.5">{t.hiringColStage}</th>
-                <th className="px-4 py-2.5">{t.hiringColAdded}</th>
+                {visibleColumnKeys.map(key => (
+                  <th key={key} className="px-4 py-2.5">{columnLabel(key, t)}</th>
+                ))}
                 <th className="px-4 py-2.5 text-right">{/* actions */}</th>
               </tr>
             </thead>
@@ -207,11 +328,12 @@ export function Recruitment({ user }: { user: User }) {
                 <CandidateRow
                   key={c.id}
                   candidate={c}
+                  visibleColumns={visibleColumnKeys}
                   stageLabel={stageLabels[c.lifecycle_stage as RecruitmentStage] ?? c.lifecycle_stage}
                   lang={lang}
                   canWrite={canWrite}
                   orgDisplayName={org?.display_name || org?.name || ''}
-                  onOpen={() => setModalCandidate(c)}
+                  onOpen={() => navigate(`/dashboard/recruitment/${c.id}/edit`)}
                   onChangeStage={next => changeStage(c, next)}
                   onDelete={() => deleteCandidate(c)}
                   onViewFullProfile={() => navigate(`/dashboard/employees/${c.id}/edit`)}
@@ -229,48 +351,17 @@ export function Recruitment({ user }: { user: User }) {
           onClose={() => setMakeOfferCandidate(null)}
           onCompleted={async () => { setMakeOfferCandidate(null); await loadData() }}
           onEditContract={(contractId) => navigate(documentEditPath('contract', contractId))}
-          onManageTemplates={() => { setMakeOfferCandidate(null); navigate(documentsIndexPath('contract')) }}
+          onManageTemplates={() => { setMakeOfferCandidate(null); navigate('/dashboard/templates') }}
         />
       )}
 
-      {(showAdd || modalCandidate) && (
-        <CandidateModal
-          mode={modalCandidate ? 'edit' : 'create'}
-          candidate={modalCandidate}
-          orgCountryCode={org?.default_country_code || '+62'}
-          orgId={user.org_id}
-          jobPositions={jobPositions}
-          availableDepartments={availableDepartments}
-          onAvailableDepartmentsChange={setAvailableDepartments}
-          onClose={() => { setShowAdd(false); setModalCandidate(null) }}
-          onSaved={async () => { setShowAdd(false); setModalCandidate(null); await loadData() }}
-          onManageReferences={() => {
-            setShowAdd(false)
-            setModalCandidate(null)
-            navigate('/dashboard/company?tab=structure')
-          }}
-        />
-      )}
     </div>
   )
 }
 
-function TabButton({ active, onClick, label, count }: { active: boolean; onClick: () => void; label: string; count: number }) {
-  return (
-    <button
-      onClick={onClick}
-      className="relative flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors"
-      style={{ color: active ? 'var(--color-text)' : 'var(--color-text-tertiary)' }}
-    >
-      <span>{label}</span>
-      <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}>{count}</span>
-      {active && <span className="absolute -bottom-px left-0 right-0 h-0.5" style={{ backgroundColor: 'var(--color-primary)' }} />}
-    </button>
-  )
-}
-
-function CandidateRow({ candidate, stageLabel, lang, canWrite, orgDisplayName, onOpen, onChangeStage, onDelete, onViewFullProfile }: {
-  candidate: Employee
+function CandidateRow({ candidate, visibleColumns, stageLabel, lang, canWrite, orgDisplayName, onOpen, onChangeStage, onDelete, onViewFullProfile }: {
+  candidate: Candidate
+  visibleColumns: ColumnKey[]
   stageLabel: string
   lang: 'en' | 'id'
   canWrite: boolean
@@ -322,17 +413,38 @@ function CandidateRow({ candidate, stageLabel, lang, canWrite, orgDisplayName, o
           </div>
         </div>
       </td>
-      <td className="px-4 py-3" style={{ color: 'var(--color-text-secondary)' }}>{candidate.job_position || em()}</td>
-      <td className="px-4 py-3" style={{ color: 'var(--color-text-secondary)' }}>{candidate.phone || em()}</td>
-      <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
-        <StagePicker
-          stage={stage}
-          label={stageLabel}
-          disabled={!canWrite}
-          onChange={onChangeStage}
-        />
-      </td>
-      <td className="px-4 py-3" style={{ color: 'var(--color-text-tertiary)' }}>{formatDate(candidate.created_at, lang)}</td>
+      {visibleColumns.map(key => {
+        switch (key) {
+          case 'position':
+            return <td key={key} className="px-4 py-3" style={{ color: 'var(--color-text-secondary)' }}>{candidate.job_position || em()}</td>
+          case 'phone':
+            return <td key={key} className="px-4 py-3" style={{ color: 'var(--color-text-secondary)' }}>{candidate.phone || em()}</td>
+          case 'department': {
+            const depts = getEmployeeDepts(candidate)
+            return (
+              <td key={key} className="px-4 py-3">
+                {depts.length === 0 ? em() : (
+                  <div className="flex flex-wrap gap-1">
+                    {depts.map(d => (
+                      <span key={d} className="inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium" style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}>{d}</span>
+                    ))}
+                  </div>
+                )}
+              </td>
+            )
+          }
+          case 'source':
+            return <td key={key} className="px-4 py-3" style={{ color: 'var(--color-text-secondary)' }}>{candidate.source ? candidateSourceLabel(candidate.source as CandidateSourceOption, t) : em()}</td>
+          case 'stage':
+            return (
+              <td key={key} className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                <StagePicker stage={stage} label={stageLabel} disabled={!canWrite} onChange={onChangeStage} />
+              </td>
+            )
+          case 'added':
+            return <td key={key} className="px-4 py-3" style={{ color: 'var(--color-text-tertiary)' }}>{formatDate(candidate.created_at, lang)}</td>
+        }
+      })}
       <td className="px-3 py-3 text-right" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-end gap-1">
           <CopyPortalLinkButton url={portalUrl} t={t} />
@@ -660,388 +772,6 @@ function formatDate(iso: string, lang: 'en' | 'id'): string {
   return new Intl.DateTimeFormat(lang === 'id' ? 'id-ID' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' }).format(d)
 }
 
-// ───── Modal (create + edit) ──────────────────────────────────────────────
-
-type ModalMode = 'create' | 'edit'
-
-function candidateSourceLabel(s: CandidateSourceOption, t: Translations): string {
-  switch (s) {
-    case 'jobseek': return t.candidateSourceJobseek
-    case 'indeed': return t.candidateSourceIndeed
-    case 'linkedin': return t.candidateSourceLinkedin
-    case 'referral': return t.candidateSourceReferral
-    case 'direct': return t.candidateSourceDirect
-    case 'other': return t.candidateSourceOther
-  }
-}
-
-function CandidateModal({ mode, candidate, orgCountryCode, orgId, jobPositions, availableDepartments, onAvailableDepartmentsChange, onClose, onSaved, onManageReferences }: {
-  mode: ModalMode
-  candidate: Candidate | null
-  orgCountryCode: string
-  orgId: string
-  jobPositions: string[]
-  availableDepartments: DepartmentOption[]
-  onAvailableDepartmentsChange: (next: DepartmentOption[]) => void
-  onClose: () => void
-  onSaved: () => void
-  onManageReferences: () => void
-}) {
-  const { t } = useLang()
-  const [name, setName] = useState(candidate?.name || '')
-  const [phone, setPhone] = useState(candidate?.phone || '')
-  const [position, setPosition] = useState(candidate?.job_position || '')
-  const initialDepartment = candidate ? (primaryDept(candidate) ?? '') : ''
-  const [department, setDepartment] = useState(initialDepartment)
-  const [notes, setNotes] = useState(candidate?.notes || '')
-  const [photoUrl, setPhotoUrl] = useState<string | null>(candidate?.photo_url || null)
-  const [pendingPhoto, setPendingPhoto] = useState<File | null>(null)
-  const [pendingPhotoPreview, setPendingPhotoPreview] = useState<string | null>(null)
-  const [appliedForJdId, setAppliedForJdId] = useState<string>(candidate?.applied_for_jd_id || '')
-  const [source, setSource] = useState<CandidateSourceOption | ''>(
-    (candidate?.source as CandidateSourceOption | null) ?? '',
-  )
-  const [publishedJds, setPublishedJds] = useState<{ id: string; title: string; department_id: string | null; hiring_request_id: string | null; department_name: string | null }[]>([])
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
-
-  // Published JDs for the "Applied for" picker. Draft/archived JDs aren't
-  // offered — drafts aren't a public role description yet, and archived
-  // roles shouldn't be receiving new candidates.
-  useEffect(() => {
-    let cancelled = false
-    async function loadJds() {
-      const { data } = await supabase
-        .from('job_descriptions')
-        .select('id, title, department_id, hiring_request_id, department:company_departments!job_descriptions_department_id_fkey(name)')
-        .eq('org_id', orgId)
-        .eq('status', 'published')
-        .order('updated_at', { ascending: false })
-      if (cancelled) return
-      setPublishedJds((data ?? []).map(d => ({
-        id: d.id,
-        title: d.title,
-        department_id: d.department_id,
-        hiring_request_id: d.hiring_request_id,
-        // Supabase types the FK join as either an object or array depending
-        // on inferred cardinality. Narrow defensively so the picker can show
-        // a department name beside the title.
-        department_name: Array.isArray(d.department)
-          ? (d.department[0] as { name: string } | undefined)?.name ?? null
-          : ((d.department as { name: string } | null)?.name ?? null),
-      })))
-    }
-    loadJds()
-    return () => { cancelled = true }
-  }, [orgId])
-
-  // When the user picks a JD, auto-fill the position + department fields
-  // from it. The user can still override afterward — e.g. if the JD says
-  // "Senior Backend Engineer" but they want to file the candidate under a
-  // tweaked title. Picking "(none)" clears the JD link but leaves the
-  // already-filled position/department alone (no point un-filling them).
-  function handleAppliedForJdChange(jdId: string) {
-    setAppliedForJdId(jdId)
-    if (!jdId) return
-    const jd = publishedJds.find(j => j.id === jdId)
-    if (!jd) return
-    setPosition(jd.title)
-    if (jd.department_name) setDepartment(jd.department_name)
-  }
-
-  const phoneNormalized = normalizePhone(phone, orgCountryCode)
-  const phoneValid = !phone || isValidE164(phoneNormalized)
-  const canSubmit = name.trim().length > 0 && phoneValid && !saving
-  const positionsEmpty = jobPositions.length === 0
-  const departmentsEmpty = availableDepartments.length === 0
-  const departmentNames = useMemo(() => availableDepartments.map(d => d.name), [availableDepartments])
-
-  useEffect(() => () => {
-    if (pendingPhotoPreview) URL.revokeObjectURL(pendingPhotoPreview)
-  }, [pendingPhotoPreview])
-
-  async function handlePhotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    e.target.value = ''
-    if (!file) return
-    if (!ALLOWED_PHOTO_TYPES.includes(file.type)) {
-      setError(t.avatarInvalidType)
-      return
-    }
-    if (file.size > MAX_PHOTO_SIZE) {
-      setError(t.avatarTooLarge)
-      return
-    }
-    setError('')
-
-    if (mode === 'edit' && candidate) {
-      // Edit mode: upload immediately and persist to the row.
-      setSaving(true)
-      const url = await uploadPhoto(candidate.id, file)
-      if (!url) {
-        setSaving(false)
-        setError(t.hiringPhotoUploadError)
-        return
-      }
-      const { error: updateError } = await supabase.from('employees').update({ photo_url: url }).eq('id', candidate.id)
-      setSaving(false)
-      if (updateError) {
-        setError(updateError.message)
-        return
-      }
-      setPhotoUrl(url)
-    } else {
-      // Create mode: hold the file until the row exists.
-      if (pendingPhotoPreview) URL.revokeObjectURL(pendingPhotoPreview)
-      setPendingPhoto(file)
-      setPendingPhotoPreview(URL.createObjectURL(file))
-    }
-  }
-
-  async function handlePhotoRemove() {
-    if (mode === 'edit' && candidate && photoUrl) {
-      setSaving(true)
-      const match = photoUrl.match(/\/avatars\/([^?]+)/)
-      if (match) await supabase.storage.from('avatars').remove([match[1]])
-      const { error: updateError } = await supabase.from('employees').update({ photo_url: null }).eq('id', candidate.id)
-      setSaving(false)
-      if (updateError) {
-        setError(updateError.message)
-        return
-      }
-      setPhotoUrl(null)
-    } else {
-      if (pendingPhotoPreview) URL.revokeObjectURL(pendingPhotoPreview)
-      setPendingPhoto(null)
-      setPendingPhotoPreview(null)
-    }
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (!canSubmit) return
-    setSaving(true)
-    setError('')
-
-    // Derive the hiring_request link from the picked JD — saves HR from
-    // entering it twice and keeps the audit chain consistent. If they
-    // unpick the JD, both columns clear.
-    const pickedJd = appliedForJdId ? publishedJds.find(j => j.id === appliedForJdId) : null
-    const payload = {
-      name: name.trim(),
-      phone: phoneNormalized || '',
-      job_position: position || null,
-      notes: notes.trim() || null,
-      applied_for_jd_id: pickedJd?.id ?? null,
-      source_request_id: pickedJd?.hiring_request_id ?? null,
-      source: source || null,
-    }
-
-    let candidateId: string
-    if (mode === 'edit' && candidate) {
-      const { error: updateError } = await supabase.from('employees').update(payload).eq('id', candidate.id)
-      if (updateError) {
-        setSaving(false)
-        setError(updateError.message || t.hiringSaveError)
-        return
-      }
-      candidateId = candidate.id
-    } else {
-      const slug = generateUniqueSlug(name.trim())
-      const token = generateAccessToken()
-      const { data: newCandidate, error: insertError } = await supabase
-        .from('employees')
-        .insert({ ...payload, org_id: orgId, slug, access_token: token, lifecycle_stage: 'prospective' })
-        .select()
-        .single()
-
-      if (insertError || !newCandidate) {
-        setSaving(false)
-        setError(insertError?.message || t.hiringCreateError)
-        return
-      }
-      candidateId = newCandidate.id
-
-      if (pendingPhoto) {
-        const url = await uploadPhoto(newCandidate.id, pendingPhoto)
-        if (url) {
-          await supabase.from('employees').update({ photo_url: url }).eq('id', newCandidate.id)
-        }
-      }
-    }
-
-    // Department assignment lives in employee_departments; sync it after the
-    // employee row exists. Only write when the value has changed.
-    if (department.trim() !== initialDepartment) {
-      const result = await setEmployeePrimaryDepartment({
-        employeeId: candidateId,
-        orgId,
-        name: department.trim() || null,
-        available: availableDepartments,
-      })
-      if (result.error) {
-        setSaving(false)
-        setError(result.error)
-        return
-      }
-      if (result.created) {
-        onAvailableDepartmentsChange(
-          [...availableDepartments, result.created].sort((a, b) => a.name.localeCompare(b.name)),
-        )
-      }
-    }
-
-    setSaving(false)
-    onSaved()
-  }
-
-  const displayPhoto = pendingPhotoPreview || photoUrl
-  const initials = name.trim().split(/\s+/).slice(0, 2).map(s => s[0]?.toUpperCase() || '').join('') || '?'
-  const gradientSeed = candidate?.id || name || 'new'
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div
-        className="w-full max-w-md overflow-y-auto rounded-lg border p-5 shadow-xl"
-        style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', maxHeight: 'calc(100vh - 2rem)' }}
-        onClick={e => e.stopPropagation()}
-      >
-        <h2 className="mb-4 text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
-          {mode === 'edit' ? t.hiringEditCandidateTitle : t.hiringAddCandidateTitle}
-        </h2>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <Field label={t.hiringPhotoLabel} help={mode === 'create' && !pendingPhoto ? t.hiringPhotoCreateHint : undefined}>
-            <div className="flex items-center gap-3">
-              <div
-                className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full text-sm font-semibold text-white"
-                style={{ background: displayPhoto ? 'var(--color-bg-tertiary)' : getAvatarGradient(gradientSeed) }}
-              >
-                {displayPhoto ? <img src={displayPhoto} alt="" className="h-full w-full object-cover" /> : initials}
-              </div>
-              <div className="flex items-center gap-2">
-                <label
-                  className={`cursor-pointer rounded-lg border px-3 py-1.5 text-xs transition-colors ${saving ? 'pointer-events-none opacity-50' : 'hover:bg-[var(--color-bg-tertiary)]'}`}
-                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
-                >
-                  {displayPhoto ? t.hiringPhotoChange : t.hiringPhotoUpload}
-                  <input type="file" accept="image/jpeg,image/png,image/webp" onChange={handlePhotoSelect} disabled={saving} className="hidden" />
-                </label>
-                {displayPhoto && (
-                  <button
-                    type="button"
-                    onClick={handlePhotoRemove}
-                    disabled={saving}
-                    className="text-xs"
-                    style={{ color: 'var(--color-danger)' }}
-                  >
-                    {t.hiringPhotoRemove}
-                  </button>
-                )}
-              </div>
-            </div>
-          </Field>
-
-          <Field label={t.hiringFieldName} required>
-            <input
-              type="text"
-              value={name}
-              onChange={e => setName(e.target.value)}
-              autoFocus
-              required
-              className="w-full rounded-lg border px-3 py-2 text-sm"
-              style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
-            />
-          </Field>
-          <Field label={t.hiringFieldPhone}>
-            <PhoneInput value={phone} onChange={setPhone} defaultCountryCode={orgCountryCode} />
-          </Field>
-          <Field
-            label={t.hiringFieldPosition}
-            action={<ManageButton label={t.hiringFieldManage} onClick={onManageReferences} />}
-          >
-            <select
-              value={position}
-              onChange={e => setPosition(e.target.value)}
-              disabled={positionsEmpty}
-              className="w-full rounded-lg border px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
-              style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
-            >
-              <option value="">{positionsEmpty ? t.hiringPositionEmpty : t.hiringFieldPositionPlaceholder}</option>
-              {jobPositions.map(p => <option key={p} value={p}>{p}</option>)}
-            </select>
-          </Field>
-          <Field
-            label={t.hiringFieldDepartments}
-            help={t.hiringFieldDepartmentsHelp}
-            action={<ManageButton label={t.hiringFieldManage} onClick={onManageReferences} />}
-          >
-            <select
-              value={department}
-              onChange={e => setDepartment(e.target.value)}
-              disabled={departmentsEmpty}
-              className="w-full rounded-lg border px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
-              style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
-            >
-              <option value="">{departmentsEmpty ? t.hiringDepartmentEmpty : t.hiringFieldDepartmentPlaceholder}</option>
-              {departmentNames.map(d => <option key={d} value={d}>{d}</option>)}
-            </select>
-          </Field>
-          <Field label={t.candidateFieldAppliedForJd} help={publishedJds.length === 0 ? t.candidateNoPublishedJds : t.candidateFieldAppliedForJdHelp}>
-            <select
-              value={appliedForJdId}
-              onChange={e => handleAppliedForJdChange(e.target.value)}
-              disabled={publishedJds.length === 0}
-              className="w-full rounded-lg border px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
-              style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
-            >
-              <option value="">{t.candidateFieldAppliedForJdPlaceholder}</option>
-              {publishedJds.map(j => (
-                <option key={j.id} value={j.id}>
-                  {j.department_name ? `${j.title} — ${j.department_name}` : j.title}
-                </option>
-              ))}
-            </select>
-          </Field>
-
-          <Field label={t.candidateFieldSource} help={t.candidateFieldSourceHelp}>
-            <select
-              value={source}
-              onChange={e => setSource(e.target.value as CandidateSourceOption | '')}
-              className="w-full rounded-lg border px-3 py-2 text-sm"
-              style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
-            >
-              <option value="">{t.candidateFieldSourcePlaceholder}</option>
-              {CANDIDATE_SOURCE_OPTIONS.map(s => (
-                <option key={s} value={s}>{candidateSourceLabel(s, t)}</option>
-              ))}
-            </select>
-          </Field>
-
-          <Field label={t.hiringFieldNotes}>
-            <textarea
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              rows={3}
-              placeholder={t.hiringFieldNotesPlaceholder}
-              className="w-full rounded-lg border px-3 py-2 text-sm"
-              style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
-            />
-          </Field>
-          {error && <p className="text-sm" style={{ color: 'var(--color-danger)' }}>{error}</p>}
-          <div className="flex justify-end gap-2 pt-2">
-            <button type="button" onClick={onClose} className="rounded-lg border px-4 py-2 text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>
-              {t.cancel}
-            </button>
-            <button type="submit" disabled={!canSubmit} className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50" style={{ backgroundColor: 'var(--color-primary)' }}>
-              {saving ? t.saving : mode === 'edit' ? t.save : t.add}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  )
-}
-
 // ───── Make offer modal ───────────────────────────────────────────────────
 
 function MakeOfferModal({ candidate, orgId, onClose, onCompleted, onEditContract, onManageTemplates }: {
@@ -1225,43 +955,3 @@ function ModalShell({ onClose, children }: { onClose: () => void; children: Reac
   )
 }
 
-async function uploadPhoto(employeeId: string, file: File): Promise<string | null> {
-  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase()
-  const path = `${employeeId}.${ext}`
-  const { error } = await supabase.storage.from('avatars').upload(path, file, { upsert: true })
-  if (error) return null
-  const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path)
-  return `${publicUrl}?t=${Date.now()}`
-}
-
-function Field({ label, required, help, action, children }: { label: string; required?: boolean; help?: string; action?: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <div>
-      <div className="mb-1 flex items-center justify-between gap-2">
-        <label className="block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
-          {label}{required && <span style={{ color: 'var(--color-danger)' }}> *</span>}
-        </label>
-        {action}
-      </div>
-      {children}
-      {help && <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{help}</p>}
-    </div>
-  )
-}
-
-function ManageButton({ label, onClick }: { label: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="inline-flex items-center gap-0.5 text-xs font-medium hover:underline"
-      style={{ color: 'var(--color-primary)' }}
-    >
-      {label}
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-        <line x1="5" y1="12" x2="19" y2="12" />
-        <polyline points="12 5 19 12 12 19" />
-      </svg>
-    </button>
-  )
-}

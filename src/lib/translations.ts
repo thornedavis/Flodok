@@ -235,7 +235,7 @@ export const translations = {
     // hiring* translation keys below stay for v1 to keep the diff focused;
     // they're internal identifiers, not user-visible.
     recruitmentTitle: 'Recruitment',
-    recruitmentSubtitle: 'Track candidates from first meeting through signed contract. Once they start, they move to Employees automatically.',
+    recruitmentSubtitle: 'Track candidates from first meeting through signed contract.',
 
     // Hiring requests page — the pre-pipeline approval workflow.
     hiringRequestsTitle: 'Hiring',
@@ -451,6 +451,10 @@ export const translations = {
     hiringDepartmentEmpty: 'No departments configured yet.',
     hiringFieldManage: 'Manage',
     hiringEditCandidateTitle: 'Edit candidate',
+    hiringNewPlaceholderName: 'New candidate',
+    candidateSectionDetails: 'Candidate details',
+    candidateSectionApplication: 'Application',
+    candidateSectionNotes: 'Notes',
     hiringPhotoLabel: 'Photo',
     hiringPhotoCreateHint: 'Optional — helps you remember faces between interviews.',
     hiringPhotoUpload: 'Upload',
@@ -2177,7 +2181,7 @@ export const translations = {
     // Manager app — Company page
     // Manager app — Recruitment page (renamed from "Hiring")
     recruitmentTitle: 'Perekrutan',
-    recruitmentSubtitle: 'Pantau kandidat dari pertemuan pertama hingga kontrak ditandatangani. Setelah mulai bekerja, mereka berpindah ke Karyawan secara otomatis.',
+    recruitmentSubtitle: 'Pantau kandidat dari pertemuan pertama hingga kontrak ditandatangani.',
 
     // Hiring requests page
     hiringRequestsTitle: 'Permintaan Hiring',
@@ -2389,6 +2393,10 @@ export const translations = {
     hiringDepartmentEmpty: 'Belum ada departemen yang dikonfigurasi.',
     hiringFieldManage: 'Atur',
     hiringEditCandidateTitle: 'Ubah kandidat',
+    hiringNewPlaceholderName: 'Kandidat baru',
+    candidateSectionDetails: 'Detail kandidat',
+    candidateSectionApplication: 'Lamaran',
+    candidateSectionNotes: 'Catatan',
     hiringPhotoLabel: 'Foto',
     hiringPhotoCreateHint: 'Opsional — membantu mengingat wajah di antara wawancara.',
     hiringPhotoUpload: 'Unggah',

@@ -10,6 +10,7 @@
 // passport, blood type) don't count against completion.
 
 import type { Employee } from '../types/aliases'
+import type { Translations } from './translations'
 
 export const CANDIDATE_SOURCE_OPTIONS = [
   'jobseek',
@@ -20,6 +21,17 @@ export const CANDIDATE_SOURCE_OPTIONS = [
   'other',
 ] as const
 export type CandidateSourceOption = typeof CANDIDATE_SOURCE_OPTIONS[number]
+
+export function candidateSourceLabel(s: CandidateSourceOption, t: Translations): string {
+  switch (s) {
+    case 'jobseek': return t.candidateSourceJobseek
+    case 'indeed': return t.candidateSourceIndeed
+    case 'linkedin': return t.candidateSourceLinkedin
+    case 'referral': return t.candidateSourceReferral
+    case 'direct': return t.candidateSourceDirect
+    case 'other': return t.candidateSourceOther
+  }
+}
 
 // ─── Section model ──────────────────────────────────────────────────────
 
