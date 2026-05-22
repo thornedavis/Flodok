@@ -263,6 +263,10 @@ function Sidebar({ user, mobileOpen, onCloseMobile }: {
         style={{
           borderColor: 'var(--color-border)',
           backgroundColor: 'var(--color-bg-secondary)',
+          // Faint static shadow down the rail's right edge so the hover tab's
+          // own shadow reads as a local swelling of the rail's, not a detached
+          // floating element. Mostly rightward, no vertical offset.
+          boxShadow: '2px 0 10px rgba(0, 0, 0, 0.06)',
         }}
       >
         {/* Top: logo + collapse toggle. When collapsed the imagemark
@@ -310,18 +314,19 @@ function Sidebar({ user, mobileOpen, onCloseMobile }: {
           )}
         </div>
 
-        {/* Nav items */}
-        <nav className="flex-1 overflow-y-auto px-3 py-4">
+        {/* Nav items. When collapsed we drop the scroll container's clipping
+            so the hover flyout labels can extend past the rail's right edge
+            (overflow-y-auto would compute overflow-x to auto and clip them). */}
+        <nav className={`flex-1 px-3 py-4 ${isCollapsed ? 'overflow-visible' : 'overflow-y-auto'}`}>
           <ul className="space-y-0.5">
             {navItems.map(item => {
               const isActive = item.exact
                 ? location.pathname === item.path
                 : location.pathname.startsWith(item.path)
               return (
-                <li key={item.path}>
+                <li key={item.path} className="group relative">
                   <Link
                     to={item.path}
-                    title={isCollapsed ? t[item.labelKey] : undefined}
                     className={`flex items-center rounded-lg py-2 text-sm font-medium transition-colors ${
                       isCollapsed ? 'justify-center px-2' : 'gap-3 px-3'
                     }`}
@@ -337,6 +342,7 @@ function Sidebar({ user, mobileOpen, onCloseMobile }: {
                     </span>
                     {!isCollapsed && t[item.labelKey]}
                   </Link>
+                  {isCollapsed && <NavFlyout label={t[item.labelKey]} />}
                 </li>
               )
             })}
@@ -345,25 +351,27 @@ function Sidebar({ user, mobileOpen, onCloseMobile }: {
 
         {/* Help link */}
         <div className="border-t px-3 pt-3" style={{ borderColor: 'var(--color-border)' }}>
-          <Link
-            to="/help"
-            title={isCollapsed ? t.helpCenter : undefined}
-            className={`flex items-center rounded-lg py-2 text-sm font-medium transition-colors ${
-              isCollapsed ? 'justify-center px-2' : 'gap-3 px-3'
-            }`}
-            style={{ color: 'var(--color-text-secondary)' }}
-            onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
-            onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
-          >
-            <span style={{ color: 'var(--color-text-tertiary)' }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10" />
-                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
-                <line x1="12" y1="17" x2="12.01" y2="17" />
-              </svg>
-            </span>
-            {!isCollapsed && t.helpCenter}
-          </Link>
+          <div className="group relative">
+            <Link
+              to="/help"
+              className={`flex items-center rounded-lg py-2 text-sm font-medium transition-colors ${
+                isCollapsed ? 'justify-center px-2' : 'gap-3 px-3'
+              }`}
+              style={{ color: 'var(--color-text-secondary)' }}
+              onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
+              onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
+            >
+              <span style={{ color: 'var(--color-text-tertiary)' }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                  <line x1="12" y1="17" x2="12.01" y2="17" />
+                </svg>
+              </span>
+              {!isCollapsed && t.helpCenter}
+            </Link>
+            {isCollapsed && <NavFlyout label={t.helpCenter} />}
+          </div>
         </div>
 
         {/* Invite card — admins only, hidden once the team has 3+ members */}
@@ -381,6 +389,64 @@ function Sidebar({ user, mobileOpen, onCloseMobile }: {
         )}
       </aside>
     </>
+  )
+}
+
+// ─── Collapsed-rail flyout label ────────────────────────
+//
+// When the sidebar is collapsed to icons, hovering an item makes the rail's
+// right edge appear to bulge outward into a labelled tab. It shares the
+// rail's surface colour and border so it reads as part of the sidebar
+// rather than a detached tooltip, and two concave "cove" fillets slope the
+// tab smoothly off the rail instead of meeting it at a hard corner.
+//
+// The coves are radial-gradient pseudo-surfaces: transparent inside the
+// arc (so the content background shows through the carved corner), a 1px
+// ring of border colour tracing the arc, then the rail surface beyond —
+// which lets the curved outline join the tab's straight top/bottom borders
+// seamlessly. They overlap the tab by 1px to cover its straight border stub
+// near the rail. `pointer-events-none` so the tab never blocks the icon.
+
+const FLYOUT_COVE = 'radial-gradient(circle at CORNER, transparent 13px, var(--color-border) 13px, var(--color-border) 14px, var(--color-bg-secondary) 14px)'
+
+function NavFlyout({ label }: { label: string }) {
+  return (
+    <div
+      role="tooltip"
+      // Anchored to the rail's right border, not the nav item's edge: the
+      // nav has px-3 padding, so the item sits 0.75rem inside the rail edge.
+      // Offsetting by that padding lands the coves exactly on the border line.
+      className="pointer-events-none absolute left-[calc(100%+0.75rem)] top-1/2 z-50 origin-left -translate-y-1/2 scale-x-90 opacity-0 transition-all duration-200 ease-out group-hover:scale-x-100 group-hover:opacity-100"
+    >
+      {/* drop-shadow (not box-shadow) so it follows the carved cove silhouette
+          rather than a plain rectangle. Offset rightward to lift off content. */}
+      <div className="relative [filter:drop-shadow(2px_2px_5px_rgba(0,0,0,0.22))]">
+        <span
+          className="relative block whitespace-nowrap py-1.5 pl-3.5 pr-4 text-sm font-medium"
+          style={{
+            backgroundColor: 'var(--color-bg-secondary)',
+            borderTop: '1px solid var(--color-border)',
+            borderRight: '1px solid var(--color-border)',
+            borderBottom: '1px solid var(--color-border)',
+            borderRadius: '0 12px 12px 0',
+            color: 'var(--color-text)',
+          }}
+        >
+          {label}
+        </span>
+        {/* Concave cove fillets joining the tab back into the rail edge */}
+        <span
+          aria-hidden="true"
+          className="absolute left-0 block h-3.5 w-3.5"
+          style={{ top: '-13px', background: FLYOUT_COVE.replace('CORNER', 'top right') }}
+        />
+        <span
+          aria-hidden="true"
+          className="absolute left-0 block h-3.5 w-3.5"
+          style={{ bottom: '-13px', background: FLYOUT_COVE.replace('CORNER', 'bottom right') }}
+        />
+      </div>
+    </div>
   )
 }
 
