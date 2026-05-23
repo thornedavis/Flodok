@@ -28,6 +28,7 @@ import { SpotlightEdit } from './pages/dashboard/SpotlightEdit'
 import { Pending } from './pages/dashboard/Pending'
 import { Inbox } from './pages/dashboard/Inbox'
 import { Settings } from './pages/dashboard/Settings'
+import { Trash } from './pages/dashboard/Trash'
 import { Portal } from './pages/public/Portal'
 import { Landing } from './pages/public/Landing'
 import { PublicSiteLayout } from './components/PublicSiteLayout'
@@ -147,6 +148,7 @@ function AppRoutes() {
             <Route path="/dashboard/spotlight/:id/edit" element={<SpotlightEdit user={user} />} />
             <Route path="/dashboard/pending" element={<Pending user={user} />} />
             <Route path="/dashboard/inbox" element={<Inbox user={user} />} />
+            <Route path="/dashboard/trash" element={<Trash user={user} />} />
             <Route path="/dashboard/settings" element={<Settings user={user} />} />
           </Route>
 

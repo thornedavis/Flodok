@@ -16,6 +16,7 @@ import { EducationSection } from '../../components/employee/sections/EducationSe
 import { ExperienceSection } from '../../components/employee/sections/ExperienceSection'
 import { AdditionalInfoSection } from '../../components/employee/sections/AdditionalInfoSection'
 import { EmployeeAttachments } from '../../components/EmployeeAttachments'
+import { DeleteEmployeeModal } from '../../components/DeleteEmployeeModal'
 import { isPro, syncSeats } from '../../lib/billing'
 import { bucketReferenceValues, referenceNames } from '../../lib/companyReference'
 import { useBilling } from '../../contexts/BillingContext'
@@ -56,6 +57,7 @@ export function EmployeeEdit({ user }: { user: User }) {
   const [uploading, setUploading] = useState(false)
   const [topError, setTopError] = useState('')
   const [separationType, setSeparationType] = useState<SeparationType | null>(null)
+  const [deleteOpen, setDeleteOpen] = useState(false)
 
   useBreadcrumbTrailing(employee?.name ?? null)
 
@@ -243,10 +245,12 @@ export function EmployeeEdit({ user }: { user: User }) {
     setSeparationType(null)
   }
 
-  async function handleDelete() {
+  function handleDelete() {
     if (!employee) return
-    if (!confirm(t.deleteEmployeeConfirm(employee.name))) return
-    await supabase.from('employees').delete().eq('id', employee.id)
+    setDeleteOpen(true)
+  }
+
+  function afterDeleted() {
     if (org && isPro(org)) {
       syncSeats().catch(err => console.error('sync-seats failed after delete:', err))
     }
@@ -396,6 +400,13 @@ export function EmployeeEdit({ user }: { user: User }) {
           onConfirm={(lastDay, reason) => handleSeparationConfirm(separationType, lastDay, reason)}
         />
       )}
+
+      <DeleteEmployeeModal
+        open={deleteOpen}
+        target={deleteOpen && employee ? { kind: 'single', id: employee.id, name: employee.name } : null}
+        onClose={() => setDeleteOpen(false)}
+        onDeleted={afterDeleted}
+      />
     </div>
   )
 }

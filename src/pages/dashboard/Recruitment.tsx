@@ -20,6 +20,7 @@ import {
 import { FilterPanel, FilterSearchInput, MultiSelectDropdown } from '../../components/FilterControls'
 import type { FilterPanelSection } from '../../components/FilterControls'
 import { Skeleton } from '../../components/Skeleton'
+import { DeleteEmployeeModal } from '../../components/DeleteEmployeeModal'
 import type { Employee, Organization, User } from '../../types/aliases'
 import type { Translations } from '../../lib/translations'
 
@@ -79,6 +80,11 @@ export function Recruitment({ user }: { user: User }) {
   })
   const [makeOfferCandidate, setMakeOfferCandidate] = useState<Employee | null>(null)
   const [adding, setAdding] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<
+    | { kind: 'single'; id: string; name: string }
+    | { kind: 'bulk'; ids: string[] }
+    | null
+  >(null)
 
   useEffect(() => { loadData() }, [user.org_id])
 
@@ -255,14 +261,8 @@ export function Recruitment({ user }: { user: User }) {
     await loadData()
   }
 
-  async function deleteCandidate(candidate: Employee) {
-    if (!confirm(t.hiringDeleteConfirm(candidate.name))) return
-    const { error } = await supabase.from('employees').delete().eq('id', candidate.id)
-    if (error) {
-      alert(error.message)
-      return
-    }
-    await loadData()
+  function deleteCandidate(candidate: Employee) {
+    setDeleteTarget({ kind: 'single', id: candidate.id, name: candidate.name })
   }
 
   return (
@@ -355,6 +355,13 @@ export function Recruitment({ user }: { user: User }) {
           onManageTemplates={() => { setMakeOfferCandidate(null); navigate('/dashboard/templates') }}
         />
       )}
+
+      <DeleteEmployeeModal
+        open={deleteTarget !== null}
+        target={deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onDeleted={loadData}
+      />
 
     </div>
   )

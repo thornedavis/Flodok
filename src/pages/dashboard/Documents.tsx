@@ -37,6 +37,7 @@ import type { FilterPanelSection } from '../../components/FilterControls'
 import { EmployeeSelect } from '../../components/EmployeeSelect'
 import { Modal } from '../../components/Modal'
 import { Skeleton } from '../../components/Skeleton'
+import { trashDocument } from '../../lib/trash'
 import { buildPkwtStarterDoc } from '../../lib/pkwtStarterDoc'
 import { docAsJson, docPreviewLines, emptyDocumentDoc } from '../../lib/documentDoc'
 import { type EmpDeptShape } from '../../lib/employee'
@@ -444,12 +445,18 @@ function AllDocumentsView({ user }: { user: User }) {
   async function deleteItem(item: AllDocItem) {
     if (!canWrite) return
     if (!window.confirm(t.deleteDocumentConfirm(item.title.trim() || t.documentsUntitled))) return
-    const { error } = await supabase.from(tableForType(item.type)).delete().eq('id', item.id)
-    if (error) {
-      window.alert(error.message)
-      return
+    try {
+      if (item.type === 'sop' || item.type === 'contract') {
+        await trashDocument(item.id, item.type)
+      } else {
+        // job_descriptions: not part of the trash system; hard delete preserved.
+        const { error } = await supabase.from(tableForType(item.type)).delete().eq('id', item.id)
+        if (error) throw new Error(error.message)
+      }
+      setItems(prev => prev.filter(i => !(i.type === item.type && i.id === item.id)))
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : String(err))
     }
-    setItems(prev => prev.filter(i => !(i.type === item.type && i.id === item.id)))
   }
 
   async function renameItem(item: AllDocItem, nextTitle: string) {

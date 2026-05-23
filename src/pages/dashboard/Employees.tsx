@@ -14,6 +14,7 @@ import { isPro, syncSeats } from '../../lib/billing'
 import { FREE_EMPLOYEE_LIMIT, PRO_MIN_SEATS } from '../../lib/pricing'
 import { UpgradeModal } from '../../components/UpgradeModal'
 import { ImportEmployeesModal } from '../../components/ImportEmployeesModal'
+import { DeleteEmployeeModal } from '../../components/DeleteEmployeeModal'
 import { buildExportFile } from '../../lib/employeeImport'
 import { Skeleton } from '../../components/Skeleton'
 import { useBilling } from '../../contexts/BillingContext'
@@ -206,7 +207,11 @@ export function Employees({ user }: { user: User }) {
   const [showImport, setShowImport] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [bulkDeleting, setBulkDeleting] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<
+    | { kind: 'single'; id: string; name: string }
+    | { kind: 'bulk'; ids: string[] }
+    | null
+  >(null)
   const [view, setView] = useState<EmployeesView>(() => {
     if (typeof window === 'undefined') return 'list'
     const saved = window.localStorage.getItem(VIEW_STORAGE_KEY)
@@ -321,13 +326,16 @@ export function Employees({ user }: { user: User }) {
     loadData()
   }
 
-  async function handleDelete(emp: EmployeeWithDepartments) {
+  function handleDelete(emp: EmployeeWithDepartments) {
     if (!canWrite) return
-    if (!confirm(t.deleteEmployeeConfirm(emp.name))) return
-    await supabase.from('employees').delete().eq('id', emp.id)
+    setDeleteTarget({ kind: 'single', id: emp.id, name: emp.name })
+  }
+
+  function afterDelete() {
     if (org && isPro(org)) {
       syncSeats().catch(err => console.error('sync-seats failed after delete:', err))
     }
+    setSelectedIds(new Set())
     loadData()
   }
 
@@ -465,22 +473,9 @@ export function Employees({ user }: { user: User }) {
     })
   }
 
-  async function handleBulkDelete() {
-    if (selectedIds.size === 0 || !canWrite || bulkDeleting) return
-    if (!confirm(t.bulkDeleteConfirm(selectedIds.size))) return
-    setBulkDeleting(true)
-    try {
-      const ids = [...selectedIds]
-      const { error } = await supabase.from('employees').delete().in('id', ids)
-      if (error) { alert(error.message); return }
-      if (org && isPro(org)) {
-        syncSeats().catch(err => console.error('sync-seats failed after bulk delete:', err))
-      }
-      setSelectedIds(new Set())
-      loadData()
-    } finally {
-      setBulkDeleting(false)
-    }
+  function handleBulkDelete() {
+    if (selectedIds.size === 0 || !canWrite) return
+    setDeleteTarget({ kind: 'bulk', ids: [...selectedIds] })
   }
 
   if (loading) return <EmployeesSkeleton view={view} title={t.employeesTitle} />
@@ -690,7 +685,7 @@ export function Employees({ user }: { user: User }) {
             <button
               type="button"
               onClick={handleBulkDelete}
-              disabled={!canWrite || bulkDeleting}
+              disabled={!canWrite}
               className="rounded-lg px-3 py-1 text-xs font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
               style={{ backgroundColor: 'var(--color-danger)' }}
             >
@@ -794,6 +789,13 @@ export function Employees({ user }: { user: User }) {
           onImported={() => { setShowImport(false); loadData() }}
         />
       )}
+
+      <DeleteEmployeeModal
+        open={deleteTarget !== null}
+        target={deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onDeleted={afterDelete}
+      />
     </div>
   )
 }

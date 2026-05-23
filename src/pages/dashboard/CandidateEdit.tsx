@@ -17,6 +17,7 @@ import {
 } from '../../lib/candidateProfile'
 import { PhoneInput } from '../../components/PhoneInput'
 import { EmployeeAttachments } from '../../components/EmployeeAttachments'
+import { DeleteEmployeeModal } from '../../components/DeleteEmployeeModal'
 import type { Employee, Organization, User } from '../../types/aliases'
 import type { Translations } from '../../lib/translations'
 
@@ -83,6 +84,7 @@ export function CandidateEdit({ user }: { user: User }) {
   const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [deleteOpen, setDeleteOpen] = useState(false)
 
   useBreadcrumbTrailing(candidate?.name ?? null)
 
@@ -233,11 +235,9 @@ export function CandidateEdit({ user }: { user: User }) {
     goBack()
   }
 
-  async function handleDelete() {
+  function handleDelete() {
     if (!candidate) return
-    if (!confirm(t.hiringDeleteConfirm(candidate.name))) return
-    await supabase.from('employees').delete().eq('id', candidate.id)
-    goBack()
+    setDeleteOpen(true)
   }
 
   function onManageReferences() {
@@ -447,6 +447,13 @@ export function CandidateEdit({ user }: { user: User }) {
           </main>
         </div>
       </form>
+
+      <DeleteEmployeeModal
+        open={deleteOpen}
+        target={deleteOpen && candidate ? { kind: 'single', id: candidate.id, name: candidate.name } : null}
+        onClose={() => setDeleteOpen(false)}
+        onDeleted={goBack}
+      />
     </div>
   )
 }
