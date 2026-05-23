@@ -266,7 +266,7 @@ function Sidebar({ user, mobileOpen, onCloseMobile }: {
 
       <aside
         className={`no-print fixed inset-y-0 left-0 z-50 flex flex-col border-r transition-[width,transform] md:sticky md:top-0 md:h-screen md:translate-x-0 ${
-          isCollapsed ? 'w-16' : 'w-52'
+          isCollapsed ? 'w-16' : 'w-56'
         } ${mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}
         style={{
           borderColor: 'var(--color-border)',
