@@ -19,7 +19,7 @@ import { StatRow } from '../../components/portal/StatRow'
 import { InfoTooltip } from '../../components/InfoTooltip'
 import { AvatarWithBadge } from '../../components/portal/AvatarWithBadge'
 import { MonthStrip } from '../../components/portal/MonthStrip'
-import type { Employee, Sop, SopSignature, SopVersion, Organization, Contract, ContractSignature, ContractVersion, FeedEvent, JobDescription, JobDescriptionSignature } from '../../types/aliases'
+import type { Employee, Sop, SopSignature, SopVersion, Organization, Contract, ContractSignature, ContractVersion, FeedEvent, JobDescription, JobDescriptionSignature, Letter, LetterAcknowledgement } from '../../types/aliases'
 
 type AchievementSummary = {
   unlock_id: string
@@ -52,6 +52,8 @@ type PortalDocumentsData = {
   org: Organization | null
   sops: Sop[]
   contracts: Contract[]
+  letters?: Letter[]
+  letter_acknowledgements?: LetterAcknowledgement[]
 }
 
 type PortalDocumentsRpc = (fn: 'portal_documents', args: { emp_slug: string; emp_token: string }) => Promise<{
@@ -79,8 +81,8 @@ function monthFromIsoDate(iso: string): string {
 }
 
 type Tab = 'home' | 'documents' | 'spotlight' | 'leaderboard' | 'badges'
-type DocFilter = 'all' | 'sops' | 'contracts'
-type OpenDocType = 'sop' | 'contract' | null
+type DocFilter = 'all' | 'sops' | 'contracts' | 'letters'
+type OpenDocType = 'sop' | 'contract' | 'letter' | null
 
 type BadgeData = {
   definition_id: string
@@ -185,6 +187,13 @@ function ContractIcon() {
   return <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M7 16q2-3 4 0t4 0"/></svg>
 }
 
+function LetterIcon() {
+  // Envelope glyph — reads as "letter" / "communication", visually
+  // distinct from the file-shaped SOP and contract icons so the three
+  // doc types separate at a glance in the grid.
+  return <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+}
+
 function ActivityIcon() {
   return <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
 }
@@ -224,6 +233,9 @@ export function Portal() {
   const [contracts, setContracts] = useState<Contract[]>([])
   const [activeContract, setActiveContract] = useState<Contract | null>(null)
   const [contractSignatures, setContractSignatures] = useState<Record<string, ContractSignature>>({})
+  const [letters, setLetters] = useState<Letter[]>([])
+  const [activeLetter, setActiveLetter] = useState<Letter | null>(null)
+  const [letterAcknowledgements, setLetterAcknowledgements] = useState<Record<string, LetterAcknowledgement>>({})
   // Employer signatures keyed by contract id, for the current version. Lets
   // the rendered contract body show the manager's countersignature inline in
   // the EMPLOYER block (matching how employee sigs render in the EMPLOYEE
@@ -372,6 +384,23 @@ export function Portal() {
       // view never auto-opens — openDocType stays null until the user picks.
       setActiveContract(contractList[0] ?? null)
 
+      // Letters and the employee's own acknowledgement rows arrive in the
+      // same payload (extended by migration 119). The grid renders the
+      // letter cards; the ack dict drives the "Acknowledged on X" state.
+      const letterList = docs?.letters ?? []
+      setLetters(letterList)
+      const ackList = docs?.letter_acknowledgements ?? []
+      const ackByLetter: Record<string, LetterAcknowledgement> = {}
+      for (const ack of ackList) {
+        const existing = ackByLetter[ack.letter_id]
+        // Keep the most recent ack per letter (in case the same letter was
+        // re-issued at a higher version and re-acknowledged).
+        if (!existing || existing.version_number < ack.version_number) {
+          ackByLetter[ack.letter_id] = ack
+        }
+      }
+      setLetterAcknowledgements(ackByLetter)
+
       // Load signatures (SOPs)
       if (sopList.length > 0) {
         const { data: sigs } = await supabase
@@ -502,12 +531,16 @@ export function Portal() {
     return () => { cancelled = true }
   }, [employee])
 
-  // Notifications: unsigned documents (SOPs + contracts, actionable) +
-  // unread informational events. Actionable items persist until acted on;
-  // informational items clear when the user opens the bell dropdown.
+  // Notifications: unsigned documents (SOPs + contracts + letters that
+  // require acknowledgement, all actionable) + unread informational events.
+  // Actionable items persist until acted on; informational items clear when
+  // the user opens the bell dropdown.
   const unsignedSops = sops.filter(s => !sopSignatures[s.id])
   const unsignedContracts = contracts.filter(c => !contractSignatures[c.id])
-  const pendingActionCount = unsignedSops.length + unsignedContracts.length
+  const pendingLetters = letters.filter(l =>
+    l.requires_acknowledgement && !letterAcknowledgements[l.id],
+  )
+  const pendingActionCount = unsignedSops.length + unsignedContracts.length + pendingLetters.length
   const notificationCount = pendingActionCount + unreadInformational
 
   // Documents grid: combined, sorted by recency (updated_at desc).
@@ -526,12 +559,26 @@ export function Portal() {
       updatedAt: c.updated_at ?? c.created_at ?? '',
       signedAt: contractSignatures[c.id]?.signed_at ?? null,
     }))
-    return [...sopCards, ...contractCards].sort((a, b) =>
+    // Letters: only those flagged requires_acknowledgement need an action
+    // from the employee. Non-ack letters still show in the grid (formality
+    // letters like recognition / offering aren't gated on a click), but
+    // their needsAction stays false so they don't inflate the pending count.
+    const letterCards: DocCardItem[] = letters.map(l => ({
+      type: 'letter' as const,
+      doc: l,
+      needsAction: l.requires_acknowledgement && !letterAcknowledgements[l.id],
+      updatedAt: l.updated_at ?? l.created_at ?? '',
+      signedAt: letterAcknowledgements[l.id]?.acknowledged_at ?? null,
+    }))
+    return [...sopCards, ...contractCards, ...letterCards].sort((a, b) =>
       b.updatedAt.localeCompare(a.updatedAt)
     )
-  }, [sops, contracts, sopSignatures, contractSignatures])
+  }, [sops, contracts, letters, sopSignatures, contractSignatures, letterAcknowledgements])
   const filteredDocCards = allDocCards.filter(c =>
-    docFilter === 'all' ? true : docFilter === 'sops' ? c.type === 'sop' : c.type === 'contract'
+    docFilter === 'all' ? true :
+    docFilter === 'sops' ? c.type === 'sop' :
+    docFilter === 'contracts' ? c.type === 'contract' :
+    c.type === 'letter'
   )
   const pendingDocCards = filteredDocCards.filter(c => c.needsAction)
   const archiveDocCards = filteredDocCards.filter(c => !c.needsAction)
@@ -567,6 +614,33 @@ export function Portal() {
     setActiveContract(c)
     setOpenDocType('contract')
     setTab('documents')
+  }
+
+  function openLetterDoc(l: Letter) {
+    resetHistoryState()
+    setActiveLetter(l)
+    setOpenDocType('letter')
+    setTab('documents')
+  }
+
+  async function handleAcknowledgeLetter() {
+    if (!activeLetter || !employee || !slugToken) return
+    setSigning(true)
+    const lastDash = slugToken.lastIndexOf('-')
+    const slug = slugToken.slice(0, lastDash)
+    const token = slugToken.slice(lastDash + 1)
+    const { data, error: ackError } = await supabase.rpc('acknowledge_letter', {
+      emp_slug: slug,
+      emp_token: token,
+      p_letter_id: activeLetter.id,
+      p_typed_name: employee.name,
+      p_signature_font: selectedFont,
+    })
+    if (ackError) { setError(ackError.message); setSigning(false); return }
+    if (data) {
+      setLetterAcknowledgements(prev => ({ ...prev, [activeLetter.id]: data as unknown as LetterAcknowledgement }))
+    }
+    setSigning(false)
   }
 
   function closeOpenDoc() {
@@ -1095,10 +1169,11 @@ export function Portal() {
               totalCount={allDocCards.length}
               onOpenSop={openSopDoc}
               onOpenContract={openContractDoc}
+              onOpenLetter={openLetterDoc}
             />
           )}
 
-          {tab === 'documents' && openDocType !== null && (() => {
+          {tab === 'documents' && (openDocType === 'sop' || openDocType === 'contract') && (() => {
             const isSop = openDocType === 'sop'
             const doc = isSop ? activeSop : activeContract
             if (!doc) return null
@@ -1400,6 +1475,81 @@ export function Portal() {
             )
           })()}
 
+          {/* ─── Letter detail view ───────────────────────────
+              Mirrors the SOP/contract detail in shape (back button +
+              content + optional sign action) but slimmer: letters
+              don't carry the version-history, PDF-download, or
+              bilateral-signature surface yet. The Acknowledge button
+              only renders when the letter opted into the flow
+              (requires_acknowledgement=true). */}
+          {tab === 'documents' && openDocType === 'letter' && activeLetter && (() => {
+            const letter = activeLetter
+            const ack = letterAcknowledgements[letter.id] ?? null
+            const docDoc = isDocumentDoc(letter.content_doc) ? letter.content_doc : null
+            return (
+              <div>
+                {/* Back button */}
+                <div className="mb-3 flex items-center justify-between">
+                  <button
+                    onClick={closeOpenDoc}
+                    className="flex items-center gap-1 text-sm font-medium"
+                    style={{ color: 'var(--color-text-secondary)' }}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                    {s.backToDocuments}
+                  </button>
+                </div>
+
+                {/* Metadata header */}
+                <div className="mb-4 rounded-xl border p-4" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)' }}>
+                  <h1 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>
+                    {letter.title || s.documentsUntitled}
+                  </h1>
+                  <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+                    {letter.subject && (<><dt className="font-medium" style={{ color: 'var(--color-text-tertiary)' }}>Subject</dt><dd>{letter.subject}</dd></>)}
+                    {letter.reference_number && (<><dt className="font-medium" style={{ color: 'var(--color-text-tertiary)' }}>Ref</dt><dd>{letter.reference_number}</dd></>)}
+                    {letter.category && (<><dt className="font-medium" style={{ color: 'var(--color-text-tertiary)' }}>Category</dt><dd>{letter.category}</dd></>)}
+                    {letter.response_by_date && (<><dt className="font-medium" style={{ color: 'var(--color-text-tertiary)' }}>Respond by</dt><dd>{letter.response_by_date}</dd></>)}
+                    {letter.issued_at && (<><dt className="font-medium" style={{ color: 'var(--color-text-tertiary)' }}>Issued</dt><dd>{new Date(letter.issued_at).toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</dd></>)}
+                  </dl>
+                </div>
+
+                {/* Content */}
+                {docDoc ? (
+                  <div className="rounded-xl border p-4" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }}>
+                    <style>{DOCUMENT_RENDERER_STYLES}</style>
+                    <DocumentRenderer doc={docDoc} lang={docContentLang} />
+                  </div>
+                ) : (
+                  <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>
+                    This letter has no body yet.
+                  </p>
+                )}
+
+                {/* Acknowledge / acknowledged state */}
+                {letter.requires_acknowledgement && (
+                  <div className="mt-4 rounded-xl border p-4" style={{ borderColor: 'var(--color-border)' }}>
+                    {ack ? (
+                      <p className="text-sm" style={{ color: 'var(--color-success)' }}>
+                        Acknowledged on {new Date(ack.acknowledged_at).toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}.
+                      </p>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleAcknowledgeLetter}
+                        disabled={signing}
+                        className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                        style={{ backgroundColor: 'var(--color-primary)' }}
+                      >
+                        {signing ? 'Acknowledging…' : 'I have read this letter'}
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })()}
+
 
           {/* ─── Spotlight Tab Content ─── */}
           {tab === 'spotlight' && (
@@ -1504,6 +1654,7 @@ export function Portal() {
 type DocCardItem =
   | { type: 'sop'; doc: Sop; needsAction: boolean; updatedAt: string; signedAt: string | null }
   | { type: 'contract'; doc: Contract; needsAction: boolean; updatedAt: string; signedAt: string | null }
+  | { type: 'letter'; doc: Letter; needsAction: boolean; updatedAt: string; signedAt: string | null }
 
 function DocumentsGrid({
   s,
@@ -1515,6 +1666,7 @@ function DocumentsGrid({
   totalCount,
   onOpenSop,
   onOpenContract,
+  onOpenLetter,
 }: {
   s: ReturnType<typeof useLang>['t']
   lang: 'en' | 'id'
@@ -1525,16 +1677,19 @@ function DocumentsGrid({
   totalCount: number
   onOpenSop: (sop: Sop) => void
   onOpenContract: (c: Contract) => void
+  onOpenLetter: (l: Letter) => void
 }) {
   const chips: Array<{ key: DocFilter; label: string }> = [
     { key: 'all', label: s.documentsAll },
     { key: 'sops', label: s.sops },
     { key: 'contracts', label: s.contracts },
+    { key: 'letters', label: 'Letters' },
   ]
 
   function openCard(card: DocCardItem) {
     if (card.type === 'sop') onOpenSop(card.doc)
-    else onOpenContract(card.doc)
+    else if (card.type === 'contract') onOpenContract(card.doc)
+    else onOpenLetter(card.doc)
   }
 
   function formatShortDate(iso: string): string {
@@ -1547,7 +1702,7 @@ function DocumentsGrid({
   }
 
   function renderCard(card: DocCardItem) {
-    const Icon = card.type === 'sop' ? DocIcon : ContractIcon
+    const Icon = card.type === 'sop' ? DocIcon : card.type === 'contract' ? ContractIcon : LetterIcon
     // Date line: signed docs anchor to the signature date (legal anchor —
     // absolute is more meaningful than "5 days ago"); unsigned/awaiting docs
     // show a relative "Updated" so freshness is obvious at a glance.
