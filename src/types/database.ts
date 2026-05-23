@@ -3523,6 +3523,18 @@ export type Database = {
       }
       get_user_org_id: { Args: never; Returns: string }
       get_user_role: { Args: never; Returns: string }
+      global_search: {
+        Args: { q: string; max_per_group?: number }
+        Returns: {
+          group_key: string
+          id: string
+          title: string
+          subtitle: string | null
+          status: string | null
+          updated_at: string
+          rank: number
+        }[]
+      }
       handle_signup:
         | {
             Args: {

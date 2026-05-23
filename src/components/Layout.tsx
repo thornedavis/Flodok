@@ -12,7 +12,7 @@ import type { Organization, User } from '../types/aliases'
 import { Wordmark, Imagemark } from './Brand'
 import { DunningBanner } from './DunningBanner'
 import { NotificationBell } from './NotificationBell'
-import { FilterSearchInput } from './FilterControls'
+import { GlobalSearchButton } from './GlobalSearch'
 
 type NavKey = 'navOverview' | 'navInbox' | 'navEmployees' | 'navHiring' | 'navRecruitment' | 'navCompany' | 'navDocuments' | 'navPerformance' | 'navSpotlight' | 'navPending' | 'navTrash' | 'navSettings'
 
@@ -691,7 +691,7 @@ function Header({ user, org, onSignOut, onOpenMenu }: {
 
       {/* Right: search · language · theme · bell · avatar */}
       <div className="flex shrink-0 items-center gap-2">
-        <HeaderSearch />
+        <GlobalSearchButton />
         <button
           type="button"
           onClick={toggleLang}
@@ -732,34 +732,6 @@ function Header({ user, org, onSignOut, onOpenMenu }: {
         </div>
       </div>
     </div>
-  )
-}
-
-// Visual placeholder for a future global command palette. Uses the same
-// FilterSearchInput primitive as the per-page search bars so it inherits
-// the brand styling. On Enter the query is forwarded to /dashboard/employees,
-// which prefills its own search box from `location.state.q`.
-function HeaderSearch() {
-  const navigate = useNavigate()
-  const { t } = useLang()
-  const [q, setQ] = useState('')
-  return (
-    <form
-      onSubmit={e => {
-        e.preventDefault()
-        const trimmed = q.trim()
-        if (!trimmed) return
-        navigate('/dashboard/employees', { state: { q: trimmed } })
-        setQ('')
-      }}
-      className="hidden w-56 md:block lg:w-72"
-    >
-      <FilterSearchInput
-        value={q}
-        onChange={setQ}
-        placeholder={t.headerSearchPlaceholder}
-      />
-    </form>
   )
 }
 

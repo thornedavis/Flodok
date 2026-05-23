@@ -1010,6 +1010,21 @@ export const translations = {
     headerSearchAria: 'Search',
     headerSearchPlaceholder: 'Search...',
 
+    // Global header search modal
+    globalSearchOpen: 'Search',
+    globalSearchPlaceholder: 'Search employees, documents, templates…',
+    globalSearchRecent: 'Recent',
+    globalSearchEmptyHint: 'Start typing to search across your workspace.',
+    globalSearchNoResults: 'No matches.',
+    globalSearchGroupEmployees: 'Employees',
+    globalSearchGroupRecruitment: 'Recruitment',
+    globalSearchGroupDocuments: 'Documents',
+    globalSearchGroupTemplates: 'Templates',
+    globalSearchGroupHiring: 'Hiring',
+    globalSearchHintOpen: 'open',
+    globalSearchHintNewTab: 'new tab',
+    globalSearchHintClose: 'close',
+
     // Settings — tabs
     settingsAccountTab: 'Account',
     settingsOrganizationTab: 'Organization',
@@ -3018,6 +3033,21 @@ export const translations = {
     userMenuAria: 'Buka menu akun',
     headerSearchAria: 'Cari',
     headerSearchPlaceholder: 'Cari...',
+
+    // Global header search modal
+    globalSearchOpen: 'Cari',
+    globalSearchPlaceholder: 'Cari karyawan, dokumen, template…',
+    globalSearchRecent: 'Terakhir',
+    globalSearchEmptyHint: 'Mulai ketik untuk mencari di seluruh workspace.',
+    globalSearchNoResults: 'Tidak ada hasil.',
+    globalSearchGroupEmployees: 'Karyawan',
+    globalSearchGroupRecruitment: 'Rekrutmen',
+    globalSearchGroupDocuments: 'Dokumen',
+    globalSearchGroupTemplates: 'Template',
+    globalSearchGroupHiring: 'Permintaan',
+    globalSearchHintOpen: 'buka',
+    globalSearchHintNewTab: 'tab baru',
+    globalSearchHintClose: 'tutup',
 
     // Settings — tabs
     settingsAccountTab: 'Akun',

@@ -234,6 +234,13 @@ select:focus-visible {
   box-shadow: none !important;
 }
 
+/* Opt-out for inputs that own their own focus styling (e.g. the global
+   search modal, where the surrounding panel is the focused surface and a
+   ring on the field itself would look like a stray box). */
+input[data-no-focus-ring]:focus-visible {
+  outline: none !important;
+}
+
 /* Print stylesheet */
 @media print {
   nav, .no-print, button, .signature-section {
