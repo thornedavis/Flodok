@@ -142,6 +142,18 @@ export function LetterEdit({ user }: { user: User }) {
     [contentDoc, savedContentDoc],
   )
 
+  // Required fields for Issue. Shown as a small red dot next to each
+  // missing label so the user can see at a glance why the Issue button
+  // is disabled, instead of having to hover for the tooltip.
+  const missingRequiredFields: { key: string; label: string }[] = useMemo(() => {
+    if (!letter || letter.is_template) return []
+    const out: { key: string; label: string }[] = []
+    if (!employeeId) out.push({ key: 'employee', label: 'Recipient' })
+    if (!senderUserId) out.push({ key: 'sender', label: 'Sender' })
+    return out
+  }, [letter, employeeId, senderUserId])
+  const missingKeys = new Set(missingRequiredFields.map(f => f.key))
+
   const hasChanges = letter ? (
     docChanged ||
     title !== letter.title ||
@@ -239,6 +251,18 @@ export function LetterEdit({ user }: { user: User }) {
   // Issue is only meaningful for drafts that have both an employee and a sender.
   const canIssue = status === 'draft' && !!employeeId && !!senderUserId
 
+  function missingDot(key: string) {
+    if (!missingKeys.has(key)) return null
+    return (
+      <span
+        aria-hidden="true"
+        title="Required before issuing"
+        className="ml-1 inline-block h-1.5 w-1.5 shrink-0 rounded-full align-middle"
+        style={{ backgroundColor: 'var(--color-danger, #b91c1c)' }}
+      />
+    )
+  }
+
   const statusColors: Record<string, string> = {
     draft: 'var(--color-warning)',
     issued: 'var(--color-success)',
@@ -299,7 +323,7 @@ export function LetterEdit({ user }: { user: User }) {
     <>
       {/* Employee — nullable. Tagging enables but does not auto-fire the Issue action. */}
       <div>
-        <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>Recipient</label>
+        <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>Recipient{missingDot('employee')}</label>
         <EmployeeSelect
           value={employeeId}
           onChange={setEmployeeId}
@@ -311,7 +335,7 @@ export function LetterEdit({ user }: { user: User }) {
 
       {/* Sender — required for issuing. */}
       <div>
-        <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>Sender</label>
+        <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>Sender{missingDot('sender')}</label>
         <div className="relative">
           <select
             value={senderUserId || ''}
