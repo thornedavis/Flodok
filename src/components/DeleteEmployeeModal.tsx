@@ -41,7 +41,17 @@ export function DeleteEmployeeModal({
 
   if (!target) return null
 
-  const hasRelated = counts !== null && (counts.sops > 0 || counts.contracts > 0 || counts.attachments > 0)
+  const hasRelated = counts !== null && (
+    counts.soleAudienceSops > 0 ||
+    counts.sharedAudienceSops > 0 ||
+    counts.contracts > 0 ||
+    counts.attachments > 0
+  )
+  // Cascade is meaningful only when there's something it would take with it:
+  // either sole-audience SOPs (will be trashed) or contracts (also cascade).
+  // If the employee only appears in shared audiences and has no contracts/
+  // attachments, deletion just detaches them — no extra choice needed.
+  const cascadeEligible = counts !== null && (counts.soleAudienceSops > 0 || counts.contracts > 0)
   const isBulk = target.kind === 'bulk'
   const title = isBulk
     ? t.trashDeleteBulkTitle(target.ids.length)
@@ -85,21 +95,28 @@ export function DeleteEmployeeModal({
             <div className="mb-2 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-danger, #b91c1c)' }}>
               {t.trashDangerZone}
             </div>
-            <p className="mb-3 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-              {t.trashDangerExplain(target.name, counts.sops, counts.contracts, counts.attachments)}
+            <p className="mb-2 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+              {t.trashDangerExplain(target.name, counts.soleAudienceSops, counts.contracts, counts.attachments)}
             </p>
-            <label className="flex cursor-pointer items-start gap-2">
-              <input
-                type="checkbox"
-                checked={cascade}
-                onChange={e => setCascade(e.target.checked)}
-                disabled={submitting}
-                className="mt-0.5"
-              />
-              <span className="text-xs" style={{ color: 'var(--color-text)' }}>
-                {t.trashAlsoDeleteDocs(counts.sops, counts.contracts)}
-              </span>
-            </label>
+            {counts.sharedAudienceSops > 0 && (
+              <p className="mb-3 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                Also in the audience of {counts.sharedAudienceSops} other {counts.sharedAudienceSops === 1 ? 'SOP' : 'SOPs'} alongside other targets — {counts.sharedAudienceSops === 1 ? 'it stays' : 'they stay'} alive and silently {counts.sharedAudienceSops === 1 ? 'loses' : 'lose'} {target.name} as a required signer.
+              </p>
+            )}
+            {cascadeEligible && (
+              <label className="flex cursor-pointer items-start gap-2">
+                <input
+                  type="checkbox"
+                  checked={cascade}
+                  onChange={e => setCascade(e.target.checked)}
+                  disabled={submitting}
+                  className="mt-0.5"
+                />
+                <span className="text-xs" style={{ color: 'var(--color-text)' }}>
+                  {t.trashAlsoDeleteDocs(counts.soleAudienceSops, counts.contracts)}
+                </span>
+              </label>
+            )}
           </div>
         )}
 

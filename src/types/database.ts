@@ -3218,6 +3218,13 @@ export type Database = {
         }
         Returns: Json
       }
+      delete_branch: { Args: { p_id: string }; Returns: Json }
+      delete_department: { Args: { p_id: string }; Returns: Json }
+      delete_reference_value: { Args: { p_id: string }; Returns: Json }
+      employee_audience_impact: {
+        Args: { p_employee_id: string }
+        Returns: Json
+      }
       employee_in_departments: {
         Args: { p_department_names: string[]; p_employee_id: string }
         Returns: boolean

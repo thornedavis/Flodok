@@ -59,6 +59,29 @@ type ProfileForm = {
 
 const COMPANY_TABS: CompanyTab[] = ['profile', 'structure', 'assets', 'activity']
 
+// Compose the confirm() message shown before deleting a department,
+// branch, or reference value (job position / level / class). Surfaces
+// the three things that can make a delete consequential: employees
+// currently denormalised against the name, SOPs that target it as an
+// audience, and (departments only) SOPs that name it as owner. All of
+// those are detached transactionally on the server — the confirm just
+// makes sure the user knows what's about to happen.
+function buildDeleteConfirmMessage(
+  name: string,
+  employeeUsage: number,
+  audienceCount: number,
+  ownerCount: number = 0,
+): string {
+  const parts: string[] = []
+  if (employeeUsage > 0) parts.push(`${employeeUsage} ${employeeUsage === 1 ? 'employee' : 'employees'}`)
+  if (audienceCount > 0) parts.push(`${audienceCount} SOP ${audienceCount === 1 ? 'audience' : 'audiences'}`)
+  if (ownerCount > 0) parts.push(`${ownerCount} SOP ${ownerCount === 1 ? 'owner' : 'owners'}`)
+  if (parts.length === 0) {
+    return `Delete "${name}"?`
+  }
+  return `Delete "${name}"? It's referenced by ${parts.join(', ')} and will be detached from each.`
+}
+
 function parseTab(value: string | null): CompanyTab {
   return COMPANY_TABS.find(t => t === value) ?? 'profile'
 }
@@ -531,12 +554,18 @@ function CompanyStructureTab({ user }: { user: User }) {
     if (!canWrite) return
     const kind = value.kind as CompanyReferenceKind
     const usage = usageByKind.get(kind)?.get(value.name.toLowerCase()) ?? 0
-    const ok = confirm(usage > 0 ? t.companyReferenceDeleteInUseConfirm(value.name, usage) : t.companyReferenceDeleteConfirm(value.name))
+    const { count: audienceCount } = await supabase
+      .from('sop_audience')
+      .select('id', { count: 'exact', head: true })
+      .eq('reference_id', value.id)
+    const ok = confirm(buildDeleteConfirmMessage(value.name, usage, audienceCount ?? 0))
     if (!ok) return
 
+    // The new RPC handles audience detach + employee column null-out
+    // + the actual delete transactionally, so the previous two-step
+    // (delete + updateEmployeeValues) is replaced by a single call.
     setSavingKind(kind)
-    const { error } = await supabase.from('company_reference_values').delete().eq('id', value.id)
-    if (!error) await updateEmployeeValues(kind, value.name, null)
+    const { error } = await supabase.rpc('delete_reference_value', { p_id: value.id })
     setSavingKind(null)
     if (error) {
       alert(error.message)
@@ -613,11 +642,18 @@ function CompanyStructureTab({ user }: { user: User }) {
   async function handleDeleteDepartment(dept: CompanyDepartment) {
     if (!canWrite) return
     const usage = departmentCounts.get(dept.id) ?? 0
-    const ok = confirm(usage > 0 ? t.companyReferenceDeleteInUseConfirm(dept.name, usage) : t.companyReferenceDeleteConfirm(dept.name))
+    const [audienceRes, ownerRes] = await Promise.all([
+      supabase.from('sop_audience').select('id', { count: 'exact', head: true }).eq('department_id', dept.id),
+      supabase.from('sops').select('id', { count: 'exact', head: true }).eq('owner_department_id', dept.id).is('deleted_at', null),
+    ])
+    const ok = confirm(buildDeleteConfirmMessage(dept.name, usage, audienceRes.count ?? 0, ownerRes.count ?? 0))
     if (!ok) return
     setSavingKind('departments')
-    // employee_departments has on-delete-cascade, so the join rows go with it.
-    const { error } = await supabase.from('company_departments').delete().eq('id', dept.id)
+    // delete_department RPC detaches sop_audience rows transactionally
+    // before the DELETE; owner_department_id is ON DELETE SET NULL so
+    // owning SOPs auto-detach. employee_departments has its own
+    // ON DELETE CASCADE.
+    const { error } = await supabase.rpc('delete_department', { p_id: dept.id })
     setSavingKind(null)
     if (error) {
       alert(error.message)
@@ -670,11 +706,16 @@ function CompanyStructureTab({ user }: { user: User }) {
   async function handleDeleteBranch(branch: CompanyBranch) {
     if (!canWrite) return
     const usage = employees.filter(e => sameName(e.branch_name || '', branch.name)).length
-    const ok = confirm(usage > 0 ? t.companyReferenceDeleteInUseConfirm(branch.name, usage) : t.companyReferenceDeleteConfirm(branch.name))
+    const { count: audienceCount } = await supabase
+      .from('sop_audience')
+      .select('id', { count: 'exact', head: true })
+      .eq('branch_id', branch.id)
+    const ok = confirm(buildDeleteConfirmMessage(branch.name, usage, audienceCount ?? 0))
     if (!ok) return
     setSavingKind('branch_table')
-    const { error } = await supabase.from('company_branches').delete().eq('id', branch.id)
-    if (!error) await supabase.from('employees').update({ branch_name: null }).eq('org_id', user.org_id).eq('branch_name', branch.name)
+    // delete_branch RPC detaches sop_audience rows + nulls employee
+    // branch_name + deletes the branch row in one transaction.
+    const { error } = await supabase.rpc('delete_branch', { p_id: branch.id })
     setSavingKind(null)
     if (error) {
       alert(error.message)
