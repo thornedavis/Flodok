@@ -174,7 +174,7 @@ function AllDocumentsView({ user }: { user: User }) {
 
   useEffect(() => {
     async function load() {
-      const [sopResult, contractResult, jdResult, employeeResult] = await Promise.all([
+      const [sopResult, contractResult, jdResult, letterResult, employeeResult] = await Promise.all([
         supabase
           .from('sops')
           .select('id, title, status, current_version, updated_at, created_at, content_doc, employee_id')
@@ -188,6 +188,11 @@ function AllDocumentsView({ user }: { user: User }) {
           .from('job_descriptions')
           .select('id, title, status, current_version, updated_at, created_at, content_doc')
           .eq('org_id', user.org_id),
+        supabase
+          .from('letters')
+          .select('id, title, status, current_version, updated_at, created_at, content_doc, employee_id')
+          .eq('org_id', user.org_id)
+          .eq('is_template', false),
         supabase
           .from('employees')
           .select(EMPLOYEE_WITH_DEPTS_SELECT)
@@ -237,8 +242,19 @@ function AllDocumentsView({ user }: { user: User }) {
         employee_id: null,
         preview: previewOf(j.content_doc),
       }))
+      const letters: AllDocItem[] = (letterResult.data || []).map(l => ({
+        id: l.id,
+        type: 'letter' as const,
+        title: l.title,
+        status: l.status,
+        current_version: l.current_version,
+        updated_at: l.updated_at,
+        created_at: l.created_at,
+        employee_id: l.employee_id ?? null,
+        preview: previewOf(l.content_doc),
+      }))
 
-      const merged = [...sops, ...contracts, ...jds].sort((a, b) =>
+      const merged = [...sops, ...contracts, ...jds, ...letters].sort((a, b) =>
         (b.updated_at || b.created_at).localeCompare(a.updated_at || a.created_at),
       )
 
@@ -432,6 +448,23 @@ function AllDocumentsView({ user }: { user: User }) {
         contract_type: src.contract_type,
         annual_leave_days: src.annual_leave_days,
         probation_months: src.probation_months,
+      }
+    } else if (item.type === 'letter') {
+      // Letters duplicate as a fresh draft — drop the issued state,
+      // reference number, and timestamps so the copy is unambiguously
+      // a new artefact. Carry over the letter-specific metadata so the
+      // copy starts from the same template shape.
+      insertObj = {
+        org_id: user.org_id,
+        title: copyTitle,
+        content_doc: src.content_doc ?? docAsJson(emptyDocumentDoc()),
+        status: 'draft',
+        employee_id: null,
+        sender_user_id: src.sender_user_id ?? null,
+        category: src.category ?? null,
+        type_code: src.type_code ?? null,
+        subject: src.subject ?? null,
+        requires_acknowledgement: src.requires_acknowledgement ?? false,
       }
     } else {
       // Job description — copy only descriptive fields; never the
@@ -979,11 +1012,13 @@ function RecentGrid({
 
   const statusColors: Record<string, string> = {
     active: 'var(--color-success)',
+    issued: 'var(--color-success)',
     draft: 'var(--color-warning)',
     archived: 'var(--color-text-tertiary)',
   }
   const statusLabels: Record<string, string> = {
     active: t.statusActive,
+    issued: 'Issued',
     draft: t.statusDraft,
     archived: t.statusArchived,
   }
@@ -1059,7 +1094,18 @@ function RecentGrid({
             {/* Footer — filename flush-left on its own line, then a meta
                 row with the type icon bottom-left and the kebab menu. */}
             <div className="border-t px-3 py-2.5" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)' }}>
-              <div className="truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+              <div className="flex items-center gap-1">
+                <span className="shrink-0" style={{ color: accent }}>
+                  <DocTypeIcon type={item.type} size={12} />
+                </span>
+                <span
+                  className="truncate text-[8px] font-semibold uppercase tracking-wide"
+                  style={{ color: accent }}
+                >
+                  {typeLabel(t, item.type)}
+                </span>
+              </div>
+              <div className="mt-1 truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>
                 {title}
               </div>
               <div className="mt-1 flex items-center gap-1.5 text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>
@@ -1205,11 +1251,13 @@ function RecentList({ items, onOpen }: { items: AllDocItem[]; onOpen: (item: All
 
   const statusColors: Record<string, string> = {
     active: 'var(--color-success)',
+    issued: 'var(--color-success)',
     draft: 'var(--color-warning)',
     archived: 'var(--color-text-tertiary)',
   }
   const statusLabels: Record<string, string> = {
     active: t.statusActive,
+    issued: 'Issued',
     draft: t.statusDraft,
     archived: t.statusArchived,
   }
