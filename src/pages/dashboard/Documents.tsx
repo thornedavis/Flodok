@@ -890,6 +890,7 @@ function RecentFilters({
 function typeLabel(t: ReturnType<typeof useLang>['t'], type: DocumentType): string {
   if (type === 'sop') return t.documentsAllTypeBadgeSop
   if (type === 'contract') return t.documentsAllTypeBadgeContract
+  if (type === 'letter') return 'Letter'
   return t.documentsAllTypeBadgeJobDescription
 }
 
