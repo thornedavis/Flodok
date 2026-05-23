@@ -2011,6 +2011,228 @@ export type Database = {
           },
         ]
       }
+      letter_acknowledgements: {
+        Row: {
+          acknowledged_at: string
+          employee_id: string
+          id: string
+          letter_id: string
+          signature_font: string | null
+          signature_meta: Json | null
+          typed_name: string | null
+          version_number: number
+        }
+        Insert: {
+          acknowledged_at?: string
+          employee_id: string
+          id?: string
+          letter_id: string
+          signature_font?: string | null
+          signature_meta?: Json | null
+          typed_name?: string | null
+          version_number: number
+        }
+        Update: {
+          acknowledged_at?: string
+          employee_id?: string
+          id?: string
+          letter_id?: string
+          signature_font?: string | null
+          signature_meta?: Json | null
+          typed_name?: string | null
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "letter_acknowledgements_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "letter_acknowledgements_letter_id_fkey"
+            columns: ["letter_id"]
+            isOneToOne: false
+            referencedRelation: "letters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      letter_tags: {
+        Row: {
+          letter_id: string
+          tag_id: string
+        }
+        Insert: {
+          letter_id: string
+          tag_id: string
+        }
+        Update: {
+          letter_id?: string
+          tag_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "letter_tags_letter_id_fkey"
+            columns: ["letter_id"]
+            isOneToOne: false
+            referencedRelation: "letters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "letter_tags_tag_id_fkey"
+            columns: ["tag_id"]
+            isOneToOne: false
+            referencedRelation: "tags"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      letter_versions: {
+        Row: {
+          change_summary: string | null
+          changed_by: string | null
+          content_doc: Json | null
+          content_markdown: string
+          content_markdown_id: string | null
+          created_at: string
+          id: string
+          letter_id: string
+          version_number: number
+        }
+        Insert: {
+          change_summary?: string | null
+          changed_by?: string | null
+          content_doc?: Json | null
+          content_markdown?: string
+          content_markdown_id?: string | null
+          created_at?: string
+          id?: string
+          letter_id: string
+          version_number: number
+        }
+        Update: {
+          change_summary?: string | null
+          changed_by?: string | null
+          content_doc?: Json | null
+          content_markdown?: string
+          content_markdown_id?: string | null
+          created_at?: string
+          id?: string
+          letter_id?: string
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "letter_versions_letter_id_fkey"
+            columns: ["letter_id"]
+            isOneToOne: false
+            referencedRelation: "letters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      letters: {
+        Row: {
+          category: string | null
+          content_doc: Json | null
+          content_markdown: string
+          content_markdown_id: string | null
+          created_at: string
+          current_version: number
+          deleted_at: string | null
+          deleted_by: string | null
+          employee_id: string | null
+          id: string
+          is_template: boolean
+          issued_at: string | null
+          org_id: string
+          reference_number: string | null
+          requires_acknowledgement: boolean
+          response_by_date: string | null
+          sender_user_id: string | null
+          status: string
+          subject: string | null
+          title: string
+          trashed_with_parent_id: string | null
+          type_code: string | null
+          updated_at: string
+        }
+        Insert: {
+          category?: string | null
+          content_doc?: Json | null
+          content_markdown?: string
+          content_markdown_id?: string | null
+          created_at?: string
+          current_version?: number
+          deleted_at?: string | null
+          deleted_by?: string | null
+          employee_id?: string | null
+          id?: string
+          is_template?: boolean
+          issued_at?: string | null
+          org_id: string
+          reference_number?: string | null
+          requires_acknowledgement?: boolean
+          response_by_date?: string | null
+          sender_user_id?: string | null
+          status?: string
+          subject?: string | null
+          title: string
+          trashed_with_parent_id?: string | null
+          type_code?: string | null
+          updated_at?: string
+        }
+        Update: {
+          category?: string | null
+          content_doc?: Json | null
+          content_markdown?: string
+          content_markdown_id?: string | null
+          created_at?: string
+          current_version?: number
+          deleted_at?: string | null
+          deleted_by?: string | null
+          employee_id?: string | null
+          id?: string
+          is_template?: boolean
+          issued_at?: string | null
+          org_id?: string
+          reference_number?: string | null
+          requires_acknowledgement?: boolean
+          response_by_date?: string | null
+          sender_user_id?: string | null
+          status?: string
+          subject?: string | null
+          title?: string
+          trashed_with_parent_id?: string | null
+          type_code?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "letters_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "letters_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "letters_sender_user_id_fkey"
+            columns: ["sender_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       org_integrations: {
         Row: {
           config: Json
@@ -2225,6 +2447,7 @@ export type Database = {
           industry: string | null
           jkk_rate: string | null
           klu_code: string | null
+          letter_reference_prefix: string | null
           logo_url: string | null
           max_bonus_idr: number | null
           max_credit_per_award: number | null
@@ -2272,6 +2495,7 @@ export type Database = {
           industry?: string | null
           jkk_rate?: string | null
           klu_code?: string | null
+          letter_reference_prefix?: string | null
           logo_url?: string | null
           max_bonus_idr?: number | null
           max_credit_per_award?: number | null
@@ -2319,6 +2543,7 @@ export type Database = {
           industry?: string | null
           jkk_rate?: string | null
           klu_code?: string | null
+          letter_reference_prefix?: string | null
           logo_url?: string | null
           max_bonus_idr?: number | null
           max_credit_per_award?: number | null
