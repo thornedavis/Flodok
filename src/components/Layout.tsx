@@ -14,7 +14,7 @@ import { DunningBanner } from './DunningBanner'
 import { NotificationBell } from './NotificationBell'
 import { FilterSearchInput } from './FilterControls'
 
-type NavKey = 'navOverview' | 'navInbox' | 'navEmployees' | 'navHiring' | 'navRecruitment' | 'navCompany' | 'navDocuments' | 'navPerformance' | 'navSpotlight' | 'navPending' | 'navSettings'
+type NavKey = 'navOverview' | 'navInbox' | 'navEmployees' | 'navHiring' | 'navRecruitment' | 'navCompany' | 'navDocuments' | 'navPerformance' | 'navSpotlight' | 'navPending' | 'navTrash' | 'navSettings'
 
 interface NavItemDef {
   path: string
@@ -76,10 +76,18 @@ const navItems: NavItemDef[] = [
     labelKey: 'navCompany',
     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 21h18" /><path d="M5 21V7l8-4v18" /><path d="M19 21V11l-6-4" /><path d="M9 9h1" /><path d="M9 13h1" /><path d="M9 17h1" /><path d="M15 13h1" /><path d="M15 17h1" /></svg>,
   },
+]
+
+const footerNavItems: NavItemDef[] = [
   {
     path: '/dashboard/settings',
     labelKey: 'navSettings',
     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>,
+  },
+  {
+    path: '/dashboard/trash',
+    labelKey: 'navTrash',
+    icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>,
   },
 ]
 
@@ -349,29 +357,59 @@ function Sidebar({ user, mobileOpen, onCloseMobile }: {
           </ul>
         </nav>
 
-        {/* Help link */}
+        {/* Footer nav: Settings + Trash sit above Help as low-frequency
+            utilities, separated from the main work surfaces above. */}
         <div className="border-t px-3 pt-3" style={{ borderColor: 'var(--color-border)' }}>
-          <div className="group relative">
-            <Link
-              to="/help"
-              className={`flex items-center rounded-lg py-2 text-sm font-medium transition-colors ${
-                isCollapsed ? 'justify-center px-2' : 'gap-3 px-3'
-              }`}
-              style={{ color: 'var(--color-text-secondary)' }}
-              onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
-              onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
-            >
-              <span style={{ color: 'var(--color-text-tertiary)' }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="10" />
-                  <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
-                  <line x1="12" y1="17" x2="12.01" y2="17" />
-                </svg>
-              </span>
-              {!isCollapsed && t.helpCenter}
-            </Link>
-            {isCollapsed && <NavFlyout label={t.helpCenter} />}
-          </div>
+          <ul className="space-y-0.5">
+            {footerNavItems.map(item => {
+              const isActive = item.exact
+                ? location.pathname === item.path
+                : location.pathname.startsWith(item.path)
+              return (
+                <li key={item.path} className="group relative">
+                  <Link
+                    to={item.path}
+                    className={`flex items-center rounded-lg py-2 text-sm font-medium transition-colors ${
+                      isCollapsed ? 'justify-center px-2' : 'gap-3 px-3'
+                    }`}
+                    style={{
+                      color: isActive ? 'var(--color-text)' : 'var(--color-text-secondary)',
+                      backgroundColor: isActive ? 'var(--color-bg-tertiary)' : 'transparent',
+                    }}
+                    onMouseOver={e => { if (!isActive) e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
+                    onMouseOut={e => { if (!isActive) e.currentTarget.style.backgroundColor = 'transparent' }}
+                  >
+                    <span style={{ color: isActive ? 'var(--color-text)' : 'var(--color-text-tertiary)' }}>
+                      {item.icon}
+                    </span>
+                    {!isCollapsed && t[item.labelKey]}
+                  </Link>
+                  {isCollapsed && <NavFlyout label={t[item.labelKey]} />}
+                </li>
+              )
+            })}
+            <li className="group relative">
+              <Link
+                to="/help"
+                className={`flex items-center rounded-lg py-2 text-sm font-medium transition-colors ${
+                  isCollapsed ? 'justify-center px-2' : 'gap-3 px-3'
+                }`}
+                style={{ color: 'var(--color-text-secondary)' }}
+                onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
+                onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
+              >
+                <span style={{ color: 'var(--color-text-tertiary)' }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                    <line x1="12" y1="17" x2="12.01" y2="17" />
+                  </svg>
+                </span>
+                {!isCollapsed && t.helpCenter}
+              </Link>
+              {isCollapsed && <NavFlyout label={t.helpCenter} />}
+            </li>
+          </ul>
         </div>
 
         {/* Invite card — admins only, hidden once the team has 3+ members */}
