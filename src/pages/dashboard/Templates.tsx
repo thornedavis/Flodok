@@ -103,7 +103,7 @@ export function Templates({ user }: { user: User }) {
       sop: t.templateNewSopUntitled,
       contract: t.templateNewContractUntitled,
       job_description: t.jdTemplateUntitled,
-      letter: 'Untitled letter template',
+      letter: t.templateNewLetterUntitled,
     }
     const { data, error } = await supabase
       .from('document_templates')
@@ -325,7 +325,7 @@ function TypePickerTile({
     sop: t.documentsAllTypeBadgeSop,
     contract: t.documentsAllTypeBadgeContract,
     job_description: t.documentsAllTypeBadgeJobDescription,
-    letter: 'Letter',
+    letter: t.documentsAllTypeBadgeLetter,
   }
   return (
     <button
@@ -366,7 +366,7 @@ function TypePickerTile({
 function typeLabel(t: ReturnType<typeof useLang>['t'], type: DocumentType): string {
   if (type === 'sop') return t.documentsAllTypeBadgeSop
   if (type === 'contract') return t.documentsAllTypeBadgeContract
-  if (type === 'letter') return 'Letter'
+  if (type === 'letter') return t.documentsAllTypeBadgeLetter
   return t.documentsAllTypeBadgeJobDescription
 }
 
@@ -675,7 +675,7 @@ function TemplateList({ items, onOpen }: { items: TemplateItem[]; onOpen: (item:
     sop: t.documentsAllTypeBadgeSop,
     contract: t.documentsAllTypeBadgeContract,
     job_description: t.documentsAllTypeBadgeJobDescription,
-    letter: 'Letter',
+    letter: t.documentsAllTypeBadgeLetter,
   }
 
   return (

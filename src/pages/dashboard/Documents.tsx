@@ -669,7 +669,7 @@ function StartNewSection({
           onClick={onCreateJobDescription}
         />
         <CreateTile
-          label="New Letter"
+          label={t.documentsNewLetter}
           accent="var(--color-primary)"
           disabled={!canWrite}
           onClick={onCreateLetter}
@@ -890,7 +890,7 @@ function RecentFilters({
 function typeLabel(t: ReturnType<typeof useLang>['t'], type: DocumentType): string {
   if (type === 'sop') return t.documentsAllTypeBadgeSop
   if (type === 'contract') return t.documentsAllTypeBadgeContract
-  if (type === 'letter') return 'Letter'
+  if (type === 'letter') return t.documentsAllTypeBadgeLetter
   return t.documentsAllTypeBadgeJobDescription
 }
 
@@ -1019,7 +1019,7 @@ function RecentGrid({
   }
   const statusLabels: Record<string, string> = {
     active: t.statusActive,
-    issued: 'Issued',
+    issued: t.statusIssued,
     draft: t.statusDraft,
     archived: t.statusArchived,
   }
@@ -1258,7 +1258,7 @@ function RecentList({ items, onOpen }: { items: AllDocItem[]; onOpen: (item: All
   }
   const statusLabels: Record<string, string> = {
     active: t.statusActive,
-    issued: 'Issued',
+    issued: t.statusIssued,
     draft: t.statusDraft,
     archived: t.statusArchived,
   }
@@ -1266,7 +1266,7 @@ function RecentList({ items, onOpen }: { items: AllDocItem[]; onOpen: (item: All
     sop: t.documentsAllTypeBadgeSop,
     contract: t.documentsAllTypeBadgeContract,
     job_description: t.documentsAllTypeBadgeJobDescription,
-    letter: 'Letter',
+    letter: t.documentsAllTypeBadgeLetter,
   }
 
   return (

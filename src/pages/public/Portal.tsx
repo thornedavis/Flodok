@@ -1506,11 +1506,11 @@ export function Portal() {
                     {letter.title || s.documentsUntitled}
                   </h1>
                   <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-                    {letter.subject && (<><dt className="font-medium" style={{ color: 'var(--color-text-tertiary)' }}>Subject</dt><dd>{letter.subject}</dd></>)}
-                    {letter.reference_number && (<><dt className="font-medium" style={{ color: 'var(--color-text-tertiary)' }}>Ref</dt><dd>{letter.reference_number}</dd></>)}
-                    {letter.category && (<><dt className="font-medium" style={{ color: 'var(--color-text-tertiary)' }}>Category</dt><dd>{letter.category}</dd></>)}
-                    {letter.response_by_date && (<><dt className="font-medium" style={{ color: 'var(--color-text-tertiary)' }}>Respond by</dt><dd>{letter.response_by_date}</dd></>)}
-                    {letter.issued_at && (<><dt className="font-medium" style={{ color: 'var(--color-text-tertiary)' }}>Issued</dt><dd>{new Date(letter.issued_at).toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</dd></>)}
+                    {letter.subject && (<><dt className="font-medium" style={{ color: 'var(--color-text-tertiary)' }}>{s.portalLetterMetaSubject}</dt><dd>{letter.subject}</dd></>)}
+                    {letter.reference_number && (<><dt className="font-medium" style={{ color: 'var(--color-text-tertiary)' }}>{s.portalLetterMetaRef}</dt><dd>{letter.reference_number}</dd></>)}
+                    {letter.category && (<><dt className="font-medium" style={{ color: 'var(--color-text-tertiary)' }}>{s.portalLetterMetaCategory}</dt><dd>{letter.category}</dd></>)}
+                    {letter.response_by_date && (<><dt className="font-medium" style={{ color: 'var(--color-text-tertiary)' }}>{s.portalLetterMetaRespondBy}</dt><dd>{letter.response_by_date}</dd></>)}
+                    {letter.issued_at && (<><dt className="font-medium" style={{ color: 'var(--color-text-tertiary)' }}>{s.portalLetterMetaIssued}</dt><dd>{new Date(letter.issued_at).toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</dd></>)}
                   </dl>
                 </div>
 
@@ -1522,7 +1522,7 @@ export function Portal() {
                   </div>
                 ) : (
                   <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>
-                    This letter has no body yet.
+                    {s.portalLetterNoBody}
                   </p>
                 )}
 
@@ -1531,7 +1531,7 @@ export function Portal() {
                   <div className="mt-4 rounded-xl border p-4" style={{ borderColor: 'var(--color-border)' }}>
                     {ack ? (
                       <p className="text-sm" style={{ color: 'var(--color-success)' }}>
-                        Acknowledged on {new Date(ack.acknowledged_at).toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}.
+                        {s.portalLetterAcknowledgedOn(new Date(ack.acknowledged_at).toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-GB', { day: 'numeric', month: 'short', year: 'numeric' }))}
                       </p>
                     ) : (
                       <button
@@ -1541,7 +1541,7 @@ export function Portal() {
                         className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
                         style={{ backgroundColor: 'var(--color-primary)' }}
                       >
-                        {signing ? 'Acknowledging…' : 'I have read this letter'}
+                        {signing ? s.portalLetterAckLoading : s.portalLetterAckButton}
                       </button>
                     )}
                   </div>
@@ -1683,7 +1683,7 @@ function DocumentsGrid({
     { key: 'all', label: s.documentsAll },
     { key: 'sops', label: s.sops },
     { key: 'contracts', label: s.contracts },
-    { key: 'letters', label: 'Letters' },
+    { key: 'letters', label: s.portalLettersFilter },
   ]
 
   function openCard(card: DocCardItem) {
@@ -2217,6 +2217,7 @@ function ActivityFeed({
     contract_assigned: s.eventContractAssigned,
     contract_updated: s.eventContractUpdated,
     contract_signed: s.eventContractSigned,
+    letter_issued: s.eventLetterIssued,
     bonus_awarded: s.eventRewardGiven,
     achievement_unlocked: s.eventBadgeEarned,
     welcome: s.eventWelcome,
@@ -2228,6 +2229,7 @@ function ActivityFeed({
     contract_assigned: <ContractIcon />,
     contract_updated: <ContractIcon />,
     contract_signed: <CheckCircle />,
+    letter_issued: <LetterIcon />,
     bonus_awarded: <TrophyIcon />,
     achievement_unlocked: <BadgeIcon />,
     welcome: <HomeIcon />,

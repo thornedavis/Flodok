@@ -256,7 +256,7 @@ export function LetterEdit({ user }: { user: User }) {
     return (
       <span
         aria-hidden="true"
-        title="Required before issuing"
+        title={t.letterRequiredDotHint}
         className="ml-1 inline-block h-1.5 w-1.5 shrink-0 rounded-full align-middle"
         style={{ backgroundColor: 'var(--color-danger, #b91c1c)' }}
       />
@@ -269,9 +269,9 @@ export function LetterEdit({ user }: { user: User }) {
     archived: 'var(--color-text-tertiary)',
   }
   const statusLabel: Record<string, string> = {
-    draft: 'Draft',
-    issued: 'Issued',
-    archived: 'Archived',
+    draft: t.statusDraft,
+    issued: t.statusIssued,
+    archived: t.statusArchived,
   }
 
   const badge = (
@@ -303,18 +303,18 @@ export function LetterEdit({ user }: { user: User }) {
         disabled={saving || !canWrite || !canIssue}
         title={
           !canWrite ? t.dunningWriteBlocked :
-          !employeeId ? 'Tag an employee before issuing' :
-          !senderUserId ? 'Pick a sender before issuing' :
-          isIssued ? 'Already issued' :
-          isArchived ? 'Letter is archived' :
+          !employeeId ? t.letterIssueDisabledNoEmployee :
+          !senderUserId ? t.letterIssueDisabledNoSender :
+          isIssued ? t.letterIssueDisabledAlreadyIssued :
+          isArchived ? t.letterIssueDisabledArchived :
           undefined
         }
         className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
         style={{ backgroundColor: 'var(--color-primary)' }}
       >
         {savingMode === 'issue' ? (
-          <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>Issuing…</>
-        ) : isIssued ? 'Issued' : 'Issue'}
+          <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>{t.letterIssuing}</>
+        ) : isIssued ? t.letterIssuedButton : t.letterIssueButton}
       </button>
     </>
   )
@@ -323,19 +323,19 @@ export function LetterEdit({ user }: { user: User }) {
     <>
       {/* Employee — nullable. Tagging enables but does not auto-fire the Issue action. */}
       <div>
-        <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>Recipient{missingDot('employee')}</label>
+        <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>{t.letterRecipientLabel}{missingDot('employee')}</label>
         <EmployeeSelect
           value={employeeId}
           onChange={setEmployeeId}
           employees={allEmployees}
           disabled={!canWrite || isIssued || isArchived}
-          emptyLabel="No recipient yet"
+          emptyLabel={t.letterNoRecipient}
         />
       </div>
 
       {/* Sender — required for issuing. */}
       <div>
-        <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>Sender{missingDot('sender')}</label>
+        <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>{t.letterSenderLabel}{missingDot('sender')}</label>
         <div className="relative">
           <select
             value={senderUserId || ''}
@@ -344,7 +344,7 @@ export function LetterEdit({ user }: { user: User }) {
             className="w-full appearance-none rounded-lg border px-3 py-2 pr-8 text-sm disabled:opacity-50"
             style={inputStyle}
           >
-            <option value="">No sender</option>
+            <option value="">{t.letterNoSender}</option>
             {senderCandidates.map(u => (
               <option key={u.id} value={u.id}>
                 {u.name}{u.title ? ` · ${u.title}` : ''}
@@ -359,13 +359,13 @@ export function LetterEdit({ user }: { user: User }) {
 
       {/* Category — display label, eventually populated by template choice. */}
       <div>
-        <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>Category</label>
+        <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>{t.letterCategoryLabel}</label>
         <input
           type="text"
           value={category}
           onChange={e => setCategory(e.target.value)}
           disabled={!canWrite || isIssued || isArchived}
-          placeholder="e.g. Offering Letter"
+          placeholder={t.letterCategoryPlaceholder}
           className="w-full rounded-lg border px-3 py-2 text-sm disabled:opacity-50"
           style={inputStyle}
         />
@@ -373,7 +373,7 @@ export function LetterEdit({ user }: { user: User }) {
 
       {/* Type code — short code substituted into the reference number template. */}
       <div>
-        <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>Type code</label>
+        <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>{t.letterTypeCodeLabel}</label>
         <input
           type="text"
           value={typeCode}
@@ -388,13 +388,13 @@ export function LetterEdit({ user }: { user: User }) {
 
       {/* Reference number — auto-generated on issue if blank; editable otherwise. */}
       <div>
-        <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>Reference number</label>
+        <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>{t.letterReferenceNumberLabel}</label>
         <input
           type="text"
           value={referenceNumber}
           onChange={e => setReferenceNumber(e.target.value)}
           disabled={!canWrite || isArchived}
-          placeholder={status === 'draft' ? 'Auto-generated on issue' : ''}
+          placeholder={status === 'draft' ? t.letterReferenceNumberAutoPlaceholder : ''}
           className="w-full rounded-lg border px-3 py-2 text-sm disabled:opacity-50"
           style={inputStyle}
         />
@@ -402,13 +402,13 @@ export function LetterEdit({ user }: { user: User }) {
 
       {/* Subject. */}
       <div>
-        <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>Subject</label>
+        <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>{t.letterSubjectLabel}</label>
         <input
           type="text"
           value={subject}
           onChange={e => setSubject(e.target.value)}
           disabled={!canWrite || isIssued || isArchived}
-          placeholder="e.g. Offering Letter"
+          placeholder={t.letterSubjectPlaceholder}
           className="w-full rounded-lg border px-3 py-2 text-sm disabled:opacity-50"
           style={inputStyle}
         />
@@ -416,13 +416,13 @@ export function LetterEdit({ user }: { user: User }) {
 
       {/* Response-by date — optional deadline shown in the portal. */}
       <div>
-        <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>Response by</label>
+        <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>{t.letterResponseByLabel}</label>
         <DateTimePicker
           value={responseByDate}
           onChange={setResponseByDate}
           mode="date"
           disabled={!canWrite || isArchived}
-          placeholder="Optional"
+          placeholder={t.letterResponseByPlaceholder}
         />
       </div>
 
@@ -437,9 +437,9 @@ export function LetterEdit({ user }: { user: User }) {
             className="mt-0.5"
           />
           <span className="text-xs" style={{ color: 'var(--color-text)' }}>
-            Requires acknowledgement
+            {t.letterRequiresAckLabel}
             <span className="block text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>
-              Recipient must click to confirm they&rsquo;ve read this in the portal.
+              {t.letterRequiresAckHelp}
             </span>
           </span>
         </label>
@@ -499,7 +499,7 @@ export function LetterEdit({ user }: { user: User }) {
       storageKey="letterEdit"
       icon={<LetterIcon />}
       accent="var(--color-primary)"
-      typeLabel="Letter"
+      typeLabel={t.letterTypeLabel}
       title={title}
       onTitleChange={setTitle}
       canEditTitle={canWrite && !isIssued && !isArchived}
