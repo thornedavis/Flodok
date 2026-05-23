@@ -412,8 +412,11 @@ export function Pending({ user }: { user: User }) {
   return (
     <div>
       {/* Pending Updates Section */}
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.pendingUpdatesTitle}</h2>
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.pendingUpdatesTitle}</h1>
+          <p className="mt-1 max-w-3xl text-sm" style={{ color: 'var(--color-text-secondary)' }}>{t.pendingUpdatesSubtitle}</p>
+        </div>
         <div className="flex items-center gap-3">
           {pollResult && (
             <span className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>{pollResult}</span>
@@ -421,11 +424,9 @@ export function Pending({ user }: { user: User }) {
           <button
             onClick={handleCheckForUpdates}
             disabled={polling}
-            className="flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors"
+            className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50"
             style={{
-              borderColor: 'var(--color-border)',
-              color: polling ? 'var(--color-text-tertiary)' : 'var(--color-text)',
-              backgroundColor: 'var(--color-bg-elevated)',
+              backgroundColor: 'var(--color-primary)',
             }}
           >
             <svg

@@ -829,6 +829,7 @@ export const translations = {
 
     // Manager app — Pending page
     pendingUpdatesTitle: 'Pending Updates',
+    pendingUpdatesSubtitle: 'Review proposed SOP changes pulled from meeting transcripts.',
     checkForUpdates: 'Check for Updates',
     checking: 'Checking...',
     noApiKeyFound: 'No active API key found. Create one in Settings.',
@@ -2837,6 +2838,7 @@ export const translations = {
 
     // Manager app — Pending page
     pendingUpdatesTitle: 'Pembaruan Tertunda',
+    pendingUpdatesSubtitle: 'Tinjau usulan perubahan SOP dari transkrip rapat.',
     checkForUpdates: 'Periksa Pembaruan',
     checking: 'Memeriksa...',
     noApiKeyFound: 'Tidak ada kunci API aktif. Buat satu di Pengaturan.',
