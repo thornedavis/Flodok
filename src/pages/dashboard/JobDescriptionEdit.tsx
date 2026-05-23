@@ -20,6 +20,7 @@ import { useBilling } from '../../contexts/BillingContext'
 import { useBreadcrumbTrailing } from '../../contexts/BreadcrumbContext'
 import { DocumentEditor } from '../../components/editor/bilingual/DocumentEditor'
 import { DocumentEditShell, EDITOR_STICKY_TOP_PX } from '../../components/editor/DocumentEditShell'
+import { SaveAsTemplateButton } from '../../components/SaveAsTemplateButton'
 import { DateTimePicker } from '../../components/DateTimePicker'
 import { EmployeeSelect } from '../../components/EmployeeSelect'
 import { type EmpDeptShape } from '../../lib/employee'
@@ -401,6 +402,14 @@ export function JobDescriptionEdit({ user }: { user: User }) {
               {t.jdActionDelete}
             </button>
           )}
+          {!isNew && (
+            <SaveAsTemplateButton
+              orgId={user.org_id}
+              defaultTitle={form.title}
+              disabled={!canWrite}
+              getSource={() => ({ type: 'job_description', contentDoc: content })}
+            />
+          )}
           <button type="button" onClick={handleSaveDraft} disabled={saving || !canWrite} title={writeDisabledTitle}
             className="rounded-lg border px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
             style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
@@ -414,11 +423,19 @@ export function JobDescriptionEdit({ user }: { user: User }) {
         </>
       )}
       {status === 'published' && (
-        <button type="button" onClick={handleArchive} disabled={saving || !canWrite} title={writeDisabledTitle}
-          className="rounded-lg border px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
-          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-          {t.jdActionArchive}
-        </button>
+        <>
+          <SaveAsTemplateButton
+            orgId={user.org_id}
+            defaultTitle={form.title}
+            disabled={!canWrite}
+            getSource={() => ({ type: 'job_description', contentDoc: content })}
+          />
+          <button type="button" onClick={handleArchive} disabled={saving || !canWrite} title={writeDisabledTitle}
+            className="rounded-lg border px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+            {t.jdActionArchive}
+          </button>
+        </>
       )}
     </>
   )

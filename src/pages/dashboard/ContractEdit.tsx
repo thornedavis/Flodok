@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { DocumentEditor } from '../../components/editor/bilingual/DocumentEditor'
 import { DocumentEditShell, EDITOR_STICKY_TOP_PX } from '../../components/editor/DocumentEditShell'
+import { SaveAsTemplateButton } from '../../components/SaveAsTemplateButton'
 import { useLang } from '../../contexts/LanguageContext'
 import { type EmpDeptShape } from '../../lib/employee'
 import { bucketReferenceValues, referenceNames } from '../../lib/companyReference'
@@ -578,6 +579,23 @@ export function ContractEdit({ user }: { user: User }) {
         </button>
       ) : (
         <>
+          <SaveAsTemplateButton
+            orgId={user.org_id}
+            defaultTitle={title}
+            disabled={!canWrite}
+            getSource={() => ({
+              type: 'contract',
+              contentDoc,
+              contractType,
+              baseWageIdr: parsedBaseWage,
+              allowanceIdr: parsedAllowance,
+              hoursPerDay: parsedHoursPerDay,
+              daysPerWeek: parsedDaysPerWeek,
+              annualLeaveDays: parsedAnnualLeave,
+              probationMonths: parsedProbationMonths,
+              jobPositions,
+            })}
+          />
           <button onClick={handleSaveAsDraft} disabled={saving || !canWrite || (!hasChanges && status === 'draft')} title={!canWrite ? t.dunningWriteBlocked : undefined}
             className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-50"
             style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>

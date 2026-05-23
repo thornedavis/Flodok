@@ -26,6 +26,8 @@ import {
 import { FilterPanel, FilterSearchInput } from '../../components/FilterControls'
 import type { FilterPanelSection } from '../../components/FilterControls'
 import { Skeleton } from '../../components/Skeleton'
+import { Modal } from '../../components/Modal'
+import { useBilling } from '../../contexts/BillingContext'
 import { docPreviewLines } from '../../lib/documentDoc'
 import type { User } from '../../types/aliases'
 
@@ -78,14 +80,46 @@ function markdownPreviewLines(markdown: string | null, maxLines: number): string
 export function Templates({ user }: { user: User }) {
   const { t } = useLang()
   const navigate = useNavigate()
+  const { canWrite } = useBilling()
   const [items, setItems] = useState<TemplateItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [creating, setCreating] = useState(false)
 
   const [viewMode, setViewMode] = useState<ViewMode>(loadViewMode)
   const [typeFilter, setTypeFilter] = useState<DocumentType[]>([])
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [query, setQuery] = useState('')
+
+  // Create a blank template of the chosen type, then route to the slim
+  // template editor. Mirrors the per-type blank-create flow in
+  // JobDescriptions.tsx (which inserts JD templates the same way) so all
+  // three types reach the same `document_templates` row shape.
+  async function handleCreateBlank(type: DocumentType) {
+    if (creating || !canWrite) return
+    setCreating(true)
+    const untitledByType: Record<DocumentType, string> = {
+      sop: t.templateNewSopUntitled,
+      contract: t.templateNewContractUntitled,
+      job_description: t.jdTemplateUntitled,
+    }
+    const { data, error } = await supabase
+      .from('document_templates')
+      .insert({
+        org_id: user.org_id,
+        type,
+        title: untitledByType[type],
+      })
+      .select('id')
+      .single()
+    setCreating(false)
+    if (error || !data) {
+      window.alert(error?.message ?? 'Could not create template')
+      return
+    }
+    navigate(documentTemplateEditPath(data.id))
+  }
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -185,6 +219,20 @@ export function Templates({ user }: { user: User }) {
         <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>
           {t.templatesTitle}
         </h1>
+        <button
+          type="button"
+          onClick={() => setPickerOpen(true)}
+          disabled={!canWrite}
+          title={!canWrite ? t.dunningWriteBlocked : undefined}
+          className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+          style={{ backgroundColor: 'var(--color-primary)' }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          {t.templatesNewTemplate}
+        </button>
       </div>
 
       <TemplateFilters
@@ -205,9 +253,24 @@ export function Templates({ user }: { user: User }) {
       {loading ? (
         viewMode === 'grid' ? <TemplateGridSkeleton count={8} /> : <TemplateListSkeleton count={6} />
       ) : items.length === 0 ? (
-        <p className="py-12 text-center text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-          {t.templatesEmpty}
-        </p>
+        <div className="py-12 text-center">
+          <p className="mb-3 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+            {t.templatesEmpty}
+          </p>
+          <button
+            type="button"
+            onClick={() => setPickerOpen(true)}
+            disabled={!canWrite}
+            className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            {t.templatesNewTemplate}
+          </button>
+        </div>
       ) : filtered.length === 0 ? (
         <p className="py-12 text-center text-sm" style={{ color: 'var(--color-text-secondary)' }}>
           {t.templatesNoMatches}
@@ -217,7 +280,82 @@ export function Templates({ user }: { user: User }) {
       ) : (
         <TemplateList items={filtered} onOpen={item => navigate(documentTemplateEditPath(item.id))} />
       )}
+
+      <Modal
+        open={pickerOpen}
+        onClose={() => { if (!creating) setPickerOpen(false) }}
+        title={t.templatesNewTemplate}
+      >
+        <p className="mb-4 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+          {t.templatesNewTemplateDesc}
+        </p>
+        <div className="grid grid-cols-3 gap-3">
+          {DOCUMENT_TYPES.map(type => (
+            <TypePickerTile
+              key={type}
+              type={type}
+              disabled={creating}
+              onSelect={() => handleCreateBlank(type)}
+            />
+          ))}
+        </div>
+      </Modal>
     </div>
+  )
+}
+
+// One tile per document type in the "New template" picker. The visual
+// language matches the "Start a new document" tiles on the Documents
+// landing — same blank-page surface, same per-type accent colour and
+// glyph in a tinted circle — so the gesture for creating a template
+// feels like the gesture for creating a document.
+function TypePickerTile({
+  type,
+  onSelect,
+  disabled,
+}: {
+  type: DocumentType
+  onSelect: () => void
+  disabled?: boolean
+}) {
+  const { t } = useLang()
+  const accent = TYPE_COLORS[type]
+  const labels: Record<DocumentType, string> = {
+    sop: t.documentsAllTypeBadgeSop,
+    contract: t.documentsAllTypeBadgeContract,
+    job_description: t.documentsAllTypeBadgeJobDescription,
+  }
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      disabled={disabled}
+      className="group flex flex-col text-left transition-all disabled:cursor-not-allowed disabled:opacity-40"
+    >
+      <div
+        className="flex aspect-[3/4] items-center justify-center rounded-lg border transition-all"
+        style={{ backgroundColor: 'var(--color-bg)', borderColor: 'var(--color-border)' }}
+        onMouseOver={e => {
+          if (disabled) return
+          e.currentTarget.style.borderColor = accent
+          e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.18)'
+        }}
+        onMouseOut={e => {
+          e.currentTarget.style.borderColor = 'var(--color-border)'
+          e.currentTarget.style.boxShadow = 'none'
+        }}
+      >
+        <div
+          className="flex h-10 w-10 items-center justify-center rounded-full transition-transform group-hover:scale-110"
+          style={{ backgroundColor: `color-mix(in srgb, ${accent} 14%, transparent)`, color: accent }}
+        >
+          <DocTypeIcon type={type} />
+        </div>
+      </div>
+      <div className="mt-2 px-0.5 text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+        {labels[type]}
+      </div>
+    </button>
   )
 }
 
@@ -408,7 +546,7 @@ const TYPE_COLORS: Record<DocumentType, string> = {
 
 function TemplateGridSkeleton({ count }: { count: number }) {
   return (
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4" role="status" aria-busy="true">
+    <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4" role="status" aria-busy="true">
       {Array.from({ length: count }).map((_, i) => (
         <div
           key={i}
@@ -461,7 +599,7 @@ function TemplateGrid({ items, onOpen }: { items: TemplateItem[]; onOpen: (item:
   const { t } = useLang()
 
   return (
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4">
+    <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4">
       {items.map(item => {
         const title = item.title.trim() || t.documentsUntitled
         const accent = TYPE_COLORS[item.type] ?? 'var(--color-primary)'
