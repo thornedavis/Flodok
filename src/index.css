@@ -41,6 +41,10 @@
   --color-diff-remove: #450a0a;
 }
 
+html {
+  font-size: 90%;
+}
+
 body {
   margin: 0;
   background-color: var(--color-bg);
