@@ -31,6 +31,7 @@ import {
   publishJobDescription, suggestDocVersion,
   type JobDescriptionStatus,
 } from '../../lib/jobDescriptions'
+import { trashDocument } from '../../lib/trash'
 import type { User, JobDescription, CompanyDepartment, HiringRequest, Employee } from '../../types/aliases'
 
 type DepartmentOption = Pick<CompanyDepartment, 'id' | 'name'>
@@ -354,10 +355,14 @@ export function JobDescriptionEdit({ user }: { user: User }) {
     if (!id) return
     if (!confirm(t.jdConfirmDelete)) return
     setSaving(true)
-    const { error } = await supabase.from('job_descriptions').delete().eq('id', id)
-    setSaving(false)
-    if (error) { setError(error.message); return }
-    navigate('/dashboard/documents')
+    try {
+      await trashDocument(id, 'job_description')
+      navigate('/dashboard/documents')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setSaving(false)
+    }
   }
 
   const writeDisabledTitle = !canWrite ? t.dunningWriteBlocked : undefined

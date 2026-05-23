@@ -1504,6 +1504,8 @@ export type Database = {
           candidate_employee_id: string | null
           category: string
           created_at: string
+          deleted_at: string | null
+          deleted_by: string | null
           department_id: string
           employment_type: string
           expected_hiring_date: string | null
@@ -1541,6 +1543,8 @@ export type Database = {
           candidate_employee_id?: string | null
           category: string
           created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
           department_id: string
           employment_type: string
           expected_hiring_date?: string | null
@@ -1578,6 +1582,8 @@ export type Database = {
           candidate_employee_id?: string | null
           category?: string
           created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
           department_id?: string
           employment_type?: string
           expected_hiring_date?: string | null
@@ -1851,6 +1857,8 @@ export type Database = {
           created_at: string
           created_by: string | null
           current_version: number
+          deleted_at: string | null
+          deleted_by: string | null
           department_id: string | null
           doc_version: string | null
           effective_date: string | null
@@ -1873,6 +1881,8 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           current_version?: number
+          deleted_at?: string | null
+          deleted_by?: string | null
           department_id?: string | null
           doc_version?: string | null
           effective_date?: string | null
@@ -1895,6 +1905,8 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           current_version?: number
+          deleted_at?: string | null
+          deleted_by?: string | null
           department_id?: string | null
           doc_version?: string | null
           effective_date?: string | null
@@ -2765,6 +2777,8 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string | null
+          deleted_at: string | null
+          deleted_by: string | null
           display_mode: string
           effective_from: string | null
           effective_until: string | null
@@ -2792,6 +2806,8 @@ export type Database = {
         Insert: {
           created_at?: string
           created_by?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           display_mode?: string
           effective_from?: string | null
           effective_until?: string | null
@@ -2819,6 +2835,8 @@ export type Database = {
         Update: {
           created_at?: string
           created_by?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           display_mode?: string
           effective_from?: string | null
           effective_until?: string | null
@@ -3055,6 +3073,10 @@ export type Database = {
         Args: { p_org_id: string }
         Returns: undefined
       }
+      _trash_assert_caller_in_org: {
+        Args: { p_org_id: string }
+        Returns: undefined
+      }
       admin_rewards_roster: { Args: never; Returns: Json }
       admin_update_user_role: {
         Args: { new_role: string; target_user_id: string }
@@ -3069,6 +3091,8 @@ export type Database = {
           created_at: string
           created_by: string | null
           current_version: number
+          deleted_at: string | null
+          deleted_by: string | null
           department_id: string | null
           doc_version: string | null
           effective_date: string | null
@@ -3178,6 +3202,8 @@ export type Database = {
           candidate_employee_id: string | null
           category: string
           created_at: string
+          deleted_at: string | null
+          deleted_by: string | null
           department_id: string
           employment_type: string
           expected_hiring_date: string | null
@@ -3224,6 +3250,8 @@ export type Database = {
           candidate_employee_id: string | null
           category: string
           created_at: string
+          deleted_at: string | null
+          deleted_by: string | null
           department_id: string
           employment_type: string
           expected_hiring_date: string | null
@@ -3270,6 +3298,8 @@ export type Database = {
           candidate_employee_id: string | null
           category: string
           created_at: string
+          deleted_at: string | null
+          deleted_by: string | null
           department_id: string
           employment_type: string
           expected_hiring_date: string | null
@@ -3375,6 +3405,8 @@ export type Database = {
           created_at: string
           created_by: string | null
           current_version: number
+          deleted_at: string | null
+          deleted_by: string | null
           department_id: string | null
           doc_version: string | null
           effective_date: string | null
@@ -3461,6 +3493,8 @@ export type Database = {
           candidate_employee_id: string | null
           category: string
           created_at: string
+          deleted_at: string | null
+          deleted_by: string | null
           department_id: string
           employment_type: string
           expected_hiring_date: string | null
@@ -3511,6 +3545,11 @@ export type Database = {
         Args: { p_cascade_docs?: boolean; p_employee_id: string }
         Returns: undefined
       }
+      trash_hiring_request: {
+        Args: { p_request_id: string }
+        Returns: undefined
+      }
+      trash_spotlight_post: { Args: { p_post_id: string }; Returns: undefined }
       upcoming_milestones: {
         Args: { p_days_ahead: number }
         Returns: {

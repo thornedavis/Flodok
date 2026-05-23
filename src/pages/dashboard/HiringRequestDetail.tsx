@@ -19,6 +19,7 @@ import {
   pendingApprover, statusTone, submitHiringRequest, isTerminalStatus,
   type AllowanceOption, type CandidateSource, type EmploymentType, type FundSource, type HiringEventKind, type RequestCategory, type RequestStatus,
 } from '../../lib/hiringRequests'
+import { trashHiringRequest } from '../../lib/trash'
 import type { Translations } from '../../lib/translations'
 import type { User, HiringRequest } from '../../types/aliases'
 
@@ -179,10 +180,14 @@ export function HiringRequestDetail({ user }: { user: User }) {
     if (!row) return
     if (!confirm(t.hiringRequestsDeleteDraftConfirm)) return
     setWorking(true)
-    const { error } = await supabase.from('hiring_requests').delete().eq('id', row.id)
-    setWorking(false)
-    if (error) { setError(error.message); return }
-    navigate('/dashboard/hiring')
+    try {
+      await trashHiringRequest(row.id)
+      navigate('/dashboard/hiring')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setWorking(false)
+    }
   }
 
   async function handleSubmit() {

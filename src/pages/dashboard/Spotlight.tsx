@@ -6,6 +6,7 @@ import { formatRelativeTime } from '../../lib/relativeTime'
 import { FilterPill, FilterPanel, FilterSearchInput } from '../../components/FilterControls'
 import type { FilterPanelSection } from '../../components/FilterControls'
 import { Skeleton } from '../../components/Skeleton'
+import { trashSpotlightPost } from '../../lib/trash'
 import type { Lang, Translations } from '../../lib/translations'
 import { useBilling } from '../../contexts/BillingContext'
 import type { User, SpotlightPost, SpotlightStatus, SpotlightPriority } from '../../types/aliases'
@@ -104,9 +105,12 @@ export function Spotlight({ user }: { user: User }) {
 
   async function handleDelete(post: PostWithStats) {
     if (!confirm(t.spotlightDeleteConfirm)) return
-    const { error } = await supabase.from('spotlight_posts').delete().eq('id', post.id)
-    if (error) { alert(error.message); return }
-    loadData()
+    try {
+      await trashSpotlightPost(post.id)
+      loadData()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err))
+    }
   }
 
   const filtered = posts

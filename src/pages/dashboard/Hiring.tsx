@@ -18,6 +18,7 @@ import { useRole } from '../../hooks/useRole'
 import { FilterPill, FilterSearchInput } from '../../components/FilterControls'
 import { Skeleton } from '../../components/Skeleton'
 import { isEditableByRequester, pendingApprover, statusTone, submitHiringRequest, type RequestStatus } from '../../lib/hiringRequests'
+import { trashHiringRequest } from '../../lib/trash'
 import { JobDescriptionsList } from './JobDescriptions'
 import type { Translations } from '../../lib/translations'
 import type { User, HiringRequest, CompanyDepartment } from '../../types/aliases'
@@ -268,10 +269,14 @@ function RequestsView({ user }: { user: User }) {
     if (busy) return
     if (!confirm(t.hiringRequestsDeleteDraftConfirm)) return
     setBusy(true)
-    const { error } = await supabase.from('hiring_requests').delete().eq('id', r.id)
-    setBusy(false)
-    if (error) { alert(error.message); return }
-    await loadAll()
+    try {
+      await trashHiringRequest(r.id)
+      await loadAll()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (

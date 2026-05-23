@@ -446,13 +446,7 @@ function AllDocumentsView({ user }: { user: User }) {
     if (!canWrite) return
     if (!window.confirm(t.deleteDocumentConfirm(item.title.trim() || t.documentsUntitled))) return
     try {
-      if (item.type === 'sop' || item.type === 'contract') {
-        await trashDocument(item.id, item.type)
-      } else {
-        // job_descriptions: not part of the trash system; hard delete preserved.
-        const { error } = await supabase.from(tableForType(item.type)).delete().eq('id', item.id)
-        if (error) throw new Error(error.message)
-      }
+      await trashDocument(item.id, item.type)
       setItems(prev => prev.filter(i => !(i.type === item.type && i.id === item.id)))
     } catch (err) {
       window.alert(err instanceof Error ? err.message : String(err))

@@ -15,7 +15,14 @@ import type { User } from '../../types/aliases'
 
 const RECRUITMENT_STAGES = new Set(['prospective', 'shortlisted', 'offered', 'signed', 'talent_pool', 'no_show'])
 
-type DisplayType = 'employee' | 'candidate' | 'sop' | 'contract'
+type DisplayType =
+  | 'employee'
+  | 'candidate'
+  | 'sop'
+  | 'contract'
+  | 'job_description'
+  | 'hiring_request'
+  | 'spotlight_post'
 
 interface DisplayItem extends TrashItem {
   displayType: DisplayType
@@ -27,6 +34,9 @@ const FILTERS: Array<{ key: 'all' | DisplayType; labelKey: keyof Translations }>
   { key: 'candidate', labelKey: 'trashFilterCandidates' },
   { key: 'sop', labelKey: 'trashFilterSops' },
   { key: 'contract', labelKey: 'trashFilterContracts' },
+  { key: 'job_description', labelKey: 'trashFilterJobDescriptions' },
+  { key: 'hiring_request', labelKey: 'trashFilterHiringRequests' },
+  { key: 'spotlight_post', labelKey: 'trashFilterSpotlight' },
 ]
 
 function classifyItem(item: TrashItem): DisplayType {
@@ -74,7 +84,14 @@ export function Trash({ user }: { user: User }) {
 
   const counts = useMemo(() => {
     const m: Record<'all' | DisplayType, number> = {
-      all: items.length, employee: 0, candidate: 0, sop: 0, contract: 0,
+      all: items.length,
+      employee: 0,
+      candidate: 0,
+      sop: 0,
+      contract: 0,
+      job_description: 0,
+      hiring_request: 0,
+      spotlight_post: 0,
     }
     for (const it of items) m[it.displayType] += 1
     return m
@@ -252,7 +269,10 @@ function TypeBadge({ type, t }: { type: DisplayType; t: Translations }) {
     type === 'employee' ? t.trashTypeEmployee :
     type === 'candidate' ? t.trashTypeCandidate :
     type === 'sop' ? t.trashTypeSop :
-    t.trashTypeContract
+    type === 'contract' ? t.trashTypeContract :
+    type === 'job_description' ? t.trashTypeJobDescription :
+    type === 'hiring_request' ? t.trashTypeHiringRequest :
+    t.trashTypeSpotlightPost
   return (
     <span
       className="inline-flex w-fit items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"

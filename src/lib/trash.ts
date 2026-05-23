@@ -1,6 +1,14 @@
 import { supabase } from './supabase'
 
-export type TrashItemType = 'employee' | 'sop' | 'contract'
+export type TrashItemType =
+  | 'employee'
+  | 'sop'
+  | 'contract'
+  | 'job_description'
+  | 'hiring_request'
+  | 'spotlight_post'
+
+export type TrashDocumentType = 'sop' | 'contract' | 'job_description'
 
 export interface TrashItem {
   item_type: TrashItemType
@@ -41,11 +49,25 @@ export async function trashEmployee(
 
 export async function trashDocument(
   docId: string,
-  docType: 'sop' | 'contract',
+  docType: TrashDocumentType,
 ): Promise<void> {
   const { error } = await supabase.rpc('trash_document', {
     p_doc_id: docId,
     p_doc_type: docType,
+  })
+  if (error) throw new Error(error.message)
+}
+
+export async function trashHiringRequest(requestId: string): Promise<void> {
+  const { error } = await supabase.rpc('trash_hiring_request', {
+    p_request_id: requestId,
+  })
+  if (error) throw new Error(error.message)
+}
+
+export async function trashSpotlightPost(postId: string): Promise<void> {
+  const { error } = await supabase.rpc('trash_spotlight_post', {
+    p_post_id: postId,
   })
   if (error) throw new Error(error.message)
 }
