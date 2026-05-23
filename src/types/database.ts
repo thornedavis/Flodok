@@ -2059,6 +2059,35 @@ export type Database = {
           },
         ]
       }
+      letter_reference_seqs: {
+        Row: {
+          last_used: number
+          org_id: string
+          type_code: string
+          year: number
+        }
+        Insert: {
+          last_used?: number
+          org_id: string
+          type_code: string
+          year: number
+        }
+        Update: {
+          last_used?: number
+          org_id?: string
+          type_code?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "letter_reference_seqs_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       letter_tags: {
         Row: {
           letter_id: string
@@ -3387,6 +3416,31 @@ export type Database = {
         Args: { p_org_id: string }
         Returns: undefined
       }
+      acknowledge_letter: {
+        Args: {
+          emp_slug: string
+          emp_token: string
+          p_letter_id: string
+          p_signature_font?: string
+          p_typed_name?: string
+        }
+        Returns: {
+          acknowledged_at: string
+          employee_id: string
+          id: string
+          letter_id: string
+          signature_font: string | null
+          signature_meta: Json | null
+          typed_name: string | null
+          version_number: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "letter_acknowledgements"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       admin_rewards_roster: { Args: never; Returns: Json }
       admin_update_user_role: {
         Args: { new_role: string; target_user_id: string }
@@ -3492,6 +3546,40 @@ export type Database = {
       is_department_manager: {
         Args: { p_department_id: string }
         Returns: boolean
+      }
+      issue_letter: {
+        Args: { p_letter_id: string }
+        Returns: {
+          category: string | null
+          content_doc: Json | null
+          content_markdown: string
+          content_markdown_id: string | null
+          created_at: string
+          current_version: number
+          deleted_at: string | null
+          deleted_by: string | null
+          employee_id: string | null
+          id: string
+          is_template: boolean
+          issued_at: string | null
+          org_id: string
+          reference_number: string | null
+          requires_acknowledgement: boolean
+          response_by_date: string | null
+          sender_user_id: string | null
+          status: string
+          subject: string | null
+          title: string
+          trashed_with_parent_id: string | null
+          type_code: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "letters"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       list_trash: {
         Args: never
@@ -3602,6 +3690,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      next_letter_reference_number: {
+        Args: { p_org_id: string; p_type_code: string; p_year?: number }
+        Returns: string
       }
       owner_decide_hiring_request: {
         Args: { p_approve: boolean; p_note?: string; p_request_id: string }
