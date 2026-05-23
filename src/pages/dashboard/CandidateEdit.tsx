@@ -16,10 +16,11 @@ import {
   type CandidateSourceOption,
 } from '../../lib/candidateProfile'
 import { PhoneInput } from '../../components/PhoneInput'
+import { EmployeeAttachments } from '../../components/EmployeeAttachments'
 import type { Employee, Organization, User } from '../../types/aliases'
 import type { Translations } from '../../lib/translations'
 
-type RecruitmentStage = 'prospective' | 'shortlisted' | 'offered' | 'signed' | 'talent_pool'
+type RecruitmentStage = 'prospective' | 'shortlisted' | 'offered' | 'signed' | 'talent_pool' | 'no_show'
 type Candidate = Employee & EmpDeptShape
 
 const CANDIDATE_WITH_DEPTS_SELECT =
@@ -34,6 +35,7 @@ const STAGE_TONES: Record<RecruitmentStage, { bg: string; text: string; dot: str
   offered: { bg: 'color-mix(in srgb, var(--color-primary) 14%, transparent)', text: 'var(--color-primary)', dot: 'var(--color-primary)' },
   signed: { bg: 'color-mix(in srgb, var(--color-success) 14%, transparent)', text: 'var(--color-success)', dot: 'var(--color-success)' },
   talent_pool: { bg: 'color-mix(in srgb, var(--color-text-tertiary) 10%, transparent)', text: 'var(--color-text-tertiary)', dot: 'var(--color-text-tertiary)' },
+  no_show: { bg: 'color-mix(in srgb, var(--color-danger) 12%, transparent)', text: 'var(--color-danger)', dot: 'var(--color-danger)' },
 }
 
 function stageLabel(stage: RecruitmentStage, t: Translations): string {
@@ -43,6 +45,7 @@ function stageLabel(stage: RecruitmentStage, t: Translations): string {
     case 'offered': return t.hiringStageOffered
     case 'signed': return t.hiringStageSigned
     case 'talent_pool': return t.hiringStageTalentPool
+    case 'no_show': return t.hiringStageNoShow
   }
 }
 
@@ -163,12 +166,12 @@ export function CandidateEdit({ user }: { user: User }) {
     if (file.size > MAX_PHOTO_SIZE) { setError(t.avatarTooLarge); return }
     setError('')
     setUploading(true)
-    const url = await uploadPhoto(candidateId, file)
-    if (!url) { setUploading(false); setError(t.hiringPhotoUploadError); return }
-    const { error: updateError } = await supabase.from('employees').update({ photo_url: url }).eq('id', candidateId)
+    const result = await uploadPhoto(candidateId, file)
+    if (!result.url) { setUploading(false); setError(result.error || t.hiringPhotoUploadError); return }
+    const { error: updateError } = await supabase.from('employees').update({ photo_url: result.url }).eq('id', candidateId)
     setUploading(false)
     if (updateError) { setError(updateError.message); return }
-    setCandidate(prev => prev ? { ...prev, photo_url: url } : prev)
+    setCandidate(prev => prev ? { ...prev, photo_url: result.url } : prev)
   }
 
   async function handlePhotoRemove() {
@@ -406,6 +409,10 @@ export function CandidateEdit({ user }: { user: User }) {
               </Field>
             </Section>
 
+            <Section title={t.candidateSectionDocuments}>
+              <EmployeeAttachments employeeId={candidateId} disabled={!canWrite} />
+            </Section>
+
             <Section title={t.candidateSectionNotes}>
               <Field label={t.hiringFieldNotes}>
                 <textarea
@@ -485,11 +492,11 @@ function ManageButton({ label, onClick }: { label: string; onClick: () => void }
   )
 }
 
-async function uploadPhoto(employeeId: string, file: File): Promise<string | null> {
+async function uploadPhoto(employeeId: string, file: File): Promise<{ url: string | null; error: string | null }> {
   const ext = (file.name.split('.').pop() || 'jpg').toLowerCase()
   const path = `${employeeId}.${ext}`
   const { error } = await supabase.storage.from('avatars').upload(path, file, { upsert: true })
-  if (error) return null
+  if (error) return { url: null, error: error.message }
   const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path)
-  return `${publicUrl}?t=${Date.now()}`
+  return { url: `${publicUrl}?t=${Date.now()}`, error: null }
 }

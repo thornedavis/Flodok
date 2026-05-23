@@ -25,6 +25,7 @@ import type { FeedEvent, User } from '../../types/aliases'
 
 interface Stats {
   employeeCount: number
+  candidateCount: number
   activeSOPs: number
   activeContracts: number
   pendingSignatures: number
@@ -155,8 +156,9 @@ async function loadDashboard(orgId: string): Promise<DashboardData> {
   const windowStartMs = now - windowDays * 86400000
   const windowStartIso = new Date(windowStartMs).toISOString()
 
-  const [empResult, sopResult, contractResult, pendingResult, feedWindowResult, recentResult, sigResult, csigResult, orgResult] = await Promise.all([
-    supabase.from('employees').select('id, name, photo_url, date_of_birth, created_at, employee_departments(is_primary, department:company_departments(id, name))').eq('org_id', orgId),
+  const [empResult, candidateResult, sopResult, contractResult, pendingResult, feedWindowResult, recentResult, sigResult, csigResult, orgResult] = await Promise.all([
+    supabase.from('employees').select('id, name, photo_url, date_of_birth, created_at, employee_departments(is_primary, department:company_departments(id, name))').eq('org_id', orgId).in('lifecycle_stage', ['active', 'separated']),
+    supabase.from('employees').select('id', { count: 'exact', head: true }).eq('org_id', orgId).in('lifecycle_stage', ['prospective', 'shortlisted', 'offered', 'signed', 'talent_pool', 'no_show']),
     supabase.from('sops').select('id, status, current_version, employee_id').eq('org_id', orgId),
     supabase.from('contracts').select('id, status, current_version, employee_id').eq('org_id', orgId),
     supabase.from('pending_updates').select('id', { count: 'exact', head: true }).eq('org_id', orgId).eq('status', 'pending'),
@@ -179,6 +181,7 @@ async function loadDashboard(orgId: string): Promise<DashboardData> {
   const pendingSignatures = activeSops.filter(s => s.employee_id && !signedSopSet.has(`${s.id}-${s.current_version}`)).length
   const stats: Stats = {
     employeeCount: employees.length,
+    candidateCount: candidateResult.count || 0,
     activeSOPs: activeSops.length,
     activeContracts: activeContracts.length,
     pendingSignatures,
@@ -369,13 +372,14 @@ function QuickActions({ t }: { t: Translations }) {
 function StatCards({ stats, t }: { stats: Stats; t: Translations }) {
   const cards = [
     { label: t.overviewEmployees, value: stats.employeeCount, link: '/dashboard/employees' },
+    { label: t.overviewCandidates, value: stats.candidateCount, link: '/dashboard/recruitment' },
     { label: t.overviewActiveSops, value: stats.activeSOPs, link: documentsIndexPath('sop') },
     { label: t.overviewActiveContracts, value: stats.activeContracts, link: documentsIndexPath('contract') },
     { label: t.overviewAwaitingSignature, value: stats.pendingSignatures, link: documentsIndexPath('sop') },
     { label: t.overviewPendingUpdates, value: stats.pendingUpdates, link: '/dashboard/pending' },
   ]
   return (
-    <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+    <div className="grid grid-cols-2 gap-4 lg:grid-cols-6">
       {cards.map(card => (
         <Link
           key={card.label}

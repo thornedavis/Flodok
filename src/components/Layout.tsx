@@ -419,8 +419,14 @@ function NavFlyout({ label }: { label: string }) {
       className="pointer-events-none absolute left-[calc(100%+0.75rem)] top-1/2 z-50 origin-left -translate-y-1/2 scale-x-90 opacity-0 transition-all duration-200 ease-out group-hover:scale-x-100 group-hover:opacity-100"
     >
       {/* drop-shadow (not box-shadow) so it follows the carved cove silhouette
-          rather than a plain rectangle. Offset rightward to lift off content. */}
-      <div className="relative [filter:drop-shadow(2px_2px_5px_rgba(0,0,0,0.22))]">
+          rather than a plain rectangle. Purely horizontal: zero Y-offset means
+          no shadow leaks above or below the cove squares onto the rail, and
+          each X-offset exceeds its blur radius so nothing bleeds leftward
+          either. The result reads as a local thickening of the rail's own
+          rightward `2px 0 10px` edge shadow — the tab looks like the rail
+          bulging outward, not a separate panel floating beside it. Two stacked
+          shadows give a softer near-to-far falloff than a single pass. */}
+      <div className="relative [filter:drop-shadow(3px_0_3px_rgba(0,0,0,0.08))_drop-shadow(6px_0_8px_rgba(0,0,0,0.06))]">
         <span
           className="relative block whitespace-nowrap py-1.5 pl-3.5 pr-4 text-sm font-medium"
           style={{
@@ -430,6 +436,11 @@ function NavFlyout({ label }: { label: string }) {
             borderBottom: '1px solid var(--color-border)',
             borderRadius: '0 12px 12px 0',
             color: 'var(--color-text)',
+            // Pull 1px left so the tab overlaps the rail's `border-r` hairline
+            // in its vertical range. Without this, two identical bg-secondary
+            // surfaces are separated by a 1px `--color-border` line that the
+            // eye reads as a seam between two distinct panels.
+            marginLeft: '-1px',
           }}
         >
           {label}

@@ -1149,6 +1149,7 @@ function DerivedStatusBadge({ status, label }: { status: DerivedStatus; label: s
     active:      { bg: 'color-mix(in srgb, var(--color-success, #16a34a) 14%, transparent)', fg: 'var(--color-success, #16a34a)' },
     separated:   { bg: 'color-mix(in srgb, var(--color-danger, #dc2626) 14%, transparent)',  fg: 'var(--color-danger, #dc2626)' },
     talent_pool: { bg: 'var(--color-bg-tertiary)',                                            fg: 'var(--color-text-tertiary)' },
+    no_show:     { bg: 'color-mix(in srgb, var(--color-danger, #dc2626) 12%, transparent)',  fg: 'var(--color-danger, #dc2626)' },
   }
   const c = tone[status]
   return (
@@ -1170,6 +1171,7 @@ function derivedStatusLabel(status: DerivedStatus, t: Translations): string {
     case 'active': return t.derivedStatusActive
     case 'separated': return t.derivedStatusSeparated
     case 'talent_pool': return t.derivedStatusTalentPool
+    case 'no_show': return t.derivedStatusNoShow
   }
 }
 

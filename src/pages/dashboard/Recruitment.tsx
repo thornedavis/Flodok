@@ -23,13 +23,13 @@ import { Skeleton } from '../../components/Skeleton'
 import type { Employee, Organization, User } from '../../types/aliases'
 import type { Translations } from '../../lib/translations'
 
-type RecruitmentStage = 'prospective' | 'shortlisted' | 'offered' | 'signed' | 'talent_pool'
+type RecruitmentStage = 'prospective' | 'shortlisted' | 'offered' | 'signed' | 'talent_pool' | 'no_show'
 type Candidate = Employee & EmpDeptShape
 
 type ColumnKey = 'position' | 'phone' | 'department' | 'source' | 'stage' | 'added'
 type SortValue = 'created_at|desc' | 'created_at|asc' | 'name|asc' | 'name|desc'
 
-const RECRUITMENT_STAGES: RecruitmentStage[] = ['prospective', 'shortlisted', 'offered', 'signed', 'talent_pool']
+const RECRUITMENT_STAGES: RecruitmentStage[] = ['prospective', 'shortlisted', 'offered', 'signed', 'talent_pool', 'no_show']
 // Display order in the row + the order options appear in the Columns picker.
 // Name (identity) and the actions cell are always present and live outside this list.
 const COLUMN_ORDER: ColumnKey[] = ['position', 'phone', 'department', 'source', 'stage', 'added']
@@ -131,7 +131,7 @@ export function Recruitment({ user }: { user: User }) {
   }
 
   const counts = useMemo(() => {
-    const out: Record<'all' | RecruitmentStage, number> = { all: candidates.length, prospective: 0, shortlisted: 0, offered: 0, signed: 0, talent_pool: 0 }
+    const out: Record<'all' | RecruitmentStage, number> = { all: candidates.length, prospective: 0, shortlisted: 0, offered: 0, signed: 0, talent_pool: 0, no_show: 0 }
     for (const c of candidates) {
       const stage = c.lifecycle_stage as RecruitmentStage
       if (stage in out) out[stage]++
@@ -789,6 +789,7 @@ const STAGE_TONES: Record<RecruitmentStage, { bg: string; text: string; dot: str
   offered: { bg: 'color-mix(in srgb, var(--color-primary) 14%, transparent)', text: 'var(--color-primary)', dot: 'var(--color-primary)' },
   signed: { bg: 'color-mix(in srgb, var(--color-success) 14%, transparent)', text: 'var(--color-success)', dot: 'var(--color-success)' },
   talent_pool: { bg: 'color-mix(in srgb, var(--color-text-tertiary) 10%, transparent)', text: 'var(--color-text-tertiary)', dot: 'var(--color-text-tertiary)' },
+  no_show: { bg: 'color-mix(in srgb, var(--color-danger) 12%, transparent)', text: 'var(--color-danger)', dot: 'var(--color-danger)' },
 }
 
 function stageLabelMap(t: Translations): Record<RecruitmentStage, string> {
@@ -798,6 +799,7 @@ function stageLabelMap(t: Translations): Record<RecruitmentStage, string> {
     offered: t.hiringStageOffered,
     signed: t.hiringStageSigned,
     talent_pool: t.hiringStageTalentPool,
+    no_show: t.hiringStageNoShow,
   }
 }
 

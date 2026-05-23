@@ -10,6 +10,7 @@ export type EmployeeSectionKey =
   | 'education'
   | 'experience'
   | 'additional'
+  | 'documents'
   | 'compensation'
   | 'achievements'
 
@@ -67,6 +68,11 @@ const statusColors: Record<DerivedStatus, { dot: string; bg: string; text: strin
     bg: 'color-mix(in srgb, var(--color-text-tertiary) 10%, transparent)',
     text: 'var(--color-text-tertiary)',
   },
+  no_show: {
+    dot: 'var(--color-danger)',
+    bg: 'color-mix(in srgb, var(--color-danger) 12%, transparent)',
+    text: 'var(--color-danger)',
+  },
 }
 
 function statusLabel(s: DerivedStatus, t: Translations): string {
@@ -78,6 +84,7 @@ function statusLabel(s: DerivedStatus, t: Translations): string {
     case 'active': return t.derivedStatusActive
     case 'separated': return t.derivedStatusSeparated
     case 'talent_pool': return t.derivedStatusTalentPool
+    case 'no_show': return t.derivedStatusNoShow
   }
 }
 
@@ -128,7 +135,7 @@ export function EmployeeSidebar({
 
   const colors = statusColors[status]
   const isSeparated = status === 'separated'
-  const canSeparate = canWrite && !isSeparated && status !== 'prospective' && status !== 'offered' && status !== 'talent_pool'
+  const canSeparate = canWrite && !isSeparated && status !== 'prospective' && status !== 'offered' && status !== 'talent_pool' && status !== 'no_show'
 
   const groups: { label: string; items: { key: EmployeeSectionKey; label: string }[] }[] = [
     {
@@ -139,6 +146,7 @@ export function EmployeeSidebar({
         { key: 'education', label: t.empNavEducation },
         { key: 'experience', label: t.empNavExperience },
         { key: 'additional', label: t.empNavAdditional },
+        { key: 'documents', label: t.empNavDocuments },
       ],
     },
     {

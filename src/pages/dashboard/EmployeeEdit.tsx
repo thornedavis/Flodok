@@ -15,6 +15,7 @@ import { EmploymentSection } from '../../components/employee/sections/Employment
 import { EducationSection } from '../../components/employee/sections/EducationSection'
 import { ExperienceSection } from '../../components/employee/sections/ExperienceSection'
 import { AdditionalInfoSection } from '../../components/employee/sections/AdditionalInfoSection'
+import { EmployeeAttachments } from '../../components/EmployeeAttachments'
 import { isPro, syncSeats } from '../../lib/billing'
 import { bucketReferenceValues, referenceNames } from '../../lib/companyReference'
 import { useBilling } from '../../contexts/BillingContext'
@@ -317,6 +318,13 @@ export function EmployeeEdit({ user }: { user: User }) {
             writeDisabledTitle={writeDisabledTitle}
             saveFields={saveFields}
           />
+        )
+      case 'documents':
+        return (
+          <div>
+            <SectionHeader title={t.empNavDocuments} />
+            <EmployeeAttachments employeeId={employeeId} disabled={!canWrite} />
+          </div>
         )
       case 'compensation':
         return org ? (

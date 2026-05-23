@@ -8,6 +8,7 @@ export type DerivedStatus =
   | 'active'
   | 'separated'
   | 'talent_pool'
+  | 'no_show'
 
 export type SeparationType = 'resigned' | 'terminated'
 
@@ -21,6 +22,7 @@ export function deriveEmployeeStatus(emp: Pick<Employee, 'lifecycle_stage' | 'jo
   if (stage === 'offered') return 'offered'
   if (stage === 'separated') return 'separated'
   if (stage === 'talent_pool') return 'talent_pool'
+  if (stage === 'no_show') return 'no_show'
 
   // 'signed' (start_date in the future) or 'active'.
   const todayYmd = ymd(today)
