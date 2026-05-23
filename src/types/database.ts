@@ -3448,6 +3448,31 @@ export type Database = {
         Args: { emp_slug: string; emp_token: string }
         Returns: undefined
       }
+      portal_sign_sop: {
+        Args: {
+          emp_slug: string
+          emp_token: string
+          p_signature_font?: string
+          p_sop_id: string
+          p_typed_name: string
+        }
+        Returns: {
+          employee_id: string
+          id: string
+          required_via: string | null
+          signature_font: string | null
+          signed_at: string
+          sop_id: string
+          typed_name: string
+          version_number: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "sop_signatures"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       portal_spotlight_acknowledge: {
         Args: { emp_slug: string; emp_token: string; p_post_id: string }
         Returns: undefined

@@ -612,23 +612,26 @@ export function Portal() {
   }
 
   async function handleSign() {
-    if (!activeSop || !employee) return
+    if (!activeSop || !employee || !slugToken) return
     setSigning(true)
 
-    const { data, error: sigError } = await supabase
-      .from('sop_signatures')
-      .insert({
-        sop_id: activeSop.id,
-        version_number: activeSop.current_version,
-        employee_id: employee.id,
-        typed_name: employee.name,
-        signature_font: selectedFont,
-      })
-      .select()
-      .single()
+    const lastDash = slugToken.lastIndexOf('-')
+    const slug = slugToken.slice(0, lastDash)
+    const token = slugToken.slice(lastDash + 1)
+
+    // portal_sign_sop (migration 117) validates audience membership
+    // and resolves required_via server-side, so the payload is now
+    // just slug+token + the user-controlled fields.
+    const { data, error: sigError } = await supabase.rpc('portal_sign_sop', {
+      emp_slug: slug,
+      emp_token: token,
+      p_sop_id: activeSop.id,
+      p_typed_name: employee.name,
+      p_signature_font: selectedFont,
+    })
 
     if (sigError) { setError(sigError.message); setSigning(false); return }
-    setSopSignatures(prev => ({ ...prev, [activeSop.id]: data }))
+    if (data) setSopSignatures(prev => ({ ...prev, [activeSop.id]: data }))
 
     // Create feed event
     await supabase.from('feed_events').insert({
