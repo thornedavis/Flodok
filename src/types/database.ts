@@ -2493,6 +2493,78 @@ export type Database = {
           },
         ]
       }
+      sop_audience: {
+        Row: {
+          added_at: string
+          added_by: string | null
+          branch_id: string | null
+          department_id: string | null
+          employee_id: string | null
+          id: string
+          reference_id: string | null
+          sop_id: string
+          target_type: string
+        }
+        Insert: {
+          added_at?: string
+          added_by?: string | null
+          branch_id?: string | null
+          department_id?: string | null
+          employee_id?: string | null
+          id?: string
+          reference_id?: string | null
+          sop_id: string
+          target_type: string
+        }
+        Update: {
+          added_at?: string
+          added_by?: string | null
+          branch_id?: string | null
+          department_id?: string | null
+          employee_id?: string | null
+          id?: string
+          reference_id?: string | null
+          sop_id?: string
+          target_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sop_audience_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "company_branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sop_audience_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "company_departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sop_audience_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sop_audience_reference_id_fkey"
+            columns: ["reference_id"]
+            isOneToOne: false
+            referencedRelation: "company_reference_values"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sop_audience_sop_id_fkey"
+            columns: ["sop_id"]
+            isOneToOne: false
+            referencedRelation: "sops"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sop_categories: {
         Row: {
           id: string
@@ -2526,6 +2598,7 @@ export type Database = {
         Row: {
           employee_id: string
           id: string
+          required_via: string | null
           signature_font: string | null
           signed_at: string
           sop_id: string
@@ -2535,6 +2608,7 @@ export type Database = {
         Insert: {
           employee_id: string
           id?: string
+          required_via?: string | null
           signature_font?: string | null
           signed_at?: string
           sop_id: string
@@ -2544,6 +2618,7 @@ export type Database = {
         Update: {
           employee_id?: string
           id?: string
+          required_via?: string | null
           signature_font?: string | null
           signed_at?: string
           sop_id?: string
@@ -2668,6 +2743,7 @@ export type Database = {
           id: string
           org_id: string
           owner_department: string | null
+          owner_department_id: string | null
           status: string
           title: string
           trashed_with_parent_id: string | null
@@ -2687,6 +2763,7 @@ export type Database = {
           id?: string
           org_id: string
           owner_department?: string | null
+          owner_department_id?: string | null
           status?: string
           title: string
           trashed_with_parent_id?: string | null
@@ -2706,6 +2783,7 @@ export type Database = {
           id?: string
           org_id?: string
           owner_department?: string | null
+          owner_department_id?: string | null
           status?: string
           title?: string
           trashed_with_parent_id?: string | null
@@ -2724,6 +2802,13 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sops_owner_department_id_fkey"
+            columns: ["owner_department_id"]
+            isOneToOne: false
+            referencedRelation: "company_departments"
             referencedColumns: ["id"]
           },
         ]

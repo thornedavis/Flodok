@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { DocumentEditor } from '../../components/editor/bilingual/DocumentEditor'
 import { DocumentEditShell, EDITOR_STICKY_TOP_PX } from '../../components/editor/DocumentEditShell'
 import { SaveAsTemplateButton } from '../../components/SaveAsTemplateButton'
+import { AudiencePicker, type AudienceTarget, type AudienceEmployee, type NamedRef } from '../../components/AudiencePicker'
 import { useLang } from '../../contexts/LanguageContext'
 import { primaryDept, type EmpDeptShape } from '../../lib/employee'
 import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning'
@@ -27,9 +28,7 @@ export function SOPEdit({ user }: { user: User }) {
   const { view, setView } = useDocumentViewPref('sop', id ?? null)
   const [sop, setSOP] = useState<Sop | null>(null)
   const [organization, setOrganization] = useState<Organization | null>(null)
-  const [, setEmployee] = useState<EmployeeWithDepartments | null>(null)
   const [allEmployees, setAllEmployees] = useState<EmployeeWithDepartments[]>([])
-  const [employeeId, setEmployeeId] = useState<string | null>(null)
   const [title, setTitle] = useState('')
   // Phase C source of truth: the full structured document. Local
   // `contentDoc` mirrors the editor state; `savedContentDoc` captures
@@ -53,18 +52,47 @@ export function SOPEdit({ user }: { user: User }) {
   const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set())
   const [newTagName, setNewTagName] = useState('')
 
+  // Audience targeting (sop_audience) + owner department (sops.owner_department_id).
+  // When the audience is a single 'employee' target we mirror it into
+  // sops.employee_id (compatEmployeeId, below) so legacy PDF merge context
+  // and feed events keep working for the 1:1 case.
+  const [audienceTargets, setAudienceTargets] = useState<AudienceTarget[]>([])
+  const [savedAudienceTargets, setSavedAudienceTargets] = useState<AudienceTarget[]>([])
+  const [ownerDepartmentId, setOwnerDepartmentId] = useState<string | null>(null)
+  const [savedOwnerDepartmentId, setSavedOwnerDepartmentId] = useState<string | null>(null)
+  const [departments, setDepartments] = useState<NamedRef[]>([])
+  const [branches, setBranches] = useState<NamedRef[]>([])
+  const [jobPositions, setJobPositions] = useState<NamedRef[]>([])
+  const [jobLevels, setJobLevels] = useState<NamedRef[]>([])
+  const [employeeClasses, setEmployeeClasses] = useState<NamedRef[]>([])
+
   useEffect(() => {
     async function load() {
-      const [sopResult, tagsResult, sopTagsResult, empsResult, orgResult] = await Promise.all([
+      const [
+        sopResult, tagsResult, sopTagsResult, empsResult, orgResult,
+        deptsResult, branchesResult, refValuesResult, audienceResult,
+      ] = await Promise.all([
         supabase.from('sops').select('*').eq('id', id!).single(),
         supabase.from('tags').select('*').eq('org_id', user.org_id).order('name'),
         supabase.from('sop_tags').select('tag_id').eq('sop_id', id!),
         supabase.from('employees').select(EMPLOYEE_WITH_DEPTS_SELECT).eq('org_id', user.org_id).order('name'),
         supabase.from('organizations').select('*').eq('id', user.org_id).single(),
+        supabase.from('company_departments').select('id, name').eq('org_id', user.org_id).order('name'),
+        supabase.from('company_branches').select('id, name').eq('org_id', user.org_id).eq('is_active', true).order('name'),
+        supabase.from('company_reference_values').select('id, name, kind').eq('org_id', user.org_id).in('kind', ['job_position', 'job_level', 'employee_class']).order('name'),
+        supabase.from('sop_audience').select('*').eq('sop_id', id!),
       ])
 
-      setAllEmployees((empsResult.data || []) as EmployeeWithDepartments[])
+      const loadedEmps = (empsResult.data || []) as EmployeeWithDepartments[]
+      setAllEmployees(loadedEmps)
       setOrganization(orgResult.data)
+      setDepartments(deptsResult.data || [])
+      setBranches(branchesResult.data || [])
+
+      const refValues = (refValuesResult.data || []) as { id: string; name: string; kind: string }[]
+      setJobPositions(refValues.filter(r => r.kind === 'job_position').map(r => ({ id: r.id, name: r.name })))
+      setJobLevels(refValues.filter(r => r.kind === 'job_level').map(r => ({ id: r.id, name: r.name })))
+      setEmployeeClasses(refValues.filter(r => r.kind === 'employee_class').map(r => ({ id: r.id, name: r.name })))
 
       if (sopResult.data) {
         setSOP(sopResult.data)
@@ -73,13 +101,50 @@ export function SOPEdit({ user }: { user: User }) {
         setContentDoc(loadedDoc)
         setSavedContentDoc(loadedDoc)
         setStatus(sopResult.data.status as typeof status)
-        setEmployeeId(sopResult.data.employee_id)
-
-        if (sopResult.data.employee_id) {
-          const emp = ((empsResult.data || []) as EmployeeWithDepartments[]).find(e => e.id === sopResult.data.employee_id)
-          if (emp) setEmployee(emp)
-        }
+        setOwnerDepartmentId(sopResult.data.owner_department_id)
+        setSavedOwnerDepartmentId(sopResult.data.owner_department_id)
       }
+
+      // Map sop_audience rows into the picker's AudienceTarget shape.
+      const audienceRows = (audienceResult.data || []) as {
+        target_type: string
+        employee_id: string | null
+        department_id: string | null
+        branch_id: string | null
+        reference_id: string | null
+      }[]
+      const empById = new Map(loadedEmps.map(e => [e.id, e.name]))
+      const deptById = new Map((deptsResult.data || []).map(d => [d.id, d.name]))
+      const branchById = new Map((branchesResult.data || []).map(b => [b.id, b.name]))
+      const refById = new Map(refValues.map(r => [r.id, r.name]))
+      const targets: AudienceTarget[] = audienceRows.flatMap((row): AudienceTarget[] => {
+        switch (row.target_type) {
+          case 'everyone':
+            return [{ type: 'everyone', id: null, label: 'Everyone' }]
+          case 'employee':
+            return row.employee_id && empById.has(row.employee_id)
+              ? [{ type: 'employee', id: row.employee_id, label: empById.get(row.employee_id)! }]
+              : []
+          case 'department':
+            return row.department_id && deptById.has(row.department_id)
+              ? [{ type: 'department', id: row.department_id, label: deptById.get(row.department_id)! }]
+              : []
+          case 'branch':
+            return row.branch_id && branchById.has(row.branch_id)
+              ? [{ type: 'branch', id: row.branch_id, label: branchById.get(row.branch_id)! }]
+              : []
+          case 'job_position':
+          case 'job_level':
+          case 'employee_class':
+            return row.reference_id && refById.has(row.reference_id)
+              ? [{ type: row.target_type, id: row.reference_id, label: refById.get(row.reference_id)! }]
+              : []
+          default:
+            return []
+        }
+      })
+      setAudienceTargets(targets)
+      setSavedAudienceTargets(targets)
 
       setAllTags(tagsResult.data || [])
       setSelectedTagIds(new Set((sopTagsResult.data || []).map(st => st.tag_id)))
@@ -127,13 +192,46 @@ export function SOPEdit({ user }: { user: User }) {
     () => JSON.stringify(contentDoc) !== JSON.stringify(savedContentDoc),
     [contentDoc, savedContentDoc],
   )
-  const employeeChanged = sop ? employeeId !== sop.employee_id : false
+  const audienceChanged = useMemo(() => {
+    if (audienceTargets.length !== savedAudienceTargets.length) return true
+    const key = (t: AudienceTarget) => `${t.type}:${t.id ?? ''}`
+    const a = new Set(audienceTargets.map(key))
+    return savedAudienceTargets.some(t => !a.has(key(t)))
+  }, [audienceTargets, savedAudienceTargets])
+  const ownerDeptChanged = ownerDepartmentId !== savedOwnerDepartmentId
   const hasChanges = sop ? (
-    docChanged || employeeChanged ||
+    docChanged || audienceChanged || ownerDeptChanged ||
     title !== sop.title ||
     status !== sop.status ||
     changeSummary !== ''
   ) : false
+
+  // Project employees into the AudiencePicker's shape — primaryDept for
+  // the sublabel display, departmentIds for client-side resolution.
+  const audienceEmployees: AudienceEmployee[] = useMemo(
+    () => allEmployees.map(e => ({
+      id: e.id,
+      name: e.name,
+      branch_name: e.branch_name ?? null,
+      job_position: e.job_position ?? null,
+      job_level: e.job_level ?? null,
+      class: e.class ?? null,
+      departmentIds: (e.employee_departments ?? []).map(ed => ed.department?.id).filter((id): id is string => !!id),
+      primaryDept: primaryDept(e),
+    })),
+    [allEmployees],
+  )
+
+  // Single-target compatibility shim: if the audience is exactly one
+  // 'employee' target, mirror it into sops.employee_id so legacy PDF
+  // merge context and feed events keep working for the 1:1 case.
+  // Multi-target / group audiences write null and skip those legacy paths.
+  const compatEmployeeId = useMemo(() => {
+    if (audienceTargets.length === 1 && audienceTargets[0].type === 'employee' && audienceTargets[0].id) {
+      return audienceTargets[0].id
+    }
+    return null
+  }, [audienceTargets])
 
   // Registers the navigation guard; the header exit link trips it when
   // there are unsaved changes.
@@ -147,15 +245,16 @@ export function SOPEdit({ user }: { user: User }) {
     setError('')
     setSaving(true)
 
-    // Write metadata (title, status, employee_id) first so the snapshot
-    // helper — which re-reads the row to render merge fields — sees the
-    // about-to-be-saved employee. The snapshot helper then owns the
-    // structured doc, derived markdown columns, and current_version.
+    // Write metadata (title, status, employee_id, owner_department_id)
+    // first so the snapshot helper — which re-reads the row to render merge
+    // fields — sees the about-to-be-saved values. The snapshot helper then
+    // owns the structured doc, derived markdown columns, and current_version.
     const { error: updateError } = await supabase
       .from('sops')
       .update({
         title,
-        employee_id: employeeId,
+        employee_id: compatEmployeeId,
+        owner_department_id: ownerDepartmentId,
         status: nextStatus,
         updated_at: new Date().toISOString(),
       })
@@ -171,10 +270,32 @@ export function SOPEdit({ user }: { user: User }) {
       )
     }
 
+    // Sync audience targets. Delete-all-then-insert mirrors the sop_tags
+    // pattern above; cheap at the audience-row scale we expect.
+    await supabase.from('sop_audience').delete().eq('sop_id', sop.id)
+    if (audienceTargets.length > 0) {
+      const rows = audienceTargets.map(target => ({
+        sop_id: sop.id,
+        target_type: target.type,
+        employee_id: target.type === 'employee' ? target.id : null,
+        department_id: target.type === 'department' ? target.id : null,
+        branch_id: target.type === 'branch' ? target.id : null,
+        reference_id:
+          target.type === 'job_position' || target.type === 'job_level' || target.type === 'employee_class'
+            ? target.id
+            : null,
+        added_by: user.id,
+      }))
+      const { error: audErr } = await supabase.from('sop_audience').insert(rows)
+      if (audErr) { setError(audErr.message); setSaving(false); return }
+    }
+    setSavedAudienceTargets(audienceTargets)
+    setSavedOwnerDepartmentId(ownerDepartmentId)
+
     setStatus(nextStatus)
 
     if (!docChanged) {
-      setSOP({ ...sop, title, employee_id: employeeId, status: nextStatus })
+      setSOP({ ...sop, title, employee_id: compatEmployeeId, owner_department_id: ownerDepartmentId, status: nextStatus })
       setSaving(false)
       return
     }
@@ -205,12 +326,14 @@ export function SOPEdit({ user }: { user: User }) {
     const finalDoc = (result.content_doc as DocumentDoc | null) ?? contentDoc
     setContentDoc(finalDoc)
     setSavedContentDoc(finalDoc)
-    setSOP({ ...sop, content_markdown: result.content_markdown, content_markdown_id: result.content_markdown_id, content_doc: result.content_doc as Sop['content_doc'], current_version: result.version_number, title, employee_id: employeeId, status: nextStatus })
+    setSOP({ ...sop, content_markdown: result.content_markdown, content_markdown_id: result.content_markdown_id, content_doc: result.content_doc as Sop['content_doc'], current_version: result.version_number, title, employee_id: compatEmployeeId, owner_department_id: ownerDepartmentId, status: nextStatus })
 
-    if (employeeId) {
+    // Feed events only fire for the 1:1 case. Multi-target / group audiences
+    // don't fan out individual inbox notifications in this phase.
+    if (compatEmployeeId) {
       await supabase.from('feed_events').insert({
         org_id: user.org_id,
-        employee_id: employeeId,
+        employee_id: compatEmployeeId,
         event_type: 'sop_updated',
         title: title,
         description: `Version ${result.version_number}${changeSummary ? ' — ' + changeSummary : ''}`,
@@ -250,7 +373,7 @@ export function SOPEdit({ user }: { user: User }) {
       // resolve differently per language (signatures, dates) get the
       // lang override from the renderer side.
       const baseCtx = {
-        employee: allEmployees.find(e => e.id === employeeId) ?? null,
+        employee: compatEmployeeId ? (allEmployees.find(e => e.id === compatEmployeeId) ?? null) : null,
         organization,
         today: new Date(),
       }
@@ -325,25 +448,39 @@ export function SOPEdit({ user }: { user: User }) {
     <>
       {/* Title lives in the page top bar as an inline-editable heading. */}
 
-      {/* Employee */}
+      {/* Audience — who this SOP applies to. Replaces the single-employee
+          dropdown; can target individuals, departments, branches, job
+          positions, job levels, employee classes, or everyone. */}
       <div>
-        <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>{t.employeeLabel}</label>
+        <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>Audience</label>
+        <AudiencePicker
+          value={audienceTargets}
+          onChange={setAudienceTargets}
+          employees={audienceEmployees}
+          departments={departments}
+          branches={branches}
+          jobPositions={jobPositions}
+          jobLevels={jobLevels}
+          employeeClasses={employeeClasses}
+          disabled={!canWrite}
+        />
+      </div>
+
+      {/* Owner department — who maintains this SOP. Distinct from audience
+          (who must read it). Free for filtering and "who do I bug about this". */}
+      <div>
+        <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>Owner department</label>
         <div className="relative">
           <select
-            value={employeeId || ''}
-            onChange={e => {
-              const val = e.target.value
-              setEmployeeId(val || null)
-              setEmployee(allEmployees.find(emp => emp.id === val) || null)
-            }}
-            className="w-full appearance-none rounded-lg border px-3 py-2 pr-8 text-sm"
+            value={ownerDepartmentId || ''}
+            onChange={e => setOwnerDepartmentId(e.target.value || null)}
+            disabled={!canWrite}
+            className="w-full appearance-none rounded-lg border px-3 py-2 pr-8 text-sm disabled:opacity-50"
             style={inputStyle}
           >
-            <option value="">{t.noEmployeeLinked}</option>
-            {allEmployees.map(emp => (
-              <option key={emp.id} value={emp.id}>
-                {emp.name}{primaryDept(emp) ? ` (${primaryDept(emp)})` : ''}
-              </option>
+            <option value="">No owner</option>
+            {departments.map(d => (
+              <option key={d.id} value={d.id}>{d.name}</option>
             ))}
           </select>
           <svg className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-text-tertiary)' }}>
@@ -423,7 +560,7 @@ export function SOPEdit({ user }: { user: User }) {
         mergeFields={{
           scope: 'sop',
           getContext: () => ({
-            employee: allEmployees.find(e => e.id === employeeId) ?? null,
+            employee: compatEmployeeId ? (allEmployees.find(e => e.id === compatEmployeeId) ?? null) : null,
             organization,
             today: new Date(),
             lang: 'en',
