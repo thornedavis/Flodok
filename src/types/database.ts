@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       achievement_definitions: {
@@ -596,6 +571,8 @@ export type Database = {
           created_at: string
           current_version: number
           days_per_week: number | null
+          deleted_at: string | null
+          deleted_by: string | null
           document_number: string | null
           employee_id: string | null
           end_date: string | null
@@ -609,6 +586,7 @@ export type Database = {
           status: string
           template_for_position: string | null
           title: string
+          trashed_with_parent_id: string | null
           updated_at: string
         }
         Insert: {
@@ -623,6 +601,8 @@ export type Database = {
           created_at?: string
           current_version?: number
           days_per_week?: number | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           document_number?: string | null
           employee_id?: string | null
           end_date?: string | null
@@ -636,6 +616,7 @@ export type Database = {
           status?: string
           template_for_position?: string | null
           title: string
+          trashed_with_parent_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -650,6 +631,8 @@ export type Database = {
           created_at?: string
           current_version?: number
           days_per_week?: number | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           document_number?: string | null
           employee_id?: string | null
           end_date?: string | null
@@ -663,6 +646,7 @@ export type Database = {
           status?: string
           template_for_position?: string | null
           title?: string
+          trashed_with_parent_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -843,6 +827,53 @@ export type Database = {
           },
         ]
       }
+      employee_attachments: {
+        Row: {
+          created_at: string
+          employee_id: string
+          file_name: string
+          file_path: string
+          file_size: number | null
+          file_url: string
+          id: string
+          kind: string | null
+          mime_type: string | null
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          employee_id: string
+          file_name: string
+          file_path: string
+          file_size?: number | null
+          file_url: string
+          id?: string
+          kind?: string | null
+          mime_type?: string | null
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          employee_id?: string
+          file_name?: string
+          file_path?: string
+          file_size?: number | null
+          file_url?: string
+          id?: string
+          kind?: string | null
+          mime_type?: string | null
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_attachments_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employee_custom_fields: {
         Row: {
           created_at: string
@@ -887,53 +918,6 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      employee_attachments: {
-        Row: {
-          created_at: string
-          employee_id: string
-          file_name: string
-          file_path: string
-          file_size: number | null
-          file_url: string
-          id: string
-          kind: string | null
-          mime_type: string | null
-          uploaded_by: string | null
-        }
-        Insert: {
-          created_at?: string
-          employee_id: string
-          file_name: string
-          file_path: string
-          file_size?: number | null
-          file_url: string
-          id?: string
-          kind?: string | null
-          mime_type?: string | null
-          uploaded_by?: string | null
-        }
-        Update: {
-          created_at?: string
-          employee_id?: string
-          file_name?: string
-          file_path?: string
-          file_size?: number | null
-          file_url?: string
-          id?: string
-          kind?: string | null
-          mime_type?: string | null
-          uploaded_by?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "employee_attachments_employee_id_fkey"
-            columns: ["employee_id"]
-            isOneToOne: false
-            referencedRelation: "employees"
             referencedColumns: ["id"]
           },
         ]
@@ -1294,6 +1278,8 @@ export type Database = {
           class: string | null
           created_at: string
           date_of_birth: string | null
+          deleted_at: string | null
+          deleted_by: string | null
           email: string | null
           employee_code: string | null
           employment_type: string | null
@@ -1344,6 +1330,8 @@ export type Database = {
           class?: string | null
           created_at?: string
           date_of_birth?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           email?: string | null
           employee_code?: string | null
           employment_type?: string | null
@@ -1394,6 +1382,8 @@ export type Database = {
           class?: string | null
           created_at?: string
           date_of_birth?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           email?: string | null
           employee_code?: string | null
           employment_type?: string | null
@@ -1824,6 +1814,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "job_description_versions_assignee_employee_id_fkey"
+            columns: ["assignee_employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "job_description_versions_changed_by_fkey"
             columns: ["changed_by"]
             isOneToOne: false
@@ -1914,6 +1911,13 @@ export type Database = {
           work_location?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "job_descriptions_assignee_employee_id_fkey"
+            columns: ["assignee_employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "job_descriptions_created_by_fkey"
             columns: ["created_by"]
@@ -2645,6 +2649,8 @@ export type Database = {
           content_markdown_id: string | null
           created_at: string
           current_version: number
+          deleted_at: string | null
+          deleted_by: string | null
           document_number: string | null
           employee_id: string | null
           id: string
@@ -2652,6 +2658,7 @@ export type Database = {
           owner_department: string | null
           status: string
           title: string
+          trashed_with_parent_id: string | null
           updated_at: string
         }
         Insert: {
@@ -2661,6 +2668,8 @@ export type Database = {
           content_markdown_id?: string | null
           created_at?: string
           current_version?: number
+          deleted_at?: string | null
+          deleted_by?: string | null
           document_number?: string | null
           employee_id?: string | null
           id?: string
@@ -2668,6 +2677,7 @@ export type Database = {
           owner_department?: string | null
           status?: string
           title: string
+          trashed_with_parent_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -2677,6 +2687,8 @@ export type Database = {
           content_markdown_id?: string | null
           created_at?: string
           current_version?: number
+          deleted_at?: string | null
+          deleted_by?: string | null
           document_number?: string | null
           employee_id?: string | null
           id?: string
@@ -2684,6 +2696,7 @@ export type Database = {
           owner_department?: string | null
           status?: string
           title?: string
+          trashed_with_parent_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -3038,6 +3051,10 @@ export type Database = {
       }
     }
     Functions: {
+      _trash_assert_caller_authorized: {
+        Args: { p_org_id: string }
+        Returns: undefined
+      }
       admin_rewards_roster: { Args: never; Returns: Json }
       admin_update_user_role: {
         Args: { new_role: string; target_user_id: string }
@@ -3047,6 +3064,7 @@ export type Database = {
         Args: { p_id: string }
         Returns: {
           archived_at: string | null
+          assignee_employee_id: string | null
           content_doc: Json | null
           created_at: string
           created_by: string | null
@@ -3095,6 +3113,7 @@ export type Database = {
         Args: { p_department_names: string[]; p_employee_id: string }
         Returns: boolean
       }
+      empty_trash: { Args: never; Returns: undefined }
       evaluate_first_event_for_employee: {
         Args: { p_employee_id: string }
         Returns: number
@@ -3132,6 +3151,20 @@ export type Database = {
       is_department_manager: {
         Args: { p_department_id: string }
         Returns: boolean
+      }
+      list_trash: {
+        Args: never
+        Returns: {
+          deleted_at: string
+          deleted_by: string
+          deleted_by_avatar: string
+          deleted_by_name: string
+          item_id: string
+          item_type: string
+          subtitle: string
+          title: string
+          trashed_with_parent_id: string
+        }[]
       }
       manager_decide_hiring_request: {
         Args: { p_approve: boolean; p_note?: string; p_request_id: string }
@@ -3337,6 +3370,7 @@ export type Database = {
         Args: { p_id: string }
         Returns: {
           archived_at: string | null
+          assignee_employee_id: string | null
           content_doc: Json | null
           created_at: string
           created_by: string | null
@@ -3363,6 +3397,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      purge_item: {
+        Args: { p_item_id: string; p_item_type: string }
+        Returns: undefined
+      }
       recent_unlocks: {
         Args: { p_days_back: number }
         Returns: {
@@ -3383,6 +3421,10 @@ export type Database = {
       }
       republish_spotlight_post: {
         Args: { p_post_id: string }
+        Returns: undefined
+      }
+      restore_item: {
+        Args: { p_item_id: string; p_item_type: string }
         Returns: undefined
       }
       run_daily_achievements: {
@@ -3459,6 +3501,14 @@ export type Database = {
       }
       transfer_ownership: {
         Args: { p_target_user_id: string }
+        Returns: undefined
+      }
+      trash_document: {
+        Args: { p_doc_id: string; p_doc_type: string }
+        Returns: undefined
+      }
+      trash_employee: {
+        Args: { p_cascade_docs?: boolean; p_employee_id: string }
         Returns: undefined
       }
       upcoming_milestones: {
@@ -3602,9 +3652,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {},
   },
