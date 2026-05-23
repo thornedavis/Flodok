@@ -414,6 +414,11 @@ export const translations = {
     hiringRequestsActionEditDraft: 'Edit draft',
     hiringRequestsActionDeleteDraft: 'Delete draft',
     hiringRequestsDeleteDraftConfirm: 'Delete this draft? This cannot be undone.',
+    hiringRequestsBulkTrashConfirm: (n: number) =>
+      `Move ${n} ${n === 1 ? 'request' : 'requests'} to Trash?`,
+    hiringRequestsBulkTrashConfirmPartial: (eligible: number, skipped: number) =>
+      `Move ${eligible} ${eligible === 1 ? 'request' : 'requests'} to Trash? ${skipped} selected ${skipped === 1 ? 'request' : 'requests'} cannot be deleted and will be skipped.`,
+    hiringRequestsBulkNoneEligible: 'None of the selected requests can be deleted.',
     hiringRequestsApprovingTitle: 'Approve request',
     hiringRequestsRejectingTitle: 'Reject request',
 
@@ -2425,6 +2430,11 @@ export const translations = {
     hiringRequestsActionEditDraft: 'Ubah draf',
     hiringRequestsActionDeleteDraft: 'Hapus draf',
     hiringRequestsDeleteDraftConfirm: 'Hapus draf ini? Tindakan tidak dapat dibatalkan.',
+    hiringRequestsBulkTrashConfirm: (n: number) =>
+      `Pindahkan ${n} permintaan ke Sampah?`,
+    hiringRequestsBulkTrashConfirmPartial: (eligible: number, skipped: number) =>
+      `Pindahkan ${eligible} permintaan ke Sampah? ${skipped} permintaan yang dipilih tidak dapat dihapus dan akan dilewati.`,
+    hiringRequestsBulkNoneEligible: 'Tidak ada permintaan yang dipilih dapat dihapus.',
     hiringRequestsApprovingTitle: 'Setujui permintaan',
     hiringRequestsRejectingTitle: 'Tolak permintaan',
 

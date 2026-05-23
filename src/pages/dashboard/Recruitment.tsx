@@ -85,12 +85,18 @@ export function Recruitment({ user }: { user: User }) {
     | { kind: 'bulk'; ids: string[] }
     | null
   >(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   useEffect(() => { loadData() }, [user.org_id])
 
   useEffect(() => {
     try { window.localStorage.setItem(COLUMNS_STORAGE_KEY, JSON.stringify([...visibleColumns])) } catch { /* storage unavailable */ }
   }, [visibleColumns])
+
+  // Filter changes can move selected rows off the page (or remove them
+  // entirely from the visible set) — keeping the selection across that leads
+  // to confusing "deleted hidden things" outcomes. Matches Employees.tsx.
+  useEffect(() => { setSelectedIds(new Set()) }, [search, stageFilter, positionFilter, deptFilter, sourceFilter, sort])
 
   async function loadData() {
     setLoading(true)
@@ -265,6 +271,35 @@ export function Recruitment({ user }: { user: User }) {
     setDeleteTarget({ kind: 'single', id: candidate.id, name: candidate.name })
   }
 
+  function toggleRowSelected(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  function toggleAllOnPage() {
+    setSelectedIds(prev => {
+      const allSelected = visible.length > 0 && visible.every(c => prev.has(c.id))
+      const next = new Set(prev)
+      for (const c of visible) {
+        if (allSelected) next.delete(c.id); else next.add(c.id)
+      }
+      return next
+    })
+  }
+
+  function handleBulkDelete() {
+    if (selectedIds.size === 0 || !canWrite) return
+    setDeleteTarget({ kind: 'bulk', ids: [...selectedIds] })
+  }
+
+  async function handleAfterDelete() {
+    setSelectedIds(new Set())
+    await loadData()
+  }
+
   return (
     <div>
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
@@ -306,6 +341,39 @@ export function Recruitment({ user }: { user: User }) {
         </div>
       </div>
 
+      {selectedIds.size > 0 && !loading && (
+        <div
+          className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2"
+          style={{
+            borderColor: 'var(--color-primary)',
+            backgroundColor: 'color-mix(in srgb, var(--color-primary) 8%, transparent)',
+          }}
+        >
+          <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+            {t.bulkSelectedCount(selectedIds.size)}
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setSelectedIds(new Set())}
+              className="rounded-lg border px-3 py-1 text-xs font-medium transition-colors"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', backgroundColor: 'var(--color-bg)' }}
+            >
+              {t.bulkClear}
+            </button>
+            <button
+              type="button"
+              onClick={handleBulkDelete}
+              disabled={!canWrite}
+              className="rounded-lg px-3 py-1 text-xs font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+              style={{ backgroundColor: 'var(--color-danger)' }}
+            >
+              {t.bulkDelete}
+            </button>
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <CandidateTableSkeleton colCount={visibleColumnKeys.length} />
       ) : visible.length === 0 ? (
@@ -317,6 +385,14 @@ export function Recruitment({ user }: { user: User }) {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b text-left text-[11px] font-semibold uppercase tracking-wide" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-tertiary)', backgroundColor: 'var(--color-bg-tertiary)' }}>
+                <th className="w-10 px-3 py-2.5">
+                  <HeaderCheckbox
+                    rows={visible}
+                    selectedIds={selectedIds}
+                    onToggleAll={toggleAllOnPage}
+                    ariaLabel={t.bulkSelectAllAriaLabel}
+                  />
+                </th>
                 <th className="px-4 py-2.5">{t.hiringFieldName}</th>
                 {visibleColumnKeys.map(key => (
                   <th key={key} className="px-4 py-2.5">{columnLabel(key, t)}</th>
@@ -334,6 +410,8 @@ export function Recruitment({ user }: { user: User }) {
                   lang={lang}
                   canWrite={canWrite}
                   orgDisplayName={org?.display_name || org?.name || ''}
+                  selected={selectedIds.has(c.id)}
+                  onToggleSelected={() => toggleRowSelected(c.id)}
                   onOpen={() => navigate(`/dashboard/recruitment/${c.id}/edit`)}
                   onChangeStage={next => changeStage(c, next)}
                   onDelete={() => deleteCandidate(c)}
@@ -360,7 +438,7 @@ export function Recruitment({ user }: { user: User }) {
         open={deleteTarget !== null}
         target={deleteTarget}
         onClose={() => setDeleteTarget(null)}
-        onDeleted={loadData}
+        onDeleted={handleAfterDelete}
       />
 
     </div>
@@ -376,6 +454,7 @@ function CandidateTableSkeleton({ colCount, rows = 6 }: { colCount: number; rows
         className="flex items-center gap-4 border-b px-4 py-2.5"
         style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-tertiary)' }}
       >
+        <Skeleton className="h-3.5 w-4" />
         <Skeleton className="h-2.5 w-24" />
         {Array.from({ length: colCount }).map((_, i) => (
           <Skeleton key={i} className="h-2.5 w-16" />
@@ -387,6 +466,7 @@ function CandidateTableSkeleton({ colCount, rows = 6 }: { colCount: number; rows
           className="flex items-center gap-4 border-t px-4 py-3.5 first:border-t-0"
           style={{ borderColor: 'var(--color-border)' }}
         >
+          <Skeleton className="h-4 w-4 shrink-0" />
           <div className="flex min-w-0 items-center gap-2.5">
             <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
             <Skeleton className="h-3 w-32" />
@@ -401,13 +481,40 @@ function CandidateTableSkeleton({ colCount, rows = 6 }: { colCount: number; rows
   )
 }
 
-function CandidateRow({ candidate, visibleColumns, stageLabel, lang, canWrite, orgDisplayName, onOpen, onChangeStage, onDelete, onViewFullProfile }: {
+function HeaderCheckbox({ rows, selectedIds, onToggleAll, ariaLabel }: {
+  rows: { id: string }[]
+  selectedIds: Set<string>
+  onToggleAll: () => void
+  ariaLabel: string
+}) {
+  const ref = useRef<HTMLInputElement>(null)
+  const allSelected = rows.length > 0 && rows.every(r => selectedIds.has(r.id))
+  const someSelected = rows.some(r => selectedIds.has(r.id))
+  useEffect(() => {
+    if (ref.current) ref.current.indeterminate = !allSelected && someSelected
+  }, [allSelected, someSelected])
+  return (
+    <input
+      ref={ref}
+      type="checkbox"
+      checked={allSelected}
+      onChange={onToggleAll}
+      aria-label={ariaLabel}
+      className="h-4 w-4 cursor-pointer"
+      style={{ accentColor: 'var(--color-primary)' }}
+    />
+  )
+}
+
+function CandidateRow({ candidate, visibleColumns, stageLabel, lang, canWrite, orgDisplayName, selected, onToggleSelected, onOpen, onChangeStage, onDelete, onViewFullProfile }: {
   candidate: Candidate
   visibleColumns: ColumnKey[]
   stageLabel: string
   lang: 'en' | 'id'
   canWrite: boolean
   orgDisplayName: string
+  selected: boolean
+  onToggleSelected: () => void
   onOpen: () => void
   onChangeStage: (next: RecruitmentStage) => void
   onDelete: () => void
@@ -440,6 +547,16 @@ function CandidateRow({ candidate, visibleColumns, stageLabel, lang, canWrite, o
       className="cursor-pointer border-b last:border-0 hover:bg-[var(--color-bg-tertiary)]"
       style={{ borderColor: 'var(--color-border)' }}
     >
+      <td className="w-10 px-3 py-3" onClick={e => e.stopPropagation()}>
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={onToggleSelected}
+          aria-label={t.bulkSelectRowAriaLabel(candidate.name)}
+          className="h-4 w-4 cursor-pointer"
+          style={{ accentColor: 'var(--color-primary)' }}
+        />
+      </td>
       <td className="px-4 py-3">
         <div className="flex items-center gap-3">
           {candidate.photo_url ? (

@@ -131,8 +131,14 @@ function RequestsView({ user }: { user: User }) {
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   useEffect(() => { loadAll() }, [user.id, user.org_id])
+
+  // Tab/search/filter changes can pull selected rows off the visible set —
+  // clearing avoids the "deleting things you can't see" trap (same reasoning
+  // as Employees.tsx and Recruitment.tsx).
+  useEffect(() => { setSelectedIds(new Set()) }, [tab, search])
 
   async function loadAll() {
     setLoading(true)
@@ -279,6 +285,55 @@ function RequestsView({ user }: { user: User }) {
     }
   }
 
+  function toggleRowSelected(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  function toggleAllOnPage() {
+    setSelectedIds(prev => {
+      const allSelected = visible.length > 0 && visible.every(r => prev.has(r.id))
+      const next = new Set(prev)
+      for (const r of visible) {
+        if (allSelected) next.delete(r.id); else next.add(r.id)
+      }
+      return next
+    })
+  }
+
+  async function handleBulkDelete() {
+    if (selectedIds.size === 0 || !canWrite || busy) return
+    // Two filters because RLS will reject ineligible rows server-side and we
+    // don't want a partial mid-loop failure. Selection allows any row, but the
+    // delete itself only acts on rows the user is authorised to trash.
+    const selectedRows = requests.filter(r => selectedIds.has(r.id))
+    const eligible = selectedRows.filter(r => canDeleteRequest(r, user.id, role.canManagePeople))
+    if (eligible.length === 0) {
+      alert(t.hiringRequestsBulkNoneEligible)
+      return
+    }
+    const skipped = selectedRows.length - eligible.length
+    const confirmMsg = skipped > 0
+      ? t.hiringRequestsBulkTrashConfirmPartial(eligible.length, skipped)
+      : t.hiringRequestsBulkTrashConfirm(eligible.length)
+    if (!confirm(confirmMsg)) return
+    setBusy(true)
+    try {
+      for (const r of eligible) {
+        await trashHiringRequest(r.id)
+      }
+      setSelectedIds(new Set())
+      await loadAll()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <div>
       <div className="mb-5 flex flex-wrap items-center gap-2">
@@ -303,6 +358,39 @@ function RequestsView({ user }: { user: User }) {
         </div>
       </div>
 
+      {selectedIds.size > 0 && !loading && (
+        <div
+          className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2"
+          style={{
+            borderColor: 'var(--color-primary)',
+            backgroundColor: 'color-mix(in srgb, var(--color-primary) 8%, transparent)',
+          }}
+        >
+          <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+            {t.bulkSelectedCount(selectedIds.size)}
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setSelectedIds(new Set())}
+              className="rounded-lg border px-3 py-1 text-xs font-medium transition-colors"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', backgroundColor: 'var(--color-bg)' }}
+            >
+              {t.bulkClear}
+            </button>
+            <button
+              type="button"
+              onClick={handleBulkDelete}
+              disabled={!canWrite || busy}
+              className="rounded-lg px-3 py-1 text-xs font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+              style={{ backgroundColor: 'var(--color-danger)' }}
+            >
+              {t.bulkDelete}
+            </button>
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <RequestsTableSkeleton />
       ) : visible.length === 0 ? (
@@ -313,8 +401,12 @@ function RequestsView({ user }: { user: User }) {
           t={t}
           lang={lang}
           currentUserId={user.id}
+          canManagePeople={role.canManagePeople}
           canWrite={canWrite}
           busy={busy}
+          selectedIds={selectedIds}
+          onToggleRowSelected={toggleRowSelected}
+          onToggleAllOnPage={toggleAllOnPage}
           onRowClick={r => navigate(`/dashboard/hiring/${r.id}`)}
           onView={r => navigate(`/dashboard/hiring/${r.id}`)}
           onEdit={r => navigate(`/dashboard/hiring/${r.id}/edit`)}
@@ -334,6 +426,15 @@ function isAwaitingMyDecision(r: HiringRequest, cap: ViewerCapability): boolean 
   if (pending === 'manager') return cap.managedDepartmentIds.has(r.department_id)
   if (pending === 'owner') return cap.isOwner
   return false
+}
+
+// Mirrors the RLS DELETE policy on hiring_requests (migration 107): a request
+// can be trashed by its requester while still a draft, OR by owner/admin/hr
+// in any state (so HR can clean up abandoned approved requests). Used by
+// both the per-row Delete menu and the bulk-selection eligibility filter.
+function canDeleteRequest(r: RequestRow, currentUserId: string, canManagePeople: boolean): boolean {
+  if (canManagePeople) return true
+  return r.hiring_manager_id === currentUserId && (r.status as RequestStatus) === 'draft'
 }
 
 function tabLabel(tab: HiringTab, t: Translations): string {
@@ -393,6 +494,7 @@ function RequestsTableSkeleton({ rows = 6 }: { rows?: number }) {
   return (
     <div className="overflow-hidden rounded-lg border" style={{ borderColor: 'var(--color-border)' }} role="status" aria-busy="true">
       <div className="flex items-center gap-4 px-4 py-2.5" style={{ backgroundColor: 'var(--color-bg-tertiary)' }}>
+        <Skeleton className="h-3.5 w-4" />
         <Skeleton className="h-2.5 w-24" />
         <Skeleton className="h-2.5 w-20" />
         <Skeleton className="h-2.5 w-20" />
@@ -405,6 +507,7 @@ function RequestsTableSkeleton({ rows = 6 }: { rows?: number }) {
           className="flex items-center gap-4 border-t px-4 py-3.5"
           style={{ borderColor: 'var(--color-border)' }}
         >
+          <Skeleton className="h-4 w-4 shrink-0" />
           <Skeleton className="h-3 w-1/4" />
           <Skeleton className="h-3 w-24" />
           <Skeleton className="h-3 w-20" />
@@ -417,13 +520,17 @@ function RequestsTableSkeleton({ rows = 6 }: { rows?: number }) {
   )
 }
 
-function RequestsTable({ rows, t, lang, currentUserId, canWrite, busy, onRowClick, onView, onEdit, onSubmit, onDuplicate, onDelete }: {
+function RequestsTable({ rows, t, lang, currentUserId, canManagePeople, canWrite, busy, selectedIds, onToggleRowSelected, onToggleAllOnPage, onRowClick, onView, onEdit, onSubmit, onDuplicate, onDelete }: {
   rows: RequestRow[]
   t: Translations
   lang: 'en' | 'id'
   currentUserId: string
+  canManagePeople: boolean
   canWrite: boolean
   busy: boolean
+  selectedIds: Set<string>
+  onToggleRowSelected: (id: string) => void
+  onToggleAllOnPage: () => void
   onRowClick: (r: RequestRow) => void
   onView: (r: RequestRow) => void
   onEdit: (r: RequestRow) => void
@@ -431,11 +538,29 @@ function RequestsTable({ rows, t, lang, currentUserId, canWrite, busy, onRowClic
   onDuplicate: (r: RequestRow) => void
   onDelete: (r: RequestRow) => void
 }) {
+  const headerCheckRef = useRef<HTMLInputElement>(null)
+  const allSelected = rows.length > 0 && rows.every(r => selectedIds.has(r.id))
+  const someSelected = rows.some(r => selectedIds.has(r.id))
+  useEffect(() => {
+    if (headerCheckRef.current) headerCheckRef.current.indeterminate = !allSelected && someSelected
+  }, [allSelected, someSelected])
+
   return (
     <div className="overflow-hidden rounded-lg border" style={{ borderColor: 'var(--color-border)' }}>
       <table className="w-full text-sm">
         <thead style={{ backgroundColor: 'var(--color-bg-tertiary)' }}>
           <tr>
+            <th className="w-10 px-3 py-2.5">
+              <input
+                ref={headerCheckRef}
+                type="checkbox"
+                checked={allSelected}
+                onChange={onToggleAllOnPage}
+                aria-label={t.bulkSelectAllAriaLabel}
+                className="h-4 w-4 cursor-pointer"
+                style={{ accentColor: 'var(--color-primary)' }}
+              />
+            </th>
             <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--color-text-tertiary)' }}>{t.hiringRequestsColPosition}</th>
             <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--color-text-tertiary)' }}>{t.hiringRequestsColDepartment}</th>
             <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--color-text-tertiary)' }}>{t.hiringRequestsColRequester}</th>
@@ -452,6 +577,16 @@ function RequestsTable({ rows, t, lang, currentUserId, canWrite, busy, onRowClic
               className="cursor-pointer border-t hover:bg-[var(--color-bg-tertiary)]"
               style={{ borderColor: 'var(--color-border)' }}
             >
+              <td className="w-10 px-3 py-3" onClick={e => e.stopPropagation()}>
+                <input
+                  type="checkbox"
+                  checked={selectedIds.has(r.id)}
+                  onChange={() => onToggleRowSelected(r.id)}
+                  aria-label={t.bulkSelectRowAriaLabel(r.position_name)}
+                  className="h-4 w-4 cursor-pointer"
+                  style={{ accentColor: 'var(--color-primary)' }}
+                />
+              </td>
               <td className="px-4 py-3 font-medium" style={{ color: 'var(--color-text)' }}>{r.position_name}</td>
               <td className="px-4 py-3" style={{ color: 'var(--color-text-secondary)' }}>{r.department?.name ?? '—'}</td>
               <td className="px-4 py-3" style={{ color: 'var(--color-text-secondary)' }}>{r.requester?.name ?? '—'}</td>
@@ -461,6 +596,7 @@ function RequestsTable({ rows, t, lang, currentUserId, canWrite, busy, onRowClic
                 <RequestActionsMenu
                   request={r}
                   currentUserId={currentUserId}
+                  canManagePeople={canManagePeople}
                   disabled={!canWrite || busy}
                   t={t}
                   onView={() => onView(r)}
@@ -485,12 +621,13 @@ function RequestsTable({ rows, t, lang, currentUserId, canWrite, busy, onRowClic
 //   - Submit        → requester + status='draft' (server enforces required
 //                      fields; we surface the RPC error as an alert)
 //   - Duplicate     → anyone who can read the row (RLS already gated that)
-//   - Delete        → requester + status='draft' (matches RLS DELETE policy)
+//   - Delete        → canDeleteRequest() — mirrors RLS DELETE policy post-trash
 // The portal-based popover mirrors what Recruitment + Employees do so the
 // menu doesn't get clipped by table overflow.
-function RequestActionsMenu({ request, currentUserId, disabled, t, onView, onEdit, onSubmit, onDuplicate, onDelete }: {
+function RequestActionsMenu({ request, currentUserId, canManagePeople, disabled, t, onView, onEdit, onSubmit, onDuplicate, onDelete }: {
   request: RequestRow
   currentUserId: string
+  canManagePeople: boolean
   disabled: boolean
   t: Translations
   onView: () => void
@@ -506,7 +643,8 @@ function RequestActionsMenu({ request, currentUserId, disabled, t, onView, onEdi
 
   const status = request.status as RequestStatus
   const isRequester = request.hiring_manager_id === currentUserId
-  const canEditOrDelete = isRequester && isEditableByRequester(status) && status === 'draft'
+  const canEdit = isRequester && isEditableByRequester(status) && status === 'draft'
+  const canDelete = canDeleteRequest(request, currentUserId, canManagePeople)
   const canSubmit = isRequester && status === 'draft'
 
   function openMenu() {
@@ -561,13 +699,13 @@ function RequestActionsMenu({ request, currentUserId, disabled, t, onView, onEdi
         >
           <MenuItem onClick={() => { setOpen(false); onView() }}>{t.hiringRequestsActionView}</MenuItem>
           <MenuItem onClick={() => { setOpen(false); onDuplicate() }}>{t.duplicate}</MenuItem>
-          {canEditOrDelete && (
+          {canEdit && (
             <MenuItem onClick={() => { setOpen(false); onEdit() }}>{t.hiringRequestsActionEditDraft}</MenuItem>
           )}
           {canSubmit && (
             <MenuItem onClick={() => { setOpen(false); onSubmit() }} primary>{t.hiringRequestsActionSubmit}</MenuItem>
           )}
-          {canEditOrDelete && (
+          {canDelete && (
             <>
               <div className="my-1 border-t" style={{ borderColor: 'var(--color-border)' }} />
               <MenuItem onClick={() => { setOpen(false); onDelete() }} danger>{t.delete}</MenuItem>
