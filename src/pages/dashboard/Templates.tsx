@@ -103,6 +103,7 @@ export function Templates({ user }: { user: User }) {
       sop: t.templateNewSopUntitled,
       contract: t.templateNewContractUntitled,
       job_description: t.jdTemplateUntitled,
+      letter: 'Untitled letter template',
     }
     const { data, error } = await supabase
       .from('document_templates')
@@ -165,7 +166,7 @@ export function Templates({ user }: { user: User }) {
   // Counts per type from the unfiltered set so the filter always shows
   // total volume per type, not "volume given the other filters."
   const countByType: Record<DocumentType, number> = useMemo(() => {
-    const out: Record<DocumentType, number> = { sop: 0, contract: 0, job_description: 0 }
+    const out: Record<DocumentType, number> = { sop: 0, contract: 0, job_description: 0, letter: 0 }
     for (const item of items) {
       if (DOCUMENT_TYPES.includes(item.type)) out[item.type] += 1
     }
@@ -324,6 +325,7 @@ function TypePickerTile({
     sop: t.documentsAllTypeBadgeSop,
     contract: t.documentsAllTypeBadgeContract,
     job_description: t.documentsAllTypeBadgeJobDescription,
+    letter: 'Letter',
   }
   return (
     <button
@@ -542,6 +544,7 @@ const TYPE_COLORS: Record<DocumentType, string> = {
   sop: 'var(--color-primary)',
   contract: 'var(--color-success)',
   job_description: 'var(--color-warning)',
+  letter: 'var(--color-primary)',
 }
 
 function TemplateGridSkeleton({ count }: { count: number }) {
@@ -671,6 +674,7 @@ function TemplateList({ items, onOpen }: { items: TemplateItem[]; onOpen: (item:
     sop: t.documentsAllTypeBadgeSop,
     contract: t.documentsAllTypeBadgeContract,
     job_description: t.documentsAllTypeBadgeJobDescription,
+    letter: 'Letter',
   }
 
   return (

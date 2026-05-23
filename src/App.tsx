@@ -20,6 +20,7 @@ import { SOPEdit } from './pages/dashboard/SOPEdit'
 import { SOPHistory } from './pages/dashboard/SOPHistory'
 import { ContractEdit } from './pages/dashboard/ContractEdit'
 import { ContractHistory } from './pages/dashboard/ContractHistory'
+import { LetterEdit } from './pages/dashboard/LetterEdit'
 import { DocumentTemplateEdit } from './pages/dashboard/DocumentTemplateEdit'
 import { Templates } from './pages/dashboard/Templates'
 import { Performance } from './pages/dashboard/Performance'
@@ -130,6 +131,7 @@ function AppRoutes() {
             <Route path="/dashboard/documents/sop/:id/history" element={<SOPHistory />} />
             <Route path="/dashboard/documents/contract/:id/edit" element={<ContractEdit user={user} />} />
             <Route path="/dashboard/documents/contract/:id/history" element={<ContractHistory />} />
+            <Route path="/dashboard/documents/letter/:id/edit" element={<LetterEdit user={user} />} />
             <Route path="/dashboard/document-templates/:id/edit" element={<DocumentTemplateEdit user={user} />} />
             <Route path="/dashboard/templates" element={<Templates user={user} />} />
 

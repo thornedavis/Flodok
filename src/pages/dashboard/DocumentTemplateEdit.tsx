@@ -28,6 +28,7 @@ const TYPE_ACCENT: Record<DocumentType, string> = {
   sop: 'var(--color-primary)',
   contract: 'var(--color-success)',
   job_description: 'var(--color-warning)',
+  letter: 'var(--color-primary)',
 }
 
 // Templates can be any document type; map the stored `type` string to the

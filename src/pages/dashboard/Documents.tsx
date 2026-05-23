@@ -251,7 +251,7 @@ function AllDocumentsView({ user }: { user: User }) {
   // Counts per type are computed from the unfiltered set so the dropdown
   // always shows total volume per type, not "volume given the other filters."
   const countByType: Record<DocumentType, number> = useMemo(() => {
-    const out: Record<DocumentType, number> = { sop: 0, contract: 0, job_description: 0 }
+    const out: Record<DocumentType, number> = { sop: 0, contract: 0, job_description: 0, letter: 0 }
     for (const item of items) out[item.type] += 1
     return out
   }, [items])
@@ -341,6 +341,26 @@ function AllDocumentsView({ user }: { user: User }) {
   // modal collected fields it didn't actually save (KTP / address /
   // work location), and the edit page now exposes everything that
   // matters (contract type, leave, probation, wages, dates).
+  async function createBlankLetter() {
+    if (!canWrite) return
+    const { data, error } = await supabase
+      .from('letters')
+      .insert({
+        org_id: user.org_id,
+        title: '',
+        status: 'draft' as const,
+        sender_user_id: user.id,
+        content_doc: docAsJson(emptyDocumentDoc()),
+      })
+      .select()
+      .single()
+    if (error || !data) {
+      window.alert(error?.message ?? 'Could not create letter.')
+      return
+    }
+    navigate(documentEditPath('letter', data.id))
+  }
+
   async function createBlankContract() {
     if (!canWrite) return
     const starter = buildPkwtStarterDoc('pkwt')
@@ -474,6 +494,7 @@ function AllDocumentsView({ user }: { user: User }) {
       <StartNewSection
         onCreateSop={createBlankSop}
         onCreateContract={createBlankContract}
+        onCreateLetter={createBlankLetter}
         onCreateJobDescription={() => navigate('/dashboard/hiring/jds/new?from=documents')}
         onOpenTemplates={() => navigate('/dashboard/templates')}
         canWrite={canWrite}
@@ -555,12 +576,14 @@ function AllDocumentsView({ user }: { user: User }) {
 function StartNewSection({
   onCreateSop,
   onCreateContract,
+  onCreateLetter,
   onCreateJobDescription,
   onOpenTemplates,
   canWrite,
 }: {
   onCreateSop: () => void
   onCreateContract: () => void
+  onCreateLetter: () => void
   onCreateJobDescription: () => void
   onOpenTemplates: () => void
   canWrite: boolean
@@ -611,6 +634,12 @@ function StartNewSection({
           accent="var(--color-warning)"
           disabled={!canWrite}
           onClick={onCreateJobDescription}
+        />
+        <CreateTile
+          label="New Letter"
+          accent="var(--color-primary)"
+          disabled={!canWrite}
+          onClick={onCreateLetter}
         />
       </div>
       </div>
@@ -833,10 +862,10 @@ function typeLabel(t: ReturnType<typeof useLang>['t'], type: DocumentType): stri
 
 // ─── Grid + list renderers ──────────────────────────────────────────
 
-function DocTypeIcon({ type }: { type: DocumentType }) {
+function DocTypeIcon({ type, size = 20 }: { type: DocumentType; size?: number }) {
   const common = {
-    width: 20,
-    height: 20,
+    width: size,
+    height: size,
     viewBox: '0 0 24 24',
     fill: 'none',
     stroke: 'currentColor',
@@ -964,6 +993,7 @@ function RecentGrid({
     sop: 'var(--color-primary)',
     contract: 'var(--color-success)',
     job_description: 'var(--color-warning)',
+    letter: 'var(--color-primary)',
   }
 
   return (
@@ -1032,13 +1062,10 @@ function RecentGrid({
               <div className="truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>
                 {title}
               </div>
-              <div className="mt-1 flex items-center gap-1.5 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                <span className="shrink-0" style={{ color: accent }} title={typeLabel(t, item.type)}>
-                  <DocTypeIcon type={item.type} />
+              <div className="mt-1 flex items-center gap-1.5 text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>
+                <span className="truncate">
+                  v{item.current_version} · {new Date(item.updated_at).toLocaleDateString()}
                 </span>
-                <span>v{item.current_version}</span>
-                <span>·</span>
-                <span>{new Date(item.updated_at).toLocaleDateString()}</span>
 
                 <div className="relative ml-auto shrink-0">
                 <button
@@ -1190,6 +1217,7 @@ function RecentList({ items, onOpen }: { items: AllDocItem[]; onOpen: (item: All
     sop: t.documentsAllTypeBadgeSop,
     contract: t.documentsAllTypeBadgeContract,
     job_description: t.documentsAllTypeBadgeJobDescription,
+    letter: 'Letter',
   }
 
   return (
