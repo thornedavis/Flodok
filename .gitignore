@@ -32,3 +32,6 @@ supabase/.temp
 .dev.vars*
 !.dev.vars.example
 !.env.example
+
+# Claude Code local config — contains permission allowlist with secrets
+.claude/
