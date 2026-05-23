@@ -592,7 +592,7 @@ function StartNewSection({
         </button>
       </div>
 
-      <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+      <div className="grid grid-cols-3 gap-5 sm:grid-cols-4 lg:grid-cols-6">
         <CreateTile
           label={t.documentsNewSop}
           accent="var(--color-primary)"
@@ -876,7 +876,7 @@ function DocTypeIcon({ type }: { type: DocumentType }) {
 // mirror the real grid cards / list rows so the layout doesn't jump.
 function RecentGridSkeleton({ count }: { count: number }) {
   return (
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4" role="status" aria-busy="true">
+    <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4" role="status" aria-busy="true">
       {Array.from({ length: count }).map((_, i) => (
         <div
           key={i}
@@ -966,7 +966,7 @@ function RecentGrid({
   }
 
   return (
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4">
+    <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4">
       {items.map(item => {
         const title = item.title.trim() || t.documentsUntitled
         const accent = typeColors[item.type]
