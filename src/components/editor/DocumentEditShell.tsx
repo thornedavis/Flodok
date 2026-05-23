@@ -48,8 +48,11 @@ interface DocumentEditShellProps {
   storageKey: string
   // Glanceable document-type glyph shown left of the title.
   icon: ReactNode
-  // Accent colour for the icon chip (and nothing else). Defaults to primary.
+  // Accent colour for the icon chip + the type-label eyebrow. Defaults to primary.
   accent?: string
+  // Document-type eyebrow shown above the title (e.g. "SOP", "Contract").
+  // Anchors the user to *what kind of thing* they're editing.
+  typeLabel: string
   // Inline-editable document title. The shell renders the click-to-rename
   // affordance; the page owns the value + persistence.
   title: string
@@ -80,6 +83,7 @@ export function DocumentEditShell({
   storageKey,
   icon,
   accent = 'var(--color-primary)',
+  typeLabel,
   title,
   onTitleChange,
   titlePlaceholder,
@@ -143,7 +147,7 @@ export function DocumentEditShell({
         <div className="flex min-w-0 items-center gap-3">
           <span
             aria-hidden="true"
-            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md"
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md"
             style={{
               backgroundColor: `color-mix(in srgb, ${accent} 16%, transparent)`,
               color: accent,
@@ -151,53 +155,61 @@ export function DocumentEditShell({
           >
             {icon}
           </span>
-          {editingTitle ? (
-            <input
-              type="text"
-              value={title}
-              onChange={e => onTitleChange(e.target.value)}
-              onBlur={commitTitle}
-              onFocus={e => e.currentTarget.select()}
-              onKeyDown={e => {
-                if (e.key === 'Enter') { e.preventDefault(); commitTitle() }
-                if (e.key === 'Escape') { e.preventDefault(); revertTitle() }
-              }}
-              placeholder={placeholder}
-              autoFocus
-              className="min-w-0 max-w-[40vw] rounded-md border px-2 py-1 text-lg font-semibold outline-none"
-              style={{
-                borderColor: 'var(--color-primary)',
-                backgroundColor: 'var(--color-bg)',
-                color: 'var(--color-text)',
-              }}
-            />
-          ) : (
-            // Inline-editable title — hover shows a subtle border + "Rename"
-            // tooltip as a click affordance. Click switches to the input.
-            <button
-              type="button"
-              onClick={startEditingTitle}
-              disabled={!canEditTitle}
-              title={canEditTitle ? t.renameTitle : undefined}
-              className="group/title relative inline-flex min-w-0 cursor-text items-center rounded-md border px-2 py-1 text-lg font-semibold transition-colors disabled:cursor-not-allowed"
-              style={{
-                borderColor: 'transparent',
-                color: title.trim() ? 'var(--color-text)' : 'var(--color-text-tertiary)',
-              }}
-              onMouseOver={e => { if (canEditTitle) e.currentTarget.style.borderColor = 'var(--color-border)' }}
-              onMouseOut={e => { e.currentTarget.style.borderColor = 'transparent' }}
+          <div className="flex min-w-0 flex-col items-start">
+            <span
+              className="px-2 text-[10px] font-semibold uppercase leading-none tracking-[0.08em]"
+              style={{ color: accent }}
             >
-              <span className="truncate">{title.trim() || placeholder}</span>
-              {canEditTitle && (
-                <span
-                  className="pointer-events-none absolute left-1/2 top-full z-30 mt-1 -translate-x-1/2 whitespace-nowrap rounded-md px-2 py-1 text-[10px] font-medium opacity-0 transition-opacity group-hover/title:opacity-100"
-                  style={{ backgroundColor: 'var(--color-text)', color: 'var(--color-bg)' }}
-                >
-                  {t.renameTitle}
-                </span>
-              )}
-            </button>
-          )}
+              {typeLabel}
+            </span>
+            {editingTitle ? (
+              <input
+                type="text"
+                value={title}
+                onChange={e => onTitleChange(e.target.value)}
+                onBlur={commitTitle}
+                onFocus={e => e.currentTarget.select()}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') { e.preventDefault(); commitTitle() }
+                  if (e.key === 'Escape') { e.preventDefault(); revertTitle() }
+                }}
+                placeholder={placeholder}
+                autoFocus
+                className="mt-0.5 min-w-0 max-w-[40vw] rounded-md border px-2 py-0.5 text-lg font-semibold leading-tight outline-none"
+                style={{
+                  borderColor: 'var(--color-primary)',
+                  backgroundColor: 'var(--color-bg)',
+                  color: 'var(--color-text)',
+                }}
+              />
+            ) : (
+              // Inline-editable title — hover shows a subtle border + "Rename"
+              // tooltip as a click affordance. Click switches to the input.
+              <button
+                type="button"
+                onClick={startEditingTitle}
+                disabled={!canEditTitle}
+                title={canEditTitle ? t.renameTitle : undefined}
+                className="group/title relative mt-0.5 inline-flex min-w-0 cursor-text items-center rounded-md border px-2 py-0.5 text-lg font-semibold leading-tight transition-colors disabled:cursor-not-allowed"
+                style={{
+                  borderColor: 'transparent',
+                  color: title.trim() ? 'var(--color-text)' : 'var(--color-text-tertiary)',
+                }}
+                onMouseOver={e => { if (canEditTitle) e.currentTarget.style.borderColor = 'var(--color-border)' }}
+                onMouseOut={e => { e.currentTarget.style.borderColor = 'transparent' }}
+              >
+                <span className="truncate">{title.trim() || placeholder}</span>
+                {canEditTitle && (
+                  <span
+                    className="pointer-events-none absolute left-1/2 top-full z-30 mt-1 -translate-x-1/2 whitespace-nowrap rounded-md px-2 py-1 text-[10px] font-medium opacity-0 transition-opacity group-hover/title:opacity-100"
+                    style={{ backgroundColor: 'var(--color-text)', color: 'var(--color-bg)' }}
+                  >
+                    {t.renameTitle}
+                  </span>
+                )}
+              </button>
+            )}
+          </div>
           {badge}
           {headerHint && (
             <span className="hidden text-xs md:inline" style={{ color: 'var(--color-text-tertiary)' }}>

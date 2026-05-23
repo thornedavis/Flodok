@@ -874,6 +874,7 @@ export function ContractEdit({ user }: { user: User }) {
       storageKey="contractEdit"
       icon={<ContractTypeIcon />}
       accent="var(--color-success)"
+      typeLabel={t.documentTypeContract}
       title={title}
       onTitleChange={setTitle}
       canEditTitle={canWrite}

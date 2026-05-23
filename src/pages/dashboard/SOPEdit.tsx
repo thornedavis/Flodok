@@ -400,6 +400,7 @@ export function SOPEdit({ user }: { user: User }) {
       storageKey="sopEdit"
       icon={<SopIcon />}
       accent="var(--color-primary)"
+      typeLabel={t.documentTypeSop}
       title={title}
       onTitleChange={setTitle}
       canEditTitle={canWrite}

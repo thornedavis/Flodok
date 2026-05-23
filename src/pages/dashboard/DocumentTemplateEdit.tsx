@@ -334,6 +334,11 @@ export function DocumentTemplateEdit({ user }: { user: User }) {
       storageKey="templateEdit"
       icon={<TemplateTypeIcon type={type} />}
       accent={TYPE_ACCENT[type] ?? 'var(--color-primary)'}
+      typeLabel={t.documentTypeTemplateSuffix(
+        type === 'sop' ? t.documentTypeSop
+          : type === 'job_description' ? t.documentTypeJobDescription
+          : t.documentTypeContract,
+      )}
       title={title}
       onTitleChange={setTitle}
       canEditTitle={canWrite}

@@ -535,6 +535,7 @@ export function JobDescriptionEdit({ user }: { user: User }) {
       storageKey="jdEdit"
       icon={<JdIcon />}
       accent="var(--color-warning)"
+      typeLabel={t.documentTypeJobDescription}
       title={form.title}
       onTitleChange={v => update('title', v)}
       titlePlaceholder={t.jdFieldTitlePlaceholder}
