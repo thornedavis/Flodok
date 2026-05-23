@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { DocumentEditor } from '../../components/editor/bilingual/DocumentEditor'
 import { DocumentEditShell, EDITOR_STICKY_TOP_PX } from '../../components/editor/DocumentEditShell'
 import { SaveAsTemplateButton } from '../../components/SaveAsTemplateButton'
 import { AudiencePicker, type AudienceTarget, type AudienceEmployee, type NamedRef } from '../../components/AudiencePicker'
+import { SopSignatureProgress, type SignatureProgressData } from '../../components/SopSignatureProgress'
 import { useLang } from '../../contexts/LanguageContext'
 import { primaryDept, type EmpDeptShape } from '../../lib/employee'
 import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning'
@@ -65,6 +66,20 @@ export function SOPEdit({ user }: { user: User }) {
   const [jobPositions, setJobPositions] = useState<NamedRef[]>([])
   const [jobLevels, setJobLevels] = useState<NamedRef[]>([])
   const [employeeClasses, setEmployeeClasses] = useState<NamedRef[]>([])
+  const [sigProgress, setSigProgress] = useState<SignatureProgressData | null>(null)
+  const [sigProgressLoading, setSigProgressLoading] = useState(true)
+
+  // Fetch the signature progress for the current SOP version. Called on
+  // mount and again after publish so the panel reflects the new version's
+  // required-signer set without a full page reload. Wrapped in useCallback
+  // so the load effect can list it as a dependency without re-firing.
+  const loadSignatureProgress = useCallback(async () => {
+    if (!id) return
+    setSigProgressLoading(true)
+    const { data, error } = await supabase.rpc('sop_signature_progress', { p_sop_id: id })
+    if (!error && data) setSigProgress(data as unknown as SignatureProgressData)
+    setSigProgressLoading(false)
+  }, [id])
 
   useEffect(() => {
     async function load() {
@@ -82,6 +97,10 @@ export function SOPEdit({ user }: { user: User }) {
         supabase.from('company_reference_values').select('id, name, kind').eq('org_id', user.org_id).in('kind', ['job_position', 'job_level', 'employee_class']).order('name'),
         supabase.from('sop_audience').select('*').eq('sop_id', id!),
       ])
+      // Signature progress fetched separately — it depends on the audience
+      // rows having been loaded above so calling it last keeps the
+      // returned counts consistent with what we're about to render.
+      loadSignatureProgress()
 
       const loadedEmps = (empsResult.data || []) as EmployeeWithDepartments[]
       setAllEmployees(loadedEmps)
@@ -150,7 +169,7 @@ export function SOPEdit({ user }: { user: User }) {
       setSelectedTagIds(new Set((sopTagsResult.data || []).map(st => st.tag_id)))
     }
     load()
-  }, [id, user.org_id])
+  }, [id, user.org_id, loadSignatureProgress])
 
   function toggleTag(tagId: string) {
     setSelectedTagIds(prev => {
@@ -291,6 +310,11 @@ export function SOPEdit({ user }: { user: User }) {
     }
     setSavedAudienceTargets(audienceTargets)
     setSavedOwnerDepartmentId(ownerDepartmentId)
+
+    // Audience changes (and a possible publish-side version bump below)
+    // both shift the required-signer set. Refresh in the background; the
+    // panel falls back to its current data until the new payload lands.
+    loadSignatureProgress()
 
     setStatus(nextStatus)
 
@@ -528,6 +552,13 @@ export function SOPEdit({ user }: { user: User }) {
             )}
           </div>
         </div>
+      </div>
+
+      {/* Signatures — required signers resolved from the audience above,
+          with per-version sign status from sop_signatures. */}
+      <div>
+        <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>Signatures</label>
+        <SopSignatureProgress data={sigProgress} loading={sigProgressLoading} status={status} />
       </div>
     </>
   )

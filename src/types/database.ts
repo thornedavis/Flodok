@@ -3562,6 +3562,13 @@ export type Database = {
         Args: { p_org_id: string }
         Returns: undefined
       }
+      sop_resolved_audience: {
+        Args: { p_sop_id: string }
+        Returns: {
+          employee_id: string
+        }[]
+      }
+      sop_signature_progress: { Args: { p_sop_id: string }; Returns: Json }
       spotlight_target_employee_ids: {
         Args: { p_post_id: string }
         Returns: string[]
