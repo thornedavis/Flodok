@@ -77,12 +77,6 @@ const inputStyle: React.CSSProperties = {
   color: 'var(--color-text)',
 }
 
-function shiftMonth(iso: string, delta: number): string {
-  const d = new Date(`${iso.slice(0, 10)}T00:00:00`)
-  d.setMonth(d.getMonth() + delta)
-  return d.toISOString().slice(0, 10)
-}
-
 function signedIdr(idr: number, lang: 'en' | 'id'): string {
   return `${idr > 0 ? '+' : idr < 0 ? '−' : ''}${formatIdr(Math.abs(idr), lang)}`
 }
@@ -133,8 +127,6 @@ export function Performance({ user }: { user: User }) {
   const [lenses, setLenses] = useState<Set<Lens>>(new Set())
 
   // Period-scoped recognition signal (org-wide), for the dashboard cards.
-  const [badgesGiven, setBadgesGiven] = useState(0)
-  const [badgedIds, setBadgedIds] = useState<Set<string>>(new Set())
 
   // Action modals.
   const [payAction, setPayAction] = useState<{ row: RosterRow; mode: PayMode } | null>(null)
@@ -179,26 +171,6 @@ export function Performance({ user }: { user: User }) {
     }
     setRoster(raw ?? null)
     setLoading(false)
-
-    // Badges given (org-wide) drives the stat card + coverage. Scoped to the
-    // selected month, or all-time when that mode is active.
-    if (raw) {
-      let q = supabase
-        .from('achievement_unlocks')
-        .select('employee_id, achievement_definitions!inner(org_id)')
-        .eq('achievement_definitions.org_id', user.org_id)
-      if (!allTime) {
-        const periodStart = (raw.period_month ?? selectedMonth).slice(0, 10)
-        q = q.gte('unlocked_at', periodStart).lt('unlocked_at', shiftMonth(periodStart, 1))
-      }
-      const { data: unlocks } = await q
-      const ids = new Set((unlocks ?? []).map((u: { employee_id: string }) => u.employee_id))
-      setBadgesGiven((unlocks ?? []).length)
-      setBadgedIds(ids)
-    } else {
-      setBadgesGiven(0)
-      setBadgedIds(new Set())
-    }
   }
 
   async function loadDefinitions() {
@@ -282,14 +254,6 @@ export function Performance({ user }: { user: User }) {
     return rows
   }, [roster, search, deptFilter, statusFilter, lenses, sort])
 
-  // Dashboard stat values (over the full roster, independent of UI filters).
-  const stats = useMemo(() => {
-    const rows = roster?.rows ?? []
-    const adjustmentNet = rows.reduce((s, r) => s + r.adjustment_idr, 0)
-    const recognized = rows.filter(r => r.adjustment_idr !== 0 || badgedIds.has(r.employee_id)).length
-    return { adjustmentNet, recognized, total: rows.length }
-  }, [roster, badgedIds])
-
   function toggleLens(l: Lens) {
     setLenses(prev => {
       const next = new Set(prev)
@@ -352,19 +316,6 @@ export function Performance({ user }: { user: User }) {
           lang={lang}
           muted={periodKind === 'all'}
           trailing={<PeriodKindToggle value={periodKind} onChange={setPeriodKind} t={t} />}
-        />
-      </div>
-
-      {/* Dashboard stat cards */}
-      <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
-        <StatCard label={t.performanceStatAdjustments} value={signedIdr(stats.adjustmentNet, lang)} accent="#3b82f6" loading={loading} />
-        <StatCard label={t.performanceStatBadges} value={String(badgesGiven)} accent="var(--color-primary)" loading={loading} />
-        <StatCard
-          label={t.performanceStatCoverage}
-          value={t.performanceCoverageValue(stats.recognized, stats.total)}
-          hint={t.performanceCoverageHint}
-          accent="#a855f7"
-          loading={loading}
         />
       </div>
 
@@ -476,31 +427,6 @@ export function Performance({ user }: { user: User }) {
           t={t}
         />
       )}
-    </div>
-  )
-}
-
-// ─── Dashboard stat card ─────────────────────────────────
-
-function StatCard({ label, value, hint, accent, loading }: {
-  label: string
-  value: string
-  hint?: string
-  accent: string
-  loading: boolean
-}) {
-  return (
-    <div className="rounded-xl border p-3" style={{ borderColor: 'var(--color-border)' }}>
-      <div className="flex items-center gap-1.5">
-        <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: accent }} />
-        <p className="truncate text-[11px] font-medium" style={{ color: 'var(--color-text-tertiary)' }}>{label}</p>
-      </div>
-      {loading ? (
-        <Skeleton className="mt-1.5 h-5 w-2/3" />
-      ) : (
-        <p className="mt-0.5 truncate text-lg font-semibold tabular-nums" style={{ color: 'var(--color-text)' }}>{value}</p>
-      )}
-      {hint && !loading && <p className="truncate text-[10px]" style={{ color: 'var(--color-text-tertiary)' }}>{hint}</p>}
     </div>
   )
 }
