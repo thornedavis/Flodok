@@ -16,6 +16,7 @@ import { useLang } from '../../contexts/LanguageContext'
 import { useBilling } from '../../contexts/BillingContext'
 import { useRole } from '../../hooks/useRole'
 import { FilterPill, FilterSearchInput } from '../../components/FilterControls'
+import { ActionsMenuButton } from '../../components/ActionsMenuButton'
 import { Skeleton } from '../../components/Skeleton'
 import { isEditableByRequester, pendingApprover, statusTone, submitHiringRequest, type RequestStatus } from '../../lib/hiringRequests'
 import { trashHiringRequest } from '../../lib/trash'
@@ -675,21 +676,13 @@ function RequestActionsMenu({ request, currentUserId, canManagePeople, disabled,
 
   return (
     <>
-      <button
+      <ActionsMenuButton
         ref={buttonRef}
-        type="button"
+        label={t.hiringActionsLabel}
+        open={open}
         onClick={() => open ? setOpen(false) : openMenu()}
-        aria-haspopup="menu"
-        aria-expanded={open}
         disabled={disabled}
-        className="inline-flex items-center gap-1 rounded-lg border px-3 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-        style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)', backgroundColor: 'var(--color-bg)' }}
-      >
-        <span>{t.hiringActionsLabel}</span>
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
-      </button>
+      />
       {open && pos && createPortal(
         <div
           ref={menuRef}

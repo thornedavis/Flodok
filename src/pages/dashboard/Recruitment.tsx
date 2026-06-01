@@ -19,6 +19,7 @@ import {
 } from '../../lib/candidateProfile'
 import { FilterPanel, FilterSearchInput, MultiSelectDropdown } from '../../components/FilterControls'
 import type { FilterPanelSection } from '../../components/FilterControls'
+import { ActionsMenuButton } from '../../components/ActionsMenuButton'
 import { Skeleton } from '../../components/Skeleton'
 import { DeleteEmployeeModal } from '../../components/DeleteEmployeeModal'
 import type { Employee, Organization, User } from '../../types/aliases'
@@ -732,21 +733,13 @@ function RowActionsMenu({ stage, disabled, onEdit, onChangeStage, onDelete, onVi
 
   return (
     <>
-      <button
+      <ActionsMenuButton
         ref={buttonRef}
-        type="button"
+        label={t.hiringActionsLabel}
+        open={open}
         onClick={() => open ? setOpen(false) : openMenu()}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        className="inline-flex items-center gap-1 rounded-lg border px-3 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-        style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)', backgroundColor: 'var(--color-bg)' }}
         disabled={disabled}
-      >
-        <span>{t.hiringActionsLabel}</span>
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
-      </button>
+      />
       {open && pos && createPortal(
         <div
           ref={menuRef}

@@ -13,6 +13,7 @@ import { docAsJson, emptyDocumentDoc } from '../../lib/documentDoc'
 import { isPro, syncSeats } from '../../lib/billing'
 import { FREE_EMPLOYEE_LIMIT, PRO_MIN_SEATS } from '../../lib/pricing'
 import { UpgradeModal } from '../../components/UpgradeModal'
+import { ActionsMenuButton } from '../../components/ActionsMenuButton'
 import { ImportEmployeesModal } from '../../components/ImportEmployeesModal'
 import { DeleteEmployeeModal } from '../../components/DeleteEmployeeModal'
 import { buildExportFile } from '../../lib/employeeImport'
@@ -1287,24 +1288,12 @@ function EmployeeRow({ emp, t, statusLabels, isLast, visibleColumns, nameColumnP
         className={STICKY_RIGHT_CELL_BODY}
         style={{ backgroundColor: 'var(--color-bg)' }}
       >
-        <button
+        <ActionsMenuButton
           ref={buttonRef}
-          type="button"
+          label={t.actionsLabel}
+          open={menuOpen}
           onClick={() => menuOpen ? setMenuOpen(false) : openMenu()}
-          aria-haspopup="menu"
-          aria-expanded={menuOpen}
-          className="inline-flex items-center gap-1 rounded-lg border px-3 py-1 text-xs font-medium transition-colors"
-          style={{
-            borderColor: 'var(--color-border)',
-            color: 'var(--color-primary)',
-            backgroundColor: 'var(--color-bg)',
-          }}
-        >
-          <span>{t.actionsLabel}</span>
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="6 9 12 15 18 9" />
-          </svg>
-        </button>
+        />
         {menuOpen && menuPos && createPortal(
           <div
             ref={menuRef}

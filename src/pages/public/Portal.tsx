@@ -8,13 +8,13 @@ import html2pdf from 'html2pdf.js'
 import { supabase } from '../../lib/supabase'
 import { useTheme } from '../../hooks/useTheme'
 import { useLang } from '../../contexts/LanguageContext'
-import { formatIdr, allowanceGradientColor } from '../../lib/credits'
+import { formatIdr } from '../../lib/credits'
 import { formatRelativeTime } from '../../lib/relativeTime'
 import { BadgeGlyph } from '../../components/BadgeGlyph'
 import { renderMergeFields, type MergeContext } from '../../lib/mergeFields'
 import { DocumentRenderer, DOCUMENT_RENDERER_STYLES } from '../../components/editor/bilingual/DocumentRenderer'
 import { isDocumentDoc } from '../../lib/documentDoc'
-import { CompensationRing, ShieldPath, WalletPath, CoinPath, GiftPath } from '../../components/portal/CompensationRing'
+import { CompensationRing, ShieldPath, WalletPath, CoinPath } from '../../components/portal/CompensationRing'
 import { StatRow } from '../../components/portal/StatRow'
 import { InfoTooltip } from '../../components/InfoTooltip'
 import { AvatarWithBadge } from '../../components/portal/AvatarWithBadge'
@@ -33,18 +33,16 @@ type AchievementSummary = {
 
 type PortalHomeData = {
   employee: { id: string; name: string; photo_url: string | null; department: string | null; departments: string[]; created_at: string }
-  org: { id: string; name: string; logo_url: string | null; credits_divisor: number }
+  org: { id: string; name: string; logo_url: string | null }
   contract: { base_wage_idr: number | null; allowance_idr: number | null; hours_per_day: number | null; days_per_week: number | null } | null
   period_month: string
   is_current_period?: boolean
   days_employed: number
   hours_per_week: number
   lifetime_xp: number
-  credit_adjustments: Array<{ id: string; amount: number; reason: string; created_at: string; paid_out_at: string | null; payout_idr: number | null }>
-  credit_net: number
-  credit_frozen: boolean
-  bonus_adjustments: Array<{ id: string; amount_idr: number; reason: string; created_at: string; paid_out_at: string | null; payout_idr: number | null }>
-  bonus_sum: number
+  adjustments: Array<{ id: string; amount_idr: number; reason: string; created_at: string; paid_out_at: string | null }>
+  adjustment_net: number
+  adjustment_frozen: boolean
   achievements: AchievementSummary[]
 }
 
@@ -126,7 +124,7 @@ type LeaderboardData = {
   period_kind: 'month' | 'quarter' | 'all-time'
   period_label: string
   viewer_employee_id: string
-  org: { id: string; name: string; credits_divisor: number }
+  org: { id: string; name: string }
   rows: Array<{
     employee_id: string
     name: string
@@ -1146,8 +1144,7 @@ export function Portal() {
               unsignedSops={unsignedSops}
               feedEvents={feedEvents}
               badgesEnabled={org?.badges_enabled !== false}
-              creditsEnabled={org?.credits_enabled !== false}
-              bonusesEnabled={org?.bonuses_enabled !== false}
+              adjustmentsEnabled={org?.credits_enabled !== false}
               selectedMonth={selectedMonth}
               currentMonth={currentMonth}
               isCurrentMonth={isCurrentMonth}
@@ -1920,8 +1917,7 @@ function HomeTab({
   unsignedSops,
   feedEvents,
   badgesEnabled,
-  creditsEnabled,
-  bonusesEnabled,
+  adjustmentsEnabled,
   selectedMonth,
   currentMonth,
   isCurrentMonth,
@@ -1936,8 +1932,7 @@ function HomeTab({
   unsignedSops: Sop[]
   feedEvents: FeedEvent[]
   badgesEnabled: boolean
-  creditsEnabled: boolean
-  bonusesEnabled: boolean
+  adjustmentsEnabled: boolean
   selectedMonth: string
   currentMonth: string
   isCurrentMonth: boolean
@@ -1952,39 +1947,19 @@ function HomeTab({
   const visibleFeedEvents = isCurrentMonth
     ? feedEvents
     : feedEvents.filter(ev => monthFromIsoDate(ev.created_at) === selectedMonth)
-  const divisor = portal?.org.credits_divisor ?? 1000
   const baseWage = portal?.contract?.base_wage_idr ?? null
-  const baselineAllowance = portal?.contract?.allowance_idr ?? 0
-  const creditsNet = portal?.credit_net ?? 0
-  const creditIdr = divisor > 0 && baselineAllowance > 0
-    ? Math.round((creditsNet * baselineAllowance) / divisor)
-    : 0
-  const allowanceShrink = Math.min(baselineAllowance, Math.max(0, -creditIdr))
-  const effectiveAllowance = Math.max(0, baselineAllowance - allowanceShrink)
-  const projectedCreditsIdr = Math.max(0, creditIdr)
-  const allowancePct = baselineAllowance > 0
-    ? Math.round((effectiveAllowance / baselineAllowance) * 100)
-    : 0
+  const allowance = portal?.contract?.allowance_idr ?? 0
+  const adjustmentNet = portal?.adjustment_net ?? 0
   const hasContract = !!portal?.contract && baseWage !== null
-  const allowanceColor = allowanceGradientColor(allowancePct / 100)
-  const creditsColor = portal?.credit_frozen
-    ? 'var(--color-text-tertiary)'
-    : creditsNet < 0
+  const adjustmentColor = adjustmentNet > 0
+    ? 'var(--color-success, #16a34a)'
+    : adjustmentNet < 0
       ? 'var(--color-danger)'
-      : '#3b82f6'
-  const bonusSum = portal?.bonus_sum ?? 0
-  const bonusColor = '#a855f7'
+      : 'var(--color-text-tertiary)'
   const ringSegments = [
     { key: 'base', valueIdr: baseWage ?? 0, color: 'var(--color-text-secondary)', icon: <ShieldPath /> },
-    {
-      key: 'allowance',
-      valueIdr: effectiveAllowance,
-      baselineIdr: baselineAllowance,
-      color: allowanceColor,
-      icon: <WalletPath />,
-    },
-    { key: 'credits', valueIdr: projectedCreditsIdr, color: creditsColor, icon: <CoinPath /> },
-    { key: 'bonus', valueIdr: bonusSum, color: bonusColor, icon: <GiftPath /> },
+    { key: 'allowance', valueIdr: allowance, color: '#16a34a', icon: <WalletPath /> },
+    { key: 'adjustment', valueIdr: Math.max(0, adjustmentNet), color: '#3b82f6', icon: <CoinPath /> },
   ]
 
   return (
@@ -2014,11 +1989,8 @@ function HomeTab({
       <WalletBalance
         hasContract={hasContract}
         baseWage={baseWage ?? 0}
-        effectiveAllowance={effectiveAllowance}
-        baselineAllowance={baselineAllowance}
-        creditsNet={creditsNet}
-        bonusSum={bonusSum}
-        divisor={divisor}
+        allowance={allowance}
+        adjustmentNet={adjustmentNet}
         s={s}
         lang={lang}
       />
@@ -2036,74 +2008,41 @@ function HomeTab({
           icon={<WalletIcon />}
           label={s.portalAllowance}
           info={s.portalAllowanceInfo}
-          value={hasContract ? formatIdr(effectiveAllowance, lang) : '—'}
-          accent={hasContract ? allowanceColor : undefined}
+          value={hasContract ? formatIdr(allowance, lang) : '—'}
+          accent="var(--color-text-secondary)"
         />
-        {creditsEnabled && (
+        {adjustmentsEnabled && (
           <StatRow
             icon={<CreditsIcon />}
-            label={s.portalCredits}
-            info={s.portalCreditsInfo}
-            value={creditsNet}
-            accent={creditsColor}
+            label={s.portalAdjustments}
+            info={s.portalAdjustmentsInfo}
+            value={<span style={{ color: adjustmentColor }}>{`${adjustmentNet > 0 ? '+' : adjustmentNet < 0 ? '−' : ''}${formatIdr(Math.abs(adjustmentNet), lang)}`}</span>}
+            accent="#3b82f6"
           >
-            {portal && portal.credit_adjustments.length > 0 ? (
+            {portal && portal.adjustments.length > 0 ? (
               <ul className="space-y-2">
-                {portal.credit_adjustments.map(adj => (
+                {portal.adjustments.map(adj => (
                   <li key={adj.id} className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <p className="text-sm" style={{ color: 'var(--color-text)' }}>{adj.reason}</p>
                       <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
                         {new Date(adj.created_at).toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-US', { day: 'numeric', month: 'short' })}
-                        {adj.paid_out_at && adj.payout_idr != null && <> · {formatIdr(adj.payout_idr, lang)}</>}
                       </p>
                     </div>
                     <span
                       className="shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold"
                       style={{
-                        backgroundColor: adj.amount > 0 ? 'var(--color-success-bg, #dcfce7)' : 'var(--color-diff-remove)',
-                        color: adj.amount > 0 ? 'var(--color-success, #16a34a)' : 'var(--color-danger)',
+                        backgroundColor: adj.amount_idr > 0 ? 'var(--color-success-bg, #dcfce7)' : 'var(--color-diff-remove)',
+                        color: adj.amount_idr > 0 ? 'var(--color-success, #16a34a)' : 'var(--color-danger)',
                       }}
                     >
-                      {adj.amount > 0 ? '+' : ''}{adj.amount}
+                      {`${adj.amount_idr > 0 ? '+' : '−'}${formatIdr(Math.abs(adj.amount_idr), lang)}`}
                     </span>
                   </li>
                 ))}
               </ul>
             ) : (
               <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{s.portalNoCreditsActivity}</p>
-            )}
-          </StatRow>
-        )}
-        {bonusesEnabled && (
-          <StatRow
-            icon={<GiftIcon />}
-            label={s.portalBonus}
-            info={s.portalBonusInfo}
-            value={formatIdr(bonusSum, lang)}
-            accent={bonusColor}
-          >
-            {portal && portal.bonus_adjustments.length > 0 ? (
-              <ul className="space-y-2">
-                {portal.bonus_adjustments.map(adj => (
-                  <li key={adj.id} className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm" style={{ color: 'var(--color-text)' }}>{adj.reason}</p>
-                      <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                        {new Date(adj.created_at).toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-US', { day: 'numeric', month: 'short' })}
-                      </p>
-                    </div>
-                    <span
-                      className="shrink-0 text-xs font-semibold"
-                      style={{ color: bonusColor }}
-                    >
-                      +{formatIdr(adj.amount_idr, lang)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>—</p>
             )}
           </StatRow>
         )}
@@ -2294,21 +2233,15 @@ function ActivityFeed({
 function WalletBalance({
   hasContract,
   baseWage,
-  effectiveAllowance,
-  baselineAllowance,
-  creditsNet,
-  bonusSum,
-  divisor,
+  allowance,
+  adjustmentNet,
   s,
   lang,
 }: {
   hasContract: boolean
   baseWage: number
-  effectiveAllowance: number
-  baselineAllowance: number
-  creditsNet: number
-  bonusSum: number
-  divisor: number
+  allowance: number
+  adjustmentNet: number
   s: ReturnType<typeof useLang>['t']
   lang: 'en' | 'id'
 }) {
@@ -2321,14 +2254,8 @@ function WalletBalance({
     )
   }
 
-  // Positive credits add a credits segment on top; negative credits have
-  // already been applied to effectiveAllowance by the caller.
-  const creditIdr = divisor > 0 && baselineAllowance > 0
-    ? Math.round((creditsNet * baselineAllowance) / divisor)
-    : 0
-  const projectedCreditsIdr = Math.max(0, creditIdr)
-  const total = baseWage + effectiveAllowance + projectedCreditsIdr + bonusSum
-  const baseline = baseWage + baselineAllowance
+  const baseline = baseWage + allowance
+  const total = Math.max(0, baseline + adjustmentNet)
   const delta = total - baseline
 
   const trendColor = delta > 0
@@ -2353,7 +2280,7 @@ function WalletBalance({
         <TrendIcon direction={delta > 0 ? 'up' : delta < 0 ? 'down' : 'flat'} />
         {delta === 0
           ? s.portalSteady
-          : <>{delta > 0 ? '+' : ''}{formatIdr(delta, lang)} {s.portalVsBaseline}</>}
+          : <>{delta > 0 ? '+' : '−'}{formatIdr(Math.abs(delta), lang)} {s.portalVsBaseline}</>}
       </div>
     </div>
   )
@@ -2393,10 +2320,6 @@ function WalletIcon() {
 
 function CreditsIcon() {
   return <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M9 9h6M9 15h6"/></svg>
-}
-
-function GiftIcon() {
-  return <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>
 }
 
 function SparkIcon() {

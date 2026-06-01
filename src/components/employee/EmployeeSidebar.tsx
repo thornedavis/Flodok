@@ -12,7 +12,6 @@ export type EmployeeSectionKey =
   | 'additional'
   | 'documents'
   | 'compensation'
-  | 'achievements'
 
 interface EmployeeSidebarProps {
   employeeId: string
@@ -153,7 +152,6 @@ export function EmployeeSidebar({
       label: '',
       items: [
         { key: 'compensation', label: t.empNavCompensation },
-        { key: 'achievements', label: t.empNavAchievements },
       ],
     },
   ]

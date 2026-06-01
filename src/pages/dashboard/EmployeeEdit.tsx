@@ -3,9 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
 import { useBreadcrumbTrailing } from '../../contexts/BreadcrumbContext'
-import { AchievementsSection } from '../../components/employee/AchievementsSection'
-import { CompensationOverview } from '../../components/employee/CompensationOverview'
-import { EmployeeActivityLog } from '../../components/employee/EmployeeActivityLog'
+import { CompensationFacts } from '../../components/employee/CompensationFacts'
 import { EmployeeSidebar, type EmployeeSectionKey } from '../../components/employee/EmployeeSidebar'
 import { SeparationModal } from '../../components/employee/SeparationModal'
 import { deriveEmployeeStatus, type SeparationType } from '../../lib/employeeStatus'
@@ -34,6 +32,11 @@ type DepartmentOption = { id: string; name: string }
 const MAX_AVATAR_SIZE = 2 * 1024 * 1024 // 2 MB
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 
+// Sections that may be deep-linked via ?section=… .
+const SECTION_KEYS: EmployeeSectionKey[] = [
+  'personal', 'employment', 'education', 'experience', 'additional', 'documents', 'compensation',
+]
+
 export function EmployeeEdit({ user }: { user: User }) {
   const { t } = useLang()
   const { id: employeeId } = useParams<{ id: string }>()
@@ -51,8 +54,10 @@ export function EmployeeEdit({ user }: { user: User }) {
   const [orgJobPositions, setOrgJobPositions] = useState<string[]>([])
   const [orgJobLevels, setOrgJobLevels] = useState<string[]>([])
   const [orgEmployeeClasses, setOrgEmployeeClasses] = useState<string[]>([])
-  const [allowanceRefreshKey, setAllowanceRefreshKey] = useState(0)
-  const [activeSection, setActiveSection] = useState<EmployeeSectionKey>('personal')
+  const initialSection = searchParams.get('section') as EmployeeSectionKey | null
+  const [activeSection, setActiveSection] = useState<EmployeeSectionKey>(
+    initialSection && SECTION_KEYS.includes(initialSection) ? initialSection : 'personal',
+  )
 
   const [uploading, setUploading] = useState(false)
   const [topError, setTopError] = useState('')
@@ -331,33 +336,10 @@ export function EmployeeEdit({ user }: { user: User }) {
           </div>
         )
       case 'compensation':
-        return org ? (
-          <div>
-            <SectionHeader title={t.empNavCompensation} />
-            <div className="space-y-10">
-              <CompensationOverview
-                user={user}
-                employeeId={employeeId}
-                contract={activeContract}
-                photoUrl={employee.photo_url}
-                divisor={org.credits_divisor}
-                refreshKey={allowanceRefreshKey}
-                onChange={() => setAllowanceRefreshKey(k => k + 1)}
-              />
-              <EmployeeActivityLog employeeId={employeeId} refreshKey={allowanceRefreshKey} />
-            </div>
-          </div>
-        ) : null
-      case 'achievements':
         return (
           <div>
-            <SectionHeader title={t.empNavAchievements} />
-            <AchievementsSection
-              user={user}
-              employeeId={employeeId}
-              employee={employee}
-              activeContract={activeContract}
-            />
+            <SectionHeader title={t.empNavCompensation} />
+            <CompensationFacts contract={activeContract} employeeId={employeeId} />
           </div>
         )
     }

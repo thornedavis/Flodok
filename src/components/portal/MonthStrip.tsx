@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 
 type Props = {
   selectedMonth: string
@@ -6,6 +6,10 @@ type Props = {
   currentMonth: string
   onSelect: (month: string) => void
   lang: 'en' | 'id'
+  /** Optional control rendered in the bar, just before the calendar icon. */
+  trailing?: ReactNode
+  /** Dim the month list (e.g. when an "all time" mode makes it inactive). */
+  muted?: boolean
 }
 
 function buildMonthList(earliest: string, current: string): string[] {
@@ -43,7 +47,7 @@ function CalendarIcon() {
   )
 }
 
-export function MonthStrip({ selectedMonth, earliestMonth, currentMonth, onSelect, lang }: Props) {
+export function MonthStrip({ selectedMonth, earliestMonth, currentMonth, onSelect, lang, trailing, muted = false }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const itemRefs = useRef<Record<string, HTMLButtonElement | null>>({})
   const settleTimerRef = useRef<number | null>(null)
@@ -152,19 +156,21 @@ export function MonthStrip({ selectedMonth, earliestMonth, currentMonth, onSelec
   const fadeMask = 'linear-gradient(to right, transparent 0%, black 14%, black 86%, transparent 100%)'
 
   return (
-    <div className="relative -mx-4 mb-2 flex items-center">
-      <div
-        ref={containerRef}
-        className="month-strip relative flex min-w-0 flex-1 snap-x snap-proximity gap-6 overflow-x-auto px-[45%] py-3"
-        style={{
-          scrollbarWidth: 'none',
-          msOverflowStyle: 'none',
-          WebkitMaskImage: fadeMask,
-          maskImage: fadeMask,
-        }}
-      >
-        <style>{`.month-strip::-webkit-scrollbar { display: none; }`}</style>
-        {yearGroups.flatMap(group => {
+    <div className="relative mb-2 flex w-full items-center">
+      <div className="min-w-0 flex-1">
+        <div
+          ref={containerRef}
+          className="month-strip relative flex snap-x snap-proximity gap-6 overflow-x-auto px-[45%] py-3 transition-opacity"
+          style={{
+            scrollbarWidth: 'none',
+            msOverflowStyle: 'none',
+            WebkitMaskImage: fadeMask,
+            maskImage: fadeMask,
+            opacity: muted ? 0.4 : 1,
+          }}
+        >
+          <style>{`.month-strip::-webkit-scrollbar { display: none; }`}</style>
+          {yearGroups.flatMap(group => {
           const labelNode = showYearLabels ? (
             <div
               key={`year-${group.year}`}
@@ -194,7 +200,10 @@ export function MonthStrip({ selectedMonth, earliestMonth, currentMonth, onSelec
           })
           return labelNode ? [labelNode, ...monthNodes] : monthNodes
         })}
+        </div>
       </div>
+
+      {trailing && <div className="ml-2 shrink-0">{trailing}</div>}
 
       <button
         ref={pickerBtnRef}

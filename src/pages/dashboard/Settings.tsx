@@ -32,7 +32,7 @@ import { useBilling } from '../../contexts/BillingContext'
 
 ensureSignatureFontsLoaded()
 
-type Tab = 'account' | 'team' | 'integrations' | 'credits' | 'bonuses' | 'achievements' | 'billing'
+type Tab = 'account' | 'team' | 'integrations' | 'adjustments' | 'achievements' | 'billing'
 
 const inputStyle: React.CSSProperties = {
   borderColor: 'var(--color-border)',
@@ -50,8 +50,7 @@ export function Settings({ user }: { user: User }) {
   if (rawTab === 'team' || rawTab === 'billing') tab = rawTab
   else if (rawTab === 'integrations' && isAdmin) tab = 'integrations'
   else if (rawTab === 'achievements' && isAdmin) tab = 'achievements'
-  else if (rawTab === 'credits' && isAdmin) tab = 'credits'
-  else if (rawTab === 'bonuses' && isAdmin) tab = 'bonuses'
+  else if ((rawTab === 'adjustments' || rawTab === 'credits' || rawTab === 'bonuses') && isAdmin) tab = 'adjustments'
 
   function setTab(next: Tab) {
     setParams({ tab: next }, { replace: true })
@@ -68,10 +67,7 @@ export function Settings({ user }: { user: User }) {
           <TabButton active={tab === 'integrations'} onClick={() => setTab('integrations')}>{t.settingsIntegrationsTab}</TabButton>
         )}
         {isAdmin && (
-          <TabButton active={tab === 'credits'} onClick={() => setTab('credits')}>{t.settingsCreditsTab}</TabButton>
-        )}
-        {isAdmin && (
-          <TabButton active={tab === 'bonuses'} onClick={() => setTab('bonuses')}>{t.settingsBonusesTab}</TabButton>
+          <TabButton active={tab === 'adjustments'} onClick={() => setTab('adjustments')}>{t.settingsAdjustmentsTab}</TabButton>
         )}
         {isAdmin && (
           <TabButton active={tab === 'achievements'} onClick={() => setTab('achievements')}>{t.achievementDefsTitle}</TabButton>
@@ -82,8 +78,7 @@ export function Settings({ user }: { user: User }) {
       {tab === 'account' && <AccountTab user={user} t={t} />}
       {tab === 'team' && <TeamMembersSection user={user} t={t} />}
       {tab === 'integrations' && isAdmin && <IntegrationsTab user={user} t={t} />}
-      {tab === 'credits' && isAdmin && <CreditsTab user={user} t={t} />}
-      {tab === 'bonuses' && isAdmin && <BonusesTab user={user} t={t} />}
+      {tab === 'adjustments' && isAdmin && <AdjustmentsTab user={user} t={t} />}
       {tab === 'achievements' && isAdmin && <AchievementsTab user={user} t={t} />}
       {tab === 'billing' && <BillingTab user={user} t={t} />}
     </div>
@@ -1132,17 +1127,18 @@ function IntegrationsTab({ user, t }: { user: User; t: Translations }) {
 }
 
 // ─── Credits tab ────────────────────────────────────────
-// Master switch for the Credits feature + the credits_divisor config that
-// used to live on the Organization tab.
+// One Adjustments tab: the feature toggle, the max-per-adjustment cap (Rp),
+// and the advanced leaderboard credit rate (Rp per credit). Reuses the
+// credits_enabled / credits_divisor / max_bonus_idr org columns.
 
-function CreditsTab({ user, t }: { user: User; t: Translations }) {
+function AdjustmentsTab({ user, t }: { user: User; t: Translations }) {
   const [enabled, setEnabled] = useState(true)
-  const [creditsDivisor, setCreditsDivisor] = useState<string>('1000')
-  const [savedDivisor, setSavedDivisor] = useState<number>(1000)
-  const [maxPerAward, setMaxPerAward] = useState<string>('')
-  const [savedMaxPerAward, setSavedMaxPerAward] = useState<number | null>(null)
+  const [rate, setRate] = useState<string>('1000')
+  const [savedRate, setSavedRate] = useState<number>(1000)
+  const [maxAdj, setMaxAdj] = useState<string>('')
+  const [savedMaxAdj, setSavedMaxAdj] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
-  const [savingDivisor, setSavingDivisor] = useState(false)
+  const [savingRate, setSavingRate] = useState(false)
   const [savingMax, setSavingMax] = useState(false)
 
   useEffect(() => { load() }, [user.org_id])
@@ -1150,15 +1146,15 @@ function CreditsTab({ user, t }: { user: User; t: Translations }) {
   async function load() {
     const { data } = await supabase
       .from('organizations')
-      .select('credits_enabled, credits_divisor, max_credit_per_award')
+      .select('credits_enabled, credits_divisor, max_bonus_idr')
       .eq('id', user.org_id)
       .single()
     if (data) {
       setEnabled(data.credits_enabled ?? true)
-      setSavedDivisor(data.credits_divisor ?? 1000)
-      setCreditsDivisor(String(data.credits_divisor ?? 1000))
-      setSavedMaxPerAward(data.max_credit_per_award ?? null)
-      setMaxPerAward(data.max_credit_per_award != null ? String(data.max_credit_per_award) : '')
+      setSavedRate(data.credits_divisor ?? 1000)
+      setRate(String(data.credits_divisor ?? 1000))
+      setSavedMaxAdj(data.max_bonus_idr ?? null)
+      setMaxAdj(data.max_bonus_idr != null ? String(data.max_bonus_idr) : '')
     }
     setLoading(false)
   }
@@ -1172,140 +1168,27 @@ function CreditsTab({ user, t }: { user: User; t: Translations }) {
     }
   }
 
-  const parsedDivisor = Number(creditsDivisor)
-  const divisorValid = Number.isFinite(parsedDivisor) && parsedDivisor > 0 && Number.isInteger(parsedDivisor)
-  const divisorDirty = divisorValid && parsedDivisor !== savedDivisor
+  const parsedRate = Number(rate)
+  const rateValid = Number.isFinite(parsedRate) && parsedRate > 0 && Number.isInteger(parsedRate)
+  const rateDirty = rateValid && parsedRate !== savedRate
 
-  async function saveDivisor() {
-    if (!divisorDirty) return
-    setSavingDivisor(true)
+  async function saveRate() {
+    if (!rateDirty) return
+    setSavingRate(true)
     const { error } = await supabase
       .from('organizations')
-      .update({ credits_divisor: parsedDivisor })
+      .update({ credits_divisor: parsedRate })
       .eq('id', user.org_id)
-    if (!error) setSavedDivisor(parsedDivisor)
+    if (!error) setSavedRate(parsedRate)
     else alert(error.message)
-    setSavingDivisor(false)
+    setSavingRate(false)
   }
 
-  // Max per award: blank string → null (no cap). Otherwise must be a positive int.
-  const trimmedMax = maxPerAward.trim()
+  // Max per adjustment: blank → null (no cap). Otherwise a positive int (Rp).
+  const trimmedMax = maxAdj.trim()
   const parsedMax = trimmedMax === '' ? null : Number(trimmedMax)
   const maxValid = trimmedMax === '' || (Number.isFinite(parsedMax) && Number.isInteger(parsedMax) && (parsedMax as number) > 0)
-  const maxDirty = maxValid && parsedMax !== savedMaxPerAward
-
-  async function saveMax() {
-    if (!maxDirty) return
-    setSavingMax(true)
-    const { error } = await supabase
-      .from('organizations')
-      .update({ max_credit_per_award: parsedMax })
-      .eq('id', user.org_id)
-    if (!error) setSavedMaxPerAward(parsedMax)
-    else alert(error.message)
-    setSavingMax(false)
-  }
-
-  if (loading) return <SettingsSectionSkeleton />
-
-  return (
-    <div className="space-y-5">
-      <InfoBanner
-        storageKey="flodok.banner.credits.dismissed"
-        title={t.bannerCreditsTitle}
-        body={t.bannerCreditsBody}
-        icon={creditsIcon}
-        accent="#3b82f6"
-      />
-
-      <div className="flex items-center justify-between gap-4">
-        <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{t.creditsEnabledLabel}</p>
-        <Toggle checked={enabled} onChange={toggleEnabled} />
-      </div>
-      <p className="-mt-3 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.creditsEnabledHelp}</p>
-
-      <div style={{ opacity: enabled ? 1 : 0.5 }}>
-        <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.creditsDivisorLabel}</label>
-        <div className="flex items-center gap-2">
-          <input
-            type="number"
-            inputMode="numeric"
-            min={1}
-            step={1}
-            value={creditsDivisor}
-            onChange={e => setCreditsDivisor(e.target.value)}
-            onBlur={saveDivisor}
-            disabled={!enabled}
-            className="rounded-lg border px-3 py-2 text-sm md:w-48"
-            style={inputStyle}
-          />
-          {savingDivisor && <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>…</span>}
-        </div>
-        <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.creditsDivisorHelp}</p>
-      </div>
-
-      <div style={{ opacity: enabled ? 1 : 0.5 }}>
-        <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.maxCreditPerAwardLabel}</label>
-        <div className="flex items-center gap-2">
-          <input
-            type="number"
-            inputMode="numeric"
-            min={1}
-            step={1}
-            value={maxPerAward}
-            onChange={e => setMaxPerAward(e.target.value)}
-            onBlur={saveMax}
-            disabled={!enabled}
-            placeholder={t.noCapPlaceholder}
-            className="rounded-lg border px-3 py-2 text-sm md:w-48"
-            style={inputStyle}
-          />
-          {savingMax && <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>…</span>}
-        </div>
-        <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.maxCreditPerAwardHelp}</p>
-      </div>
-    </div>
-  )
-}
-
-// ─── Bonuses tab ────────────────────────────────────────
-
-function BonusesTab({ user, t }: { user: User; t: Translations }) {
-  const [enabled, setEnabled] = useState(true)
-  const [maxBonus, setMaxBonus] = useState<string>('')
-  const [savedMaxBonus, setSavedMaxBonus] = useState<number | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [savingMax, setSavingMax] = useState(false)
-
-  useEffect(() => { load() }, [user.org_id])
-
-  async function load() {
-    const { data } = await supabase
-      .from('organizations')
-      .select('bonuses_enabled, max_bonus_idr')
-      .eq('id', user.org_id)
-      .single()
-    if (data) {
-      setEnabled(data.bonuses_enabled ?? true)
-      setSavedMaxBonus(data.max_bonus_idr ?? null)
-      setMaxBonus(data.max_bonus_idr != null ? String(data.max_bonus_idr) : '')
-    }
-    setLoading(false)
-  }
-
-  async function toggleEnabled(next: boolean) {
-    setEnabled(next)
-    const { error } = await supabase.from('organizations').update({ bonuses_enabled: next }).eq('id', user.org_id)
-    if (error) {
-      setEnabled(!next)
-      alert(error.message)
-    }
-  }
-
-  const trimmedMax = maxBonus.trim()
-  const parsedMax = trimmedMax === '' ? null : Number(trimmedMax)
-  const maxValid = trimmedMax === '' || (Number.isFinite(parsedMax) && Number.isInteger(parsedMax) && (parsedMax as number) > 0)
-  const maxDirty = maxValid && parsedMax !== savedMaxBonus
+  const maxDirty = maxValid && parsedMax !== savedMaxAdj
 
   async function saveMax() {
     if (!maxDirty) return
@@ -1314,7 +1197,7 @@ function BonusesTab({ user, t }: { user: User; t: Translations }) {
       .from('organizations')
       .update({ max_bonus_idr: parsedMax })
       .eq('id', user.org_id)
-    if (!error) setSavedMaxBonus(parsedMax)
+    if (!error) setSavedMaxAdj(parsedMax)
     else alert(error.message)
     setSavingMax(false)
   }
@@ -1324,28 +1207,28 @@ function BonusesTab({ user, t }: { user: User; t: Translations }) {
   return (
     <div className="space-y-5">
       <InfoBanner
-        storageKey="flodok.banner.bonuses.dismissed"
-        title={t.bannerBonusesTitle}
-        body={t.bannerBonusesBody}
-        icon={bonusesIcon}
-        accent="#10b981"
+        storageKey="flodok.banner.adjustments.dismissed"
+        title={t.bannerAdjustmentsTitle}
+        body={t.bannerAdjustmentsBody}
+        icon={creditsIcon}
+        accent="#3b82f6"
       />
 
       <div className="flex items-center justify-between gap-4">
-        <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{t.bonusesEnabledLabel}</p>
+        <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{t.adjustmentsEnabledLabel}</p>
         <Toggle checked={enabled} onChange={toggleEnabled} />
       </div>
-      <p className="-mt-3 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.bonusesEnabledHelp}</p>
+      <p className="-mt-3 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.adjustmentsEnabledHelp}</p>
 
       <div style={{ opacity: enabled ? 1 : 0.5 }}>
-        <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.maxBonusIdrLabel}</label>
+        <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.adjustmentMaxLabel}</label>
         <div className="flex items-center gap-2">
           <div className="relative md:w-56">
             <input
               type="text"
               inputMode="numeric"
-              value={formatIdrDigits(maxBonus)}
-              onChange={e => setMaxBonus(e.target.value.replace(/\D/g, ''))}
+              value={formatIdrDigits(maxAdj)}
+              onChange={e => setMaxAdj(e.target.value.replace(/\D/g, ''))}
               onBlur={saveMax}
               disabled={!enabled}
               placeholder={t.noCapPlaceholder}
@@ -1356,7 +1239,27 @@ function BonusesTab({ user, t }: { user: User; t: Translations }) {
           </div>
           {savingMax && <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>…</span>}
         </div>
-        <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.maxBonusIdrHelp}</p>
+        <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.adjustmentMaxHelp}</p>
+      </div>
+
+      <div style={{ opacity: enabled ? 1 : 0.5 }}>
+        <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.leaderboardRateLabel}</label>
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            inputMode="numeric"
+            min={1}
+            step={1}
+            value={rate}
+            onChange={e => setRate(e.target.value)}
+            onBlur={saveRate}
+            disabled={!enabled}
+            className="rounded-lg border px-3 py-2 text-sm md:w-48"
+            style={inputStyle}
+          />
+          {savingRate && <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>…</span>}
+        </div>
+        <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.leaderboardRateHelp}</p>
       </div>
     </div>
   )
@@ -2199,16 +2102,6 @@ const creditsIcon = (
     <ellipse cx="12" cy="6" rx="8" ry="3"/>
     <path d="M4 6v6c0 1.66 3.58 3 8 3s8-1.34 8-3V6"/>
     <path d="M4 12v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6"/>
-  </svg>
-)
-
-const bonusesIcon = (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="20 12 20 22 4 22 4 12"/>
-    <rect x="2" y="7" width="20" height="5"/>
-    <line x1="12" y1="22" x2="12" y2="7"/>
-    <path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/>
-    <path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/>
   </svg>
 )
 

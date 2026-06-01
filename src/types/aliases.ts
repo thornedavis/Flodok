@@ -54,8 +54,7 @@ export type AllowanceAdjustment = {
   awarded_by: string
   created_at: string
 }
-export type CreditAdjustment = Database['public']['Tables']['credit_adjustments']['Row']
-export type BonusAdjustment = Database['public']['Tables']['bonus_adjustments']['Row']
+export type PayAdjustment = Database['public']['Tables']['pay_adjustments']['Row']
 export type AchievementDefinition = Database['public']['Tables']['achievement_definitions']['Row']
 export type AchievementUnlock = Database['public']['Tables']['achievement_unlocks']['Row']
 export type LeaderboardSnapshot = Database['public']['Tables']['leaderboard_snapshots']['Row']

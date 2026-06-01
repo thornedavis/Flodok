@@ -148,67 +148,6 @@ export type Database = {
           },
         ]
       }
-      bonus_adjustments: {
-        Row: {
-          amount_idr: number
-          awarded_by: string
-          created_at: string
-          employee_id: string
-          id: string
-          org_id: string
-          paid_out_at: string | null
-          payout_idr: number | null
-          period_month: string
-          reason: string
-        }
-        Insert: {
-          amount_idr: number
-          awarded_by: string
-          created_at?: string
-          employee_id: string
-          id?: string
-          org_id: string
-          paid_out_at?: string | null
-          payout_idr?: number | null
-          period_month?: string
-          reason: string
-        }
-        Update: {
-          amount_idr?: number
-          awarded_by?: string
-          created_at?: string
-          employee_id?: string
-          id?: string
-          org_id?: string
-          paid_out_at?: string | null
-          payout_idr?: number | null
-          period_month?: string
-          reason?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "bonus_adjustments_awarded_by_fkey"
-            columns: ["awarded_by"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "bonus_adjustments_employee_id_fkey"
-            columns: ["employee_id"]
-            isOneToOne: false
-            referencedRelation: "employees"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "bonus_adjustments_org_id_fkey"
-            columns: ["org_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       company_branches: {
         Row: {
           address_city: string | null
@@ -659,67 +598,6 @@ export type Database = {
           },
           {
             foreignKeyName: "contracts_org_id_fkey"
-            columns: ["org_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      credit_adjustments: {
-        Row: {
-          amount: number
-          awarded_by: string
-          created_at: string
-          employee_id: string
-          id: string
-          org_id: string
-          paid_out_at: string | null
-          payout_idr: number | null
-          period_month: string
-          reason: string
-        }
-        Insert: {
-          amount: number
-          awarded_by: string
-          created_at?: string
-          employee_id: string
-          id?: string
-          org_id: string
-          paid_out_at?: string | null
-          payout_idr?: number | null
-          period_month?: string
-          reason: string
-        }
-        Update: {
-          amount?: number
-          awarded_by?: string
-          created_at?: string
-          employee_id?: string
-          id?: string
-          org_id?: string
-          paid_out_at?: string | null
-          payout_idr?: number | null
-          period_month?: string
-          reason?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "credit_adjustments_awarded_by_fkey"
-            columns: ["awarded_by"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "credit_adjustments_employee_id_fkey"
-            columns: ["employee_id"]
-            isOneToOne: false
-            referencedRelation: "employees"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "credit_adjustments_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
@@ -2598,6 +2476,64 @@ export type Database = {
         }
         Relationships: []
       }
+      pay_adjustments: {
+        Row: {
+          amount_idr: number
+          awarded_by: string
+          created_at: string
+          employee_id: string
+          id: string
+          org_id: string
+          paid_out_at: string | null
+          period_month: string
+          reason: string
+        }
+        Insert: {
+          amount_idr: number
+          awarded_by: string
+          created_at?: string
+          employee_id: string
+          id?: string
+          org_id: string
+          paid_out_at?: string | null
+          period_month?: string
+          reason: string
+        }
+        Update: {
+          amount_idr?: number
+          awarded_by?: string
+          created_at?: string
+          employee_id?: string
+          id?: string
+          org_id?: string
+          paid_out_at?: string | null
+          period_month?: string
+          reason?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pay_adjustments_awarded_by_fkey"
+            columns: ["awarded_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pay_adjustments_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pay_adjustments_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pending_updates: {
         Row: {
           created_at: string
@@ -3441,7 +3377,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      admin_rewards_roster: { Args: never; Returns: Json }
+      admin_rewards_roster: {
+        Args: { all_time?: boolean; target_period_month?: string }
+        Returns: Json
+      }
       admin_update_user_role: {
         Args: { new_role: string; target_user_id: string }
         Returns: undefined
@@ -3489,14 +3428,6 @@ export type Database = {
         Returns: number
       }
       current_period_month: { Args: never; Returns: string }
-      deduct_credits_cascade: {
-        Args: {
-          deduction_credits: number
-          reason: string
-          target_employee_id: string
-        }
-        Returns: Json
-      }
       delete_branch: { Args: { p_id: string }; Returns: Json }
       delete_department: { Args: { p_id: string }; Returns: Json }
       delete_reference_value: { Args: { p_id: string }; Returns: Json }
@@ -3524,15 +3455,15 @@ export type Database = {
       get_user_org_id: { Args: never; Returns: string }
       get_user_role: { Args: never; Returns: string }
       global_search: {
-        Args: { q: string; max_per_group?: number }
+        Args: { max_per_group?: number; q: string }
         Returns: {
           group_key: string
           id: string
-          title: string
-          subtitle: string | null
-          status: string | null
-          updated_at: string
           rank: number
+          status: string
+          subtitle: string
+          title: string
+          updated_at: string
         }[]
       }
       handle_signup:

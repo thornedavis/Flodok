@@ -10,6 +10,7 @@ export function StatRow({
   actions,
   children,
   defaultOpen = false,
+  flat = false,
 }: {
   icon: ReactNode
   label: string
@@ -19,13 +20,15 @@ export function StatRow({
   actions?: ReactNode
   children?: ReactNode
   defaultOpen?: boolean
+  /** Drop the card border + horizontal padding so the row sits flat within a parent container. */
+  flat?: boolean
 }) {
   const [open, setOpen] = useState(defaultOpen)
   const expandable = !!children
 
   return (
     <div
-      className="rounded-xl border"
+      className={flat ? 'border-t' : 'rounded-xl border'}
       style={{ borderColor: 'var(--color-border)' }}
     >
       <div
@@ -38,7 +41,7 @@ export function StatRow({
             setOpen(o => !o)
           }
         }}
-        className={`flex w-full items-center gap-3 px-4 py-2.5 ${expandable ? 'cursor-pointer' : ''}`}
+        className={`flex w-full items-center gap-3 ${flat ? 'py-3' : 'px-4 py-2.5'} ${expandable ? 'cursor-pointer' : ''}`}
       >
         <div
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg [&_svg]:h-[20px] [&_svg]:w-[20px]"
@@ -47,7 +50,7 @@ export function StatRow({
           {icon}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="flex items-center text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>
+          <p className={`flex items-center font-medium ${flat ? 'text-sm' : 'text-xs'}`} style={{ color: 'var(--color-text-tertiary)' }}>
             {label}
             {info && (
               <span onClick={e => e.stopPropagation()}>
@@ -55,7 +58,7 @@ export function StatRow({
               </span>
             )}
           </p>
-          <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{value}</p>
+          <p className={`font-semibold ${flat ? 'text-base' : 'text-sm'}`} style={{ color: 'var(--color-text)' }}>{value}</p>
         </div>
         {actions && (
           <div className="flex shrink-0 items-center gap-1.5" onClick={e => e.stopPropagation()}>
@@ -83,7 +86,7 @@ export function StatRow({
         )}
       </div>
       {open && children && (
-        <div className="border-t px-4 py-3" style={{ borderColor: 'var(--color-border)' }}>
+        <div className={`border-t py-3 ${flat ? '' : 'px-4'}`} style={{ borderColor: 'var(--color-border)' }}>
           {children}
         </div>
       )}

@@ -1,12 +1,16 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
 import { useRole } from '../../hooks/useRole'
 import { Modal } from '../../components/Modal'
 import { getAvatarGradient } from '../../lib/avatar'
-import { creditToIdr, formatIdr } from '../../lib/credits'
+import { formatIdr, formatIdrDigits, currentPeriodMonth } from '../../lib/credits'
 import { BadgeGlyph } from '../../components/BadgeGlyph'
 import { Skeleton } from '../../components/Skeleton'
+import { FilterPill, FilterPanel, FilterSearchInput, MultiSelectDropdown, type FilterPanelSection } from '../../components/FilterControls'
+import { MonthStrip } from '../../components/portal/MonthStrip'
+import { ActionsMenuButton } from '../../components/ActionsMenuButton'
 import { useBilling } from '../../contexts/BillingContext'
 import type { User, AchievementDefinition } from '../../types/aliases'
 
@@ -15,21 +19,57 @@ type RosterRow = {
   name: string
   photo_url: string | null
   departments: string[]
-  credits_net: number
-  credits_frozen: boolean
+  adjustment_idr: number
+  adjustment_frozen: boolean
   achievements_count: number
   top_achievements: Array<{ name: string; icon: string | null; unlocked_at: string }>
-  allowance_idr: number
+  // Attached client-side from the employees lifecycle lookup + contract hours.
+  lifecycle_stage?: 'active' | 'separated'
+  xp?: number
 }
 
 type Roster = {
-  period_month: string
-  credits_divisor: number
+  period_month: string | null
   rows: RosterRow[]
 }
 
-type Tab = 'credits' | 'achievements'
-type CreditAction = 'award' | 'deduct'
+type PayMode = 'reward' | 'penalise'
+type PeriodKind = 'month' | 'all'
+type SortKey = 'name' | 'adjustment' | 'badges' | 'recent' | 'xp'
+type Lens = 'frozen' | 'negative' | 'nobadges'
+type PerfView = 'cards' | 'list'
+type ColumnKey = 'department' | 'status' | 'adjustment' | 'badges' | 'xp'
+
+const VIEW_KEY = 'flodok-performance-view'
+const COLUMNS_KEY = 'flodok-performance-columns'
+const COLUMN_ORDER: ColumnKey[] = ['department', 'status', 'adjustment', 'badges', 'xp']
+const DEFAULT_COLUMNS: ColumnKey[] = ['department', 'adjustment', 'badges']
+
+function loadView(): PerfView {
+  if (typeof window === 'undefined') return 'cards'
+  return window.localStorage.getItem(VIEW_KEY) === 'list' ? 'list' : 'cards'
+}
+
+function loadColumns(): Set<ColumnKey> {
+  if (typeof window === 'undefined') return new Set(DEFAULT_COLUMNS)
+  try {
+    const saved = window.localStorage.getItem(COLUMNS_KEY)
+    if (!saved) return new Set(DEFAULT_COLUMNS)
+    const parsed = JSON.parse(saved)
+    if (!Array.isArray(parsed)) return new Set(DEFAULT_COLUMNS)
+    return new Set(parsed.filter((c): c is ColumnKey => COLUMN_ORDER.includes(c as ColumnKey)))
+  } catch { return new Set(DEFAULT_COLUMNS) }
+}
+
+function columnLabel(key: ColumnKey, t: ReturnType<typeof useLang>['t']): string {
+  switch (key) {
+    case 'department': return t.performanceFilterDepartment
+    case 'status': return t.performanceFilterStatus
+    case 'adjustment': return t.performanceStatAdjustments
+    case 'badges': return t.empNavAchievements
+    case 'xp': return t.portalExperience
+  }
+}
 
 const inputStyle: React.CSSProperties = {
   borderColor: 'var(--color-border)',
@@ -37,44 +77,128 @@ const inputStyle: React.CSSProperties = {
   color: 'var(--color-text)',
 }
 
+function shiftMonth(iso: string, delta: number): string {
+  const d = new Date(`${iso.slice(0, 10)}T00:00:00`)
+  d.setMonth(d.getMonth() + delta)
+  return d.toISOString().slice(0, 10)
+}
+
+function signedIdr(idr: number, lang: 'en' | 'id'): string {
+  return `${idr > 0 ? '+' : idr < 0 ? '−' : ''}${formatIdr(Math.abs(idr), lang)}`
+}
+
 export function Performance({ user }: { user: User }) {
   const { t, lang } = useLang()
   const { isAdmin } = useRole(user)
   const { canWrite } = useBilling()
+  const navigate = useNavigate()
   const [roster, setRoster] = useState<Roster | null>(null)
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<Tab>('credits')
-  const [search, setSearch] = useState('')
   const [definitions, setDefinitions] = useState<AchievementDefinition[]>([])
-  const [badgesEnabled, setBadgesEnabled] = useState(true)
-  const [creditsEnabled, setCreditsEnabled] = useState(true)
-  const [maxCreditPerAward, setMaxCreditPerAward] = useState<number | null>(null)
 
-  // Action state
-  const [creditAction, setCreditAction] = useState<{ row: RosterRow; mode: CreditAction } | null>(null)
+  // Org feature flags + cap.
+  const [badgesEnabled, setBadgesEnabled] = useState(true)
+  const [adjustmentsEnabled, setAdjustmentsEnabled] = useState(true)
+  const [maxAdjustmentIdr, setMaxAdjustmentIdr] = useState<number | null>(null)
+
+  // Period navigation. offset 0 = current month; negative = past months. The
+  // server is the source of truth for "current period" (Asia/Jakarta), so we
+  // capture it from the first load and shift relative to it.
+  const [baseCurrent] = useState(() => currentPeriodMonth())
+  const [selectedMonth, setSelectedMonth] = useState(baseCurrent)
+  const [earliestMonth, setEarliestMonth] = useState(baseCurrent)
+  const [periodKind, setPeriodKind] = useState<PeriodKind>('month')
+  const isCurrentPeriod = selectedMonth === baseCurrent
+  // Rewards/penalties can only be applied to the live, current month.
+  const canAct = periodKind === 'month' && isCurrentPeriod
+
+  // Card vs line view (persisted).
+  const [view, setView] = useState<PerfView>(loadView)
+  useEffect(() => {
+    if (typeof window !== 'undefined') window.localStorage.setItem(VIEW_KEY, view)
+  }, [view])
+
+  // Configurable table columns (list view), persisted.
+  const [columns, setColumns] = useState<Set<ColumnKey>>(loadColumns)
+  useEffect(() => {
+    if (typeof window !== 'undefined') window.localStorage.setItem(COLUMNS_KEY, JSON.stringify([...columns]))
+  }, [columns])
+  const visibleColumns = COLUMN_ORDER.filter(k => columns.has(k))
+
+  // Filters.
+  const [search, setSearch] = useState('')
+  const [deptFilter, setDeptFilter] = useState<string[]>([])
+  const [statusFilter, setStatusFilter] = useState<string[]>([])
+  const [sort, setSort] = useState<SortKey>('name')
+  const [lenses, setLenses] = useState<Set<Lens>>(new Set())
+
+  // Period-scoped recognition signal (org-wide), for the dashboard cards.
+  const [badgesGiven, setBadgesGiven] = useState(0)
+  const [badgedIds, setBadgedIds] = useState<Set<string>>(new Set())
+
+  // Action modals.
+  const [payAction, setPayAction] = useState<{ row: RosterRow; mode: PayMode } | null>(null)
   const [badgeAction, setBadgeAction] = useState<RosterRow | null>(null)
 
   async function loadRoster() {
     setLoading(true)
-    // The RPC returns every employee row regardless of lifecycle stage; filter
-    // out anyone still in the recruitment pipeline (prospective/offered/
-    // signed/talent_pool) so Performance only shows people who exist in
-    // the Employees section.
-    const [{ data: rosterData }, { data: empRows }] = await Promise.all([
-      supabase.rpc('admin_rewards_roster'),
+    const allTime = periodKind === 'all'
+    const target = !allTime && !isCurrentPeriod ? selectedMonth : null
+    const rpcArgs: { target_period_month?: string; all_time?: boolean } =
+      allTime ? { all_time: true } : (target ? { target_period_month: target } : {})
+    const [{ data: rosterData }, { data: empRows }, { data: contractRows }] = await Promise.all([
+      supabase.rpc('admin_rewards_roster', rpcArgs),
       supabase
         .from('employees')
-        .select('id')
+        .select('id, lifecycle_stage, created_at')
         .eq('org_id', user.org_id)
         .in('lifecycle_stage', ['active', 'separated']),
+      supabase
+        .from('contracts')
+        .select('employee_id, hours_per_day, days_per_week')
+        .eq('org_id', user.org_id)
+        .eq('status', 'active'),
     ])
-    const eligible = new Set((empRows ?? []).map(e => e.id))
+    const stageById = new Map((empRows ?? []).map(e => [e.id, e.lifecycle_stage as 'active' | 'separated']))
+    const createdById = new Map((empRows ?? []).map(e => [e.id, e.created_at]))
+    const hoursById = new Map((contractRows ?? []).map(c => [c.employee_id, (c.hours_per_day ?? 0) * (c.days_per_week ?? 0)]))
+    // Bound the month strip at the earliest employee start month.
+    const createdMonths = (empRows ?? []).map(e => e.created_at.slice(0, 7) + '-01')
+    if (createdMonths.length) setEarliestMonth(createdMonths.reduce((a, b) => (a < b ? a : b)))
+    const now = Date.now()
     const raw = rosterData as unknown as Roster | null
     if (raw) {
-      raw.rows = raw.rows.filter(r => eligible.has(r.employee_id))
+      raw.rows = raw.rows
+        .filter(r => stageById.has(r.employee_id))
+        .map(r => {
+          const created = createdById.get(r.employee_id)
+          const days = created ? Math.max(0, Math.floor((now - new Date(created).getTime()) / 86400000)) : 0
+          const xp = Math.floor((days / 7) * (hoursById.get(r.employee_id) ?? 0))
+          return { ...r, lifecycle_stage: stageById.get(r.employee_id), xp }
+        })
     }
     setRoster(raw ?? null)
     setLoading(false)
+
+    // Badges given (org-wide) drives the stat card + coverage. Scoped to the
+    // selected month, or all-time when that mode is active.
+    if (raw) {
+      let q = supabase
+        .from('achievement_unlocks')
+        .select('employee_id, achievement_definitions!inner(org_id)')
+        .eq('achievement_definitions.org_id', user.org_id)
+      if (!allTime) {
+        const periodStart = (raw.period_month ?? selectedMonth).slice(0, 10)
+        q = q.gte('unlocked_at', periodStart).lt('unlocked_at', shiftMonth(periodStart, 1))
+      }
+      const { data: unlocks } = await q
+      const ids = new Set((unlocks ?? []).map((u: { employee_id: string }) => u.employee_id))
+      setBadgesGiven((unlocks ?? []).length)
+      setBadgedIds(ids)
+    } else {
+      setBadgesGiven(0)
+      setBadgedIds(new Set())
+    }
   }
 
   async function loadDefinitions() {
@@ -90,31 +214,117 @@ export function Performance({ user }: { user: User }) {
   async function loadOrgFlags() {
     const { data } = await supabase
       .from('organizations')
-      .select('badges_enabled, credits_enabled, max_credit_per_award')
+      .select('badges_enabled, credits_enabled, max_bonus_idr')
       .eq('id', user.org_id)
       .single()
     setBadgesEnabled(data?.badges_enabled ?? true)
-    setCreditsEnabled(data?.credits_enabled ?? true)
-    setMaxCreditPerAward(data?.max_credit_per_award ?? null)
+    setAdjustmentsEnabled(data?.credits_enabled ?? true)
+    setMaxAdjustmentIdr(data?.max_bonus_idr ?? null)
   }
 
-  useEffect(() => { loadRoster(); loadDefinitions(); loadOrgFlags() }, [user.org_id])
-
-  // If the org disables badges/credits while their tab is active, snap back to whichever is still on.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { loadDefinitions(); loadOrgFlags() }, [user.org_id])
+  // Reload the roster whenever the org, selected month, or period kind changes.
   useEffect(() => {
-    if (!badgesEnabled && tab === 'achievements') setTab('credits')
-    if (!creditsEnabled && tab === 'credits' && badgesEnabled) setTab('achievements')
-  }, [badgesEnabled, creditsEnabled, tab])
+    loadRoster()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user.org_id, selectedMonth, periodKind])
+
+  function refreshAfterAction() {
+    setPayAction(null)
+    setBadgeAction(null)
+    loadRoster()
+  }
+
+  // Clicking an employee opens their dedicated Performance page.
+  function openEmployee(employeeId: string) {
+    navigate(`/dashboard/performance/${employeeId}`)
+  }
+
+  // Department options (from the full roster), with counts.
+  const deptOptions = useMemo(() => {
+    if (!roster) return [] as Array<{ id: string; label: string; count: number }>
+    const counts = new Map<string, number>()
+    for (const r of roster.rows) for (const d of r.departments) counts.set(d, (counts.get(d) ?? 0) + 1)
+    return [...counts.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([id, count]) => ({ id, label: id, count }))
+  }, [roster])
+
+  const statusCounts = useMemo(() => {
+    const c = { active: 0, separated: 0 }
+    for (const r of roster?.rows ?? []) if (r.lifecycle_stage) c[r.lifecycle_stage]++
+    return c
+  }, [roster])
 
   const filtered = useMemo(() => {
     if (!roster) return []
     const q = search.trim().toLowerCase()
-    if (!q) return roster.rows
-    return roster.rows.filter(r =>
-      r.name.toLowerCase().includes(q) ||
-      r.departments.some(d => d.toLowerCase().includes(q))
-    )
-  }, [roster, search])
+    const depts = new Set(deptFilter)
+    const stages = new Set(statusFilter)
+    let rows = roster.rows.filter(r => {
+      if (q && !r.name.toLowerCase().includes(q) && !r.departments.some(d => d.toLowerCase().includes(q))) return false
+      if (depts.size && !r.departments.some(d => depts.has(d))) return false
+      if (stages.size && (!r.lifecycle_stage || !stages.has(r.lifecycle_stage))) return false
+      if (lenses.has('frozen') && !r.adjustment_frozen) return false
+      if (lenses.has('negative') && !(r.adjustment_idr < 0)) return false
+      if (lenses.has('nobadges') && r.achievements_count > 0) return false
+      return true
+    })
+    const recency = (r: RosterRow) => r.top_achievements.reduce((m, b) => (b.unlocked_at > m ? b.unlocked_at : m), '')
+    rows = [...rows].sort((a, b) => {
+      switch (sort) {
+        case 'adjustment': return b.adjustment_idr - a.adjustment_idr
+        case 'badges': return b.achievements_count - a.achievements_count
+        case 'xp': return (b.xp ?? 0) - (a.xp ?? 0)
+        case 'recent': return recency(b).localeCompare(recency(a))
+        default: return a.name.localeCompare(b.name)
+      }
+    })
+    return rows
+  }, [roster, search, deptFilter, statusFilter, lenses, sort])
+
+  // Dashboard stat values (over the full roster, independent of UI filters).
+  const stats = useMemo(() => {
+    const rows = roster?.rows ?? []
+    const adjustmentNet = rows.reduce((s, r) => s + r.adjustment_idr, 0)
+    const recognized = rows.filter(r => r.adjustment_idr !== 0 || badgedIds.has(r.employee_id)).length
+    return { adjustmentNet, recognized, total: rows.length }
+  }, [roster, badgedIds])
+
+  function toggleLens(l: Lens) {
+    setLenses(prev => {
+      const next = new Set(prev)
+      if (next.has(l)) next.delete(l); else next.add(l)
+      return next
+    })
+  }
+
+  const filterSections: FilterPanelSection[] = [
+    {
+      type: 'multiselect', key: 'status', label: t.performanceFilterStatus, value: statusFilter, onChange: setStatusFilter,
+      options: [
+        { id: 'active', label: t.derivedStatusActive, count: statusCounts.active },
+        { id: 'separated', label: t.derivedStatusSeparated, count: statusCounts.separated },
+      ],
+    },
+    {
+      type: 'multiselect', key: 'department', label: t.performanceFilterDepartment, value: deptFilter, onChange: setDeptFilter,
+      options: deptOptions,
+    },
+    {
+      type: 'select', key: 'sort', label: t.sortLabel, value: sort, defaultValue: 'name',
+      onChange: v => setSort(v as SortKey),
+      options: [
+        { id: 'name', label: t.performanceSortName },
+        { id: 'adjustment', label: t.performanceSortAdjustmentDesc },
+        { id: 'badges', label: t.performanceSortBadgesDesc },
+        { id: 'recent', label: t.performanceSortRecent },
+      ],
+    },
+  ]
+
+  function resetFilters() {
+    setDeptFilter([]); setStatusFilter([]); setSort('name'); setLenses(new Set())
+  }
 
   if (!isAdmin) {
     return (
@@ -125,50 +335,68 @@ export function Performance({ user }: { user: User }) {
   }
 
   return (
-    <div className="max-w-2xl pb-20">
+    <div className="pb-20">
       <header className="mb-4">
         <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.performanceTitle}</h1>
         <p className="mt-0.5 text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{t.performanceSubtitle}</p>
       </header>
 
-      {/* Tab toggle — mobile-friendly pill group. Hide the achievements tab
-          entirely when the org has badges disabled. */}
-      <div className="sticky top-0 z-10 -mx-4 mb-3 bg-opacity-90 px-4 pb-2 pt-2 backdrop-blur" style={{ backgroundColor: 'var(--color-bg)' }}>
-        <div className="mb-3 flex rounded-lg p-0.5" style={{ backgroundColor: 'var(--color-bg-tertiary)' }}>
-          {((): Tab[] => {
-            const list: Tab[] = []
-            if (creditsEnabled) list.push('credits')
-            if (badgesEnabled) list.push('achievements')
-            return list
-          })().map(k => (
-            <button
-              key={k}
-              type="button"
-              onClick={() => setTab(k)}
-              className="flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors"
-              style={{
-                backgroundColor: tab === k ? 'var(--color-bg)' : 'transparent',
-                color: tab === k ? 'var(--color-text)' : 'var(--color-text-tertiary)',
-                boxShadow: tab === k ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
-              }}
-            >
-              {k === 'credits' ? t.performanceTabCredits : t.performanceTabAchievements}
-            </button>
-          ))}
-        </div>
-
-        <input
-          type="search"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder={t.performanceSearchPlaceholder}
-          className="w-full rounded-lg border px-3 py-2 text-sm"
-          style={inputStyle}
+      {/* Month picker with an inline This-month / All-time toggle. Picking a
+          month from the strip drops back into month mode. */}
+      <div className="mb-3">
+        <MonthStrip
+          selectedMonth={selectedMonth}
+          earliestMonth={earliestMonth}
+          currentMonth={baseCurrent}
+          onSelect={month => { setSelectedMonth(month); setPeriodKind('month') }}
+          lang={lang}
+          muted={periodKind === 'all'}
+          trailing={<PeriodKindToggle value={periodKind} onChange={setPeriodKind} t={t} />}
         />
       </div>
 
+      {/* Dashboard stat cards */}
+      <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <StatCard label={t.performanceStatAdjustments} value={signedIdr(stats.adjustmentNet, lang)} accent="#3b82f6" loading={loading} />
+        <StatCard label={t.performanceStatBadges} value={String(badgesGiven)} accent="var(--color-primary)" loading={loading} />
+        <StatCard
+          label={t.performanceStatCoverage}
+          value={t.performanceCoverageValue(stats.recognized, stats.total)}
+          hint={t.performanceCoverageHint}
+          accent="#a855f7"
+          loading={loading}
+        />
+      </div>
+
+      {/* Filter toolbar */}
+      <div className="sticky top-0 z-10 -mx-4 mb-3 bg-opacity-90 px-4 pb-2 pt-2 backdrop-blur" style={{ backgroundColor: 'var(--color-bg)' }}>
+        <div className="flex w-full flex-wrap items-center gap-2">
+          <ViewToggle view={view} onChange={setView} t={t} />
+          <FilterPanel triggerLabel={t.filterButtonLabel} sections={filterSections} onReset={resetFilters} />
+          {view === 'list' && (
+            <MultiSelectDropdown
+              label={t.columnsButtonLabel}
+              value={[...columns]}
+              onChange={next => setColumns(new Set(next as ColumnKey[]))}
+              options={COLUMN_ORDER.map(key => ({ id: key, label: columnLabel(key, t) }))}
+            />
+          )}
+          {periodKind === 'month' && (
+            <FilterPill active={lenses.has('frozen')} onClick={() => toggleLens('frozen')}>{t.performanceLensFrozen}</FilterPill>
+          )}
+          <FilterPill active={lenses.has('negative')} onClick={() => toggleLens('negative')}>{t.performanceLensNegative}</FilterPill>
+          <FilterPill active={lenses.has('nobadges')} onClick={() => toggleLens('nobadges')}>{t.performanceLensNoBadges}</FilterPill>
+          <div className="ml-auto w-full sm:w-56">
+            <FilterSearchInput value={search} onChange={setSearch} placeholder={t.performanceSearchPlaceholder} />
+          </div>
+        </div>
+        {periodKind === 'month' && !isCurrentPeriod && (
+          <p className="mt-2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.performancePastPeriodNote}</p>
+        )}
+      </div>
+
       {loading ? (
-        <ul className="space-y-2" role="status" aria-busy="true">
+        <ul className={view === 'list' ? 'flex flex-col gap-2' : 'grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3'} role="status" aria-busy="true">
           {Array.from({ length: 6 }).map((_, i) => (
             <li key={i} className="rounded-xl border p-3" style={{ borderColor: 'var(--color-border)' }}>
               <div className="flex items-center gap-3">
@@ -185,102 +413,54 @@ export function Performance({ user }: { user: User }) {
         <p className="py-8 text-center text-sm" style={{ color: 'var(--color-text-tertiary)' }}>
           {roster && roster.rows.length === 0 ? t.performanceEmptyNoMembers : t.performanceEmptyNoMatch}
         </p>
+      ) : view === 'list' ? (
+        <RosterTable
+          rows={filtered}
+          columns={visibleColumns}
+          sort={sort}
+          onSort={setSort}
+          isCurrentPeriod={canAct}
+          canWrite={canWrite}
+          adjustmentsEnabled={adjustmentsEnabled}
+          badgesEnabled={badgesEnabled}
+          lang={lang}
+          t={t}
+          onOpen={openEmployee}
+          onReward={row => setPayAction({ row, mode: 'reward' })}
+          onPenalise={row => setPayAction({ row, mode: 'penalise' })}
+          onAwardBadge={row => setBadgeAction(row)}
+        />
       ) : (
-        <ul className="space-y-2">
+        <ul className="grid grid-cols-1 items-start gap-2 md:grid-cols-2 xl:grid-cols-3">
           {filtered.map(row => (
-            <li
+            <RosterItem
               key={row.employee_id}
-              className="rounded-xl border p-3"
-              style={{ borderColor: 'var(--color-border)' }}
-            >
-              <div className="flex items-center gap-3">
-                <div
-                  className="h-10 w-10 shrink-0 overflow-hidden rounded-full"
-                  style={{ background: row.photo_url ? 'transparent' : getAvatarGradient(row.employee_id) }}
-                >
-                  {row.photo_url && <img src={row.photo_url} alt="" className="h-full w-full object-cover" />}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>{row.name}</p>
-                  <p className="truncate text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                    {row.departments[0] || '—'}
-                    {tab === 'credits' && (
-                      <>
-                        {' · '}
-                        <span style={{ color: row.credits_net > 0 ? 'var(--color-success, #16a34a)' : row.credits_net < 0 ? 'var(--color-danger)' : 'var(--color-text-tertiary)' }}>
-                          {t.performanceRowCreditsThisMonth(row.credits_net)}
-                        </span>
-                        {row.credits_frozen && (
-                          <span className="ml-1.5 rounded-full px-1.5 py-0.5 text-[9px] font-semibold" style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-tertiary)' }}>
-                            {t.performanceFrozenTag}
-                          </span>
-                        )}
-                      </>
-                    )}
-                    {tab === 'achievements' && row.achievements_count > 0 && ` · ${t.performanceRowBadges(row.achievements_count)}`}
-                  </p>
-                  {tab === 'achievements' && row.top_achievements.length > 0 && (
-                    <div className="mt-1 flex flex-wrap gap-1">
-                      {row.top_achievements.map((b, i) => (
-                        <span key={i} title={b.name}><BadgeGlyph icon={b.icon} size={18} /></span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div className="flex shrink-0 items-center gap-1.5">
-                  {tab === 'credits' && !row.credits_frozen && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => setCreditAction({ row, mode: 'award' })}
-                        disabled={!canWrite}
-                        title={!canWrite ? t.dunningWriteBlocked : undefined}
-                        className="flex h-9 w-9 items-center justify-center rounded-lg text-white disabled:cursor-not-allowed disabled:opacity-40"
-                        style={{ backgroundColor: 'var(--color-success, #16a34a)' }}
-                        aria-label={t.performanceAwardAction}
-                      >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setCreditAction({ row, mode: 'deduct' })}
-                        disabled={!canWrite}
-                        title={!canWrite ? t.dunningWriteBlocked : undefined}
-                        className="flex h-9 w-9 items-center justify-center rounded-lg border disabled:cursor-not-allowed disabled:opacity-40"
-                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-danger)' }}
-                        aria-label={t.performanceDeductAction}
-                      >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                      </button>
-                    </>
-                  )}
-                  {tab === 'achievements' && (
-                    <button
-                      type="button"
-                      onClick={() => setBadgeAction(row)}
-                      disabled={!canWrite}
-                      title={!canWrite ? t.dunningWriteBlocked : undefined}
-                      className="flex h-9 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
-                      style={{ backgroundColor: 'var(--color-primary)' }}
-                    >
-                      🏅
-                    </button>
-                  )}
-                </div>
-              </div>
-            </li>
+              row={row}
+              view={view}
+              isCurrentPeriod={canAct}
+              canWrite={canWrite}
+              adjustmentsEnabled={adjustmentsEnabled}
+              badgesEnabled={badgesEnabled}
+              lang={lang}
+              t={t}
+              onOpen={() => openEmployee(row.employee_id)}
+              onReward={() => setPayAction({ row, mode: 'reward' })}
+              onPenalise={() => setPayAction({ row, mode: 'penalise' })}
+              onAwardBadge={() => setBadgeAction(row)}
+            />
           ))}
         </ul>
       )}
 
-      {creditAction && roster && (
-        <CreditActionModal
-          action={creditAction}
-          divisor={roster.credits_divisor}
-          maxPerAward={maxCreditPerAward}
+      {payAction && roster && (
+        <PayAdjustmentModal
+          row={payAction.row}
+          mode={payAction.mode}
+          period={selectedMonth}
+          maxIdr={maxAdjustmentIdr}
           user={user}
-          onClose={() => setCreditAction(null)}
-          onDone={() => { setCreditAction(null); loadRoster() }}
+          onClose={() => setPayAction(null)}
+          onDone={refreshAfterAction}
           t={t}
           lang={lang}
         />
@@ -292,7 +472,7 @@ export function Performance({ user }: { user: User }) {
           definitions={definitions}
           user={user}
           onClose={() => setBadgeAction(null)}
-          onDone={() => { setBadgeAction(null); loadRoster() }}
+          onDone={refreshAfterAction}
           t={t}
         />
       )}
@@ -300,137 +480,559 @@ export function Performance({ user }: { user: User }) {
   )
 }
 
-// ─── Credit Award/Deduct modal ─────────────────────────────
+// ─── Dashboard stat card ─────────────────────────────────
 
-function CreditActionModal({
-  action,
-  divisor,
-  maxPerAward,
+function StatCard({ label, value, hint, accent, loading }: {
+  label: string
+  value: string
+  hint?: string
+  accent: string
+  loading: boolean
+}) {
+  return (
+    <div className="rounded-xl border p-3" style={{ borderColor: 'var(--color-border)' }}>
+      <div className="flex items-center gap-1.5">
+        <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: accent }} />
+        <p className="truncate text-[11px] font-medium" style={{ color: 'var(--color-text-tertiary)' }}>{label}</p>
+      </div>
+      {loading ? (
+        <Skeleton className="mt-1.5 h-5 w-2/3" />
+      ) : (
+        <p className="mt-0.5 truncate text-lg font-semibold tabular-nums" style={{ color: 'var(--color-text)' }}>{value}</p>
+      )}
+      {hint && !loading && <p className="truncate text-[10px]" style={{ color: 'var(--color-text-tertiary)' }}>{hint}</p>}
+    </div>
+  )
+}
+
+// ─── Period kind toggle (month / all-time) ───────────────
+
+function PeriodKindToggle({ value, onChange, t }: {
+  value: PeriodKind
+  onChange: (next: PeriodKind) => void
+  t: ReturnType<typeof useLang>['t']
+}) {
+  const items: Array<{ key: PeriodKind; label: string }> = [
+    { key: 'month', label: t.performancePeriodMonth },
+    { key: 'all', label: t.leaderboardPeriodAllTime },
+  ]
+  return (
+    <div role="group" className="inline-flex items-center gap-1 whitespace-nowrap text-xs font-medium">
+      {items.map(item => {
+        const active = value === item.key
+        return (
+          <button
+            key={item.key}
+            type="button"
+            onClick={() => onChange(item.key)}
+            aria-pressed={active}
+            className="rounded-full px-2.5 py-1 transition-colors"
+            style={{
+              backgroundColor: active ? 'color-mix(in srgb, var(--color-primary) 12%, transparent)' : 'transparent',
+              color: active ? 'var(--color-primary)' : 'var(--color-text-tertiary)',
+            }}
+          >
+            {item.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+// ─── View toggle (card / line) ───────────────────────────
+
+function ViewToggle({ view, onChange, t }: {
+  view: PerfView
+  onChange: (next: PerfView) => void
+  t: ReturnType<typeof useLang>['t']
+}) {
+  const items: Array<{ key: PerfView; label: string; icon: React.ReactNode }> = [
+    {
+      key: 'cards',
+      label: t.viewCards,
+      icon: (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="3" width="7" height="7" />
+          <rect x="14" y="3" width="7" height="7" />
+          <rect x="3" y="14" width="7" height="7" />
+          <rect x="14" y="14" width="7" height="7" />
+        </svg>
+      ),
+    },
+    {
+      key: 'list',
+      label: t.viewList,
+      icon: (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="8" y1="6" x2="21" y2="6" />
+          <line x1="8" y1="12" x2="21" y2="12" />
+          <line x1="8" y1="18" x2="21" y2="18" />
+          <line x1="3" y1="6" x2="3.01" y2="6" />
+          <line x1="3" y1="12" x2="3.01" y2="12" />
+          <line x1="3" y1="18" x2="3.01" y2="18" />
+        </svg>
+      ),
+    },
+  ]
+  return (
+    <div role="group" className="inline-flex items-center rounded-full border p-0.5" style={{ borderColor: 'var(--color-border)' }}>
+      {items.map(item => {
+        const active = view === item.key
+        return (
+          <button
+            key={item.key}
+            type="button"
+            onClick={() => onChange(item.key)}
+            aria-pressed={active}
+            title={item.label}
+            className="flex items-center justify-center rounded-full p-1.5 transition-colors"
+            style={{
+              backgroundColor: active ? 'color-mix(in srgb, var(--color-primary) 10%, transparent)' : 'transparent',
+              color: active ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+            }}
+          >
+            {item.icon}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+// ─── Roster item (card / line) ───────────────────────────
+
+function RosterItem({
+  row, view, isCurrentPeriod, canWrite, adjustmentsEnabled, badgesEnabled,
+  lang, t, onOpen, onReward, onPenalise, onAwardBadge,
+}: {
+  row: RosterRow
+  view: PerfView
+  isCurrentPeriod: boolean
+  canWrite: boolean
+  adjustmentsEnabled: boolean
+  badgesEnabled: boolean
+  lang: 'en' | 'id'
+  t: ReturnType<typeof useLang>['t']
+  onOpen: () => void
+  onReward: () => void
+  onPenalise: () => void
+  onAwardBadge: () => void
+}) {
+  const list = view === 'list'
+
+  const avatar = (
+    <div
+      className={`${list ? 'h-9 w-9' : 'h-10 w-10'} shrink-0 overflow-hidden rounded-full`}
+      style={{ background: row.photo_url ? 'transparent' : getAvatarGradient(row.employee_id) }}
+    >
+      {row.photo_url && <img src={row.photo_url} alt="" className="h-full w-full object-cover" />}
+    </div>
+  )
+
+  const stat = (
+    <>
+      {row.departments[0] || '—'}
+      {row.adjustment_idr !== 0 && (
+        <>
+          {' · '}
+          <span style={{ color: row.adjustment_idr > 0 ? 'var(--color-success, #16a34a)' : 'var(--color-danger)' }}>
+            {signedIdr(row.adjustment_idr, lang)}
+          </span>
+        </>
+      )}
+      {row.achievements_count > 0 && ` · ${t.performanceRowBadges(row.achievements_count)}`}
+      {row.adjustment_frozen && (
+        <span className="ml-1.5 rounded-full px-1.5 py-0.5 text-[9px] font-semibold" style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-tertiary)' }}>
+          {t.performanceFrozenTag}
+        </span>
+      )}
+    </>
+  )
+
+  const menu = isCurrentPeriod ? (
+    <RewardMenu
+      row={row}
+      canWrite={canWrite}
+      adjustmentsEnabled={adjustmentsEnabled}
+      badgesEnabled={badgesEnabled}
+      onReward={onReward}
+      onPenalise={onPenalise}
+      onAwardBadge={onAwardBadge}
+      t={t}
+    />
+  ) : null
+
+  if (list) {
+    return (
+      <li className="rounded-xl border transition-colors hover:bg-[var(--color-bg-tertiary)]" style={{ borderColor: 'var(--color-border)' }}>
+        <div className="flex items-center gap-3 px-3 py-2">
+          <button type="button" onClick={onOpen} title={t.performanceViewProfile} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+            {avatar}
+            <span className="shrink-0 truncate text-sm font-medium" style={{ color: 'var(--color-text)', maxWidth: '45%' }}>{row.name}</span>
+            <span className="min-w-0 flex-1 truncate text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{stat}</span>
+          </button>
+          {menu}
+        </div>
+      </li>
+    )
+  }
+
+  return (
+    <li className="rounded-xl border transition-colors hover:bg-[var(--color-bg-tertiary)]" style={{ borderColor: 'var(--color-border)' }}>
+      <div className="flex items-center gap-3 p-3">
+        <button type="button" onClick={onOpen} title={t.performanceViewProfile} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+          {avatar}
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>{row.name}</p>
+            <p className="truncate text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{stat}</p>
+            {row.top_achievements.length > 0 && (
+              <div className="mt-1 flex flex-wrap gap-1">
+                {row.top_achievements.map((b, i) => (
+                  <span key={i} title={b.name}><BadgeGlyph icon={b.icon} size={18} /></span>
+                ))}
+              </div>
+            )}
+          </div>
+        </button>
+        {menu}
+      </div>
+    </li>
+  )
+}
+
+// ─── Roster table (list view) ────────────────────────────
+
+function SortHeader({ label, active, onClick, align }: {
+  label: string
+  active: boolean
+  onClick?: () => void
+  align?: 'right'
+}) {
+  const cls = `px-4 py-2.5 ${align === 'right' ? 'text-right' : ''}`
+  if (!onClick) return <th className={cls}>{label}</th>
+  return (
+    <th className={cls}>
+      <button
+        type="button"
+        onClick={onClick}
+        className={`inline-flex items-center gap-1 uppercase tracking-wide ${align === 'right' ? 'flex-row-reverse' : ''}`}
+        style={{ color: active ? 'var(--color-text)' : undefined }}
+      >
+        {label}
+        {active && (
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        )}
+      </button>
+    </th>
+  )
+}
+
+function RosterTable({
+  rows, columns, sort, onSort, isCurrentPeriod, canWrite, adjustmentsEnabled, badgesEnabled,
+  lang, t, onOpen, onReward, onPenalise, onAwardBadge,
+}: {
+  rows: RosterRow[]
+  columns: ColumnKey[]
+  sort: SortKey
+  onSort: (s: SortKey) => void
+  isCurrentPeriod: boolean
+  canWrite: boolean
+  adjustmentsEnabled: boolean
+  badgesEnabled: boolean
+  lang: 'en' | 'id'
+  t: ReturnType<typeof useLang>['t']
+  onOpen: (id: string) => void
+  onReward: (row: RosterRow) => void
+  onPenalise: (row: RosterRow) => void
+  onAwardBadge: (row: RosterRow) => void
+}) {
+  const sortKeyFor: Partial<Record<ColumnKey, SortKey>> = { adjustment: 'adjustment', badges: 'badges', xp: 'xp' }
+  return (
+    <div className="rounded-xl border" style={{ borderColor: 'var(--color-border)' }}>
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b text-left text-[11px] font-semibold uppercase tracking-wide" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-tertiary)' }}>
+            <SortHeader label={t.hiringFieldName} active={sort === 'name'} onClick={() => onSort('name')} />
+            {columns.map(col => {
+              const sk = sortKeyFor[col]
+              const right = col === 'adjustment'
+              return (
+                <SortHeader
+                  key={col}
+                  label={columnLabel(col, t)}
+                  active={!!sk && sort === sk}
+                  onClick={sk ? () => onSort(sk) : undefined}
+                  align={right ? 'right' : undefined}
+                />
+              )
+            })}
+            {isCurrentPeriod && <th className="px-4 py-2.5" />}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(row => (
+            <RosterTableRow
+              key={row.employee_id}
+              row={row}
+              columns={columns}
+              isCurrentPeriod={isCurrentPeriod}
+              canWrite={canWrite}
+              adjustmentsEnabled={adjustmentsEnabled}
+              badgesEnabled={badgesEnabled}
+              lang={lang}
+              t={t}
+              onOpen={() => onOpen(row.employee_id)}
+              onReward={() => onReward(row)}
+              onPenalise={() => onPenalise(row)}
+              onAwardBadge={() => onAwardBadge(row)}
+            />
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function RosterTableRow({
+  row, columns, isCurrentPeriod, canWrite, adjustmentsEnabled, badgesEnabled,
+  lang, t, onOpen, onReward, onPenalise, onAwardBadge,
+}: {
+  row: RosterRow
+  columns: ColumnKey[]
+  isCurrentPeriod: boolean
+  canWrite: boolean
+  adjustmentsEnabled: boolean
+  badgesEnabled: boolean
+  lang: 'en' | 'id'
+  t: ReturnType<typeof useLang>['t']
+  onOpen: () => void
+  onReward: () => void
+  onPenalise: () => void
+  onAwardBadge: () => void
+}) {
+  function cell(col: ColumnKey) {
+    switch (col) {
+      case 'department':
+        return <span style={{ color: 'var(--color-text-secondary)' }}>{row.departments[0] || '—'}</span>
+      case 'status':
+        return row.lifecycle_stage ? (
+          <span
+            className="rounded-full px-2 py-0.5 text-xs font-medium"
+            style={{
+              backgroundColor: 'var(--color-bg-tertiary)',
+              color: row.lifecycle_stage === 'active' ? 'var(--color-success, #16a34a)' : 'var(--color-text-tertiary)',
+            }}
+          >
+            {row.lifecycle_stage === 'active' ? t.derivedStatusActive : t.derivedStatusSeparated}
+          </span>
+        ) : '—'
+      case 'adjustment':
+        return (
+          <span className="inline-flex items-center gap-1.5 tabular-nums font-medium" style={{ color: row.adjustment_idr > 0 ? 'var(--color-success, #16a34a)' : row.adjustment_idr < 0 ? 'var(--color-danger)' : 'var(--color-text-tertiary)' }}>
+            {row.adjustment_idr === 0 ? '—' : signedIdr(row.adjustment_idr, lang)}
+            {row.adjustment_frozen && (
+              <span className="rounded-full px-1.5 py-0.5 text-[9px] font-semibold" style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-tertiary)' }}>{t.performanceFrozenTag}</span>
+            )}
+          </span>
+        )
+      case 'badges':
+        return row.achievements_count > 0 ? (
+          <span className="inline-flex items-center gap-1">
+            {row.top_achievements.slice(0, 3).map((b, i) => (
+              <span key={i} title={b.name}><BadgeGlyph icon={b.icon} size={16} /></span>
+            ))}
+            <span style={{ color: 'var(--color-text-tertiary)' }}>{row.achievements_count}</span>
+          </span>
+        ) : '—'
+      case 'xp':
+        return <span className="tabular-nums" style={{ color: 'var(--color-text-secondary)' }}>{t.portalExperienceXp(row.xp ?? 0)}</span>
+    }
+  }
+  return (
+    <tr
+      onClick={onOpen}
+      title={t.performanceViewProfile}
+      className="cursor-pointer border-b transition-colors last:border-0 hover:bg-[var(--color-bg-tertiary)]"
+      style={{ borderColor: 'var(--color-border)' }}
+    >
+      <td className="px-4 py-2.5">
+        <div className="flex items-center gap-2">
+          <div className="h-8 w-8 shrink-0 overflow-hidden rounded-full" style={{ background: row.photo_url ? 'transparent' : getAvatarGradient(row.employee_id) }}>
+            {row.photo_url && <img src={row.photo_url} alt="" className="h-full w-full object-cover" />}
+          </div>
+          <span className="font-medium" style={{ color: 'var(--color-text)' }}>{row.name}</span>
+        </div>
+      </td>
+      {columns.map(col => (
+        <td key={col} className={`px-4 py-2.5 ${col === 'adjustment' ? 'text-right' : ''}`} style={{ color: 'var(--color-text-tertiary)' }}>
+          {cell(col)}
+        </td>
+      ))}
+      {isCurrentPeriod && (
+        <td className="px-4 py-2.5 text-right" onClick={e => e.stopPropagation()}>
+          <div className="flex justify-end">
+            <RewardMenu
+              row={row}
+              canWrite={canWrite}
+              adjustmentsEnabled={adjustmentsEnabled}
+              badgesEnabled={badgesEnabled}
+              onReward={onReward}
+              onPenalise={onPenalise}
+              onAwardBadge={onAwardBadge}
+              t={t}
+            />
+          </div>
+        </td>
+      )}
+    </tr>
+  )
+}
+
+// ─── Reward menu (per-row action dropdown) ───────────────
+
+function RewardMenu({
+  row, canWrite, adjustmentsEnabled, badgesEnabled,
+  onReward, onPenalise, onAwardBadge, t,
+}: {
+  row: RosterRow
+  canWrite: boolean
+  adjustmentsEnabled: boolean
+  badgesEnabled: boolean
+  onReward: () => void
+  onPenalise: () => void
+  onAwardBadge: () => void
+  t: ReturnType<typeof useLang>['t']
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function onClick(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', onClick)
+    document.addEventListener('keydown', onKey)
+    return () => { document.removeEventListener('mousedown', onClick); document.removeEventListener('keydown', onKey) }
+  }, [open])
+
+  function run(fn: () => void) { setOpen(false); fn() }
+
+  const items: Array<{ label: string; onClick: () => void; disabled?: boolean; tone?: string }> = []
+  if (adjustmentsEnabled) {
+    items.push({ label: t.compensationReward, onClick: onReward, disabled: row.adjustment_frozen, tone: 'var(--color-success, #16a34a)' })
+    items.push({ label: t.compensationPenalise, onClick: onPenalise, disabled: row.adjustment_frozen, tone: 'var(--color-danger)' })
+  }
+  if (badgesEnabled) items.push({ label: t.awardAchievement, onClick: onAwardBadge, tone: 'var(--color-primary)' })
+
+  if (items.length === 0) return null
+
+  return (
+    <div ref={ref} className="relative shrink-0">
+      <ActionsMenuButton
+        label={t.performanceActions}
+        open={open}
+        onClick={() => setOpen(o => !o)}
+        disabled={!canWrite}
+        title={!canWrite ? t.dunningWriteBlocked : undefined}
+      />
+      {open && (
+        <div
+          role="menu"
+          className="absolute right-0 top-full z-20 mt-1 w-44 overflow-hidden rounded-lg border shadow-lg"
+          style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-elevated, var(--color-bg))' }}
+        >
+          {items.map((it, i) => (
+            <button
+              key={i}
+              type="button"
+              role="menuitem"
+              onClick={() => !it.disabled && run(it.onClick)}
+              disabled={it.disabled}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm disabled:cursor-not-allowed disabled:opacity-40"
+              style={{ color: 'var(--color-text)' }}
+            >
+              <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: it.tone }} />
+              {it.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Reward / Penalise modal ─────────────────────────────
+
+function PayAdjustmentModal({
+  row,
+  mode,
+  period,
+  maxIdr,
   user,
   onClose,
   onDone,
   t,
   lang,
 }: {
-  action: { row: RosterRow; mode: CreditAction }
-  divisor: number
-  maxPerAward: number | null
+  row: RosterRow
+  mode: PayMode
+  period: string
+  maxIdr: number | null
   user: User
   onClose: () => void
   onDone: () => void
   t: ReturnType<typeof useLang>['t']
   lang: 'en' | 'id'
 }) {
-  const { row, mode } = action
   const [amount, setAmount] = useState('')
   const [reason, setReason] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
-  const parsed = Number(amount)
-  const isValidAmount = Number.isFinite(parsed) && parsed > 0
-
-  const rate = row.allowance_idr > 0 && divisor > 0
-    ? Math.round(row.allowance_idr / divisor)
-    : 0
-  const previewIdr = isValidAmount && row.allowance_idr > 0
-    ? creditToIdr(parsed, row.allowance_idr, divisor)
-    : 0
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!isValidAmount) { setError(t.validationAmountPositive); return }
-    if (maxPerAward != null && parsed > maxPerAward) {
-      setError(t.capExceededCredits(maxPerAward))
+    const parsed = Number(amount)
+    if (!Number.isFinite(parsed) || parsed <= 0) { setError(t.validationAmountPositive); return }
+    if (maxIdr != null && parsed > maxIdr) {
+      setError(t.capExceededBonus(formatIdr(maxIdr, lang)))
       return
     }
     if (reason.trim().length < 20) { setError(t.validationReasonMinLength); return }
     setSubmitting(true)
     setError('')
-    const n = Math.round(parsed)
-
-    if (mode === 'award') {
-      const { error: insertError } = await supabase.from('credit_adjustments').insert({
-        org_id: user.org_id,
-        employee_id: row.employee_id,
-        amount: n,
-        reason: reason.trim(),
-        awarded_by: user.id,
-      })
-      setSubmitting(false)
-      if (insertError) { setError(insertError.message); return }
-      onDone()
-      return
-    }
-
-    const { error: rpcError } = await supabase.rpc('deduct_credits_cascade', {
-      target_employee_id: row.employee_id,
-      deduction_credits: n,
+    const { error: insertError } = await supabase.from('pay_adjustments').insert({
+      org_id: user.org_id,
+      employee_id: row.employee_id,
+      period_month: period,
+      amount_idr: mode === 'reward' ? Math.round(parsed) : -Math.round(parsed),
       reason: reason.trim(),
+      awarded_by: user.id,
     })
     setSubmitting(false)
-    if (rpcError) { setError(rpcError.message); return }
+    if (insertError) { setError(insertError.message); return }
     onDone()
   }
 
-  // Preview of what a deduction will do, same logic as employee-edit CreditsSection.
-  const hasAllowance = row.allowance_idr > 0
-  let preview: { msg: string; tone: 'neutral' | 'warning' | 'danger' } | null = null
-  if (mode === 'deduct' && isValidAmount) {
-    const deduction = Math.round(parsed)
-    const creditsPortion = Math.min(Math.max(row.credits_net, 0), deduction)
-    const overflowCredits = deduction - creditsPortion
-    const overflowIdr = overflowCredits > 0 && hasAllowance
-      ? Math.round((overflowCredits * row.allowance_idr) / divisor)
-      : 0
-    if (overflowCredits === 0) {
-      preview = { msg: t.deductPreviewFullyFromCredits(deduction), tone: 'neutral' }
-    } else if (!hasAllowance) {
-      preview = { msg: t.deductPreviewNoContract, tone: 'danger' }
-    } else if (creditsPortion === 0) {
-      preview = { msg: t.deductPreviewAllFromAllowance(overflowIdr), tone: 'warning' }
-    } else {
-      preview = { msg: t.deductPreviewSplit(creditsPortion, overflowIdr), tone: 'warning' }
-    }
-  }
-
-  const title = `${mode === 'award' ? t.awardCreditsTitle : t.deductCreditsTitle} — ${row.name}`
-
   return (
-    <Modal open onClose={onClose} title={title}>
+    <Modal open onClose={onClose} title={`${mode === 'reward' ? t.compensationReward : t.compensationPenalise} — ${row.name}`}>
       <form onSubmit={handleSubmit} className="space-y-3">
         <div>
-          <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.creditsAmountLabel}</label>
-          <input
-            type="number"
-            inputMode="numeric"
-            min={1}
-            max={maxPerAward ?? undefined}
-            step={1}
-            value={amount}
-            onChange={e => setAmount(e.target.value)}
-            className="w-full rounded-lg border px-3 py-2 text-sm"
-            style={inputStyle}
-            autoFocus
-          />
-          <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-            {t.creditsAmountHelp(rate)}
-            {mode === 'award' && isValidAmount && ` · ${formatIdr(previewIdr, lang)}`}
-            {maxPerAward != null && ` · max ${maxPerAward}`}
-          </p>
-          {preview && (
-            <p
-              className="mt-2 text-xs"
-              style={{
-                color: preview.tone === 'danger'
-                  ? 'var(--color-danger)'
-                  : preview.tone === 'warning'
-                    ? 'var(--color-warning)'
-                    : 'var(--color-text-secondary)',
-              }}
-            >
-              {preview.msg}
-            </p>
+          <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.bonusAmountLabel}</label>
+          <div className="relative">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm" style={{ color: 'var(--color-text-tertiary)' }}>Rp</span>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={formatIdrDigits(amount)}
+              onChange={e => setAmount(e.target.value.replace(/\D/g, ''))}
+              className="w-full rounded-lg border py-2 pl-9 pr-3 text-sm"
+              style={inputStyle}
+              autoFocus
+            />
+          </div>
+          {maxIdr != null && (
+            <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{`max ${formatIdr(maxIdr, lang)}`}</p>
           )}
         </div>
         <div>
@@ -458,9 +1060,9 @@ function CreditActionModal({
             type="submit"
             disabled={submitting}
             className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-            style={{ backgroundColor: mode === 'award' ? 'var(--color-success, #16a34a)' : 'var(--color-danger)' }}
+            style={{ backgroundColor: mode === 'reward' ? 'var(--color-success, #16a34a)' : 'var(--color-danger)' }}
           >
-            {submitting ? '...' : mode === 'award' ? t.submitAward : t.submitDeduct}
+            {submitting ? '...' : mode === 'reward' ? t.compensationReward : t.compensationPenalise}
           </button>
         </div>
       </form>
@@ -488,8 +1090,8 @@ function BadgeActionModal({
   const manual = definitions.filter(d => d.trigger_type === 'manual')
   const [selectedId, setSelectedId] = useState(manual[0]?.id || '')
   const [reason, setReason] = useState('')
-  const todayIso = new Date().toISOString().slice(0, 10)
-  const minBackdateIso = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  const [todayIso] = useState(() => new Date().toISOString().slice(0, 10))
+  const [minBackdateIso] = useState(() => new Date(new Date().getTime() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10))
   const [unlockedDate, setUnlockedDate] = useState(todayIso)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -503,8 +1105,6 @@ function BadgeActionModal({
     if (trimmed.length > REASON_MAX) { setError(t.validationReasonTooLong); return }
     setSubmitting(true)
     setError('')
-    // Backdate: if user picked a non-today date, send midday on that date in
-    // local time so timezone shifts don't push it into the previous day.
     let unlockedAt: string | undefined
     if (unlockedDate && unlockedDate !== todayIso) {
       unlockedAt = new Date(`${unlockedDate}T12:00:00`).toISOString()
