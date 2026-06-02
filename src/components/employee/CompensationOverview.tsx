@@ -21,6 +21,17 @@ function WalletIcon() {
 function AdjustmentsIcon() {
   return <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M9 9h6M9 15h6"/></svg>
 }
+// External-link glyph — these rows open the contract editor to change baseline
+// pay. Same "open" glyph as the card's top-right profile button.
+function OpenContractIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M15 3h6v6" />
+      <path d="M10 14 21 3" />
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6" />
+    </svg>
+  )
+}
 
 function TrendIcon({ direction }: { direction: 'up' | 'down' | 'flat' }) {
   if (direction === 'up') {
@@ -147,6 +158,21 @@ export function CompensationOverview({
 
   const netLabel = `${adjustmentNet > 0 ? '+' : adjustmentNet < 0 ? '−' : ''}${formatIdr(Math.abs(adjustmentNet), lang)}`
 
+  // Base wage + allowance are both contract-defined, so each row gets a subtle
+  // icon shortcut into the contract editor — admins only, and only when a
+  // contract exists. Shared by both StatRows below.
+  const adjustAction = isAdmin && contract ? (
+    <Link
+      to={documentEditPath('contract', contract.id)}
+      title={t.adjust}
+      aria-label={t.adjust}
+      className="inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-[var(--color-bg-tertiary)]"
+      style={{ color: 'var(--color-text-secondary)' }}
+    >
+      <OpenContractIcon />
+    </Link>
+  ) : undefined
+
   return (
     <section>
       {!hideContractHeader && (
@@ -222,6 +248,7 @@ export function CompensationOverview({
                 info={t.portalBaseWageInfo}
                 value={formatIdr(baseWage, lang)}
                 accent="var(--color-text-secondary)"
+                actions={adjustAction}
               />
               <StatRow
                 flat={stacked}
@@ -230,11 +257,7 @@ export function CompensationOverview({
                 info={t.portalAllowanceInfo}
                 value={formatIdr(allowance, lang)}
                 accent="var(--color-text-secondary)"
-                actions={isAdmin && contract ? (
-                  <Link to={documentEditPath('contract', contract.id)} className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-                    {t.adjust} →
-                  </Link>
-                ) : undefined}
+                actions={adjustAction}
               />
               <StatRow
                 flat={stacked}

@@ -4,12 +4,26 @@ import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
 import { useBreadcrumbTrailing } from '../../contexts/BreadcrumbContext'
 import { CompensationOverview } from '../../components/employee/CompensationOverview'
+import { InfoTooltip } from '../../components/InfoTooltip'
 import { EmployeeActivityLog } from '../../components/employee/EmployeeActivityLog'
 import { AchievementsSection } from '../../components/employee/AchievementsSection'
 import { MonthStrip } from '../../components/portal/MonthStrip'
 import { getAvatarGradient } from '../../lib/avatar'
 import { currentPeriodMonth } from '../../lib/credits'
 import type { User, Employee, Contract } from '../../types/aliases'
+
+// Boxed external-link affordance for the top-right link out to the full employee
+// profile — same glyph as the "open contract" icon on the pay rows, so the card
+// uses one consistent "opens elsewhere" symbol.
+function ProfileLinkIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M15 3h6v6" />
+      <path d="M10 14 21 3" />
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6" />
+    </svg>
+  )
+}
 
 // Dedicated per-employee Performance page (recognition cockpit). Reached from
 // the Performance roster. Reuses the rich compensation module (ring + credit/
@@ -101,26 +115,49 @@ export function PerformanceDetail({ user }: { user: User }) {
       </div>
 
       <div className="grid gap-8 lg:grid-cols-3">
-        {/* Left column (1/3): employee identity, payout total + stacked stat
-            cards (base wage, allowance, credits ±, bonus +), then experience. */}
+        {/* Left column (1/3): employee identity (name + XP), payout total +
+            stacked stat cards (base wage, allowance, credits ±, bonus +). */}
         <div className="space-y-6 rounded-xl border p-5" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }}>
-          <div className="flex items-center gap-3">
-            <div
-              className="h-12 w-12 shrink-0 overflow-hidden rounded-full"
-              style={{ background: employee.photo_url ? 'transparent' : getAvatarGradient(employee.id) }}
-            >
-              {employee.photo_url && <img src={employee.photo_url} alt="" className="h-full w-full object-cover" />}
-            </div>
-            <div className="min-w-0">
-              <h1 className="truncate text-lg font-semibold" style={{ color: 'var(--color-text)' }}>{employee.name}</h1>
-              <Link
-                to={`/dashboard/employees/${employee.id}/edit`}
-                className="text-xs"
-                style={{ color: 'var(--color-text-secondary)' }}
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <div
+                className="h-16 w-16 shrink-0 overflow-hidden rounded-full"
+                style={{ background: employee.photo_url ? 'transparent' : getAvatarGradient(employee.id) }}
               >
-                {t.performanceViewFullProfile} →
-              </Link>
+                {employee.photo_url && <img src={employee.photo_url} alt="" className="h-full w-full object-cover" />}
+              </div>
+              <div className="min-w-0">
+                <h1 className="truncate text-lg font-semibold" style={{ color: 'var(--color-text)' }}>{employee.name}</h1>
+                <div className="mt-1.5">
+                  <span
+                    className="inline-flex items-center rounded-full px-2.5 py-1"
+                    style={{ backgroundColor: 'var(--color-bg-tertiary)' }}
+                  >
+                    <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--color-text-tertiary)' }}>
+                      {t.portalXp}
+                    </span>
+                    <span className="ml-1.5 text-xs font-semibold tabular-nums" style={{ color: 'var(--color-text)' }}>
+                      {xp.toLocaleString(lang === 'id' ? 'id-ID' : 'en-US')}
+                    </span>
+                    <InfoTooltip
+                      iconBg="var(--color-bg)"
+                      text={hoursPerWeek > 0 || daysEmployed > 0
+                        ? t.portalExperienceBreakdown(daysEmployed, Math.round(hoursPerWeek))
+                        : t.portalNoContractYet}
+                    />
+                  </span>
+                </div>
+              </div>
             </div>
+            <Link
+              to={`/dashboard/employees/${employee.id}/edit`}
+              title={t.performanceViewFullProfile}
+              aria-label={t.performanceViewFullProfile}
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-colors hover:bg-[var(--color-bg-tertiary)]"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
+            >
+              <ProfileLinkIcon />
+            </Link>
           </div>
 
           <CompensationOverview
@@ -136,20 +173,6 @@ export function PerformanceDetail({ user }: { user: User }) {
             refreshKey={refreshKey}
             onChange={bump}
           />
-
-          <div className="border-t pt-6" style={{ borderColor: 'var(--color-border)' }}>
-            <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-tertiary)' }}>
-              {t.portalExperience}
-            </p>
-            <p className="mt-0.5 text-2xl font-semibold tabular-nums" style={{ color: 'var(--color-text)' }}>
-              {t.portalExperienceXp(xp)}
-            </p>
-            <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-              {hoursPerWeek > 0 || daysEmployed > 0
-                ? t.portalExperienceBreakdown(daysEmployed, Math.round(hoursPerWeek))
-                : t.portalNoContractYet}
-            </p>
-          </div>
         </div>
 
         {/* Right column (2/3): badges and the activity log. */}

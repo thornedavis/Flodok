@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 
-export function InfoTooltip({ text }: { text: string }) {
+export function InfoTooltip({ text, iconBg = 'var(--color-bg-tertiary)' }: { text: string; iconBg?: string }) {
   const [show, setShow] = useState(false)
   const btnRef = useRef<HTMLButtonElement>(null)
   const [pos, setPos] = useState({ top: 0, left: 0 })
@@ -19,7 +19,7 @@ export function InfoTooltip({ text }: { text: string }) {
         ref={btnRef}
         type="button"
         className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold"
-        style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-tertiary)' }}
+        style={{ backgroundColor: iconBg, color: 'var(--color-text-tertiary)' }}
         onMouseEnter={handleEnter}
         onMouseLeave={() => setShow(false)}
       >
