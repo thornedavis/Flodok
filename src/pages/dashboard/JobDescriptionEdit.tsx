@@ -13,7 +13,7 @@
 // the live row in place — no version churn while you're still iterating.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
 import { useBilling } from '../../contexts/BillingContext'
@@ -26,7 +26,7 @@ import { DateTimePicker } from '../../components/DateTimePicker'
 import { EmployeeSelect } from '../../components/EmployeeSelect'
 import { type EmpDeptShape } from '../../lib/employee'
 import { docAsJson, type DocumentDoc, type ViewMode } from '../../lib/documentDoc'
-import { documentEditPath } from '../../lib/documentTypes'
+import { documentEditPath, documentHistoryPath } from '../../lib/documentTypes'
 import {
   archiveJobDescription, buildJobDescriptionSeedDoc, isJdEditable,
   publishJobDescription, suggestDocVersion,
@@ -445,6 +445,11 @@ export function JobDescriptionEdit({ user }: { user: User }) {
 
   const actions = (
     <>
+      {!isNew && (
+        <Link to={documentHistoryPath('job_description', id!)} className="rounded-lg border px-3 py-1.5 text-xs font-medium" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>
+          {t.historyLinkLabel}
+        </Link>
+      )}
       <button type="button" onClick={handleDownloadPdf} disabled={downloading}
         className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-50"
         style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>
