@@ -313,7 +313,7 @@ export function LetterEdit({ user }: { user: User }) {
         employee: employeeId ? (allEmployees.find(e => e.id === employeeId) ?? null) : null,
         organization,
         today: new Date(),
-        sender: senderRow,
+        signer: senderRow ? { name: senderRow.name, title: senderRow.title } : null,
       }
       await exportDocumentPdf({
         doc: contentDoc,
@@ -581,13 +581,13 @@ export function LetterEdit({ user }: { user: User }) {
         stickyToolbar
         stickyToolbarOffset={`${EDITOR_STICKY_TOP_PX}px`}
         mergeFields={{
-          scope: 'sop',
+          scope: 'letter',
           getContext: () => ({
             employee: employeeId ? (allEmployees.find(e => e.id === employeeId) ?? null) : null,
             organization,
             today: new Date(),
             lang: 'en',
-            sender: senderRow,
+            signer: senderRow ? { name: senderRow.name, title: senderRow.title } : null,
           }),
         }}
         aiGenerate={{ docType: 'sop', title }}

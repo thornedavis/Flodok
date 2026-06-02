@@ -16,7 +16,7 @@ export function MergeFieldPicker({
   open: boolean
   onClose: () => void
   onSelect: (key: MergeFieldKey) => void
-  scope: 'sop' | 'contract'
+  scope: 'sop' | 'contract' | 'letter'
   lang?: Lang
 }) {
   const [query, setQuery] = useState('')

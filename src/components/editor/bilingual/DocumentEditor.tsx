@@ -52,7 +52,7 @@ export type DocumentEditorView = 'side_by_side' | 'stacked'
 // same pill shows "Rp 5,000,000" on the EN side and the localized
 // numeral on the ID side without the host having to render two editors.
 export type DocumentEditorMergeFields = {
-  scope: 'sop' | 'contract'
+  scope: 'sop' | 'contract' | 'letter'
   getContext: () => MergeContext
 }
 

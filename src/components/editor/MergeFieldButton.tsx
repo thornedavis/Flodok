@@ -12,7 +12,7 @@ export function MergeFieldButton({
   lang = 'en',
 }: {
   editor: Editor
-  scope: 'sop' | 'contract'
+  scope: 'sop' | 'contract' | 'letter'
   lang?: Lang
 }) {
   const [open, setOpen] = useState(false)

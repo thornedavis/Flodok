@@ -53,7 +53,7 @@ export type MergeContext = {
   signer?: { name?: string | null; title?: string | null } | null
 }
 
-export type MergeFieldScope = 'sop' | 'contract' | 'both'
+export type MergeFieldScope = 'sop' | 'contract' | 'letter' | 'both'
 
 export type MergeFieldKey =
   | 'employee_name'
@@ -81,6 +81,8 @@ export type MergeFieldKey =
   | 'employer_title'
   | 'employer_signature'
   | 'employer_sign_date'
+  | 'sender_name'
+  | 'sender_title'
 
 export type MergeFieldDef = {
   key: MergeFieldKey
@@ -361,6 +363,22 @@ export const MERGE_FIELDS: Record<MergeFieldKey, MergeFieldDef> = {
       return formatted ? `<span class="signature-date">${formatted}</span>` : FIELD_BLANK
     },
   },
+  // Letter-only: resolve from the letter's selected Sender, which is passed
+  // in as `signer` (the sender is the letter's employer-side signer).
+  sender_name: {
+    key: 'sender_name',
+    scope: 'letter',
+    label: { en: 'Sender name', id: 'Nama pengirim' },
+    description: { en: "Name of the letter's selected sender", id: 'Nama pengirim surat yang dipilih' },
+    resolve: ctx => ctx.signer?.name || FIELD_BLANK,
+  },
+  sender_title: {
+    key: 'sender_title',
+    scope: 'letter',
+    label: { en: 'Sender title', id: 'Jabatan pengirim' },
+    description: { en: "Title of the letter's selected sender (e.g. Director)", id: 'Jabatan pengirim (mis. Direktur)' },
+    resolve: ctx => ctx.signer?.title || FIELD_BLANK,
+  },
 }
 
 // ─── Public API ─────────────────────────────────────────────────────────────
@@ -371,7 +389,7 @@ export function isMergeFieldKey(key: string): key is MergeFieldKey {
   return key in MERGE_FIELDS
 }
 
-export function fieldsForScope(scope: 'sop' | 'contract'): MergeFieldDef[] {
+export function fieldsForScope(scope: 'sop' | 'contract' | 'letter'): MergeFieldDef[] {
   return ALL_MERGE_FIELDS.filter(f => f.scope === 'both' || f.scope === scope)
 }
 

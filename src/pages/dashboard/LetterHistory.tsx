@@ -21,6 +21,7 @@ import type { Letter, LetterVersion, Employee, Organization } from '../../types/
 type VersionLang = 'en' | 'id'
 type ViewMode = 'rendered' | 'template'
 type AuthorLite = { id: string; name: string }
+type SenderLite = { id: string; name: string; title: string | null }
 type HistVersion = LetterVersion & {
   changed_by: string
   translation_status: string
@@ -35,6 +36,7 @@ export function LetterHistory() {
   const [selected, setSelected] = useState<HistVersion | null>(null)
   const [authors, setAuthors] = useState<Record<string, AuthorLite>>({})
   const [recipient, setRecipient] = useState<Employee | null>(null)
+  const [sender, setSender] = useState<SenderLite | null>(null)
   const [organization, setOrganization] = useState<Organization | null>(null)
 
   const [activeLang, setActiveLang] = useState<VersionLang>('en')
@@ -67,6 +69,10 @@ export function LetterHistory() {
         const { data: emp } = await supabase.from('employees').select('*').eq('id', ltr.employee_id).single()
         setRecipient(emp)
       }
+      if (ltr?.sender_user_id) {
+        const { data: snd } = await supabase.from('users').select('id, name, title').eq('id', ltr.sender_user_id).single()
+        setSender(snd)
+      }
       if (ltr?.org_id) {
         const { data: org } = await supabase.from('organizations').select('*').eq('id', ltr.org_id).single()
         setOrganization(org)
@@ -80,16 +86,16 @@ export function LetterHistory() {
     const raw = activeLang === 'en' ? selected.content_markdown : selected.content_markdown_id
     if (!raw) return ''
     if (viewMode === 'template') return raw
-    return renderMergeFields(raw, { employee: recipient, organization, today: new Date(), lang: activeLang })
-  }, [selected, activeLang, viewMode, recipient, organization])
+    return renderMergeFields(raw, { employee: recipient, organization, today: new Date(), lang: activeLang, signer: sender ? { name: sender.name, title: sender.title } : null })
+  }, [selected, activeLang, viewMode, recipient, organization, sender])
 
   const currentBody = useMemo(() => {
     if (!letter) return ''
     const raw = activeLang === 'en' ? letter.content_markdown : letter.content_markdown_id
     if (!raw) return ''
     if (viewMode === 'template') return raw
-    return renderMergeFields(raw, { employee: recipient, organization, today: new Date(), lang: activeLang })
-  }, [letter, activeLang, viewMode, recipient, organization])
+    return renderMergeFields(raw, { employee: recipient, organization, today: new Date(), lang: activeLang, signer: sender ? { name: sender.name, title: sender.title } : null })
+  }, [letter, activeLang, viewMode, recipient, organization, sender])
 
   const idUnavailableReason = useMemo((): 'not-captured' | 'failed' | null => {
     if (!selected || activeLang !== 'id') return null
