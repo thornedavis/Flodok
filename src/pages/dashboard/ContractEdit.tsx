@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { DocumentEditor } from '../../components/editor/bilingual/DocumentEditor'
 import { DocumentEditShell, EDITOR_STICKY_TOP_PX } from '../../components/editor/DocumentEditShell'
@@ -21,6 +21,7 @@ import { DateTimePicker } from '../../components/DateTimePicker'
 import { EmployeeSelect } from '../../components/EmployeeSelect'
 import { useBilling } from '../../contexts/BillingContext'
 import { documentHistoryPath } from '../../lib/documentTypes'
+import { trashDocument } from '../../lib/trash'
 import type { User, Contract, Tag, Employee, Organization } from '../../types/aliases'
 
 type EmployeeWithDepartments = Employee & EmpDeptShape
@@ -49,6 +50,7 @@ function ContractTypeIcon() {
 export function ContractEdit({ user }: { user: User }) {
   const { t } = useLang()
   const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
   const { canWrite } = useBilling()
   const { view, setView } = useDocumentViewPref('contract', id ?? null)
   const [contract, setContract] = useState<Contract | null>(null)
@@ -257,7 +259,7 @@ export function ContractEdit({ user }: { user: User }) {
 
   // Registers the beforeunload / in-app navigation guard. Exits go through
   // the header link, which trips this guard when there are unsaved changes.
-  useUnsavedChangesWarning(hasChanges, t.unsavedChangesPrompt)
+  const bypassUnsavedWarning = useUnsavedChangesWarning(hasChanges, t.unsavedChangesPrompt)
 
   // Persists the contract with the given target status. Used by both
   // "Save as draft" and "Activate & sign" — the latter passes 'draft' here
@@ -559,8 +561,29 @@ export function ContractEdit({ user }: { user: User }) {
     </span>
   ) : undefined
 
+  async function handleDelete() {
+    if (!id) return
+    if (!confirm(t.deleteDocumentConfirm(title))) return
+    setSaving(true)
+    setError('')
+    try {
+      await trashDocument(id, 'contract')
+      bypassUnsavedWarning()
+      navigate('/dashboard/documents')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const actions = (
     <>
+      <button type="button" onClick={handleDelete} disabled={saving || !canWrite} title={!canWrite ? t.dunningWriteBlocked : undefined}
+        className="rounded-lg border px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
+        style={{ borderColor: 'var(--color-border)', color: 'var(--color-danger)' }}>
+        {t.delete}
+      </button>
       <Link to={documentHistoryPath('contract', contract.id)} className="rounded-lg border px-3 py-1.5 text-xs font-medium" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>{t.historyLinkLabel}</Link>
       <button onClick={handleDownloadPdf} disabled={downloading} className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-50" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>
         {downloading && (

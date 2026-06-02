@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { DocumentEditor } from '../../components/editor/bilingual/DocumentEditor'
 import { DocumentEditShell, EDITOR_STICKY_TOP_PX } from '../../components/editor/DocumentEditShell'
@@ -15,6 +15,7 @@ import { emptyDocumentDoc, type DocumentDoc } from '../../lib/documentDoc'
 import { exportDocumentPdf } from '../../lib/pdfExport'
 import { useBilling } from '../../contexts/BillingContext'
 import { documentHistoryPath } from '../../lib/documentTypes'
+import { trashDocument } from '../../lib/trash'
 import type { User, Sop, Tag, Employee, Organization } from '../../types/aliases'
 
 type EmployeeWithDepartments = Employee & EmpDeptShape
@@ -25,6 +26,7 @@ const EMPLOYEE_WITH_DEPTS_SELECT =
 export function SOPEdit({ user }: { user: User }) {
   const { t } = useLang()
   const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
   const { canWrite } = useBilling()
   const { view, setView } = useDocumentViewPref('sop', id ?? null)
   const [sop, setSOP] = useState<Sop | null>(null)
@@ -254,7 +256,7 @@ export function SOPEdit({ user }: { user: User }) {
 
   // Registers the navigation guard; the header exit link trips it when
   // there are unsaved changes.
-  useUnsavedChangesWarning(hasChanges, t.unsavedChangesPrompt)
+  const bypassUnsavedWarning = useUnsavedChangesWarning(hasChanges, t.unsavedChangesPrompt)
 
   // Persists the SOP at the given target status. Same shape as the contract
   // editor: replaces the old status dropdown + Save with explicit
@@ -436,8 +438,29 @@ export function SOPEdit({ user }: { user: User }) {
     </span>
   )
 
+  async function handleDelete() {
+    if (!id) return
+    if (!confirm(t.deleteDocumentConfirm(title))) return
+    setSaving(true)
+    setError('')
+    try {
+      await trashDocument(id, 'sop')
+      bypassUnsavedWarning()
+      navigate('/dashboard/documents')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const actions = (
     <>
+      <button type="button" onClick={handleDelete} disabled={saving || !canWrite} title={!canWrite ? t.dunningWriteBlocked : undefined}
+        className="rounded-lg border px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
+        style={{ borderColor: 'var(--color-border)', color: 'var(--color-danger)' }}>
+        {t.delete}
+      </button>
       <Link to={documentHistoryPath('sop', sop.id)} className="rounded-lg border px-3 py-1.5 text-xs font-medium" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>
         {t.historyLinkLabel}
       </Link>
