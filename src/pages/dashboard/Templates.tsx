@@ -29,6 +29,7 @@ import { Skeleton } from '../../components/Skeleton'
 import { Modal } from '../../components/Modal'
 import { useBilling } from '../../contexts/BillingContext'
 import { docPreviewLines } from '../../lib/documentDoc'
+import { createDocFromTemplate } from '../../lib/createFromTemplate'
 import type { User } from '../../types/aliases'
 
 // Templates carry the same shape we render in the grid/list as documents
@@ -85,6 +86,7 @@ export function Templates({ user }: { user: User }) {
   const [loading, setLoading] = useState(true)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [creating, setCreating] = useState(false)
+  const [usingId, setUsingId] = useState<string | null>(null)
 
   const [viewMode, setViewMode] = useState<ViewMode>(loadViewMode)
   const [typeFilter, setTypeFilter] = useState<DocumentType[]>([])
@@ -120,6 +122,21 @@ export function Templates({ user }: { user: User }) {
       return
     }
     navigate(documentTemplateEditPath(data.id))
+  }
+
+  // "Use template": create a new document seeded from this template and open
+  // it. JD reuses its deferred /new?template= flow; the eager types insert a
+  // draft here (see createDocFromTemplate).
+  async function handleUseTemplate(item: TemplateItem) {
+    if (usingId || !canWrite) return
+    setUsingId(item.id)
+    try {
+      const path = await createDocFromTemplate(item.id, item.type, user)
+      navigate(path)
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : 'Could not create document')
+      setUsingId(null)
+    }
   }
 
   useEffect(() => {
@@ -277,9 +294,9 @@ export function Templates({ user }: { user: User }) {
           {t.templatesNoMatches}
         </p>
       ) : viewMode === 'grid' ? (
-        <TemplateGrid items={filtered} onOpen={item => navigate(documentTemplateEditPath(item.id))} />
+        <TemplateGrid items={filtered} onOpen={item => navigate(documentTemplateEditPath(item.id))} onUse={handleUseTemplate} usingId={usingId} canWrite={canWrite} />
       ) : (
-        <TemplateList items={filtered} onOpen={item => navigate(documentTemplateEditPath(item.id))} />
+        <TemplateList items={filtered} onOpen={item => navigate(documentTemplateEditPath(item.id))} onUse={handleUseTemplate} usingId={usingId} canWrite={canWrite} />
       )}
 
       <Modal
@@ -599,7 +616,7 @@ function TemplateListSkeleton({ count }: { count: number }) {
   )
 }
 
-function TemplateGrid({ items, onOpen }: { items: TemplateItem[]; onOpen: (item: TemplateItem) => void }) {
+function TemplateGrid({ items, onOpen, onUse, usingId, canWrite }: { items: TemplateItem[]; onOpen: (item: TemplateItem) => void; onUse: (item: TemplateItem) => void; usingId: string | null; canWrite: boolean }) {
   const { t } = useLang()
 
   return (
@@ -643,6 +660,19 @@ function TemplateGrid({ items, onOpen }: { items: TemplateItem[]; onOpen: (item:
                   </div>
                 ))}
               </div>
+              {/* Use-template action — revealed on hover; card click still edits. */}
+              <div className="absolute inset-x-0 bottom-0 flex justify-center p-2 opacity-0 transition-opacity group-hover:opacity-100">
+                <button
+                  type="button"
+                  disabled={!canWrite || usingId !== null}
+                  onClick={e => { e.stopPropagation(); onUse(item) }}
+                  title={!canWrite ? t.dunningWriteBlocked : undefined}
+                  className="rounded-lg px-3 py-1.5 text-xs font-medium text-white shadow disabled:opacity-50"
+                  style={{ backgroundColor: 'var(--color-primary)' }}
+                >
+                  {usingId === item.id ? t.saving : t.jdDraftActionFromTemplate}
+                </button>
+              </div>
             </div>
 
             {/* Footer — title, then a meta row with the type icon and date. */}
@@ -669,7 +699,7 @@ function TemplateGrid({ items, onOpen }: { items: TemplateItem[]; onOpen: (item:
   )
 }
 
-function TemplateList({ items, onOpen }: { items: TemplateItem[]; onOpen: (item: TemplateItem) => void }) {
+function TemplateList({ items, onOpen, onUse, usingId, canWrite }: { items: TemplateItem[]; onOpen: (item: TemplateItem) => void; onUse: (item: TemplateItem) => void; usingId: string | null; canWrite: boolean }) {
   const { t } = useLang()
   const typeBadgeLabels: Record<DocumentType, string> = {
     sop: t.documentsAllTypeBadgeSop,
@@ -707,6 +737,16 @@ function TemplateList({ items, onOpen }: { items: TemplateItem[]; onOpen: (item:
                 {t.templatesUsedFor} {item.position}
               </span>
             )}
+            <button
+              type="button"
+              disabled={!canWrite || usingId !== null}
+              onClick={e => { e.stopPropagation(); onUse(item) }}
+              title={!canWrite ? t.dunningWriteBlocked : undefined}
+              className="shrink-0 rounded-lg border px-2.5 py-1 text-xs font-medium disabled:opacity-50"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            >
+              {usingId === item.id ? t.saving : t.jdDraftActionFromTemplate}
+            </button>
             <span className="shrink-0 text-xs tabular-nums" style={{ color: 'var(--color-text-tertiary)' }}>
               {new Date(item.updated_at).toLocaleDateString()}
             </span>
