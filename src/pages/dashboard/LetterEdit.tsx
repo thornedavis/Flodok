@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { DocumentEditor } from '../../components/editor/bilingual/DocumentEditor'
 import { DocumentEditShell, EDITOR_STICKY_TOP_PX } from '../../components/editor/DocumentEditShell'
+import { SaveAsTemplateButton } from '../../components/SaveAsTemplateButton'
 import { EmployeeSelect } from '../../components/EmployeeSelect'
 import { DateTimePicker } from '../../components/DateTimePicker'
 import { useLang } from '../../contexts/LanguageContext'
@@ -12,6 +13,7 @@ import { useDocumentViewPref } from '../../hooks/useDocumentViewPref'
 import { emptyDocumentDoc, type DocumentDoc } from '../../lib/documentDoc'
 import { useBilling } from '../../contexts/BillingContext'
 import { documentHistoryPath } from '../../lib/documentTypes'
+import { trashDocument } from '../../lib/trash'
 import type { User, Tag, Employee, Organization } from '../../types/aliases'
 import type { Database } from '../../types/database'
 
@@ -32,6 +34,7 @@ interface SenderUser {
 export function LetterEdit({ user }: { user: User }) {
   const { t } = useLang()
   const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
   const { canWrite } = useBilling()
   const { view, setView } = useDocumentViewPref('letter', id ?? null)
 
@@ -167,7 +170,7 @@ export function LetterEdit({ user }: { user: User }) {
     requiresAcknowledgement !== letter.requires_acknowledgement
   ) : false
 
-  useUnsavedChangesWarning(hasChanges, t.unsavedChangesPrompt)
+  const bypassUnsavedWarning = useUnsavedChangesWarning(hasChanges, t.unsavedChangesPrompt)
 
   // Save the live letter row + sync tags. Doesn't write to letter_versions —
   // version snapshots are written by the issue_letter RPC. Post-issue edits
@@ -282,11 +285,38 @@ export function LetterEdit({ user }: { user: User }) {
     </span>
   )
 
+  async function handleDelete() {
+    if (!id) return
+    if (!confirm(t.deleteDocumentConfirm(title))) return
+    setSaving(true)
+    setError('')
+    try {
+      await trashDocument(id, 'letter')
+      bypassUnsavedWarning()
+      navigate('/dashboard/documents')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const actions = (
     <>
+      <button type="button" onClick={handleDelete} disabled={saving || !canWrite} title={!canWrite ? t.dunningWriteBlocked : undefined}
+        className="rounded-lg border px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
+        style={{ borderColor: 'var(--color-border)', color: 'var(--color-danger)' }}>
+        {t.delete}
+      </button>
       <Link to={documentHistoryPath('letter', letter.id)} className="rounded-lg border px-3 py-1.5 text-xs font-medium" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>
         {t.historyLinkLabel}
       </Link>
+      <SaveAsTemplateButton
+        orgId={user.org_id}
+        defaultTitle={title}
+        disabled={!canWrite}
+        getSource={() => ({ type: 'letter', contentDoc })}
+      />
       <button
         onClick={handleSaveAsDraft}
         disabled={saving || !canWrite || (!hasChanges && status === 'draft')}

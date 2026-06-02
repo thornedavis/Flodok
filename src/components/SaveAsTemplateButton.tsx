@@ -12,7 +12,7 @@
 //     the structured fields document_templates carries for contracts
 //     (wages, hours, leave, probation, pkwt/pkwtt) so the template can
 //     auto-fill subsequent offers.
-//   - sop / job_description: prompts for title only.
+//   - sop / job_description / letter: prompts for title only.
 //
 // On success the user is routed straight into the slim template editor
 // (`/dashboard/document-templates/:id/edit`) so they can finish naming
@@ -29,6 +29,7 @@ import type { PkwtType } from '../lib/pkwtStarterDoc'
 export type SaveAsTemplateSource =
   | { type: 'sop'; contentDoc: DocumentDoc }
   | { type: 'job_description'; contentDoc: DocumentDoc }
+  | { type: 'letter'; contentDoc: DocumentDoc }
   | {
       type: 'contract'
       contentDoc: DocumentDoc

@@ -34,7 +34,10 @@ const TYPE_ACCENT: Record<DocumentType, string> = {
 // Templates can be any document type; map the stored `type` string to the
 // Documents index tab to return to on cancel/save.
 function indexTypeFor(type: string): DocumentType {
-  return type === 'sop' ? 'sop' : type === 'job_description' ? 'job_description' : 'contract'
+  return type === 'sop' ? 'sop'
+    : type === 'job_description' ? 'job_description'
+    : type === 'letter' ? 'letter'
+    : 'contract'
 }
 
 function TemplateTypeIcon({ type }: { type: DocumentType }) {
@@ -63,6 +66,14 @@ function TemplateTypeIcon({ type }: { type: DocumentType }) {
       <svg {...common}>
         <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
         <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+      </svg>
+    )
+  }
+  if (type === 'letter') {
+    return (
+      <svg {...common}>
+        <rect x="2" y="4" width="20" height="16" rx="2" />
+        <path d="m22 7-10 5L2 7" />
       </svg>
     )
   }
@@ -201,9 +212,7 @@ export function DocumentTemplateEdit({ user }: { user: User }) {
 
   const actions = (
     <>
-      <button onClick={() => navigate(documentsIndexPath(indexType))} className="rounded-lg border px-3 py-1.5 text-xs font-medium" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>
-        {t.cancel}
-      </button>
+      {/* Cancel is provided by DocumentEditShell (backTo); don't duplicate it here. */}
       <button
         onClick={handleSave}
         disabled={saving || !canWrite || !hasChanges}
@@ -338,6 +347,7 @@ export function DocumentTemplateEdit({ user }: { user: User }) {
       typeLabel={t.documentTypeTemplateSuffix(
         type === 'sop' ? t.documentTypeSop
           : type === 'job_description' ? t.documentTypeJobDescription
+          : type === 'letter' ? t.letterTypeLabel
           : t.documentTypeContract,
       )}
       title={title}
@@ -372,7 +382,7 @@ export function DocumentTemplateEdit({ user }: { user: User }) {
             signer: { name: user.name, title: user.title },
           }),
         }}
-        aiGenerate={{ docType: 'contract', title }}
+        aiGenerate={{ docType: type === 'contract' ? 'contract' : type === 'job_description' ? 'job_description' : 'sop', title }}
       />
     </DocumentEditShell>
   )
