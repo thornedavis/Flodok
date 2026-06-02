@@ -142,8 +142,11 @@ export function DocumentEditor({
       BlockBodyNode,
       CalloutNode,
       Placeholder.configure({
+        // Only advertise what works today — no "/" or AI hints until
+        // those features actually land.
         placeholder: ({ node }) => {
-          if (node.type.name === 'paragraph') return 'Type here…'
+          if (node.type.name === 'heading') return 'Heading'
+          if (node.type.name === 'paragraph') return 'Write here…'
           return ''
         },
       }),

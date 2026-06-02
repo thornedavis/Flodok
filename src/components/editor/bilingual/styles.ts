@@ -16,8 +16,29 @@ export const DOCUMENT_EDITOR_STYLES = `
   color: var(--color-text);
   font-size: 0.9375rem;
   line-height: 1.7;
-  padding: 1.5rem;
+  /* Wide left/right gutters give the hover rail (drag handle + "+",
+   * ~46px) a home inside the canvas. The rail is floated to the left of
+   * each block by TipTap's DragHandle portal; with only the old 1.5rem
+   * pad it spilled past the canvas edge over the sidebar divider. The
+   * padding is part of .tiptap's painted background, so the rail now
+   * lands in the margin, on-canvas. Keep this >= ~48px or the rail
+   * clips again. */
+  padding: 1.5rem 3.5rem;
   min-height: 400px;
+}
+
+/* ─── Placeholder ───────────────────────────────────── */
+
+/* The Placeholder extension tags the current empty text block with
+ * .is-empty + a data-placeholder attr, but renders nothing without this
+ * rule. float:left + height:0 overlays the hint with zero layout impact,
+ * so the caret never shifts when it appears or disappears. */
+.doc-editor .tiptap .is-empty::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  color: var(--color-text-tertiary);
 }
 
 /* ─── Clause numbering ──────────────────────────────── */
@@ -54,7 +75,17 @@ export const DOCUMENT_EDITOR_STYLES = `
 /* DragHandle renders this rail in a portal positioned to the left of
  * the hovered bilingualBlock. It only shows on hover (the portal is
  * removed when the cursor leaves the block area). */
-.block-gutter { position: relative; }
+/* The DragHandle portal top-aligns the rail to the block wrapper, which
+ * sits above the first line of text (block padding + the EN/ID label
+ * line + heading margin), so the controls float above the content. The
+ * plugin positions the rail via inline top/left and never touches
+ * transform, so we use translateY to drop the whole handle (rail + its
+ * menu, which is anchored to this element) down onto the first line.
+ * Single tunable knob — nudge if the alignment drifts. */
+.block-gutter {
+  position: relative;
+  transform: translateY(1.9rem);
+}
 
 .block-gutter-rail {
   display: flex;
@@ -136,6 +167,37 @@ export const DOCUMENT_EDITOR_STYLES = `
   color: var(--color-text-tertiary);
 }
 
+/* Block-actions menu (grip click): icon + label rows, with a danger
+ * variant for Delete. Shares the .block-gutter-menu shell above. */
+.block-gutter-menu-action {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.4rem 0.5rem;
+  border: none;
+  background: transparent;
+  border-radius: 0.375rem;
+  text-align: left;
+  cursor: pointer;
+  color: var(--color-text);
+  font-size: 0.8125rem;
+}
+
+.block-gutter-menu-action:hover { background: var(--color-bg-tertiary); }
+.block-gutter-menu-action svg { flex: none; color: var(--color-text-tertiary); }
+.block-gutter-menu-action.is-danger { color: var(--color-danger); }
+.block-gutter-menu-action.is-danger svg { color: var(--color-danger); }
+.block-gutter-menu-action.is-danger:hover {
+  background: color-mix(in srgb, var(--color-danger) 10%, transparent);
+}
+
+.block-gutter-menu-sep {
+  height: 1px;
+  margin: 0.3rem 0.15rem;
+  background: var(--color-border);
+}
+
 /* ─── Trailing add-block affordance ─────────────────── */
 
 .doc-editor-add-trailing {
@@ -144,7 +206,9 @@ export const DOCUMENT_EDITOR_STYLES = `
   gap: 0.4rem;
   width: 100%;
   margin: 0;
-  padding: 0.6rem 1.5rem;
+  /* Match .tiptap's horizontal padding so the trailing affordance lines
+   * up with the block column above it. */
+  padding: 0.6rem 3.5rem;
   border: none;
   background: transparent;
   color: var(--color-text-tertiary);
@@ -189,6 +253,17 @@ export const DOCUMENT_EDITOR_STYLES = `
 
 .bilingual-block-wrap[data-needs-review="true"] {
   border-left-color: var(--color-warning);
+}
+
+/* Selected block (gutter grip click, or keyboard NodeSelection).
+ * ProseMirror tags the NodeView wrapper with .ProseMirror-selectednode.
+ * Outline rather than border so selection never shifts layout, and a
+ * faint fill to read as "this whole pair is selected". */
+.bilingual-block-wrap.ProseMirror-selectednode {
+  outline: 2px solid color-mix(in srgb, var(--color-primary) 50%, transparent);
+  outline-offset: 4px;
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--color-primary) 4%, transparent);
 }
 
 /* The NodeViewContent and any TipTap-internal wrapper become layout
