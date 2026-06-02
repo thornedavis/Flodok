@@ -881,6 +881,7 @@ export function ContractEdit({ user }: { user: User }) {
       badge={badge}
       headerHint={status === 'active' && hasChanges ? t.editingActiveWillBumpVersion : undefined}
       detailsBadge={detailsBadge}
+      backTo="/dashboard/documents"
       actions={actions}
       error={error}
       sidebar={sidebar}

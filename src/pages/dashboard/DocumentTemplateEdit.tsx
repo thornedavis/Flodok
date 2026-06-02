@@ -344,6 +344,7 @@ export function DocumentTemplateEdit({ user }: { user: User }) {
       onTitleChange={setTitle}
       canEditTitle={canWrite}
       badge={badge}
+      backTo={documentsIndexPath(indexType)}
       actions={actions}
       error={error}
       sidebar={sidebar}

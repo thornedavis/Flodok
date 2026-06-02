@@ -574,6 +574,7 @@ export function SOPEdit({ user }: { user: User }) {
       canEditTitle={canWrite}
       badge={badge}
       headerHint={status === 'active' && hasChanges ? t.editingActiveWillBumpVersion : undefined}
+      backTo="/dashboard/documents"
       actions={actions}
       error={error}
       sidebar={sidebar}

@@ -18,6 +18,7 @@ import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
 import { useBilling } from '../../contexts/BillingContext'
 import { useBreadcrumbTrailing } from '../../contexts/BreadcrumbContext'
+import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning'
 import { DocumentEditor } from '../../components/editor/bilingual/DocumentEditor'
 import { DocumentEditShell, EDITOR_STICKY_TOP_PX } from '../../components/editor/DocumentEditShell'
 import { SaveAsTemplateButton } from '../../components/SaveAsTemplateButton'
@@ -212,6 +213,22 @@ export function JobDescriptionEdit({ user }: { user: User }) {
     return () => { cancelled = true }
   }, [id, isNew, fromRequestId, templateId, user.org_id, t.jdNotFound])
 
+  // Unsaved-changes guard (matches the other doc editors). Snapshot
+  // {form, content} once the initial fetch settles; any later divergence
+  // means there are unsaved edits. Re-capture on every (re)load so the
+  // /new → /:id/edit swap after the first save — which refetches — doesn't
+  // read as dirty. The guard turns navigating away (including the shell's
+  // Cancel button) into a discard confirm.
+  const currentSnapshot = useMemo(() => JSON.stringify({ form, content }), [form, content])
+  const [savedSnapshot, setSavedSnapshot] = useState<string | null>(null)
+  useEffect(() => { if (loading) setSavedSnapshot(null) }, [loading])
+  useEffect(() => {
+    if (loading || savedSnapshot !== null) return
+    setSavedSnapshot(currentSnapshot)
+  }, [loading, currentSnapshot, savedSnapshot])
+  const hasChanges = savedSnapshot !== null && currentSnapshot !== savedSnapshot
+  const bypassUnsavedWarning = useUnsavedChangesWarning(hasChanges, t.unsavedChangesPrompt)
+
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm(prev => ({ ...prev, [key]: value }))
     if (key === 'doc_version') docVersionEditedRef.current = true
@@ -282,6 +299,8 @@ export function JobDescriptionEdit({ user }: { user: User }) {
     const newId = await persist()
     setSaving(false)
     if (!newId) return
+    // Saved — rebaseline so the page is no longer "dirty".
+    setSavedSnapshot(currentSnapshot)
     // Stay in the editor — saving is decoupled from navigation. A brand-new
     // JD was just inserted on the `/new` URL, so route to its real edit path
     // (flips isNew off) instead of re-inserting on the next save. Carry the
@@ -290,6 +309,9 @@ export function JobDescriptionEdit({ user }: { user: User }) {
     if (isNew) {
       const from = searchParams.get('from')
       const editPath = documentEditPath('job_description', newId)
+      // Intentional in-editor navigation to the real edit URL; the reload
+      // there re-captures the baseline, so skip the guard for this one hop.
+      bypassUnsavedWarning()
       navigate(from ? `${editPath}?from=${from}` : editPath)
     }
   }
@@ -327,7 +349,9 @@ export function JobDescriptionEdit({ user }: { user: User }) {
     try {
       await publishJobDescription(newId)
       // Publishing makes a JD read-only, so this is a terminal action —
-      // return to the unified documents dashboard.
+      // return to the unified documents dashboard. Already persisted, so
+      // skip the unsaved-changes guard.
+      bypassUnsavedWarning()
       navigate('/dashboard/documents')
     } catch (e) {
       setError((e as Error).message)
@@ -343,6 +367,7 @@ export function JobDescriptionEdit({ user }: { user: User }) {
     setError('')
     try {
       await archiveJobDescription(id)
+      bypassUnsavedWarning()
       navigate('/dashboard/documents')
     } catch (e) {
       setError((e as Error).message)
@@ -357,6 +382,7 @@ export function JobDescriptionEdit({ user }: { user: User }) {
     setSaving(true)
     try {
       await trashDocument(id, 'job_description')
+      bypassUnsavedWarning()
       navigate('/dashboard/documents')
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -546,6 +572,7 @@ export function JobDescriptionEdit({ user }: { user: User }) {
       titlePlaceholder={t.jdFieldTitlePlaceholder}
       canEditTitle={!readOnly && canWrite}
       badge={badge}
+      backTo="/dashboard/documents"
       actions={actions}
       error={error}
       sidebar={sidebar}

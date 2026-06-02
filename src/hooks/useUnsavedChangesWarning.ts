@@ -42,7 +42,15 @@ export function useUnsavedChangesWarning(hasChanges: boolean, message: string) {
   // grow and trips React's hook-count check.
   const shouldBlock = useCallback<BlockerFunction>(
     ({ currentLocation, nextLocation }) => {
-      if (bypassRef.current) return false
+      // Single-use: an intentional navigation (a save/delete handler that
+      // calls the returned bypass fn) skips the prompt once, then the guard
+      // re-arms. Without the reset, a "save & stay" that changes the URL —
+      // e.g. a brand-new doc swapping /new → /:id/edit on first save — would
+      // leave the guard permanently disabled for the rest of the session.
+      if (bypassRef.current) {
+        bypassRef.current = false
+        return false
+      }
       return hasChanges && currentLocation.pathname !== nextLocation.pathname
     },
     [hasChanges],

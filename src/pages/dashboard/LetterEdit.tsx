@@ -504,6 +504,7 @@ export function LetterEdit({ user }: { user: User }) {
       onTitleChange={setTitle}
       canEditTitle={canWrite && !isIssued && !isArchived}
       badge={badge}
+      backTo="/dashboard/documents"
       actions={actions}
       error={error}
       sidebar={sidebar}

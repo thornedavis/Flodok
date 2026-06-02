@@ -18,6 +18,7 @@
 // the structured fields that only make sense for its document type.
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useLang } from '../../contexts/LanguageContext'
 import { useAutoCollapseSidebar, useFullWidthLayout } from '../Layout'
 import { SectionOutline } from './SectionOutline'
@@ -63,7 +64,13 @@ interface DocumentEditShellProps {
   badge?: ReactNode
   // Optional hint text after the badge (e.g. "editing active bumps version").
   headerHint?: ReactNode
-  // Right-aligned action buttons (Cancel / Save / Activate …).
+  // Route to return to when the user clicks Cancel (e.g. the docs
+  // dashboard). When set, the shell renders a Cancel button to the left of
+  // the page actions. Cancel just navigates here — leaving with unsaved
+  // edits trips the page's useUnsavedChangesWarning guard, which prompts a
+  // discard confirm. Omit to hide the Cancel button.
+  backTo?: string
+  // Right-aligned action buttons (Save / Publish / Delete …).
   actions: ReactNode
   error?: string | null
   // The structured fields for this document type — rendered inside the
@@ -90,6 +97,7 @@ export function DocumentEditShell({
   canEditTitle = true,
   badge,
   headerHint,
+  backTo,
   actions,
   error,
   sidebar,
@@ -98,6 +106,7 @@ export function DocumentEditShell({
   children,
 }: DocumentEditShellProps) {
   const { t } = useLang()
+  const navigate = useNavigate()
   // Focus-the-canvas: collapse the main nav and break out of the max-w-6xl
   // page container so the editor + sidebar get full width. Both hooks
   // auto-restore on unmount.
@@ -217,7 +226,21 @@ export function DocumentEditShell({
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2">{actions}</div>
+        <div className="flex items-center gap-2">
+          {backTo && (
+            <button
+              type="button"
+              onClick={() => navigate(backTo)}
+              className="rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
+              onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
+              onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
+            >
+              {t.cancel}
+            </button>
+          )}
+          {actions}
+        </div>
       </div>
 
       {error && (
