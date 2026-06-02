@@ -14,6 +14,7 @@ import { emptyDocumentDoc, type DocumentDoc } from '../../lib/documentDoc'
 import { useBilling } from '../../contexts/BillingContext'
 import { documentHistoryPath } from '../../lib/documentTypes'
 import { trashDocument } from '../../lib/trash'
+import { exportDocumentPdf } from '../../lib/pdfExport'
 import type { User, Tag, Employee, Organization } from '../../types/aliases'
 import type { Database } from '../../types/database'
 
@@ -37,6 +38,7 @@ export function LetterEdit({ user }: { user: User }) {
   const navigate = useNavigate()
   const { canWrite } = useBilling()
   const { view, setView } = useDocumentViewPref('letter', id ?? null)
+  const [downloading, setDownloading] = useState(false)
 
   const [letter, setLetter] = useState<Letter | null>(null)
   const [organization, setOrganization] = useState<Organization | null>(null)
@@ -301,6 +303,31 @@ export function LetterEdit({ user }: { user: User }) {
     }
   }
 
+  async function handleDownloadPdf() {
+    if (downloading) return
+    setDownloading(true)
+    try {
+      // Same merge context the editor uses (recipient + sender + org), so
+      // the PDF resolves the letter's pills exactly as shown on screen.
+      const baseCtx = {
+        employee: employeeId ? (allEmployees.find(e => e.id === employeeId) ?? null) : null,
+        organization,
+        today: new Date(),
+        sender: senderRow,
+      }
+      await exportDocumentPdf({
+        doc: contentDoc,
+        title: title || t.letterTypeLabel,
+        view,
+        contextEn: { ...baseCtx, lang: 'en' },
+        contextId: { ...baseCtx, lang: 'id' },
+      })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'PDF export failed')
+    }
+    setDownloading(false)
+  }
+
   const actions = (
     <>
       <button type="button" onClick={handleDelete} disabled={saving || !canWrite} title={!canWrite ? t.dunningWriteBlocked : undefined}
@@ -311,6 +338,12 @@ export function LetterEdit({ user }: { user: User }) {
       <Link to={documentHistoryPath('letter', letter.id)} className="rounded-lg border px-3 py-1.5 text-xs font-medium" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>
         {t.historyLinkLabel}
       </Link>
+      <button type="button" onClick={handleDownloadPdf} disabled={downloading}
+        className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>
+        {downloading && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>}
+        {downloading ? t.generatingPdf : t.downloadPdf}
+      </button>
       <SaveAsTemplateButton
         orgId={user.org_id}
         defaultTitle={title}

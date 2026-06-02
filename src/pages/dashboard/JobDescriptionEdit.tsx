@@ -33,6 +33,7 @@ import {
   type JobDescriptionStatus,
 } from '../../lib/jobDescriptions'
 import { trashDocument } from '../../lib/trash'
+import { exportDocumentPdf } from '../../lib/pdfExport'
 import type { User, JobDescription, CompanyDepartment, HiringRequest, Employee } from '../../types/aliases'
 
 type DepartmentOption = Pick<CompanyDepartment, 'id' | 'name'>
@@ -87,6 +88,7 @@ export function JobDescriptionEdit({ user }: { user: User }) {
   const [view, setView] = useState<ViewMode>('stacked')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [downloading, setDownloading] = useState(false)
   const [error, setError] = useState('')
   // Whether the user has typed/clicked something in the doc_version field
   // since the form opened. If they have, we leave it alone; otherwise we
@@ -391,6 +393,25 @@ export function JobDescriptionEdit({ user }: { user: User }) {
     }
   }
 
+  async function handleDownloadPdf() {
+    if (downloading) return
+    setDownloading(true)
+    try {
+      // JDs carry no merge-field pills (the editor doesn't expose the
+      // picker), so a minimal context is enough to render the bilingual body.
+      await exportDocumentPdf({
+        doc: content,
+        title: form.title || t.documentTypeJobDescription,
+        view,
+        contextEn: { today: new Date(), lang: 'en' },
+        contextId: { today: new Date(), lang: 'id' },
+      })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'PDF export failed')
+    }
+    setDownloading(false)
+  }
+
   const writeDisabledTitle = !canWrite ? t.dunningWriteBlocked : undefined
 
   const departmentNameForDocSuggestion = useMemo(() =>
@@ -424,6 +445,12 @@ export function JobDescriptionEdit({ user }: { user: User }) {
 
   const actions = (
     <>
+      <button type="button" onClick={handleDownloadPdf} disabled={downloading}
+        className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>
+        {downloading && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>}
+        {downloading ? t.generatingPdf : t.downloadPdf}
+      </button>
       {status === 'draft' && (
         <>
           {!isNew && (
