@@ -48,10 +48,15 @@ type PortalHomeData = {
 
 type PortalDocumentsData = {
   org: Organization | null
+  employee?: Employee | null
   sops: Sop[]
   contracts: Contract[]
   letters?: Letter[]
   letter_acknowledgements?: LetterAcknowledgement[]
+  sop_signatures?: SopSignature[]
+  contract_signatures?: ContractSignature[]
+  applied_jd?: JobDescription | null
+  jd_signature?: JobDescriptionSignature | null
 }
 
 type PortalDocumentsRpc = (fn: 'portal_documents', args: { emp_slug: string; emp_token: string }) => Promise<{
@@ -353,22 +358,24 @@ export function Portal() {
       const slug = slugToken.slice(0, lastDash)
       const token = slugToken.slice(lastDash + 1)
 
-      const { data: emp } = await supabase
-        .from('employees')
-        .select('*')
-        .eq('slug', slug)
-        .eq('access_token', token)
-        .single()
-
+      // portal_documents (migration 137) validates slug+token and returns the
+      // employee row + the employee's signatures + applied JD alongside org /
+      // sops / contracts / letters, so the portal no longer reads those tables
+      // directly.
+      const docsResult = await (supabase.rpc as unknown as PortalDocumentsRpc)('portal_documents', { emp_slug: slug, emp_token: token })
+      const docs = docsResult.data as PortalDocumentsData | null
+      const emp = docs?.employee
       if (!emp) { setNotFound(true); return }
+
       // If the candidate has signed and their start date has arrived, flip
       // them to 'active' before rendering so the onboarding flow steps
       // aside and the regular portal takes over.
       const advanced = await advanceSignedToActive(emp.id, emp.join_date, emp.lifecycle_stage)
       setEmployee(advanced ? { ...emp, lifecycle_stage: 'active' } : emp)
 
-      const [docsResult, unreadResult, recentResult] = await Promise.all([
-        (supabase.rpc as unknown as PortalDocumentsRpc)('portal_documents', { emp_slug: slug, emp_token: token }),
+      // Unread count + recent informational feed (the feed reads move onto an
+      // RPC in a later stage; still direct here).
+      const [unreadResult, recentResult] = await Promise.all([
         supabase.rpc('portal_unread_count', { emp_slug: slug, emp_token: token }),
         supabase
           .from('feed_events')
@@ -378,11 +385,9 @@ export function Portal() {
           .order('created_at', { ascending: false })
           .limit(5),
       ])
-
       if (typeof unreadResult.data === 'number') setUnreadInformational(unreadResult.data)
       if (recentResult.data) setRecentInformational(recentResult.data)
 
-      const docs = docsResult.data as PortalDocumentsData | null
       setOrg(docs?.org ?? null)
 
       const sopList = docs?.sops ?? []
@@ -412,75 +417,46 @@ export function Portal() {
       }
       setLetterAcknowledgements(ackByLetter)
 
-      // Load signatures (SOPs)
-      if (sopList.length > 0) {
-        const { data: sigs } = await supabase
-          .from('sop_signatures')
-          .select('*')
-          .in('sop_id', sopList.map(s => s.id))
-          .eq('employee_id', emp.id)
-
-        if (sigs) {
-          const sigMap: Record<string, SopSignature> = {}
-          for (const sig of sigs) {
-            const sop = sopList.find(s => s.id === sig.sop_id)
-            if (sop && sig.version_number === sop.current_version) {
-              sigMap[sig.sop_id] = sig
-            }
-          }
-          setSopSignatures(sigMap)
+      // Signatures (SOPs) — from the portal_documents payload (the employee's
+      // own signatures); map the one matching each SOP's current_version.
+      const sopSigs = docs?.sop_signatures ?? []
+      const sigMap: Record<string, SopSignature> = {}
+      for (const sig of sopSigs) {
+        const sop = sopList.find(s => s.id === sig.sop_id)
+        if (sop && sig.version_number === sop.current_version) {
+          sigMap[sig.sop_id] = sig
         }
       }
+      setSopSignatures(sigMap)
 
-      // Load signatures (contracts) — both employee's own signature and the
-      // employer's countersignature for each contract, so the rendered body
-      // can show both inline. Filtered to current-version sigs only;
-      // historical sigs are version-pinned and not relevant for display here.
-      if (contractList.length > 0) {
-        const contractIds = contractList.map(c => c.id)
-        const { data: csigs } = await supabase
-          .from('contract_signatures')
-          .select('*')
-          .in('contract_id', contractIds)
-
-        if (csigs) {
-          const empSigs: Record<string, ContractSignature> = {}
-          const erSigs: Record<string, ContractSignature> = {}
-          for (const sig of csigs) {
-            const contract = contractList.find(c => c.id === sig.contract_id)
-            if (!contract || sig.version_number !== contract.current_version) continue
-            if (sig.signer_role === 'employer') {
-              erSigs[sig.contract_id] = sig
-            } else if (sig.employee_id === emp.id) {
-              empSigs[sig.contract_id] = sig
-            }
-          }
-          setContractSignatures(empSigs)
-          setContractEmployerSignatures(erSigs)
+      // Signatures (contracts) — employee's own + the employer countersignature,
+      // from the portal_documents payload. Current-version sigs only; historical
+      // sigs are version-pinned and not relevant for display here.
+      const csigs = docs?.contract_signatures ?? []
+      const empSigs: Record<string, ContractSignature> = {}
+      const erSigs: Record<string, ContractSignature> = {}
+      for (const sig of csigs) {
+        const contract = contractList.find(c => c.id === sig.contract_id)
+        if (!contract || sig.version_number !== contract.current_version) continue
+        if (sig.signer_role === 'employer') {
+          erSigs[sig.contract_id] = sig
+        } else if (sig.employee_id === emp.id) {
+          empSigs[sig.contract_id] = sig
         }
       }
+      setContractSignatures(empSigs)
+      setContractEmployerSignatures(erSigs)
 
-      // Phase E — JD signing step in onboarding. When the candidate has an
-      // applied_for_jd_id, fetch the JD (must be published or archived for
-      // their RLS read to succeed) and any existing signature against its
-      // current_version. Both feed into CandidateOnboarding below.
+      // Onboarding JD step — the applied-for JD and the employee's signature
+      // arrive in the portal_documents payload (no direct reads).
       if (emp.applied_for_jd_id) {
-        const [{ data: jd }, { data: existingSig }] = await Promise.all([
-          supabase.from('job_descriptions').select('*').eq('id', emp.applied_for_jd_id).maybeSingle(),
-          supabase
-            .from('job_description_signatures')
-            .select('*')
-            .eq('job_description_id', emp.applied_for_jd_id)
-            .eq('employee_id', emp.id)
-            .order('signed_at', { ascending: false })
-            .limit(1)
-            .maybeSingle(),
-        ])
-        setAppliedForJd((jd as JobDescription | null) ?? null)
+        const jd = docs?.applied_jd ?? null
+        const existingSig = docs?.jd_signature ?? null
+        setAppliedForJd(jd)
         // Only treat the signature as valid if it's against the JD's
         // current_version — an amended JD requires a fresh ack.
-        if (jd && existingSig && existingSig.version_number === (jd as JobDescription).current_version) {
-          setJdSignature(existingSig as JobDescriptionSignature)
+        if (jd && existingSig && existingSig.version_number === jd.current_version) {
+          setJdSignature(existingSig)
         } else {
           setJdSignature(null)
         }
