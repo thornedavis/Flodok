@@ -7,7 +7,7 @@ import { buildContractDocumentHash, captureSignatureIp, getUserAgent } from '../
 import { docToMarkdown, type DocumentDoc } from '../../lib/documentDoc'
 import { computeProfileSections, profileCompletionPercent } from '../../lib/candidateProfile'
 import { DocumentUpload } from '../DocumentUpload'
-import type { Contract, ContractSignature, Employee, JobDescription, JobDescriptionSignature, Organization } from '../../types/aliases'
+import type { Contract, ContractSignature, Employee, EmployeeEmergencyContact, JobDescription, JobDescriptionSignature, Organization } from '../../types/aliases'
 
 ensureSignatureFontsLoaded()
 
@@ -23,6 +23,14 @@ type PortalSignContractRpc = (fn: 'portal_sign_contract', args: {
 type PortalSignJdRpc = (fn: 'portal_sign_jd', args: {
   emp_slug: string; emp_token: string; p_jd_id: string; p_typed_name: string; p_signature_font: string | null
 }) => Promise<{ data: JobDescriptionSignature | null; error: { message: string } | null }>
+
+// Onboarding RPCs (migration 140) — token-validated, typed casts until
+// database.ts is regenerated.
+type PortalUpdateProfileRpc = (fn: 'portal_update_onboarding_profile', args: { emp_slug: string; emp_token: string; p_patch: Record<string, string | null> }) => Promise<{ data: Employee | null; error: { message: string } | null }>
+type PortalGetEmployeeRpc = (fn: 'portal_get_employee', args: { emp_slug: string; emp_token: string }) => Promise<{ data: Employee | null; error: { message: string } | null }>
+type PortalAdvanceToSignedRpc = (fn: 'portal_advance_to_signed', args: { emp_slug: string; emp_token: string }) => Promise<{ data: Employee | null; error: { message: string } | null }>
+type PortalGetEmergencyContactRpc = (fn: 'portal_get_emergency_contact', args: { emp_slug: string; emp_token: string }) => Promise<{ data: EmployeeEmergencyContact | null; error: { message: string } | null }>
+type PortalUpsertEmergencyContactRpc = (fn: 'portal_upsert_emergency_contact', args: { emp_slug: string; emp_token: string; p_name: string; p_relationship: string; p_phone: string }) => Promise<{ data: EmployeeEmergencyContact | null; error: { message: string } | null }>
 
 interface Props {
   employee: Employee
@@ -83,8 +91,11 @@ export function CandidateOnboarding({
     if (employee.lifecycle_stage !== 'offered') return
     if (activeContract && !opts.contractSigned) return
     if (requiresJdSig && !opts.jdSigned) return
-    await supabase.from('employees').update({ lifecycle_stage: 'signed' }).eq('id', employee.id)
-    setEmployee(prev => ({ ...prev, lifecycle_stage: 'signed' }))
+    // Server re-validates the required signatures exist before advancing.
+    const { data } = await (supabase.rpc as unknown as PortalAdvanceToSignedRpc)('portal_advance_to_signed', {
+      emp_slug: employee.slug, emp_token: employee.access_token,
+    })
+    if (data?.lifecycle_stage === 'signed') setEmployee(prev => ({ ...prev, lifecycle_stage: 'signed' }))
   }
 
   const stepIndex = Math.min(STEP_ORDER.indexOf(step) + 1, TOTAL_STEPS)
@@ -662,18 +673,17 @@ function PersonalStep({ employee, onSaved, onBack }: {
     if (saving) return
     setSaving(true)
     setError('')
-    const { data, error: updateError } = await supabase
-      .from('employees')
-      .update({
+    const { data, error: updateError } = await (supabase.rpc as unknown as PortalUpdateProfileRpc)('portal_update_onboarding_profile', {
+      emp_slug: employee.slug,
+      emp_token: employee.access_token,
+      p_patch: {
         ktp_nik: ktpNik.trim() || null,
         date_of_birth: dob || null,
         place_of_birth: placeOfBirth.trim() || null,
         address: address.trim() || null,
         postal_code: postalCode.trim() || null,
-      })
-      .eq('id', employee.id)
-      .select()
-      .single()
+      },
+    })
     if (updateError || !data) {
       setSaving(false)
       setError(updateError?.message || t.onboardingError)
@@ -779,17 +789,16 @@ function BankingStep({ employee, onSaved, onBack }: {
     if (saving) return
     setSaving(true)
     setError('')
-    const { data, error: updateError } = await supabase
-      .from('employees')
-      .update({
+    const { data, error: updateError } = await (supabase.rpc as unknown as PortalUpdateProfileRpc)('portal_update_onboarding_profile', {
+      emp_slug: employee.slug,
+      emp_token: employee.access_token,
+      p_patch: {
         npwp: npwp.trim() || null,
         bank_name: bankName.trim() || null,
         bank_account_number: accountNumber.trim() || null,
         bank_account_holder: accountHolder.trim() || null,
-      })
-      .eq('id', employee.id)
-      .select()
-      .single()
+      },
+    })
     if (updateError || !data) {
       setSaving(false)
       setError(updateError?.message || t.onboardingError)
@@ -878,18 +887,17 @@ function EmergencyStep({ employee, onSaved, onBack }: {
   const [relationship, setRelationship] = useState('')
   const [phone, setPhone] = useState('')
   const [loading, setLoading] = useState(true)
-  const [existingId, setExistingId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
   // Load any existing emergency contact so we can edit rather than duplicate.
   useEffect(() => {
     let cancelled = false
-    supabase.from('employee_emergency_contacts').select('*').eq('employee_id', employee.id).order('created_at').limit(1).maybeSingle()
+    const getContact = supabase.rpc as unknown as PortalGetEmergencyContactRpc
+    getContact('portal_get_emergency_contact', { emp_slug: employee.slug, emp_token: employee.access_token })
       .then(({ data }) => {
         if (cancelled) return
         if (data) {
-          setExistingId(data.id)
           setName(data.name)
           setRelationship(data.relationship)
           setPhone(data.phone)
@@ -907,32 +915,15 @@ function EmergencyStep({ employee, onSaved, onBack }: {
     setSaving(true)
     setError('')
 
-    if (existingId) {
-      const { error: updateError } = await supabase
-        .from('employee_emergency_contacts')
-        .update({
-          name: name.trim(),
-          relationship: relationship.trim(),
-          phone: phone.trim(),
-        })
-        .eq('id', existingId)
-      setSaving(false)
-      if (updateError) { setError(updateError.message); return }
-      onSaved()
-      return
-    }
-
-    const { error: insertError } = await supabase
-      .from('employee_emergency_contacts')
-      .insert({
-        org_id: employee.org_id,
-        employee_id: employee.id,
-        name: name.trim(),
-        relationship: relationship.trim(),
-        phone: phone.trim(),
-      })
+    const { error: upsertError } = await (supabase.rpc as unknown as PortalUpsertEmergencyContactRpc)('portal_upsert_emergency_contact', {
+      emp_slug: employee.slug,
+      emp_token: employee.access_token,
+      p_name: name.trim(),
+      p_relationship: relationship.trim(),
+      p_phone: phone.trim(),
+    })
     setSaving(false)
-    if (insertError) { setError(insertError.message); return }
+    if (upsertError) { setError(upsertError.message); return }
     onSaved()
   }
 
@@ -1010,23 +1001,18 @@ function DocsStep({ employee, onSaved, onSkip, onBack }: {
   const [error, setError] = useState('')
 
   async function persistField(field: 'ktp_photo_url' | 'kk_photo_url', url: string | null) {
-    const update: { ktp_photo_url?: string | null; kk_photo_url?: string | null } =
-      field === 'ktp_photo_url' ? { ktp_photo_url: url } : { kk_photo_url: url }
-    const { error: updateError } = await supabase
-      .from('employees')
-      .update(update)
-      .eq('id', employee.id)
+    const { error: updateError } = await (supabase.rpc as unknown as PortalUpdateProfileRpc)('portal_update_onboarding_profile', {
+      emp_slug: employee.slug, emp_token: employee.access_token, p_patch: { [field]: url },
+    })
     if (updateError) setError(updateError.message)
   }
 
   async function handleContinue() {
     setSaving(true)
     setError('')
-    const { data, error: updateError } = await supabase
-      .from('employees')
-      .select('*')
-      .eq('id', employee.id)
-      .single()
+    const { data, error: updateError } = await (supabase.rpc as unknown as PortalGetEmployeeRpc)('portal_get_employee', {
+      emp_slug: employee.slug, emp_token: employee.access_token,
+    })
     setSaving(false)
     if (updateError || !data) {
       setError(updateError?.message || t.onboardingError)
