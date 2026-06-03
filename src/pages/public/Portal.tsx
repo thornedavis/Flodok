@@ -77,6 +77,27 @@ type PortalSignContractRpc = (fn: 'portal_sign_contract', args: {
   p_user_agent: string | null
 }) => Promise<{ data: ContractSignature | null; error: { message: string } | null }>
 
+// portal_feed (migration 138) — the employee's feed events, newest first.
+type PortalFeedRpc = (fn: 'portal_feed', args: { emp_slug: string; emp_token: string; p_limit?: number }) => Promise<{
+  data: FeedEvent[] | null
+  error: { message: string } | null
+}>
+
+// portal_document_versions (migration 138) — version history for one SOP/contract.
+type PortalDocVersionsRpc = (fn: 'portal_document_versions', args: {
+  emp_slug: string
+  emp_token: string
+  p_doc_type: 'sop' | 'contract'
+  p_doc_id: string
+}) => Promise<{ data: Array<SopVersion | ContractVersion> | null; error: { message: string } | null }>
+
+// The "recent activity" strip shows only achievement / bonus / spotlight events;
+// derived from the full feed payload so it needs no separate query.
+const INFORMATIONAL_EVENT_TYPES = ['achievement_unlocked', 'bonus_awarded', 'spotlight_published']
+function recentInformationalFrom(feed: FeedEvent[]): FeedEvent[] {
+  return feed.filter(e => INFORMATIONAL_EVENT_TYPES.includes(e.event_type)).slice(0, 5)
+}
+
 // Returns the first day of the current month in Asia/Jakarta TZ as YYYY-MM-01.
 // Mirrors the SQL `current_period_month()` so client and server agree on which
 // month is "current" regardless of the user's local timezone.
@@ -373,20 +394,11 @@ export function Portal() {
       const advanced = await advanceSignedToActive(emp.id, emp.join_date, emp.lifecycle_stage)
       setEmployee(advanced ? { ...emp, lifecycle_stage: 'active' } : emp)
 
-      // Unread count + recent informational feed (the feed reads move onto an
-      // RPC in a later stage; still direct here).
-      const [unreadResult, recentResult] = await Promise.all([
-        supabase.rpc('portal_unread_count', { emp_slug: slug, emp_token: token }),
-        supabase
-          .from('feed_events')
-          .select('*')
-          .eq('employee_id', emp.id)
-          .in('event_type', ['achievement_unlocked', 'bonus_awarded', 'spotlight_published'])
-          .order('created_at', { ascending: false })
-          .limit(5),
-      ])
+      // Unread count for the notification bell. The feed itself (and the
+      // recent-informational subset derived from it) loads via portal_feed in
+      // the effect below.
+      const unreadResult = await supabase.rpc('portal_unread_count', { emp_slug: slug, emp_token: token })
       if (typeof unreadResult.data === 'number') setUnreadInformational(unreadResult.data)
-      if (recentResult.data) setRecentInformational(recentResult.data)
 
       setOrg(docs?.org ?? null)
 
@@ -485,33 +497,34 @@ export function Portal() {
 
   async function loadFeedEvents() {
     if (!employee) return
-    // Bumped to 200 so the month strip has enough history to filter past
-    // months client-side without a follow-up query each time the user swipes.
-    const { data } = await supabase
-      .from('feed_events')
-      .select('*')
-      .eq('employee_id', employee.id)
-      .order('created_at', { ascending: false })
-      .limit(200)
-    if (data) setFeedEvents(data)
+    // 200 rows so the month strip has enough history to filter past months
+    // client-side. portal_feed (migration 138) validates slug+token.
+    const { data } = await (supabase.rpc as unknown as PortalFeedRpc)('portal_feed', {
+      emp_slug: employee.slug, emp_token: employee.access_token, p_limit: 200,
+    })
+    if (data) {
+      setFeedEvents(data)
+      setRecentInformational(recentInformationalFrom(data))
+    }
   }
 
   // Load feed eagerly once the employee is resolved — the activity feed
   // now lives at the bottom of the home tab rather than its own tab.
   useEffect(() => {
     if (!employee) return
-    const employeeId = employee.id
+    const empSlug = employee.slug
+    const empToken = employee.access_token
 
     let cancelled = false
 
     async function loadInitialFeed() {
-      const { data } = await supabase
-        .from('feed_events')
-        .select('*')
-        .eq('employee_id', employeeId)
-        .order('created_at', { ascending: false })
-        .limit(200)
-      if (!cancelled && data) setFeedEvents(data)
+      const { data } = await (supabase.rpc as unknown as PortalFeedRpc)('portal_feed', {
+        emp_slug: empSlug, emp_token: empToken, p_limit: 200,
+      })
+      if (!cancelled && data) {
+        setFeedEvents(data)
+        setRecentInformational(recentInformationalFrom(data))
+      }
     }
 
     void loadInitialFeed()
@@ -652,21 +665,21 @@ export function Portal() {
   // Lazy-load version history for the currently open document.
   async function loadHistory() {
     if (historyVersions.length > 0) { setHistoryOpen(true); return }
+    if (!slugToken) return
     setHistoryLoading(true)
     setHistoryOpen(true)
+    const lastDash = slugToken.lastIndexOf('-')
+    const slug = slugToken.slice(0, lastDash)
+    const token = slugToken.slice(lastDash + 1)
     if (openDocType === 'sop' && activeSop) {
-      const { data } = await supabase
-        .from('sop_versions')
-        .select('*')
-        .eq('sop_id', activeSop.id)
-        .order('version_number', { ascending: false })
+      const { data } = await (supabase.rpc as unknown as PortalDocVersionsRpc)('portal_document_versions', {
+        emp_slug: slug, emp_token: token, p_doc_type: 'sop', p_doc_id: activeSop.id,
+      })
       if (data) setHistoryVersions(data)
     } else if (openDocType === 'contract' && activeContract) {
-      const { data } = await supabase
-        .from('contract_versions')
-        .select('*')
-        .eq('contract_id', activeContract.id)
-        .order('version_number', { ascending: false })
+      const { data } = await (supabase.rpc as unknown as PortalDocVersionsRpc)('portal_document_versions', {
+        emp_slug: slug, emp_token: token, p_doc_type: 'contract', p_doc_id: activeContract.id,
+      })
       if (data) setHistoryVersions(data)
     }
     setHistoryLoading(false)
