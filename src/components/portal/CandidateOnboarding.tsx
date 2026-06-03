@@ -336,14 +336,8 @@ function SignStep({ employee, organization, activeContract, employerSignature, e
     // Best-effort: stamp the signer's public IP onto the row server-side.
     captureSignatureIp(data.id, { type: 'portal', slug: employee.slug, accessToken: employee.access_token })
 
-    await supabase.from('feed_events').insert({
-      org_id: employee.org_id,
-      employee_id: employee.id,
-      event_type: 'contract_signed',
-      title: activeContract.title,
-      description: `Version ${activeContract.current_version}`,
-      metadata: { contract_id: activeContract.id, version: activeContract.current_version, signature_font: selectedFont },
-    })
+    // The contract_signed feed event is emitted server-side by the
+    // contract_signatures AFTER INSERT trigger (migration 136).
     onSigned(data)
   }
 
