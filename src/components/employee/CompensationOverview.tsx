@@ -99,6 +99,9 @@ export function CompensationOverview({
   const [adjustmentNet, setAdjustmentNet] = useState(0)
   const [frozen, setFrozen] = useState(false)
   const [maxAdjustmentIdr, setMaxAdjustmentIdr] = useState<number | null>(null)
+  // Frozen snapshot for a closed period (base/allowance/payout captured at close,
+  // migration 144); null for the current/open period, which is computed live.
+  const [settlement, setSettlement] = useState<{ base_idr: number; allowance_idr: number; adjustment_net_idr: number; payout_idr: number } | null>(null)
 
   const [payAction, setPayAction] = useState<'reward' | 'penalise' | null>(null)
 
@@ -107,7 +110,8 @@ export function CompensationOverview({
   useEffect(() => {
     let cancelled = false
     async function load() {
-      const [adjRes, orgRes] = await Promise.all([
+      type SettlementRpc = (fn: 'admin_pay_settlement', args: { p_employee_id: string; p_period_month: string }) => Promise<{ data: { base_idr: number; allowance_idr: number; adjustment_net_idr: number; payout_idr: number } | null }>
+      const [adjRes, orgRes, setlRes] = await Promise.all([
         supabase
           .from('pay_adjustments')
           .select('amount_idr, paid_out_at')
@@ -118,22 +122,27 @@ export function CompensationOverview({
           .select('max_bonus_idr')
           .eq('id', user.org_id)
           .single(),
+        (supabase.rpc as unknown as SettlementRpc)('admin_pay_settlement', { p_employee_id: employeeId, p_period_month: period }),
       ])
       if (cancelled) return
       const rows = adjRes.data || []
       setAdjustmentNet(rows.reduce((s, r) => s + (r.amount_idr || 0), 0))
       setFrozen(rows.some(r => r.paid_out_at != null))
       setMaxAdjustmentIdr(orgRes.data?.max_bonus_idr ?? null)
+      setSettlement(setlRes.data ?? null)
     }
     load()
     return () => { cancelled = true }
   }, [employeeId, period, refreshKey, user.org_id])
 
-  const baseWage = contract?.base_wage_idr ?? 0
-  const allowance = contract?.allowance_idr ?? 0
-  const hasContract = !!contract && baseWage > 0
+  // For a settled (closed) period, show the frozen snapshot rather than
+  // recomputing from the current contract — so past months don't move.
+  const settled = settlement != null
+  const baseWage = settled ? settlement.base_idr : (contract?.base_wage_idr ?? 0)
+  const allowance = settled ? settlement.allowance_idr : (contract?.allowance_idr ?? 0)
+  const hasContract = settled ? true : (!!contract && baseWage > 0)
   const baseline = baseWage + allowance
-  const total = Math.max(0, baseline + adjustmentNet)
+  const total = settled ? settlement.payout_idr : Math.max(0, baseline + adjustmentNet)
   const delta = total - baseline
 
   const adjustmentColor = adjustmentNet > 0
@@ -154,7 +163,7 @@ export function CompensationOverview({
     { key: 'adjustment', valueIdr: Math.max(0, adjustmentNet), color: '#3b82f6', icon: <CoinPath /> },
   ]
 
-  const canAdjust = isAdmin && hasContract && !readOnly && !frozen
+  const canAdjust = isAdmin && hasContract && !readOnly && !frozen && !settled
 
   const netLabel = `${adjustmentNet > 0 ? '+' : adjustmentNet < 0 ? '−' : ''}${formatIdr(Math.abs(adjustmentNet), lang)}`
 
