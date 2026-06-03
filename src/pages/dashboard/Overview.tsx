@@ -1065,9 +1065,9 @@ function CompensationTotal({ orgId, t, lang }: { orgId: string; t: Translations;
       const [employeesRes, contractsRes] = await Promise.all([
         supabase
           .from('employees')
-          .select('id, status')
+          .select('id')
           .eq('org_id', orgId)
-          .in('status', ['probation', 'active']),
+          .eq('lifecycle_stage', 'active'),
         supabase
           .from('contracts')
           .select('employee_id, base_wage_idr, allowance_idr')
