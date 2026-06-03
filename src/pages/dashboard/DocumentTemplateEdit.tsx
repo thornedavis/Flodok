@@ -372,7 +372,7 @@ export function DocumentTemplateEdit({ user }: { user: User }) {
         stickyToolbar
         stickyToolbarOffset={`${EDITOR_STICKY_TOP_PX}px`}
         mergeFields={{
-          scope: 'contract',
+          scope: type === 'contract' ? 'contract' : type === 'letter' ? 'letter' : 'sop',
           getContext: () => ({
             employee: null,
             organization,
