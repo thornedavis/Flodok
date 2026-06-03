@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useLang } from '../contexts/LanguageContext'
 
@@ -23,6 +23,28 @@ export function DocumentUpload({ employeeId, kind, photoUrl, onChange, label, di
   const { t } = useLang()
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
+
+  // employee_docs is a private bucket: photoUrl is the stored object path
+  // (legacy full public URLs are tolerated). Sign it on render — authenticated
+  // org members can sign; an anon (portal) caller can't, so it falls back to
+  // the just-uploaded local preview or the placeholder.
+  const [signedSrc, setSignedSrc] = useState<string | null>(null)
+  const [localPreview, setLocalPreview] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    if (!photoUrl) { setSignedSrc(null); return }
+    const path = photoUrl.includes('://')
+      ? (photoUrl.match(/\/employee_docs\/([^?]+)/)?.[1] ?? null)
+      : photoUrl
+    if (!path) { setSignedSrc(null); return }
+    supabase.storage.from('employee_docs').createSignedUrl(path, 3600).then(({ data }) => {
+      if (!cancelled) setSignedSrc(data?.signedUrl ?? null)
+    })
+    return () => { cancelled = true }
+  }, [photoUrl])
+
+  const displaySrc = localPreview ?? signedSrc
 
   async function handleSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -54,8 +76,9 @@ export function DocumentUpload({ employeeId, kind, photoUrl, onChange, label, di
       return
     }
 
-    const { data: { publicUrl } } = supabase.storage.from('employee_docs').getPublicUrl(path)
-    onChange(`${publicUrl}?t=${Date.now()}`)
+    // Store the object path; the bucket is private and signed on render.
+    setLocalPreview(URL.createObjectURL(file))
+    onChange(path)
     setUploading(false)
   }
 
@@ -63,10 +86,10 @@ export function DocumentUpload({ employeeId, kind, photoUrl, onChange, label, di
     if (!photoUrl) return
     setUploading(true)
     setError('')
-    const match = photoUrl.match(/\/employee_docs\/([^?]+)/)
-    if (match) {
-      await supabase.storage.from('employee_docs').remove([match[1]])
-    }
+    const path = photoUrl.includes('://') ? (photoUrl.match(/\/employee_docs\/([^?]+)/)?.[1] ?? null) : photoUrl
+    if (path) await supabase.storage.from('employee_docs').remove([path])
+    setLocalPreview(null)
+    setSignedSrc(null)
     onChange(null)
     setUploading(false)
   }
@@ -82,8 +105,8 @@ export function DocumentUpload({ employeeId, kind, photoUrl, onChange, label, di
           backgroundColor: 'var(--color-bg-tertiary)',
         }}
       >
-        {photoUrl ? (
-          <img src={photoUrl} alt={label || ''} className="h-full w-full object-cover" />
+        {displaySrc ? (
+          <img src={displaySrc} alt={label || ''} className="h-full w-full object-cover" />
         ) : (
           <div className="flex h-full w-full items-center justify-center" style={{ color: 'var(--color-text-tertiary)' }}>
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
