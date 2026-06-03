@@ -20,6 +20,7 @@ type DisplayType =
   | 'candidate'
   | 'sop'
   | 'contract'
+  | 'letter'
   | 'job_description'
   | 'hiring_request'
   | 'spotlight_post'
@@ -34,6 +35,7 @@ const FILTERS: Array<{ key: 'all' | DisplayType; labelKey: keyof Translations }>
   { key: 'candidate', labelKey: 'trashFilterCandidates' },
   { key: 'sop', labelKey: 'trashFilterSops' },
   { key: 'contract', labelKey: 'trashFilterContracts' },
+  { key: 'letter', labelKey: 'trashFilterLetters' },
   { key: 'job_description', labelKey: 'trashFilterJobDescriptions' },
   { key: 'hiring_request', labelKey: 'trashFilterHiringRequests' },
   { key: 'spotlight_post', labelKey: 'trashFilterSpotlight' },
@@ -89,6 +91,7 @@ export function Trash({ user }: { user: User }) {
       candidate: 0,
       sop: 0,
       contract: 0,
+      letter: 0,
       job_description: 0,
       hiring_request: 0,
       spotlight_post: 0,
@@ -270,6 +273,7 @@ function TypeBadge({ type, t }: { type: DisplayType; t: Translations }) {
     type === 'candidate' ? t.trashTypeCandidate :
     type === 'sop' ? t.trashTypeSop :
     type === 'contract' ? t.trashTypeContract :
+    type === 'letter' ? t.trashTypeLetter :
     type === 'job_description' ? t.trashTypeJobDescription :
     type === 'hiring_request' ? t.trashTypeHiringRequest :
     t.trashTypeSpotlightPost

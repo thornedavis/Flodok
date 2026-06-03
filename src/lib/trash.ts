@@ -4,6 +4,7 @@ export type TrashItemType =
   | 'employee'
   | 'sop'
   | 'contract'
+  | 'letter'
   | 'job_description'
   | 'hiring_request'
   | 'spotlight_post'
