@@ -234,6 +234,12 @@ function AttachmentRow({
   onDelete: () => void
 }) {
   const { t } = useLang()
+  // employee_attachments is private: sign the stored path on click rather than
+  // linking the (now non-working) public URL.
+  async function openAttachment() {
+    const { data } = await supabase.storage.from('employee_attachments').createSignedUrl(item.file_path, 3600)
+    if (data?.signedUrl) window.open(data.signedUrl, '_blank', 'noopener,noreferrer')
+  }
   return (
     <li
       className="flex items-center gap-3 rounded-lg border px-3 py-2"
@@ -241,16 +247,15 @@ function AttachmentRow({
     >
       <FileIcon mime={item.mime_type} />
       <div className="min-w-0 flex-1">
-        <a
-          href={item.file_url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="block truncate text-sm font-medium hover:underline"
+        <button
+          type="button"
+          onClick={openAttachment}
+          className="block w-full truncate text-left text-sm font-medium hover:underline"
           style={{ color: 'var(--color-text)' }}
           title={item.file_name}
         >
           {item.file_name}
-        </a>
+        </button>
         <div className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
           {formatSize(item.file_size)}
         </div>
