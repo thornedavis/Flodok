@@ -136,6 +136,11 @@ export function DocumentEditor({
         heading: { levels: [2, 3, 4] },
         blockquote: false,
         horizontalRule: false,
+        // Link and Underline are configured explicitly below (custom
+        // openOnClick / editor-link class), so disable StarterKit's bundled
+        // copies to avoid duplicate-extension-name warnings.
+        link: false,
+        underline: false,
       }),
       DocumentNode,
       BilingualBlockWithView,
