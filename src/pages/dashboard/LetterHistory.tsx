@@ -1,9 +1,11 @@
 // Version history viewer for Letters.
 //
-// letter_versions snapshots markdown (content_markdown / _id) but not the
-// resolved output, so the "rendered" view resolves merge fields at view
-// time against the live recipient / sender / org (mirroring how the editor
-// resolves them). The shared VersionRail/VersionPane (from SOPHistory)
+// letter_versions snapshots the structured `content_doc` per issue; the
+// content_markdown columns are written empty by issue_letter and aren't used.
+// We project content_doc -> markdown with docToMarkdown (per language) and,
+// because letters carry merge fields, resolve them at view time against the
+// live recipient / sender / org for the "rendered" view (mirroring how the
+// editor resolves them). The shared VersionRail/VersionPane (from SOPHistory)
 // expect a non-null `changed_by` plus `translation_status` /
 // `translation_error`, none of which letter versions carry, so we
 // synthesize them.
@@ -14,6 +16,7 @@ import { diffLines } from 'diff'
 import { supabase } from '../../lib/supabase'
 import { documentEditPath } from '../../lib/documentTypes'
 import { useLang } from '../../contexts/LanguageContext'
+import { docToMarkdown } from '../../lib/documentDoc'
 import { renderMergeFields } from '../../lib/mergeFields'
 import { VersionRail, VersionPane } from './SOPHistory'
 import type { Letter, LetterVersion, Employee, Organization } from '../../types/aliases'
@@ -83,7 +86,7 @@ export function LetterHistory() {
 
   const displayBody = useMemo(() => {
     if (!selected) return ''
-    const raw = activeLang === 'en' ? selected.content_markdown : selected.content_markdown_id
+    const raw = docToMarkdown(selected.content_doc, activeLang)
     if (!raw) return ''
     if (viewMode === 'template') return raw
     return renderMergeFields(raw, { employee: recipient, organization, today: new Date(), lang: activeLang, signer: sender ? { name: sender.name, title: sender.title } : null })
@@ -91,7 +94,7 @@ export function LetterHistory() {
 
   const currentBody = useMemo(() => {
     if (!letter) return ''
-    const raw = activeLang === 'en' ? letter.content_markdown : letter.content_markdown_id
+    const raw = docToMarkdown(letter.content_doc, activeLang)
     if (!raw) return ''
     if (viewMode === 'template') return raw
     return renderMergeFields(raw, { employee: recipient, organization, today: new Date(), lang: activeLang, signer: sender ? { name: sender.name, title: sender.title } : null })
@@ -99,7 +102,7 @@ export function LetterHistory() {
 
   const idUnavailableReason = useMemo((): 'not-captured' | 'failed' | null => {
     if (!selected || activeLang !== 'id') return null
-    return selected.content_markdown_id ? null : 'not-captured'
+    return docToMarkdown(selected.content_doc, 'id').trim() ? null : 'not-captured'
   }, [selected, activeLang])
 
   const diffResult = useMemo(() => {
