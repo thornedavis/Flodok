@@ -11,6 +11,19 @@ import type { Contract, ContractSignature, Employee, JobDescription, JobDescript
 
 ensureSignatureFontsLoaded()
 
+// Portal signing RPCs (migrations 136 / 139) — typed casts until database.ts is
+// regenerated. Both validate slug+token server-side; feed events are emitted by
+// AFTER INSERT triggers on the signature tables.
+type PortalSignContractRpc = (fn: 'portal_sign_contract', args: {
+  emp_slug: string; emp_token: string; p_contract_id: string; p_typed_name: string
+  p_signature_font: string | null; p_consent_text: string | null
+  p_document_hash: string | null; p_user_agent: string | null
+}) => Promise<{ data: ContractSignature | null; error: { message: string } | null }>
+
+type PortalSignJdRpc = (fn: 'portal_sign_jd', args: {
+  emp_slug: string; emp_token: string; p_jd_id: string; p_typed_name: string; p_signature_font: string | null
+}) => Promise<{ data: JobDescriptionSignature | null; error: { message: string } | null }>
+
 interface Props {
   employee: Employee
   organization: Organization | null
@@ -309,23 +322,18 @@ function SignStep({ employee, organization, activeContract, employerSignature, e
     setSigning(true)
     setError('')
     const documentHash = await buildContractDocumentHash(activeContract.content_markdown, activeContract.current_version)
-    const { data, error: sigError } = await supabase
-      .from('contract_signatures')
-      .insert({
-        contract_id: activeContract.id,
-        version_number: activeContract.current_version,
-        employee_id: employee.id,
-        typed_name: typedName.trim(),
-        signature_font: selectedFont,
-        signer_role: 'employee',
-        consent_text: t.onboardingSignConsent,
-        document_hash: documentHash,
-        user_agent: getUserAgent(),
-        signer_email: employee.email || null,
-        signer_phone: employee.phone || null,
-      })
-      .select()
-      .single()
+    // Token-validated server-side signing (migration 136); signer_email/phone
+    // resolved server-side, feed event via the contract_signatures trigger.
+    const { data, error: sigError } = await (supabase.rpc as unknown as PortalSignContractRpc)('portal_sign_contract', {
+      emp_slug: employee.slug,
+      emp_token: employee.access_token,
+      p_contract_id: activeContract.id,
+      p_typed_name: typedName.trim(),
+      p_signature_font: selectedFont,
+      p_consent_text: t.onboardingSignConsent,
+      p_document_hash: documentHash,
+      p_user_agent: getUserAgent(),
+    })
 
     if (sigError || !data) {
       setSigning(false)
@@ -503,17 +511,13 @@ function SignJdStep({ employee, jd, jdSignature, lang, onSigned, onSkipBack }: {
     if (!typedName.trim() || !agreed) return
     setSigning(true)
     setError('')
-    const { data, error: sigError } = await supabase
-      .from('job_description_signatures')
-      .insert({
-        job_description_id: jd.id,
-        version_number: jd.current_version,
-        employee_id: employee.id,
-        typed_name: typedName.trim(),
-        signature_font: selectedFont,
-      })
-      .select()
-      .single()
+    const { data, error: sigError } = await (supabase.rpc as unknown as PortalSignJdRpc)('portal_sign_jd', {
+      emp_slug: employee.slug,
+      emp_token: employee.access_token,
+      p_jd_id: jd.id,
+      p_typed_name: typedName.trim(),
+      p_signature_font: selectedFont,
+    })
 
     if (sigError || !data) {
       setSigning(false)
@@ -525,15 +529,9 @@ function SignJdStep({ employee, jd, jdSignature, lang, onSigned, onSkipBack }: {
     // useful for audit if a question ever arises about who acknowledged.
     captureSignatureIp(data.id, { type: 'portal', slug: employee.slug, accessToken: employee.access_token })
 
-    await supabase.from('feed_events').insert({
-      org_id: employee.org_id,
-      employee_id: employee.id,
-      event_type: 'job_description_signed',
-      title: jd.title,
-      description: `Version ${jd.current_version}`,
-      metadata: { job_description_id: jd.id, version: jd.current_version, signature_font: selectedFont },
-    })
-    onSigned(data as JobDescriptionSignature)
+    // The job_description_signed feed event is emitted server-side by the
+    // job_description_signatures AFTER INSERT trigger (migration 139).
+    onSigned(data)
   }
 
   if (jdSignature) {
