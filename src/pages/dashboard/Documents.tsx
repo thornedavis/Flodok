@@ -66,10 +66,15 @@ export function Documents({ user }: { user: User }) {
     <div className="py-8">
       <div className={SHELL_PAD}>
         <div className={SHELL_INNER}>
-          <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-            <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>
-              {t.documentsTitle}
-            </h1>
+          <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>
+                {t.documentsTitle}
+              </h1>
+              <p className="mt-1 max-w-3xl text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+                {t.documentsSubtitle}
+              </p>
+            </div>
           </div>
         </div>
       </div>

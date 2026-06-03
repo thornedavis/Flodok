@@ -88,6 +88,7 @@ export const translations = {
     navSops: 'SOPs',
     navContracts: 'Contracts',
     documentsTitle: 'Documents',
+    documentsSubtitle: 'Create, organize, and track every document your team relies on.',
     documentsTabAll: 'All',
     documentsTabSops: 'SOPs',
     documentsTabContracts: 'Contracts',
@@ -143,6 +144,7 @@ export const translations = {
 
     // Manager app — Inbox page
     inboxTitle: 'Inbox',
+    inboxSubtitle: 'Signatures, approvals, and deadlines that need your attention.',
     inboxTabAll: 'All inbox',
     inboxTabActionRequired: 'Action required',
     inboxTabAwaitingOthers: 'Awaiting others',
@@ -173,6 +175,7 @@ export const translations = {
 
     // Manager app — Overview page
     overviewTitle: 'Dashboard',
+    overviewSubtitle: "See your team's activity, documents, and pending tasks at a glance.",
     overviewEmployees: 'Employees',
     overviewCandidates: 'Candidates',
     overviewActiveSops: 'Active SOPs',
@@ -182,6 +185,7 @@ export const translations = {
 
     // Manager app — Employees page
     employeesTitle: 'Employees',
+    employeesSubtitle: "Manage your team's profiles, contracts, and details.",
     addEmployee: 'Add employee',
     employeeCount: (n: number) => `${n} ${n === 1 ? 'employee' : 'employees'}`,
     noEmployeesYet: 'No employees yet. Add your first employee to get started.',
@@ -2218,6 +2222,7 @@ export const translations = {
     navSops: 'SOP',
     navContracts: 'Kontrak',
     documentsTitle: 'Dokumen',
+    documentsSubtitle: 'Buat, atur, dan pantau setiap dokumen yang diandalkan tim Anda.',
     documentsTabAll: 'Semua',
     documentsTabSops: 'SOP',
     documentsTabContracts: 'Kontrak',
@@ -2272,6 +2277,7 @@ export const translations = {
 
     // Manager app — Inbox page
     inboxTitle: 'Kotak Masuk',
+    inboxSubtitle: 'Tanda tangan, persetujuan, dan tenggat yang memerlukan perhatian Anda.',
     inboxTabAll: 'Semua kotak masuk',
     inboxTabActionRequired: 'Perlu tindakan',
     inboxTabAwaitingOthers: 'Menunggu pihak lain',
@@ -2302,6 +2308,7 @@ export const translations = {
 
     // Manager app — Overview page
     overviewTitle: 'Dasbor',
+    overviewSubtitle: 'Lihat sekilas aktivitas tim, dokumen, dan tugas yang tertunda.',
     overviewEmployees: 'Karyawan',
     overviewCandidates: 'Kandidat',
     overviewActiveSops: 'SOP Aktif',
@@ -2311,6 +2318,7 @@ export const translations = {
 
     // Manager app — Employees page
     employeesTitle: 'Karyawan',
+    employeesSubtitle: 'Kelola profil, kontrak, dan detail tim Anda.',
     addEmployee: 'Tambah karyawan',
     employeeCount: (n: number) => `${n} karyawan`,
     noEmployeesYet: 'Belum ada karyawan. Tambahkan karyawan pertama Anda untuk memulai.',

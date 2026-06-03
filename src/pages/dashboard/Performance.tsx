@@ -11,6 +11,7 @@ import { Skeleton } from '../../components/Skeleton'
 import { FilterPill, FilterPanel, FilterSearchInput, MultiSelectDropdown, type FilterPanelSection } from '../../components/FilterControls'
 import { MonthStrip } from '../../components/portal/MonthStrip'
 import { ActionsMenuButton } from '../../components/ActionsMenuButton'
+import { useFullWidthLayout } from '../../components/Layout'
 import { useBilling } from '../../contexts/BillingContext'
 import type { User, AchievementDefinition } from '../../types/aliases'
 
@@ -44,6 +45,13 @@ const VIEW_KEY = 'flodok-performance-view'
 const COLUMNS_KEY = 'flodok-performance-columns'
 const COLUMN_ORDER: ColumnKey[] = ['department', 'status', 'adjustment', 'badges', 'xp']
 const DEFAULT_COLUMNS: ColumnKey[] = ['department', 'adjustment', 'badges']
+
+// Full-width canvas shell. The page renders edge-to-edge (useFullWidthLayout)
+// so the month-picker band can span the full content width; the header,
+// toolbar, and roster re-constrain themselves with these — the same pattern
+// the Documents page uses for its "Start a new document" band.
+const SHELL_PAD = 'px-6 md:px-10'
+const SHELL_INNER = 'mx-auto max-w-6xl'
 
 function loadView(): PerfView {
   if (typeof window === 'undefined') return 'cards'
@@ -86,6 +94,10 @@ export function Performance({ user }: { user: User }) {
   const { isAdmin } = useRole(user)
   const { canWrite } = useBilling()
   const navigate = useNavigate()
+
+  // Render edge-to-edge so the month-picker band can span the full content
+  // width; the sections below re-constrain with SHELL_PAD + SHELL_INNER.
+  useFullWidthLayout()
   const [roster, setRoster] = useState<Roster | null>(null)
   const [loading, setLoading] = useState(true)
   const [definitions, setDefinitions] = useState<AchievementDefinition[]>([])
@@ -292,116 +304,137 @@ export function Performance({ user }: { user: User }) {
 
   if (!isAdmin) {
     return (
-      <div className="max-w-2xl">
-        <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{t.adminOnlyHint}</p>
+      <div className={`${SHELL_PAD} pt-8`}>
+        <div className={SHELL_INNER}>
+          <p className="max-w-2xl text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{t.adminOnlyHint}</p>
+        </div>
       </div>
     )
   }
 
   return (
     <div className="pb-20">
-      <header className="mb-4">
-        <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.performanceTitle}</h1>
-        <p className="mt-0.5 text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{t.performanceSubtitle}</p>
-      </header>
-
-      {/* Month picker with an inline This-month / All-time toggle. Picking a
-          month from the strip drops back into month mode. */}
-      <div className="mb-3">
-        <MonthStrip
-          selectedMonth={selectedMonth}
-          earliestMonth={earliestMonth}
-          currentMonth={baseCurrent}
-          onSelect={month => { setSelectedMonth(month); setPeriodKind('month') }}
-          lang={lang}
-          muted={periodKind === 'all'}
-          trailing={<PeriodKindToggle value={periodKind} onChange={setPeriodKind} t={t} />}
-        />
+      {/* Header — re-constrained within the full-width canvas. */}
+      <div className={`${SHELL_PAD} pt-8 pb-5`}>
+        <div className={SHELL_INNER}>
+          <header>
+            <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.performanceTitle}</h1>
+            <p className="mt-0.5 text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{t.performanceSubtitle}</p>
+          </header>
+        </div>
       </div>
 
-      {/* Filter toolbar */}
-      <div className="sticky top-0 z-10 -mx-4 mb-3 bg-opacity-90 px-4 pb-2 pt-2 backdrop-blur" style={{ backgroundColor: 'var(--color-bg)' }}>
-        <div className="flex w-full flex-wrap items-center gap-2">
-          <ViewToggle view={view} onChange={setView} t={t} />
-          <FilterPanel triggerLabel={t.filterButtonLabel} sections={filterSections} onReset={resetFilters} />
-          {view === 'list' && (
-            <MultiSelectDropdown
-              label={t.columnsButtonLabel}
-              value={[...columns]}
-              onChange={next => setColumns(new Set(next as ColumnKey[]))}
-              options={COLUMN_ORDER.map(key => ({ id: key, label: columnLabel(key, t) }))}
+      {/* Month picker — a full-bleed band that frames the period selection,
+          mirroring the Documents "Start a new document" band: an edge-to-edge
+          surface with a re-constrained inner column. Picking a month from the
+          strip drops back into month mode. */}
+      <section
+        className="border-y py-3"
+        style={{ backgroundColor: 'var(--color-bg-secondary)', borderColor: 'var(--color-border)' }}
+      >
+        <div className={SHELL_PAD}>
+          <div className={SHELL_INNER}>
+            <MonthStrip
+              selectedMonth={selectedMonth}
+              earliestMonth={earliestMonth}
+              currentMonth={baseCurrent}
+              onSelect={month => { setSelectedMonth(month); setPeriodKind('month') }}
+              lang={lang}
+              muted={periodKind === 'all'}
+              trailing={<PeriodKindToggle value={periodKind} onChange={setPeriodKind} t={t} />}
             />
-          )}
-          {periodKind === 'month' && (
-            <FilterPill active={lenses.has('frozen')} onClick={() => toggleLens('frozen')}>{t.performanceLensFrozen}</FilterPill>
-          )}
-          <FilterPill active={lenses.has('negative')} onClick={() => toggleLens('negative')}>{t.performanceLensNegative}</FilterPill>
-          <FilterPill active={lenses.has('nobadges')} onClick={() => toggleLens('nobadges')}>{t.performanceLensNoBadges}</FilterPill>
-          <div className="ml-auto w-full sm:w-56">
-            <FilterSearchInput value={search} onChange={setSearch} placeholder={t.performanceSearchPlaceholder} />
           </div>
         </div>
-        {periodKind === 'month' && !isCurrentPeriod && (
-          <p className="mt-2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.performancePastPeriodNote}</p>
-        )}
-      </div>
+      </section>
 
-      {loading ? (
-        <ul className={view === 'list' ? 'flex flex-col gap-2' : 'grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3'} role="status" aria-busy="true">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <li key={i} className="rounded-xl border p-3" style={{ borderColor: 'var(--color-border)' }}>
-              <div className="flex items-center gap-3">
-                <Skeleton className="h-10 w-10 shrink-0 rounded-full" />
-                <div className="min-w-0 flex-1">
-                  <Skeleton className="h-3.5 w-1/3" />
-                  <Skeleton className="mt-2 h-2.5 w-1/2" />
-                </div>
+      {/* Toolbar + roster — re-constrained. */}
+      <div className={`${SHELL_PAD} pt-5`}>
+        <div className={SHELL_INNER}>
+          {/* Filter toolbar */}
+          <div className="sticky top-0 z-10 -mx-4 mb-3 bg-opacity-90 px-4 pb-2 pt-2 backdrop-blur" style={{ backgroundColor: 'var(--color-bg)' }}>
+            <div className="flex w-full flex-wrap items-center gap-2">
+              <ViewToggle view={view} onChange={setView} t={t} />
+              <FilterPanel triggerLabel={t.filterButtonLabel} sections={filterSections} onReset={resetFilters} />
+              {view === 'list' && (
+                <MultiSelectDropdown
+                  label={t.columnsButtonLabel}
+                  value={[...columns]}
+                  onChange={next => setColumns(new Set(next as ColumnKey[]))}
+                  options={COLUMN_ORDER.map(key => ({ id: key, label: columnLabel(key, t) }))}
+                />
+              )}
+              {periodKind === 'month' && (
+                <FilterPill active={lenses.has('frozen')} onClick={() => toggleLens('frozen')}>{t.performanceLensFrozen}</FilterPill>
+              )}
+              <FilterPill active={lenses.has('negative')} onClick={() => toggleLens('negative')}>{t.performanceLensNegative}</FilterPill>
+              <FilterPill active={lenses.has('nobadges')} onClick={() => toggleLens('nobadges')}>{t.performanceLensNoBadges}</FilterPill>
+              <div className="ml-auto w-full sm:w-56">
+                <FilterSearchInput value={search} onChange={setSearch} placeholder={t.performanceSearchPlaceholder} />
               </div>
-            </li>
-          ))}
-        </ul>
-      ) : filtered.length === 0 ? (
-        <p className="py-8 text-center text-sm" style={{ color: 'var(--color-text-tertiary)' }}>
-          {roster && roster.rows.length === 0 ? t.performanceEmptyNoMembers : t.performanceEmptyNoMatch}
-        </p>
-      ) : view === 'list' ? (
-        <RosterTable
-          rows={filtered}
-          columns={visibleColumns}
-          sort={sort}
-          onSort={setSort}
-          isCurrentPeriod={canAct}
-          canWrite={canWrite}
-          adjustmentsEnabled={adjustmentsEnabled}
-          badgesEnabled={badgesEnabled}
-          lang={lang}
-          t={t}
-          onOpen={openEmployee}
-          onReward={row => setPayAction({ row, mode: 'reward' })}
-          onPenalise={row => setPayAction({ row, mode: 'penalise' })}
-          onAwardBadge={row => setBadgeAction(row)}
-        />
-      ) : (
-        <ul className="grid grid-cols-1 items-start gap-2 md:grid-cols-2 xl:grid-cols-3">
-          {filtered.map(row => (
-            <RosterItem
-              key={row.employee_id}
-              row={row}
-              view={view}
+            </div>
+            {periodKind === 'month' && !isCurrentPeriod && (
+              <p className="mt-2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.performancePastPeriodNote}</p>
+            )}
+          </div>
+
+          {loading ? (
+            <ul className={view === 'list' ? 'flex flex-col gap-2' : 'grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3'} role="status" aria-busy="true">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <li key={i} className="rounded-xl border p-3" style={{ borderColor: 'var(--color-border)' }}>
+                  <div className="flex items-center gap-3">
+                    <Skeleton className="h-10 w-10 shrink-0 rounded-full" />
+                    <div className="min-w-0 flex-1">
+                      <Skeleton className="h-3.5 w-1/3" />
+                      <Skeleton className="mt-2 h-2.5 w-1/2" />
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : filtered.length === 0 ? (
+            <p className="py-8 text-center text-sm" style={{ color: 'var(--color-text-tertiary)' }}>
+              {roster && roster.rows.length === 0 ? t.performanceEmptyNoMembers : t.performanceEmptyNoMatch}
+            </p>
+          ) : view === 'list' ? (
+            <RosterTable
+              rows={filtered}
+              columns={visibleColumns}
+              sort={sort}
+              onSort={setSort}
               isCurrentPeriod={canAct}
               canWrite={canWrite}
               adjustmentsEnabled={adjustmentsEnabled}
               badgesEnabled={badgesEnabled}
               lang={lang}
               t={t}
-              onOpen={() => openEmployee(row.employee_id)}
-              onReward={() => setPayAction({ row, mode: 'reward' })}
-              onPenalise={() => setPayAction({ row, mode: 'penalise' })}
-              onAwardBadge={() => setBadgeAction(row)}
+              onOpen={openEmployee}
+              onReward={row => setPayAction({ row, mode: 'reward' })}
+              onPenalise={row => setPayAction({ row, mode: 'penalise' })}
+              onAwardBadge={row => setBadgeAction(row)}
             />
-          ))}
-        </ul>
-      )}
+          ) : (
+            <ul className="grid grid-cols-1 items-start gap-2 md:grid-cols-2 xl:grid-cols-3">
+              {filtered.map(row => (
+                <RosterItem
+                  key={row.employee_id}
+                  row={row}
+                  view={view}
+                  isCurrentPeriod={canAct}
+                  canWrite={canWrite}
+                  adjustmentsEnabled={adjustmentsEnabled}
+                  badgesEnabled={badgesEnabled}
+                  lang={lang}
+                  t={t}
+                  onOpen={() => openEmployee(row.employee_id)}
+                  onReward={() => setPayAction({ row, mode: 'reward' })}
+                  onPenalise={() => setPayAction({ row, mode: 'penalise' })}
+                  onAwardBadge={() => setBadgeAction(row)}
+                />
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
 
       {payAction && roster && (
         <PayAdjustmentModal

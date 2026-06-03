@@ -84,6 +84,7 @@ export function Inbox({ user }: { user: User }) {
     <div>
       <div className="mb-6">
         <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.inboxTitle}</h1>
+        <p className="mt-1 max-w-3xl text-sm" style={{ color: 'var(--color-text-secondary)' }}>{t.inboxSubtitle}</p>
       </div>
 
       {/* Bucket tabs */}
