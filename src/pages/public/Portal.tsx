@@ -59,6 +59,19 @@ type PortalDocumentsRpc = (fn: 'portal_documents', args: { emp_slug: string; emp
   error: { message: string } | null
 }>
 
+// portal_sign_contract (migration 136) — typed cast until database.ts is
+// regenerated. Token-validated server-side contract signing.
+type PortalSignContractRpc = (fn: 'portal_sign_contract', args: {
+  emp_slug: string
+  emp_token: string
+  p_contract_id: string
+  p_typed_name: string
+  p_signature_font: string | null
+  p_consent_text: string | null
+  p_document_hash: string | null
+  p_user_agent: string | null
+}) => Promise<{ data: ContractSignature | null; error: { message: string } | null }>
+
 // Returns the first day of the current month in Asia/Jakarta TZ as YYYY-MM-01.
 // Mirrors the SQL `current_period_month()` so client and server agree on which
 // month is "current" regardless of the user's local timezone.
@@ -705,16 +718,8 @@ export function Portal() {
     if (sigError) { setError(sigError.message); setSigning(false); return }
     if (data) setSopSignatures(prev => ({ ...prev, [activeSop.id]: data }))
 
-    // Create feed event
-    await supabase.from('feed_events').insert({
-      org_id: employee.org_id,
-      employee_id: employee.id,
-      event_type: 'sop_signed',
-      title: activeSop.title,
-      description: `Version ${activeSop.current_version}`,
-      metadata: { sop_id: activeSop.id, version: activeSop.current_version, signature_font: selectedFont },
-    })
-    // Refresh feed so the new signature shows up at the bottom of home.
+    // The sop_signed feed event is emitted server-side by the sop_signatures
+    // AFTER INSERT trigger (migration 136); just refresh the feed.
     loadFeedEvents()
 
     setSigning(false)
@@ -725,38 +730,26 @@ export function Portal() {
     setSigning(true)
 
     const documentHash = await buildContractDocumentHash(activeContract.content_markdown, activeContract.current_version)
-    const { data, error: sigError } = await supabase
-      .from('contract_signatures')
-      .insert({
-        contract_id: activeContract.id,
-        version_number: activeContract.current_version,
-        employee_id: employee.id,
-        typed_name: employee.name,
-        signature_font: selectedFont,
-        signer_role: 'employee',
-        consent_text: s.portalSignConsent,
-        document_hash: documentHash,
-        user_agent: getUserAgent(),
-        signer_email: employee.email || null,
-        signer_phone: employee.phone || null,
-      })
-      .select()
-      .single()
+    // Token-validated server-side signing (migration 136). signer_email/phone
+    // are resolved from the employee row server-side; the contract_signed feed
+    // event is emitted by the contract_signatures AFTER INSERT trigger.
+    const { data, error: sigError } = await (supabase.rpc as unknown as PortalSignContractRpc)('portal_sign_contract', {
+      emp_slug: employee.slug,
+      emp_token: employee.access_token,
+      p_contract_id: activeContract.id,
+      p_typed_name: employee.name,
+      p_signature_font: selectedFont,
+      p_consent_text: s.portalSignConsent,
+      p_document_hash: documentHash,
+      p_user_agent: getUserAgent(),
+    })
 
-    if (sigError) { setError(sigError.message); setSigning(false); return }
+    if (sigError || !data) { setError(sigError?.message ?? 'Signing failed'); setSigning(false); return }
     setContractSignatures(prev => ({ ...prev, [activeContract.id]: data }))
 
     // Best-effort: stamp the signer's public IP server-side.
     captureSignatureIp(data.id, { type: 'portal', slug: employee.slug, accessToken: employee.access_token })
 
-    await supabase.from('feed_events').insert({
-      org_id: employee.org_id,
-      employee_id: employee.id,
-      event_type: 'contract_signed',
-      title: activeContract.title,
-      description: `Version ${activeContract.current_version}`,
-      metadata: { contract_id: activeContract.id, version: activeContract.current_version, signature_font: selectedFont },
-    })
     loadFeedEvents()
 
     setSigning(false)
