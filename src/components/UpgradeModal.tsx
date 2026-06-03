@@ -57,7 +57,7 @@ export function UpgradeModal({
         return
       }
       const url = await startCheckout({
-        successUrl: `${window.location.origin}/settings?tab=billing&checkout=success`,
+        successUrl: `${window.location.origin}/dashboard/settings?tab=billing&checkout=success`,
         cancelUrl: `${window.location.origin}${cancelReturnPath}`,
         seats,
       })

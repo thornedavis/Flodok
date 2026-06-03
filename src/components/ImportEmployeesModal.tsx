@@ -489,7 +489,7 @@ export function ImportEmployeesModal({
             PRO_MIN_SEATS,
           )}
           minSeats={Math.max(currentEmployees.length, PRO_MIN_SEATS)}
-          cancelReturnPath="/employees"
+          cancelReturnPath="/dashboard/employees"
           onClose={() => setShowUpgrade(null)}
           onAdjusted={() => setShowUpgrade(null)}
         />

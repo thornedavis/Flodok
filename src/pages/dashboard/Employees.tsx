@@ -778,7 +778,7 @@ export function Employees({ user }: { user: User }) {
         <UpgradeModal
           t={t}
           initialSeats={Math.max(employees.length + 1, PRO_MIN_SEATS)}
-          cancelReturnPath="/employees"
+          cancelReturnPath="/dashboard/employees"
           onClose={() => setShowUpgrade(false)}
         />
       )}

@@ -1699,7 +1699,7 @@ function BillingTab({ user, t }: { user: User; t: Translations }) {
     setError(null)
     try {
       const url = await openPortal({
-        returnUrl: `${window.location.origin}/settings?tab=billing`,
+        returnUrl: `${window.location.origin}/dashboard/settings?tab=billing`,
         flow,
       })
       window.location.href = url
@@ -1954,7 +1954,7 @@ function BillingTab({ user, t }: { user: User; t: Translations }) {
         <UpgradeModal
           t={t}
           initialSeats={Math.max(employeeCount, PRO_MIN_SEATS)}
-          cancelReturnPath="/settings?tab=billing"
+          cancelReturnPath="/dashboard/settings?tab=billing"
           onClose={() => setShowUpgrade(false)}
         />
       )}
@@ -1965,7 +1965,7 @@ function BillingTab({ user, t }: { user: User; t: Translations }) {
           mode="adjust"
           initialSeats={billableSeats}
           minSeats={billableSeats}
-          cancelReturnPath="/settings?tab=billing"
+          cancelReturnPath="/dashboard/settings?tab=billing"
           onClose={() => setShowAdjust(false)}
           onAdjusted={() => setRefreshKey(k => k + 1)}
         />
