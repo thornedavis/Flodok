@@ -21,11 +21,12 @@ import type {
   ContractSignature,
   SopSignature,
   InboxDismissal,
+  FormSubmission,
 } from '../types/aliases'
 import { documentEditPath } from './documentTypes'
 
 export type InboxBucket = 'action_required' | 'awaiting_others' | 'upcoming'
-export type InboxCategory = 'contract' | 'sop' | 'probation' | 'document' | 'pending_update'
+export type InboxCategory = 'contract' | 'sop' | 'probation' | 'document' | 'pending_update' | 'form'
 
 export type InboxKind =
   | 'pending_update_review'
@@ -34,6 +35,8 @@ export type InboxKind =
   | 'sop_awaiting_employee_signature'
   | 'probation_ending_soon'
   | 'passport_expiring_soon'
+  | 'form_awaiting_manager_decision'
+  | 'form_awaiting_owner_decision'
 
 export interface InboxItem {
   dedupe_key: string
@@ -75,6 +78,11 @@ export interface DeriveInputs {
   contractSignatures: ContractSignature[]
   sopSignatures: SopSignature[]
   dismissals: InboxDismissal[]
+  // Forms awaiting a decision. viewerUserId / viewerIsOwner personalise which
+  // pending forms count as "action required" for the current viewer.
+  forms?: FormSubmission[]
+  viewerUserId?: string
+  viewerIsOwner?: boolean
   now?: Date
 }
 
@@ -88,6 +96,9 @@ export function deriveInboxItems({
   contractSignatures,
   sopSignatures,
   dismissals,
+  forms = [],
+  viewerUserId,
+  viewerIsOwner,
   now = new Date(),
 }: DeriveInputs): InboxItem[] {
   const empById = new Map(employees.map(e => [e.id, e]))
@@ -156,6 +167,27 @@ export function deriveInboxItems({
       href: documentEditPath('sop', s.id),
       action_label_key: 'inboxActionOpenSop',
     })
+  }
+
+  // Form submissions (leave / overtime) awaiting a decision from this viewer.
+  // Manager step → the designated approver; owner step → the owner.
+  for (const f of forms) {
+    const empName = f.employee_id ? empById.get(f.employee_id)?.name ?? undefined : undefined
+    const title = `${f.form_type === 'leave_request' ? 'Leave request' : 'Overtime request'}${empName ? ` — ${empName}` : ''}`
+    const base = {
+      bucket: 'action_required' as const,
+      category: 'form' as const,
+      title,
+      subtitle: empName,
+      due_at: f.submitted_at || f.created_at,
+      href: `/dashboard/forms/${f.id}`,
+      action_label_key: 'inboxActionReview' as const,
+    }
+    if (f.status === 'submitted' && viewerUserId && f.manager_user_id === viewerUserId) {
+      items.push({ ...base, dedupe_key: `form_awaiting_manager_decision:${f.id}`, kind: 'form_awaiting_manager_decision' })
+    } else if (f.status === 'manager_approved' && viewerIsOwner) {
+      items.push({ ...base, dedupe_key: `form_awaiting_owner_decision:${f.id}`, kind: 'form_awaiting_owner_decision' })
+    }
   }
 
   // Probation events. Bucket depends on how close the end date is.
@@ -234,7 +266,7 @@ function daysBetween(now: Date, iso: string): number {
 // ─── Filter helpers used by the page ────────────────────
 
 export const ALL_CATEGORIES: InboxCategory[] = [
-  'contract', 'sop', 'probation', 'document', 'pending_update',
+  'contract', 'sop', 'probation', 'document', 'pending_update', 'form',
 ]
 
 // `bucket` accepts 'all' to span every bucket — used by the top-level
@@ -274,7 +306,7 @@ export function countByCategory(
   bucket: InboxBucketSelection,
 ): Record<InboxCategory, number> {
   const counts: Record<InboxCategory, number> = {
-    contract: 0, sop: 0, probation: 0, document: 0, pending_update: 0,
+    contract: 0, sop: 0, probation: 0, document: 0, pending_update: 0, form: 0,
   }
   for (const i of items) {
     if (bucket !== 'all' && i.bucket !== bucket) continue

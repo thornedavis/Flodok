@@ -15,7 +15,7 @@ export function useInboxItems(orgId: string, userId: string, refreshKey = 0) {
     let cancelled = false
     async function load() {
       setLoading(true)
-      const [c, s, e, pu, cs, ss, d] = await Promise.all([
+      const [c, s, e, pu, cs, ss, d, f, ur] = await Promise.all([
         supabase.from('contracts').select('*').eq('org_id', orgId),
         supabase.from('sops').select('*').eq('org_id', orgId),
         supabase.from('employees').select('*').eq('org_id', orgId),
@@ -23,6 +23,8 @@ export function useInboxItems(orgId: string, userId: string, refreshKey = 0) {
         supabase.from('contract_signatures').select('*'),
         supabase.from('sop_signatures').select('*'),
         supabase.from('inbox_dismissals').select('*').eq('user_id', userId),
+        supabase.from('form_submissions').select('*').eq('org_id', orgId),
+        supabase.from('users').select('role').eq('id', userId).single(),
       ])
       if (cancelled) return
       setItems(deriveInboxItems({
@@ -33,6 +35,9 @@ export function useInboxItems(orgId: string, userId: string, refreshKey = 0) {
         contractSignatures: cs.data || [],
         sopSignatures: ss.data || [],
         dismissals: d.data || [],
+        forms: f.data || [],
+        viewerUserId: userId,
+        viewerIsOwner: ur.data?.role === 'owner',
       }))
       setLoading(false)
     }

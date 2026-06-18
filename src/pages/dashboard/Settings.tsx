@@ -32,7 +32,7 @@ import { useBilling } from '../../contexts/BillingContext'
 
 ensureSignatureFontsLoaded()
 
-type Tab = 'account' | 'team' | 'integrations' | 'adjustments' | 'achievements' | 'billing'
+type Tab = 'account' | 'team' | 'integrations' | 'adjustments' | 'achievements' | 'approvals' | 'billing'
 
 const inputStyle: React.CSSProperties = {
   borderColor: 'var(--color-border)',
@@ -50,6 +50,7 @@ export function Settings({ user }: { user: User }) {
   if (rawTab === 'team' || rawTab === 'billing') tab = rawTab
   else if (rawTab === 'integrations' && isAdmin) tab = 'integrations'
   else if (rawTab === 'achievements' && isAdmin) tab = 'achievements'
+  else if (rawTab === 'approvals' && isAdmin) tab = 'approvals'
   else if ((rawTab === 'adjustments' || rawTab === 'credits' || rawTab === 'bonuses') && isAdmin) tab = 'adjustments'
 
   function setTab(next: Tab) {
@@ -72,6 +73,9 @@ export function Settings({ user }: { user: User }) {
         {isAdmin && (
           <TabButton active={tab === 'achievements'} onClick={() => setTab('achievements')}>{t.achievementDefsTitle}</TabButton>
         )}
+        {isAdmin && (
+          <TabButton active={tab === 'approvals'} onClick={() => setTab('approvals')}>{t.settingsApprovalsTab}</TabButton>
+        )}
         <TabButton active={tab === 'billing'} onClick={() => setTab('billing')}>{t.settingsBillingTab}</TabButton>
       </div>
 
@@ -80,6 +84,7 @@ export function Settings({ user }: { user: User }) {
       {tab === 'integrations' && isAdmin && <IntegrationsTab user={user} t={t} />}
       {tab === 'adjustments' && isAdmin && <AdjustmentsTab user={user} t={t} />}
       {tab === 'achievements' && isAdmin && <AchievementsTab user={user} t={t} />}
+      {tab === 'approvals' && isAdmin && <ApprovalsTab user={user} t={t} />}
       {tab === 'billing' && <BillingTab user={user} t={t} />}
     </div>
   )
@@ -995,6 +1000,88 @@ function TransferOwnershipModal({ t, candidates, onClose, onTransferred }: {
 }
 
 // ─── Integrations tab ───────────────────────────────────
+
+// Approvals — org-level routing for forms (and, later, other approval-bearing
+// workflows). The Manager-tier approver defaults to the owner when unset; the
+// owner-gate toggle controls whether a second owner sign-off is required.
+// (Per-form field config lives on the per-type FormConfig page.)
+function ApprovalsTab({ user, t }: { user: User; t: Translations }) {
+  const [approverId, setApproverId] = useState<string | null>(null)
+  const [requireOwner, setRequireOwner] = useState(false)
+  const [members, setMembers] = useState<{ id: string; name: string | null }[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => { load() }, [user.org_id])
+
+  async function load() {
+    setLoading(true)
+    const [orgResult, usersResult] = await Promise.all([
+      supabase.from('organizations').select('forms_approver_user_id, forms_require_owner_approval').eq('id', user.org_id).single(),
+      supabase.from('users').select('id, name').eq('org_id', user.org_id).order('created_at'),
+    ])
+    if (orgResult.data) {
+      setApproverId(orgResult.data.forms_approver_user_id)
+      setRequireOwner(!!orgResult.data.forms_require_owner_approval)
+    }
+    setMembers((usersResult.data ?? []) as { id: string; name: string | null }[])
+    setLoading(false)
+  }
+
+  async function saveApprover(next: string | null) {
+    setSaving(true)
+    const previous = approverId
+    setApproverId(next)
+    const { error } = await supabase.from('organizations').update({ forms_approver_user_id: next }).eq('id', user.org_id)
+    if (error) { setApproverId(previous); alert(error.message) }
+    setSaving(false)
+  }
+
+  async function saveOwnerGate(next: boolean) {
+    setSaving(true)
+    const previous = requireOwner
+    setRequireOwner(next)
+    const { error } = await supabase.from('organizations').update({ forms_require_owner_approval: next }).eq('id', user.org_id)
+    if (error) { setRequireOwner(previous); alert(error.message) }
+    setSaving(false)
+  }
+
+  if (loading) return <SettingsSectionSkeleton />
+
+  return (
+    <div className="space-y-6">
+      <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>{t.approvalsTitle}</h2>
+      <div className="space-y-2">
+        <label className="block text-sm font-medium" style={{ color: 'var(--color-text)' }}>{t.approvalsApproverLabel}</label>
+        <select
+          value={approverId ?? ''}
+          disabled={saving}
+          onChange={e => saveApprover(e.target.value || null)}
+          className="w-full max-w-sm rounded-lg border px-3 py-2 text-sm"
+          style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+        >
+          <option value="">{t.approvalsApproverOwnerDefault}</option>
+          {members.map(m => <option key={m.id} value={m.id}>{m.name ?? m.id}</option>)}
+        </select>
+        <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.approvalsApproverHint}</p>
+      </div>
+      <div className="flex items-start justify-between gap-4 rounded-lg border p-4" style={{ borderColor: 'var(--color-border)' }}>
+        <div className="min-w-0">
+          <div className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{t.approvalsOwnerGateLabel}</div>
+          <p className="mt-0.5 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.approvalsOwnerGateHint}</p>
+        </div>
+        <input
+          type="checkbox"
+          checked={requireOwner}
+          disabled={saving}
+          onChange={e => saveOwnerGate(e.target.checked)}
+          className="mt-0.5 h-5 w-5 shrink-0 cursor-pointer"
+          style={{ accentColor: 'var(--color-primary)' }}
+        />
+      </div>
+    </div>
+  )
+}
 
 function IntegrationsTab({ user, t }: { user: User; t: Translations }) {
   const { canWrite: billingCanWrite } = useBilling()
