@@ -8,6 +8,7 @@ import html2pdf from 'html2pdf.js'
 import { supabase } from '../../lib/supabase'
 import { useTheme } from '../../hooks/useTheme'
 import { useLang } from '../../contexts/LanguageContext'
+import { RequestsTab } from '../../components/portal/RequestsTab'
 import { formatIdr } from '../../lib/credits'
 import { formatRelativeTime } from '../../lib/relativeTime'
 import { BadgeGlyph } from '../../components/BadgeGlyph'
@@ -117,7 +118,7 @@ function monthFromIsoDate(iso: string): string {
   return iso.slice(0, 7) + '-01'
 }
 
-type Tab = 'home' | 'documents' | 'spotlight' | 'leaderboard' | 'badges'
+type Tab = 'home' | 'documents' | 'requests' | 'spotlight' | 'leaderboard' | 'badges'
 type DocFilter = 'all' | 'sops' | 'contracts' | 'letters'
 type OpenDocType = 'sop' | 'contract' | 'letter' | null
 
@@ -1557,6 +1558,10 @@ export function Portal() {
             />
           )}
 
+          {tab === 'requests' && org?.forms_enabled !== false && (
+            <RequestsTab slug={slug} token={token} />
+          )}
+
         </div>
       </div>
 
@@ -1566,6 +1571,11 @@ export function Portal() {
           {([
             { key: 'home' as Tab, label: s.home, icon: <HomeIcon /> },
             { key: 'documents' as Tab, label: s.documents, icon: <DocIcon />, badge: pendingActionCount },
+            ...(org?.forms_enabled !== false
+              ? [{ key: 'requests' as Tab, label: s.portalRequestsTab, icon: (
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg>
+                ) }]
+              : []),
             { key: 'spotlight' as Tab, label: s.spotlightTabLabel, icon: <SpotlightIcon /> },
             ...(org?.badges_enabled !== false
               ? [{ key: 'badges' as Tab, label: s.portalBadgesTabLabel, icon: <BadgeIcon /> }]
