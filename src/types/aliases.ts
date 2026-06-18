@@ -20,6 +20,22 @@ export type JobDescription = Database['public']['Tables']['job_descriptions']['R
 export type JobDescriptionInsert = Database['public']['Tables']['job_descriptions']['Insert']
 export type JobDescriptionVersion = Database['public']['Tables']['job_description_versions']['Row']
 export type JobDescriptionSignature = Database['public']['Tables']['job_description_signatures']['Row']
+
+// ─── Forms (leave / overtime requests) ──────────────────────────────────────
+// form_type and status are text+CHECK columns, so the generated Row types them
+// as `string`; these unions narrow them at call sites (cast like HiringRequest).
+export type FormType = 'leave_request' | 'overtime_request'
+export type FormStatus =
+  | 'draft'
+  | 'submitted'
+  | 'manager_approved'
+  | 'approved'
+  | 'rejected_by_manager'
+  | 'rejected_by_owner'
+export type FormSubmission = Database['public']['Tables']['form_submissions']['Row']
+export type FormSubmissionInsert = Database['public']['Tables']['form_submissions']['Insert']
+export type FormLineItem = Database['public']['Tables']['form_line_items']['Row']
+export type LeaveLedger = Database['public']['Tables']['leave_ledger']['Row']
 export type SopCategory = Database['public']['Tables']['sop_categories']['Row']
 export type Sop = Database['public']['Tables']['sops']['Row']
 export type SopVersion = Database['public']['Tables']['sop_versions']['Row']

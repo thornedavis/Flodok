@@ -1371,6 +1371,223 @@ export type Database = {
           },
         ]
       }
+      form_line_items: {
+        Row: {
+          end_time: string
+          id: string
+          is_ot_day: boolean
+          line_no: number
+          org_id: string
+          reason: string | null
+          start_time: string
+          submission_id: string
+          total_hours: number
+          work_date: string
+        }
+        Insert: {
+          end_time: string
+          id?: string
+          is_ot_day?: boolean
+          line_no: number
+          org_id: string
+          reason?: string | null
+          start_time: string
+          submission_id: string
+          total_hours?: number
+          work_date: string
+        }
+        Update: {
+          end_time?: string
+          id?: string
+          is_ot_day?: boolean
+          line_no?: number
+          org_id?: string
+          reason?: string | null
+          start_time?: string
+          submission_id?: string
+          total_hours?: number
+          work_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "form_line_items_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "form_line_items_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "form_submissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      form_submissions: {
+        Row: {
+          committed_at: string | null
+          created_at: string
+          deleted_at: string | null
+          deleted_by: string | null
+          employee_id: string
+          field_data: Json
+          form_type: string
+          id: string
+          leave_ledger_entry_id: string | null
+          manager_auto_approved: boolean
+          manager_decided_at: string | null
+          manager_decided_by: string | null
+          manager_decision: string | null
+          manager_decision_note: string | null
+          manager_user_id: string | null
+          org_id: string
+          owner_approval_required: boolean
+          owner_decided_at: string | null
+          owner_decided_by: string | null
+          owner_decision: string | null
+          owner_decision_note: string | null
+          pay_adjustment_id: string | null
+          payroll_posted_at: string | null
+          posting_skipped_reason: string | null
+          reference_number: string | null
+          status: string
+          submitted_at: string | null
+          submitted_via: string
+          submitter_user_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          committed_at?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
+          employee_id: string
+          field_data?: Json
+          form_type: string
+          id?: string
+          leave_ledger_entry_id?: string | null
+          manager_auto_approved?: boolean
+          manager_decided_at?: string | null
+          manager_decided_by?: string | null
+          manager_decision?: string | null
+          manager_decision_note?: string | null
+          manager_user_id?: string | null
+          org_id: string
+          owner_approval_required?: boolean
+          owner_decided_at?: string | null
+          owner_decided_by?: string | null
+          owner_decision?: string | null
+          owner_decision_note?: string | null
+          pay_adjustment_id?: string | null
+          payroll_posted_at?: string | null
+          posting_skipped_reason?: string | null
+          reference_number?: string | null
+          status?: string
+          submitted_at?: string | null
+          submitted_via?: string
+          submitter_user_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          committed_at?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
+          employee_id?: string
+          field_data?: Json
+          form_type?: string
+          id?: string
+          leave_ledger_entry_id?: string | null
+          manager_auto_approved?: boolean
+          manager_decided_at?: string | null
+          manager_decided_by?: string | null
+          manager_decision?: string | null
+          manager_decision_note?: string | null
+          manager_user_id?: string | null
+          org_id?: string
+          owner_approval_required?: boolean
+          owner_decided_at?: string | null
+          owner_decided_by?: string | null
+          owner_decision?: string | null
+          owner_decision_note?: string | null
+          pay_adjustment_id?: string | null
+          payroll_posted_at?: string | null
+          posting_skipped_reason?: string | null
+          reference_number?: string | null
+          status?: string
+          submitted_at?: string | null
+          submitted_via?: string
+          submitter_user_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "form_submissions_deleted_by_fkey"
+            columns: ["deleted_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "form_submissions_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "form_submissions_leave_ledger_entry_id_fkey"
+            columns: ["leave_ledger_entry_id"]
+            isOneToOne: false
+            referencedRelation: "leave_ledger"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "form_submissions_manager_decided_by_fkey"
+            columns: ["manager_decided_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "form_submissions_manager_user_id_fkey"
+            columns: ["manager_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "form_submissions_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "form_submissions_owner_decided_by_fkey"
+            columns: ["owner_decided_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "form_submissions_pay_adjustment_id_fkey"
+            columns: ["pay_adjustment_id"]
+            isOneToOne: false
+            referencedRelation: "pay_adjustments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "form_submissions_submitter_user_id_fkey"
+            columns: ["submitter_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hiring_requests: {
         Row: {
           actioned_at: string | null
@@ -1885,6 +2102,80 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      leave_ledger: {
+        Row: {
+          awarded_by: string
+          created_at: string
+          delta_days: number
+          employee_id: string
+          entitlement_snapshot: number | null
+          entry_type: string
+          id: string
+          leave_year: number
+          org_id: string
+          period_month: string
+          reason: string
+          source_submission_id: string | null
+        }
+        Insert: {
+          awarded_by: string
+          created_at?: string
+          delta_days: number
+          employee_id: string
+          entitlement_snapshot?: number | null
+          entry_type: string
+          id?: string
+          leave_year: number
+          org_id: string
+          period_month: string
+          reason: string
+          source_submission_id?: string | null
+        }
+        Update: {
+          awarded_by?: string
+          created_at?: string
+          delta_days?: number
+          employee_id?: string
+          entitlement_snapshot?: number | null
+          entry_type?: string
+          id?: string
+          leave_year?: number
+          org_id?: string
+          period_month?: string
+          reason?: string
+          source_submission_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leave_ledger_awarded_by_fkey"
+            columns: ["awarded_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leave_ledger_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leave_ledger_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leave_ledger_source_submission_id_fkey"
+            columns: ["source_submission_id"]
+            isOneToOne: false
+            referencedRelation: "form_submissions"
             referencedColumns: ["id"]
           },
         ]
@@ -2603,6 +2894,10 @@ export type Database = {
           current_period_end: string | null
           default_country_code: string
           display_name: string | null
+          forms_approver_user_id: string | null
+          forms_config: Json
+          forms_enabled: boolean
+          forms_require_owner_approval: boolean
           id: string
           industry: string | null
           jkk_rate: string | null
@@ -2651,6 +2946,10 @@ export type Database = {
           current_period_end?: string | null
           default_country_code?: string
           display_name?: string | null
+          forms_approver_user_id?: string | null
+          forms_config?: Json
+          forms_enabled?: boolean
+          forms_require_owner_approval?: boolean
           id?: string
           industry?: string | null
           jkk_rate?: string | null
@@ -2699,6 +2998,10 @@ export type Database = {
           current_period_end?: string | null
           default_country_code?: string
           display_name?: string | null
+          forms_approver_user_id?: string | null
+          forms_config?: Json
+          forms_enabled?: boolean
+          forms_require_owner_approval?: boolean
           id?: string
           industry?: string | null
           jkk_rate?: string | null
@@ -2727,7 +3030,15 @@ export type Database = {
           timezone?: string
           website_url?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "organizations_forms_approver_user_id_fkey"
+            columns: ["forms_approver_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       pay_adjustments: {
         Row: {
@@ -3648,6 +3959,27 @@ export type Database = {
       }
     }
     Functions: {
+      _leave_balance: {
+        Args: { p_employee_id: string; p_org_id: string; p_year: number }
+        Returns: Json
+      }
+      _period_frozen: {
+        Args: { p_employee_id: string; p_period_month: string }
+        Returns: boolean
+      }
+      _post_approved_form: {
+        Args: { p_submission_id: string }
+        Returns: undefined
+      }
+      _pp35_line_charge: {
+        Args: {
+          p_days_per_week: number
+          p_hourly: number
+          p_hours: number
+          p_ot_day: boolean
+        }
+        Returns: number
+      }
       _settle_pay_period: {
         Args: { p_employee_id: string; p_period_month: string }
         Returns: undefined
@@ -3684,6 +4016,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      admin_leave_balance: {
+        Args: { p_employee_id: string; p_year?: number }
+        Returns: Json
       }
       admin_pay_settlement: {
         Args: { p_employee_id: string; p_period_month: string }
@@ -3850,6 +4186,47 @@ export type Database = {
           trashed_with_parent_id: string
         }[]
       }
+      manager_decide_form: {
+        Args: { p_approve: boolean; p_note?: string; p_submission_id: string }
+        Returns: {
+          committed_at: string | null
+          created_at: string
+          deleted_at: string | null
+          deleted_by: string | null
+          employee_id: string
+          field_data: Json
+          form_type: string
+          id: string
+          leave_ledger_entry_id: string | null
+          manager_auto_approved: boolean
+          manager_decided_at: string | null
+          manager_decided_by: string | null
+          manager_decision: string | null
+          manager_decision_note: string | null
+          manager_user_id: string | null
+          org_id: string
+          owner_approval_required: boolean
+          owner_decided_at: string | null
+          owner_decided_by: string | null
+          owner_decision: string | null
+          owner_decision_note: string | null
+          pay_adjustment_id: string | null
+          payroll_posted_at: string | null
+          posting_skipped_reason: string | null
+          reference_number: string | null
+          status: string
+          submitted_at: string | null
+          submitted_via: string
+          submitter_user_id: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "form_submissions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       manager_decide_hiring_request: {
         Args: { p_approve: boolean; p_note?: string; p_request_id: string }
         Returns: {
@@ -3949,6 +4326,47 @@ export type Database = {
       next_letter_reference_number: {
         Args: { p_org_id: string; p_type_code: string; p_year?: number }
         Returns: string
+      }
+      owner_decide_form: {
+        Args: { p_approve: boolean; p_note?: string; p_submission_id: string }
+        Returns: {
+          committed_at: string | null
+          created_at: string
+          deleted_at: string | null
+          deleted_by: string | null
+          employee_id: string
+          field_data: Json
+          form_type: string
+          id: string
+          leave_ledger_entry_id: string | null
+          manager_auto_approved: boolean
+          manager_decided_at: string | null
+          manager_decided_by: string | null
+          manager_decision: string | null
+          manager_decision_note: string | null
+          manager_user_id: string | null
+          org_id: string
+          owner_approval_required: boolean
+          owner_decided_at: string | null
+          owner_decided_by: string | null
+          owner_decision: string | null
+          owner_decision_note: string | null
+          pay_adjustment_id: string | null
+          payroll_posted_at: string | null
+          posting_skipped_reason: string | null
+          reference_number: string | null
+          status: string
+          submitted_at: string | null
+          submitted_via: string
+          submitter_user_id: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "form_submissions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       owner_decide_hiring_request: {
         Args: { p_approve: boolean; p_note?: string; p_request_id: string }
@@ -4080,6 +4498,14 @@ export type Database = {
         Args: { emp_slug: string; emp_token: string; p_limit?: number }
         Returns: Json
       }
+      portal_forms_config: {
+        Args: { emp_slug: string; emp_token: string }
+        Returns: Json
+      }
+      portal_forms_list: {
+        Args: { emp_slug: string; emp_token: string }
+        Returns: Json
+      }
       portal_get_emergency_contact: {
         Args: { emp_slug: string; emp_token: string }
         Returns: {
@@ -4168,6 +4594,10 @@ export type Database = {
           }
       portal_leaderboard: {
         Args: { emp_slug: string; emp_token: string; period_kind?: string }
+        Returns: Json
+      }
+      portal_leave_balance: {
+        Args: { emp_slug: string; emp_token: string }
         Returns: Json
       }
       portal_mark_notifications_seen: {
@@ -4331,6 +4761,93 @@ export type Database = {
         Args: { emp_slug: string; emp_token: string; p_post_id: string }
         Returns: undefined
       }
+      portal_submit_leave_request: {
+        Args: { emp_slug: string; emp_token: string; p_field_data: Json }
+        Returns: {
+          committed_at: string | null
+          created_at: string
+          deleted_at: string | null
+          deleted_by: string | null
+          employee_id: string
+          field_data: Json
+          form_type: string
+          id: string
+          leave_ledger_entry_id: string | null
+          manager_auto_approved: boolean
+          manager_decided_at: string | null
+          manager_decided_by: string | null
+          manager_decision: string | null
+          manager_decision_note: string | null
+          manager_user_id: string | null
+          org_id: string
+          owner_approval_required: boolean
+          owner_decided_at: string | null
+          owner_decided_by: string | null
+          owner_decision: string | null
+          owner_decision_note: string | null
+          pay_adjustment_id: string | null
+          payroll_posted_at: string | null
+          posting_skipped_reason: string | null
+          reference_number: string | null
+          status: string
+          submitted_at: string | null
+          submitted_via: string
+          submitter_user_id: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "form_submissions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      portal_submit_overtime_request: {
+        Args: {
+          emp_slug: string
+          emp_token: string
+          p_field_data: Json
+          p_line_items: Json
+        }
+        Returns: {
+          committed_at: string | null
+          created_at: string
+          deleted_at: string | null
+          deleted_by: string | null
+          employee_id: string
+          field_data: Json
+          form_type: string
+          id: string
+          leave_ledger_entry_id: string | null
+          manager_auto_approved: boolean
+          manager_decided_at: string | null
+          manager_decided_by: string | null
+          manager_decision: string | null
+          manager_decision_note: string | null
+          manager_user_id: string | null
+          org_id: string
+          owner_approval_required: boolean
+          owner_decided_at: string | null
+          owner_decided_by: string | null
+          owner_decision: string | null
+          owner_decision_note: string | null
+          pay_adjustment_id: string | null
+          payroll_posted_at: string | null
+          posting_skipped_reason: string | null
+          reference_number: string | null
+          status: string
+          submitted_at: string | null
+          submitted_via: string
+          submitter_user_id: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "form_submissions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       portal_unread_count: {
         Args: { emp_slug: string; emp_token: string }
         Returns: number
@@ -4476,10 +4993,15 @@ export type Database = {
           unlocked_at: string
         }[]
       }
+      repost_form_to_payroll: {
+        Args: { p_submission_id: string }
+        Returns: undefined
+      }
       republish_spotlight_post: {
         Args: { p_post_id: string }
         Returns: undefined
       }
+      resolve_form_approver: { Args: { p_org_id: string }; Returns: string }
       restore_item: {
         Args: { p_item_id: string; p_item_type: string }
         Returns: undefined
