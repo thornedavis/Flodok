@@ -8,8 +8,9 @@
 //   - MultiSelectDropdown popover with checkboxes for multi-select filters
 //   - FilterSearchInput  inline search box with leading magnifying glass
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import type { CSSProperties, ReactNode } from 'react'
 import { DatePicker } from './DatePicker'
 
 // ─── FilterPill ─────────────────────────────────────────
@@ -320,8 +321,12 @@ export function FilterPanel({
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const containerRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
-  const [placement, setPlacement] = useState<'below' | 'above'>('below')
-  const [hAlign, setHAlign] = useState<'right' | 'left'>('right')
+  const dialogRef = useRef<HTMLDivElement>(null)
+  // The popover is rendered in a portal with position:fixed so it never grows
+  // a scroll container (an absolute panel below a short page would balloon the
+  // page height) and never gets clipped. We anchor it to the trigger and pick
+  // whichever side has more room, height-capped with internal scroll.
+  const [panelStyle, setPanelStyle] = useState<CSSProperties | null>(null)
 
   // Active-count: selected options across multiselect sections, plus +1 for
   // each select section whose value differs from its declared default. Select
@@ -335,37 +340,59 @@ export function FilterPanel({
   }, 0)
   const active = activeCount > 0
 
-  useLayoutEffect(() => {
-    if (!open) return
+  const reposition = useCallback(() => {
     const rect = triggerRef.current?.getBoundingClientRect()
     if (!rect) return
-    const estHeight = 360
-    const spaceBelow = window.innerHeight - rect.bottom
-    setPlacement(spaceBelow < estHeight && rect.top > spaceBelow ? 'above' : 'below')
-    // Boundary against the closest <main> so the panel respects the content
-    // area, not just the viewport (a fixed sidebar sits inside the viewport
-    // but outside <main>). Right-anchoring is preferred unless it would push
-    // the panel's left edge past that boundary.
     const panelWidth = 280
     const margin = 8
+    const gap = 4
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    // Open on whichever side has more room; cap height to that side so the
+    // panel scrolls internally instead of overflowing the viewport.
+    const spaceBelow = vh - rect.bottom - gap - margin
+    const spaceAbove = rect.top - gap - margin
+    const openBelow = spaceBelow >= spaceAbove
+    const maxHeight = Math.max(160, Math.floor(openBelow ? spaceBelow : spaceAbove))
+    // Right-anchor to the trigger; clamp within the viewport (and the closest
+    // <main>, so the panel respects the content area, not a fixed sidebar).
     const mainEl = triggerRef.current?.closest('main')
     const safeLeft = (mainEl?.getBoundingClientRect().left ?? 0) + margin
-    setHAlign(rect.right - panelWidth < safeLeft ? 'left' : 'right')
-  }, [open])
+    let left = rect.right - panelWidth
+    if (left < safeLeft) left = rect.left
+    left = Math.max(margin, Math.min(left, vw - panelWidth - margin))
+    const style: CSSProperties = { position: 'fixed', left, width: panelWidth, maxHeight, zIndex: 50 }
+    if (openBelow) style.top = rect.bottom + gap
+    else style.bottom = vh - rect.top + gap
+    setPanelStyle(style)
+  }, [])
+
+  useLayoutEffect(() => {
+    if (!open) return
+    reposition()
+  }, [open, reposition])
 
   useEffect(() => {
     if (!open) return
     function handleClick(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false)
+      const target = e.target as Node
+      if (containerRef.current?.contains(target)) return
+      if (dialogRef.current?.contains(target)) return
+      setOpen(false)
     }
     function handleKey(e: KeyboardEvent) { if (e.key === 'Escape') setOpen(false) }
     document.addEventListener('mousedown', handleClick)
     document.addEventListener('keydown', handleKey)
+    // Keep the fixed panel glued to the trigger as the page scrolls/resizes.
+    window.addEventListener('scroll', reposition, true)
+    window.addEventListener('resize', reposition)
     return () => {
       document.removeEventListener('mousedown', handleClick)
       document.removeEventListener('keydown', handleKey)
+      window.removeEventListener('scroll', reposition, true)
+      window.removeEventListener('resize', reposition)
     }
-  }, [open])
+  }, [open, reposition])
 
   function toggleCollapsed(key: string) {
     setCollapsed(prev => ({ ...prev, [key]: !prev[key] }))
@@ -403,15 +430,14 @@ export function FilterPanel({
         </svg>
       </button>
 
-      {open && (
+      {open && panelStyle && createPortal(
         <div
+          ref={dialogRef}
           role="dialog"
-          className={`absolute z-40 w-[280px] overflow-hidden rounded-lg border shadow-lg ${
-            hAlign === 'right' ? 'right-0' : 'left-0'
-          } ${placement === 'below' ? 'top-full mt-1' : 'bottom-full mb-1'}`}
-          style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-elevated, var(--color-bg))' }}
+          className="flex flex-col overflow-hidden rounded-lg border shadow-lg"
+          style={{ ...panelStyle, borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-elevated, var(--color-bg))' }}
         >
-          <div className="max-h-[60vh] overflow-y-auto">
+          <div className="min-h-0 flex-1 overflow-y-auto">
             {sections.map((section, idx) => {
               const isCollapsed = collapsed[section.key]
               return (
@@ -478,7 +504,8 @@ export function FilterPanel({
               </button>
             </div>
           )}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )
