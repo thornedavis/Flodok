@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState } from 'react'
+import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useTheme } from '../hooks/useTheme'
 import { useLang } from '../contexts/LanguageContext'
@@ -14,7 +14,7 @@ import { DunningBanner } from './DunningBanner'
 import { NotificationBell } from './NotificationBell'
 import { GlobalSearchButton } from './GlobalSearch'
 
-type NavKey = 'navOverview' | 'navInbox' | 'navEmployees' | 'navHiring' | 'navRecruitment' | 'navCompany' | 'navDocuments' | 'navPerformance' | 'navSpotlight' | 'navPending' | 'navTrash' | 'navSettings'
+type NavKey = 'navOverview' | 'navInbox' | 'navEmployees' | 'navHiring' | 'navForms' | 'navRecruitment' | 'navCompany' | 'navDocuments' | 'navPerformance' | 'navSpotlight' | 'navPending' | 'navTrash' | 'navSettings'
 
 interface NavItemDef {
   path: string
@@ -40,6 +40,12 @@ const navItems: NavItemDef[] = [
     labelKey: 'navHiring',
     // Clipboard-with-checkmark icon: hiring requests are approval items.
     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 2a2 2 0 0 0-2 2v0a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v0a2 2 0 0 0-2-2H9z"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg>,
+  },
+  {
+    path: '/dashboard/forms',
+    labelKey: 'navForms',
+    // File-with-lines icon: forms are structured records employees fill in.
+    icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg>,
   },
   {
     path: '/dashboard/recruitment',
@@ -153,10 +159,18 @@ export function useAutoCollapseSidebar() {
  * Hook for pages that want the main content area to render edge-to-edge.
  * DashboardLayout drops the `max-w-6xl` constraint and the horizontal
  * `px-*` padding while this flag is set. Auto-restored on unmount.
+ *
+ * Uses `useLayoutEffect`, not `useEffect`, on purpose: the flag must flip
+ * BEFORE the browser paints. With a passive effect the page paints once in
+ * the default constrained layout, then snaps to full-width on the next
+ * frame — a visible width jump that reads as a brief "zoom-in" on a
+ * full-bleed page (e.g. Documents' edge-to-edge "Start a new document"
+ * band). A layout effect's state update is flushed pre-paint, so the very
+ * first painted frame is already full-width and there's no shift.
  */
 export function useFullWidthLayout() {
   const ctx = useContext(LayoutContext)
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!ctx) return
     ctx.setFullWidth(true)
     return () => ctx.setFullWidth(false)
@@ -593,6 +607,7 @@ function deriveBreadcrumbs(pathname: string, search: string, orgName: string, t:
     inbox: { label: t.navInbox, href: '/dashboard/inbox' },
     settings: { label: t.navSettings, href: '/dashboard/settings' },
     hiring: { label: t.navHiring, href: '/dashboard/hiring' },
+    forms: { label: t.navForms, href: '/dashboard/forms' },
     recruitment: { label: t.navRecruitment, href: '/dashboard/recruitment' },
   }
   const section = sectionMap[segments[1]]

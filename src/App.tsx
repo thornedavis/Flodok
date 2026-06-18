@@ -11,6 +11,9 @@ import { EmployeeEdit } from './pages/dashboard/EmployeeEdit'
 import { Hiring } from './pages/dashboard/Hiring'
 import { HiringRequestEdit } from './pages/dashboard/HiringRequestEdit'
 import { HiringRequestDetail } from './pages/dashboard/HiringRequestDetail'
+import { Forms } from './pages/dashboard/Forms'
+import { FormDetail } from './pages/dashboard/FormDetail'
+import { FormConfig } from './pages/dashboard/FormConfig'
 import { JobDescriptionEdit } from './pages/dashboard/JobDescriptionEdit'
 import { Recruitment } from './pages/dashboard/Recruitment'
 import { CandidateEdit } from './pages/dashboard/CandidateEdit'
@@ -127,6 +130,9 @@ function AppRoutes() {
             <Route path="/dashboard/hiring/jds/:id/edit" element={<JobDescriptionEdit user={user} />} />
             <Route path="/dashboard/hiring/:id" element={<HiringRequestDetail user={user} />} />
             <Route path="/dashboard/hiring/:id/edit" element={<HiringRequestEdit user={user} />} />
+            <Route path="/dashboard/forms" element={<Forms user={user} />} />
+            <Route path="/dashboard/forms/config/:formType" element={<FormConfig user={user} />} />
+            <Route path="/dashboard/forms/:id" element={<FormDetail user={user} />} />
             <Route path="/dashboard/recruitment" element={<Recruitment user={user} />} />
             <Route path="/dashboard/recruitment/:id/edit" element={<CandidateEdit user={user} />} />
             <Route path="/dashboard/company" element={<Company user={user} />} />
