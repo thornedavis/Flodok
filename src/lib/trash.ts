@@ -9,7 +9,7 @@ export type TrashItemType =
   | 'hiring_request'
   | 'spotlight_post'
 
-export type TrashDocumentType = 'sop' | 'contract' | 'job_description' | 'letter'
+export type TrashDocumentType = 'sop' | 'contract' | 'job_description' | 'letter' | 'nda'
 
 export interface TrashItem {
   item_type: TrashItemType

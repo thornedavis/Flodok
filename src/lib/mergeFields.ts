@@ -40,6 +40,8 @@ export type MergeContext = {
   employee?: (Employee & EmpDeptShape) | null
   organization?: Organization | null
   contract?: Contract | null
+  // NDA structural fields, for the nda_* tokens (effective date / survival / penalty).
+  nda?: { effective_date?: string | null; survival_years?: number | null; penalty_idr?: number | null } | null
   today?: Date
   lang?: Lang
   // Signatures are version-pinned at the call site — pass in only the sig
@@ -53,7 +55,7 @@ export type MergeContext = {
   signer?: { name?: string | null; title?: string | null } | null
 }
 
-export type MergeFieldScope = 'sop' | 'contract' | 'letter' | 'both'
+export type MergeFieldScope = 'sop' | 'contract' | 'letter' | 'nda' | 'both'
 
 export type MergeFieldKey =
   | 'employee_name'
@@ -83,6 +85,9 @@ export type MergeFieldKey =
   | 'employer_sign_date'
   | 'sender_name'
   | 'sender_title'
+  | 'nda_effective_date'
+  | 'nda_survival_period'
+  | 'nda_penalty_idr'
 
 export type MergeFieldDef = {
   key: MergeFieldKey
@@ -110,6 +115,12 @@ function formatDateString(value: string | Date | null | undefined, lang: Lang): 
     month: 'long',
     year: 'numeric',
   })
+}
+
+// Survival period — "2 years" / "2 tahun" (kept identical to the server port).
+function formatSurvival(years: number | null | undefined, lang: Lang): string | null {
+  if (years == null) return null
+  return lang === 'id' ? `${years} tahun` : `${years} year${years === 1 ? '' : 's'}`
 }
 
 function joinAddress(org: Organization): string | null {
@@ -379,6 +390,31 @@ export const MERGE_FIELDS: Record<MergeFieldKey, MergeFieldDef> = {
     description: { en: "Title of the letter's selected sender (e.g. Director)", id: 'Jabatan pengirim (mis. Direktur)' },
     resolve: ctx => ctx.signer?.title || FIELD_BLANK,
   },
+  // NDA-only structured fields.
+  nda_effective_date: {
+    key: 'nda_effective_date',
+    scope: 'nda',
+    label: { en: 'NDA effective date', id: 'Tanggal berlaku NDA' },
+    description: { en: 'Date the NDA takes effect', id: 'Tanggal NDA mulai berlaku' },
+    resolve: ctx => formatDateString(ctx.nda?.effective_date, ctx.lang ?? 'en'),
+  },
+  nda_survival_period: {
+    key: 'nda_survival_period',
+    scope: 'nda',
+    label: { en: 'Survival period', id: 'Jangka waktu kerahasiaan' },
+    description: { en: 'How long confidentiality continues after employment ends', id: 'Berapa lama kerahasiaan berlanjut setelah masa kerja berakhir' },
+    resolve: ctx => formatSurvival(ctx.nda?.survival_years, ctx.lang ?? 'en'),
+  },
+  nda_penalty_idr: {
+    key: 'nda_penalty_idr',
+    scope: 'nda',
+    label: { en: 'Penalty (liquidated damages)', id: 'Denda (ganti rugi)' },
+    description: { en: 'Liquidated damages payable on breach, in IDR', id: 'Ganti rugi atas pelanggaran, dalam IDR' },
+    resolve: ctx => {
+      const v = ctx.nda?.penalty_idr
+      return v == null ? null : formatIdr(v, ctx.lang ?? 'en')
+    },
+  },
 }
 
 // ─── Public API ─────────────────────────────────────────────────────────────
@@ -389,7 +425,7 @@ export function isMergeFieldKey(key: string): key is MergeFieldKey {
   return key in MERGE_FIELDS
 }
 
-export function fieldsForScope(scope: 'sop' | 'contract' | 'letter'): MergeFieldDef[] {
+export function fieldsForScope(scope: 'sop' | 'contract' | 'letter' | 'nda'): MergeFieldDef[] {
   return ALL_MERGE_FIELDS.filter(f => f.scope === 'both' || f.scope === scope)
 }
 

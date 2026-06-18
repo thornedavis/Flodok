@@ -20,6 +20,9 @@ interface Props {
   placeholder?: string
   disabled?: boolean
   mode?: Mode
+  // When true, the trigger shows a red border — used by document editors to
+  // flag a required-but-empty field (mirrors the missing-field dot).
+  invalid?: boolean
 }
 
 // Estimated popover height. Used purely for the open-up-vs-down decision —
@@ -27,7 +30,7 @@ interface Props {
 const POPOVER_HEIGHT_ESTIMATE = 380
 const POPOVER_WIDTH = 300
 
-export function DateTimePicker({ value, onChange, placeholder = 'Pick a date…', disabled, mode = 'datetime' }: Props) {
+export function DateTimePicker({ value, onChange, placeholder = 'Pick a date…', disabled, mode = 'datetime', invalid }: Props) {
   const dateOnly = mode === 'date'
   const [open, setOpen] = useState(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -286,7 +289,7 @@ export function DateTimePicker({ value, onChange, placeholder = 'Pick a date…'
         disabled={disabled}
         className="flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left text-sm"
         style={{
-          borderColor: 'var(--color-border)',
+          borderColor: invalid ? 'color-mix(in srgb, var(--color-danger) 50%, transparent)' : 'var(--color-border)',
           backgroundColor: disabled ? 'var(--color-bg-tertiary)' : 'var(--color-bg)',
           color: currentDate ? 'var(--color-text)' : 'var(--color-text-tertiary)',
         }}

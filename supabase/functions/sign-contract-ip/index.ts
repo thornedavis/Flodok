@@ -20,6 +20,9 @@ import { corsHeaders, jsonResponse, getSupabaseAdmin } from '../_shared/auth.ts'
 
 interface Body {
   signature_id: string
+  // Which signatures table the id lives in. Defaults to 'contract' for
+  // backward compatibility; NDAs pass 'nda' to stamp nda_signatures.
+  doc_type?: 'contract' | 'nda'
   // Employee/candidate auth (no JWT available in the portal):
   slug?: string
   access_token?: string
@@ -53,11 +56,14 @@ Deno.serve(async (req: Request) => {
   }
 
   const admin = getSupabaseAdmin()
+  const sigTable = body.doc_type === 'nda' ? 'nda_signatures' : 'contract_signatures'
 
-  // Pull the signature so we can check both ownership paths.
+  // Pull the signature so we can check both ownership paths. The ownership
+  // columns (employee_id / signer_user_id) are identical across the contract
+  // and nda signatures tables, so the checks below are table-agnostic.
   const { data: sig, error: sigErr } = await admin
-    .from('contract_signatures')
-    .select('id, contract_id, employee_id, signer_user_id, ip_address')
+    .from(sigTable)
+    .select('id, employee_id, signer_user_id, ip_address')
     .eq('id', body.signature_id)
     .single()
   if (sigErr || !sig) return jsonResponse({ error: 'Signature not found' }, 404)
@@ -97,7 +103,7 @@ Deno.serve(async (req: Request) => {
   }
 
   const { error: updErr } = await admin
-    .from('contract_signatures')
+    .from(sigTable)
     .update({ ip_address: ip })
     .eq('id', body.signature_id)
     .is('ip_address', null) // Idempotency / anti-replay guard.

@@ -2140,6 +2140,259 @@ export type Database = {
           },
         ]
       }
+      nda_signatures: {
+        Row: {
+          consent_text: string | null
+          document_hash: string | null
+          employee_id: string | null
+          id: string
+          ip_address: string | null
+          nda_id: string
+          signature_font: string | null
+          signed_at: string
+          signer_email: string | null
+          signer_phone: string | null
+          signer_role: string
+          signer_title: string | null
+          signer_user_id: string | null
+          typed_name: string
+          user_agent: string | null
+          version_number: number
+        }
+        Insert: {
+          consent_text?: string | null
+          document_hash?: string | null
+          employee_id?: string | null
+          id?: string
+          ip_address?: string | null
+          nda_id: string
+          signature_font?: string | null
+          signed_at?: string
+          signer_email?: string | null
+          signer_phone?: string | null
+          signer_role?: string
+          signer_title?: string | null
+          signer_user_id?: string | null
+          typed_name: string
+          user_agent?: string | null
+          version_number: number
+        }
+        Update: {
+          consent_text?: string | null
+          document_hash?: string | null
+          employee_id?: string | null
+          id?: string
+          ip_address?: string | null
+          nda_id?: string
+          signature_font?: string | null
+          signed_at?: string
+          signer_email?: string | null
+          signer_phone?: string | null
+          signer_role?: string
+          signer_title?: string | null
+          signer_user_id?: string | null
+          typed_name?: string
+          user_agent?: string | null
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nda_signatures_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nda_signatures_nda_id_fkey"
+            columns: ["nda_id"]
+            isOneToOne: false
+            referencedRelation: "ndas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nda_signatures_signer_user_id_fkey"
+            columns: ["signer_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nda_tags: {
+        Row: {
+          nda_id: string
+          tag_id: string
+        }
+        Insert: {
+          nda_id: string
+          tag_id: string
+        }
+        Update: {
+          nda_id?: string
+          tag_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nda_tags_nda_id_fkey"
+            columns: ["nda_id"]
+            isOneToOne: false
+            referencedRelation: "ndas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nda_tags_tag_id_fkey"
+            columns: ["tag_id"]
+            isOneToOne: false
+            referencedRelation: "tags"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nda_versions: {
+        Row: {
+          change_summary: string | null
+          changed_by: string
+          content_doc: Json | null
+          content_markdown: string
+          content_markdown_id: string | null
+          created_at: string
+          employee_id: string | null
+          id: string
+          nda_id: string
+          resolved_markdown_en: string | null
+          resolved_markdown_id: string | null
+          translation_error: string | null
+          translation_status: string
+          version_number: number
+        }
+        Insert: {
+          change_summary?: string | null
+          changed_by: string
+          content_doc?: Json | null
+          content_markdown?: string
+          content_markdown_id?: string | null
+          created_at?: string
+          employee_id?: string | null
+          id?: string
+          nda_id: string
+          resolved_markdown_en?: string | null
+          resolved_markdown_id?: string | null
+          translation_error?: string | null
+          translation_status?: string
+          version_number: number
+        }
+        Update: {
+          change_summary?: string | null
+          changed_by?: string
+          content_doc?: Json | null
+          content_markdown?: string
+          content_markdown_id?: string | null
+          created_at?: string
+          employee_id?: string | null
+          id?: string
+          nda_id?: string
+          resolved_markdown_en?: string | null
+          resolved_markdown_id?: string | null
+          translation_error?: string | null
+          translation_status?: string
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nda_versions_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nda_versions_nda_id_fkey"
+            columns: ["nda_id"]
+            isOneToOne: false
+            referencedRelation: "ndas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ndas: {
+        Row: {
+          content_doc: Json | null
+          content_markdown: string
+          content_markdown_id: string | null
+          created_at: string
+          current_version: number
+          deleted_at: string | null
+          deleted_by: string | null
+          document_number: string | null
+          effective_date: string | null
+          employee_id: string | null
+          id: string
+          org_id: string
+          penalty_idr: number | null
+          status: string
+          survival_years: number | null
+          title: string
+          trashed_with_parent_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          content_doc?: Json | null
+          content_markdown?: string
+          content_markdown_id?: string | null
+          created_at?: string
+          current_version?: number
+          deleted_at?: string | null
+          deleted_by?: string | null
+          document_number?: string | null
+          effective_date?: string | null
+          employee_id?: string | null
+          id?: string
+          org_id: string
+          penalty_idr?: number | null
+          status?: string
+          survival_years?: number | null
+          title: string
+          trashed_with_parent_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          content_doc?: Json | null
+          content_markdown?: string
+          content_markdown_id?: string | null
+          created_at?: string
+          current_version?: number
+          deleted_at?: string | null
+          deleted_by?: string | null
+          document_number?: string | null
+          effective_date?: string | null
+          employee_id?: string | null
+          id?: string
+          org_id?: string
+          penalty_idr?: number | null
+          status?: string
+          survival_years?: number | null
+          title?: string
+          trashed_with_parent_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ndas_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ndas_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       org_integrations: {
         Row: {
           config: Json
@@ -2527,6 +2780,57 @@ export type Database = {
           },
           {
             foreignKeyName: "pay_adjustments_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pay_period_settlements: {
+        Row: {
+          adjustment_net_idr: number
+          allowance_idr: number
+          base_idr: number
+          employee_id: string
+          id: string
+          org_id: string
+          payout_idr: number
+          period_month: string
+          settled_at: string
+        }
+        Insert: {
+          adjustment_net_idr?: number
+          allowance_idr?: number
+          base_idr?: number
+          employee_id: string
+          id?: string
+          org_id: string
+          payout_idr?: number
+          period_month: string
+          settled_at?: string
+        }
+        Update: {
+          adjustment_net_idr?: number
+          allowance_idr?: number
+          base_idr?: number
+          employee_id?: string
+          id?: string
+          org_id?: string
+          payout_idr?: number
+          period_month?: string
+          settled_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pay_period_settlements_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pay_period_settlements_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
@@ -3344,6 +3648,10 @@ export type Database = {
       }
     }
     Functions: {
+      _settle_pay_period: {
+        Args: { p_employee_id: string; p_period_month: string }
+        Returns: undefined
+      }
       _trash_assert_caller_authorized: {
         Args: { p_org_id: string }
         Returns: undefined
@@ -3376,6 +3684,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      admin_pay_settlement: {
+        Args: { p_employee_id: string; p_period_month: string }
+        Returns: Json
       }
       admin_rewards_roster: {
         Args: { all_time?: boolean; target_period_month?: string }
@@ -3686,13 +3998,167 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      portal_advance_to_signed: {
+        Args: { emp_slug: string; emp_token: string }
+        Returns: {
+          access_token: string
+          address: string | null
+          applied_for_jd_id: string | null
+          bank_account_holder: string | null
+          bank_account_number: string | null
+          bank_name: string | null
+          blood_type: string | null
+          branch_name: string | null
+          citizen_id_address: string | null
+          class: string | null
+          created_at: string
+          date_of_birth: string | null
+          deleted_at: string | null
+          deleted_by: string | null
+          email: string | null
+          employee_code: string | null
+          employment_type: string | null
+          first_name: string | null
+          gender: string | null
+          grade: string | null
+          id: string
+          job_level: string | null
+          job_position: string | null
+          join_date: string | null
+          kk_photo_url: string | null
+          ktp_nik: string | null
+          ktp_photo_url: string | null
+          last_name: string | null
+          last_notifications_seen_at: string | null
+          lifecycle_stage: string
+          marital_status: string | null
+          name: string
+          notes: string | null
+          npwp: string | null
+          org_id: string
+          passport_expiry: string | null
+          passport_number: string | null
+          phone: string
+          photo_url: string | null
+          place_of_birth: string | null
+          postal_code: string | null
+          probation_end_date: string | null
+          religion: string | null
+          resign_date: string | null
+          separation_reason: string | null
+          separation_type: string | null
+          slug: string
+          source: string | null
+          source_request_id: string | null
+          status: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "employees"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       portal_badges: {
         Args: { emp_slug: string; emp_token: string }
+        Returns: Json
+      }
+      portal_document_versions: {
+        Args: {
+          emp_slug: string
+          emp_token: string
+          p_doc_id: string
+          p_doc_type: string
+        }
         Returns: Json
       }
       portal_documents: {
         Args: { emp_slug: string; emp_token: string }
         Returns: Json
+      }
+      portal_feed: {
+        Args: { emp_slug: string; emp_token: string; p_limit?: number }
+        Returns: Json
+      }
+      portal_get_emergency_contact: {
+        Args: { emp_slug: string; emp_token: string }
+        Returns: {
+          created_at: string
+          employee_id: string
+          id: string
+          name: string
+          org_id: string
+          phone: string
+          relationship: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "employee_emergency_contacts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      portal_get_employee: {
+        Args: { emp_slug: string; emp_token: string }
+        Returns: {
+          access_token: string
+          address: string | null
+          applied_for_jd_id: string | null
+          bank_account_holder: string | null
+          bank_account_number: string | null
+          bank_name: string | null
+          blood_type: string | null
+          branch_name: string | null
+          citizen_id_address: string | null
+          class: string | null
+          created_at: string
+          date_of_birth: string | null
+          deleted_at: string | null
+          deleted_by: string | null
+          email: string | null
+          employee_code: string | null
+          employment_type: string | null
+          first_name: string | null
+          gender: string | null
+          grade: string | null
+          id: string
+          job_level: string | null
+          job_position: string | null
+          join_date: string | null
+          kk_photo_url: string | null
+          ktp_nik: string | null
+          ktp_photo_url: string | null
+          last_name: string | null
+          last_notifications_seen_at: string | null
+          lifecycle_stage: string
+          marital_status: string | null
+          name: string
+          notes: string | null
+          npwp: string | null
+          org_id: string
+          passport_expiry: string | null
+          passport_number: string | null
+          phone: string
+          photo_url: string | null
+          place_of_birth: string | null
+          postal_code: string | null
+          probation_end_date: string | null
+          religion: string | null
+          resign_date: string | null
+          separation_reason: string | null
+          separation_type: string | null
+          slug: string
+          source: string | null
+          source_request_id: string | null
+          status: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "employees"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       portal_home:
         | { Args: { emp_slug: string; emp_token: string }; Returns: Json }
@@ -3707,6 +4173,102 @@ export type Database = {
       portal_mark_notifications_seen: {
         Args: { emp_slug: string; emp_token: string }
         Returns: undefined
+      }
+      portal_sign_contract: {
+        Args: {
+          emp_slug: string
+          emp_token: string
+          p_consent_text?: string
+          p_contract_id: string
+          p_document_hash?: string
+          p_signature_font?: string
+          p_typed_name: string
+          p_user_agent?: string
+        }
+        Returns: {
+          consent_text: string | null
+          contract_id: string
+          document_hash: string | null
+          employee_id: string | null
+          id: string
+          ip_address: string | null
+          signature_font: string | null
+          signed_at: string
+          signer_email: string | null
+          signer_phone: string | null
+          signer_role: string
+          signer_title: string | null
+          signer_user_id: string | null
+          typed_name: string
+          user_agent: string | null
+          version_number: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "contract_signatures"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      portal_sign_jd: {
+        Args: {
+          emp_slug: string
+          emp_token: string
+          p_jd_id: string
+          p_signature_font?: string
+          p_typed_name: string
+        }
+        Returns: {
+          employee_id: string
+          id: string
+          job_description_id: string
+          signature_font: string | null
+          signed_at: string
+          typed_name: string
+          version_number: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "job_description_signatures"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      portal_sign_nda: {
+        Args: {
+          emp_slug: string
+          emp_token: string
+          p_consent_text?: string
+          p_document_hash?: string
+          p_nda_id: string
+          p_signature_font?: string
+          p_typed_name: string
+          p_user_agent?: string
+        }
+        Returns: {
+          consent_text: string | null
+          document_hash: string | null
+          employee_id: string | null
+          id: string
+          ip_address: string | null
+          nda_id: string
+          signature_font: string | null
+          signed_at: string
+          signer_email: string | null
+          signer_phone: string | null
+          signer_role: string
+          signer_title: string | null
+          signer_user_id: string | null
+          typed_name: string
+          user_agent: string | null
+          version_number: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "nda_signatures"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       portal_sign_sop: {
         Args: {
@@ -3772,6 +4334,92 @@ export type Database = {
       portal_unread_count: {
         Args: { emp_slug: string; emp_token: string }
         Returns: number
+      }
+      portal_update_onboarding_profile: {
+        Args: { emp_slug: string; emp_token: string; p_patch: Json }
+        Returns: {
+          access_token: string
+          address: string | null
+          applied_for_jd_id: string | null
+          bank_account_holder: string | null
+          bank_account_number: string | null
+          bank_name: string | null
+          blood_type: string | null
+          branch_name: string | null
+          citizen_id_address: string | null
+          class: string | null
+          created_at: string
+          date_of_birth: string | null
+          deleted_at: string | null
+          deleted_by: string | null
+          email: string | null
+          employee_code: string | null
+          employment_type: string | null
+          first_name: string | null
+          gender: string | null
+          grade: string | null
+          id: string
+          job_level: string | null
+          job_position: string | null
+          join_date: string | null
+          kk_photo_url: string | null
+          ktp_nik: string | null
+          ktp_photo_url: string | null
+          last_name: string | null
+          last_notifications_seen_at: string | null
+          lifecycle_stage: string
+          marital_status: string | null
+          name: string
+          notes: string | null
+          npwp: string | null
+          org_id: string
+          passport_expiry: string | null
+          passport_number: string | null
+          phone: string
+          photo_url: string | null
+          place_of_birth: string | null
+          postal_code: string | null
+          probation_end_date: string | null
+          religion: string | null
+          resign_date: string | null
+          separation_reason: string | null
+          separation_type: string | null
+          slug: string
+          source: string | null
+          source_request_id: string | null
+          status: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "employees"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      portal_upsert_emergency_contact: {
+        Args: {
+          emp_slug: string
+          emp_token: string
+          p_name: string
+          p_phone: string
+          p_relationship: string
+        }
+        Returns: {
+          created_at: string
+          employee_id: string
+          id: string
+          name: string
+          org_id: string
+          phone: string
+          relationship: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "employee_emergency_contacts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       publish_job_description: {
         Args: { p_id: string }

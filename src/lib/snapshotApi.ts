@@ -9,7 +9,7 @@ import { supabase } from './supabase'
 import type { DocumentDoc } from './documentDoc'
 
 export type SnapshotInput = {
-  table: 'sops' | 'contracts'
+  table: 'sops' | 'contracts' | 'ndas'
   doc_id: string
   changed_by: string
   // Structured-document path — Phase C onward. When provided, the snapshot

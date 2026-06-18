@@ -11,6 +11,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { DocumentEditor } from '../../components/editor/bilingual/DocumentEditor'
 import { DocumentEditShell, EDITOR_STICKY_TOP_PX } from '../../components/editor/DocumentEditShell'
+import { ToolbarButton } from '../../components/editor/ToolbarButton'
 import { useLang } from '../../contexts/LanguageContext'
 import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning'
 import { useBreadcrumbTrailing } from '../../contexts/BreadcrumbContext'
@@ -24,11 +25,13 @@ import type { User, DocumentTemplate, Organization } from '../../types/aliases'
 
 // Per-type accent for the top-bar icon chip, matching the document card
 // colour language (SOPs=primary, contracts=success, JDs=warning).
+// Neutral grey accent for the (non-clickable) type label — see Documents.tsx typeColors.
 const TYPE_ACCENT: Record<DocumentType, string> = {
-  sop: 'var(--color-primary)',
-  contract: 'var(--color-success)',
-  job_description: 'var(--color-warning)',
-  letter: 'var(--color-primary)',
+  sop: 'var(--color-text-secondary)',
+  contract: 'var(--color-text-secondary)',
+  job_description: 'var(--color-text-secondary)',
+  letter: 'var(--color-text-secondary)',
+  nda: 'var(--color-text-secondary)',
 }
 
 // Templates can be any document type; map the stored `type` string to the
@@ -37,6 +40,7 @@ function indexTypeFor(type: string): DocumentType {
   return type === 'sop' ? 'sop'
     : type === 'job_description' ? 'job_description'
     : type === 'letter' ? 'letter'
+    : type === 'nda' ? 'nda'
     : 'contract'
 }
 
@@ -74,6 +78,16 @@ function TemplateTypeIcon({ type }: { type: DocumentType }) {
       <svg {...common}>
         <rect x="2" y="4" width="20" height="16" rx="2" />
         <path d="m22 7-10 5L2 7" />
+      </svg>
+    )
+  }
+  if (type === 'nda') {
+    // Reuse the contract glyph — file with a signature scribble.
+    return (
+      <svg {...common}>
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+        <polyline points="14 2 14 8 20 8" />
+        <path d="M7 16q2-3 4 0t4 0" />
       </svg>
     )
   }
@@ -211,20 +225,16 @@ export function DocumentTemplateEdit({ user }: { user: User }) {
   )
 
   const actions = (
-    <>
-      {/* Cancel is provided by DocumentEditShell (backTo); don't duplicate it here. */}
-      <button
-        onClick={handleSave}
-        disabled={saving || !canWrite || !hasChanges}
-        title={!canWrite ? t.dunningWriteBlocked : undefined}
-        className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
-        style={{ backgroundColor: 'var(--color-primary)' }}
-      >
-        {saving ? (
-          <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>{t.saving}</>
-        ) : t.saveTemplate}
-      </button>
-    </>
+    /* Cancel is provided by DocumentEditShell (backTo); don't duplicate it here. */
+    <ToolbarButton
+      variant="primary"
+      onClick={handleSave}
+      disabled={saving || !canWrite || !hasChanges}
+      title={!canWrite ? t.dunningWriteBlocked : undefined}
+      loading={saving}
+    >
+      {saving ? t.saving : t.saveTemplate}
+    </ToolbarButton>
   )
 
   const sidebar = (
@@ -343,11 +353,12 @@ export function DocumentTemplateEdit({ user }: { user: User }) {
     <DocumentEditShell
       storageKey="templateEdit"
       icon={<TemplateTypeIcon type={type} />}
-      accent={TYPE_ACCENT[type] ?? 'var(--color-primary)'}
+      accent={TYPE_ACCENT[type] ?? 'var(--color-text-secondary)'}
       typeLabel={t.documentTypeTemplateSuffix(
         type === 'sop' ? t.documentTypeSop
           : type === 'job_description' ? t.documentTypeJobDescription
           : type === 'letter' ? t.letterTypeLabel
+          : type === 'nda' ? t.documentTypeNda
           : t.documentTypeContract,
       )}
       title={title}
@@ -355,6 +366,7 @@ export function DocumentTemplateEdit({ user }: { user: User }) {
       canEditTitle={canWrite}
       badge={badge}
       backTo={documentsIndexPath(indexType)}
+      dirty={hasChanges}
       actions={actions}
       error={error}
       sidebar={sidebar}
@@ -372,7 +384,7 @@ export function DocumentTemplateEdit({ user }: { user: User }) {
         stickyToolbar
         stickyToolbarOffset={`${EDITOR_STICKY_TOP_PX}px`}
         mergeFields={{
-          scope: type === 'contract' ? 'contract' : type === 'letter' ? 'letter' : 'sop',
+          scope: type === 'contract' ? 'contract' : type === 'nda' ? 'nda' : type === 'letter' ? 'letter' : 'sop',
           getContext: () => ({
             employee: null,
             organization,
@@ -382,7 +394,7 @@ export function DocumentTemplateEdit({ user }: { user: User }) {
             signer: { name: user.name, title: user.title },
           }),
         }}
-        aiGenerate={{ docType: type === 'contract' ? 'contract' : type === 'job_description' ? 'job_description' : 'sop', title }}
+        aiGenerate={{ docType: type === 'contract' || type === 'nda' ? 'contract' : type === 'job_description' ? 'job_description' : 'sop', title }}
       />
     </DocumentEditShell>
   )

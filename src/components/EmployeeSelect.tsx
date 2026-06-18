@@ -23,6 +23,7 @@ export function EmployeeSelect({
   employees,
   disabled,
   emptyLabel,
+  invalid,
 }: {
   value: string | null
   onChange: (next: string | null) => void
@@ -33,6 +34,9 @@ export function EmployeeSelect({
   // "No employee linked" (assignment context); a filter passes e.g.
   // "All employees".
   emptyLabel?: string
+  // When true, the trigger shows a red border — used by document editors to
+  // flag a required-but-empty field (mirrors the missing-field dot).
+  invalid?: boolean
 }) {
   const { t } = useLang()
   const noneLabel = emptyLabel ?? t.noEmployeeLinked
@@ -98,7 +102,7 @@ export function EmployeeSelect({
         aria-expanded={open}
         className="flex w-full items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left text-sm disabled:cursor-not-allowed disabled:opacity-50"
         style={{
-          borderColor: 'var(--color-border)',
+          borderColor: invalid ? 'color-mix(in srgb, var(--color-danger) 50%, transparent)' : 'var(--color-border)',
           backgroundColor: 'var(--color-bg)',
           color: selected ? 'var(--color-text)' : 'var(--color-text-tertiary)',
         }}

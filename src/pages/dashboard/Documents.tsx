@@ -39,6 +39,7 @@ import { Modal } from '../../components/Modal'
 import { Skeleton } from '../../components/Skeleton'
 import { trashDocument } from '../../lib/trash'
 import { buildPkwtStarterDoc } from '../../lib/pkwtStarterDoc'
+import { buildNdaStarterDoc } from '../../lib/ndaStarterDoc'
 import { docAsJson, docPreviewLines, emptyDocumentDoc } from '../../lib/documentDoc'
 import { type EmpDeptShape } from '../../lib/employee'
 import type { Employee, User } from '../../types/aliases'
@@ -179,7 +180,7 @@ function AllDocumentsView({ user }: { user: User }) {
 
   useEffect(() => {
     async function load() {
-      const [sopResult, contractResult, jdResult, letterResult, employeeResult] = await Promise.all([
+      const [sopResult, contractResult, ndaResult, jdResult, letterResult, employeeResult] = await Promise.all([
         supabase
           .from('sops')
           .select('id, title, status, current_version, updated_at, created_at, content_doc, employee_id')
@@ -189,6 +190,10 @@ function AllDocumentsView({ user }: { user: User }) {
           .select('id, title, status, current_version, updated_at, created_at, content_doc, employee_id')
           .eq('org_id', user.org_id)
           .eq('is_template', false),
+        supabase
+          .from('ndas')
+          .select('id, title, status, current_version, updated_at, created_at, content_doc, employee_id')
+          .eq('org_id', user.org_id),
         supabase
           .from('job_descriptions')
           .select('id, title, status, current_version, updated_at, created_at, content_doc')
@@ -236,6 +241,17 @@ function AllDocumentsView({ user }: { user: User }) {
         employee_id: c.employee_id ?? null,
         preview: previewOf(c.content_doc),
       }))
+      const ndas: AllDocItem[] = (ndaResult.data || []).map(n => ({
+        id: n.id,
+        type: 'nda' as const,
+        title: n.title,
+        status: n.status,
+        current_version: n.current_version,
+        updated_at: n.updated_at,
+        created_at: n.created_at,
+        employee_id: n.employee_id ?? null,
+        preview: previewOf(n.content_doc),
+      }))
       const jds: AllDocItem[] = (jdResult.data || []).map(j => ({
         id: j.id,
         type: 'job_description' as const,
@@ -259,7 +275,7 @@ function AllDocumentsView({ user }: { user: User }) {
         preview: previewOf(l.content_doc),
       }))
 
-      const merged = [...sops, ...contracts, ...jds, ...letters].sort((a, b) =>
+      const merged = [...sops, ...contracts, ...ndas, ...jds, ...letters].sort((a, b) =>
         (b.updated_at || b.created_at).localeCompare(a.updated_at || a.created_at),
       )
 
@@ -272,7 +288,7 @@ function AllDocumentsView({ user }: { user: User }) {
   // Counts per type are computed from the unfiltered set so the dropdown
   // always shows total volume per type, not "volume given the other filters."
   const countByType: Record<DocumentType, number> = useMemo(() => {
-    const out: Record<DocumentType, number> = { sop: 0, contract: 0, job_description: 0, letter: 0 }
+    const out: Record<DocumentType, number> = { sop: 0, contract: 0, job_description: 0, letter: 0, nda: 0 }
     for (const item of items) out[item.type] += 1
     return out
   }, [items])
@@ -405,6 +421,26 @@ function AllDocumentsView({ user }: { user: User }) {
     navigate(documentEditPath('contract', data.id))
   }
 
+  async function createBlankNda() {
+    if (!canWrite) return
+    const { data, error } = await supabase
+      .from('ndas')
+      .insert({
+        org_id: user.org_id,
+        title: '',
+        status: 'draft' as const,
+        content_doc: docAsJson(buildNdaStarterDoc()),
+        survival_years: 2,
+      })
+      .select()
+      .single()
+    if (error || !data) {
+      window.alert(error?.message ?? 'Could not create NDA.')
+      return
+    }
+    navigate(documentEditPath('nda', data.id))
+  }
+
   // ─── Recent-doc card actions (kebab menu) ──────────────────────────
   //
   // Mirrors the per-type listings' Duplicate/Delete, generalised across
@@ -453,6 +489,17 @@ function AllDocumentsView({ user }: { user: User }) {
         contract_type: src.contract_type,
         annual_leave_days: src.annual_leave_days,
         probation_months: src.probation_months,
+      }
+    } else if (item.type === 'nda') {
+      insertObj = {
+        org_id: user.org_id,
+        employee_id: src.employee_id ?? null,
+        title: copyTitle,
+        content_doc: src.content_doc ?? docAsJson(emptyDocumentDoc()),
+        status: 'draft',
+        effective_date: src.effective_date ?? null,
+        survival_years: src.survival_years,
+        penalty_idr: src.penalty_idr,
       }
     } else if (item.type === 'letter') {
       // Letters duplicate as a fresh draft — drop the issued state,
@@ -532,6 +579,7 @@ function AllDocumentsView({ user }: { user: User }) {
       <StartNewSection
         onCreateSop={createBlankSop}
         onCreateContract={createBlankContract}
+        onCreateNda={createBlankNda}
         onCreateLetter={createBlankLetter}
         onCreateJobDescription={() => navigate('/dashboard/hiring/jds/new?from=documents')}
         onOpenTemplates={() => navigate('/dashboard/templates')}
@@ -614,6 +662,7 @@ function AllDocumentsView({ user }: { user: User }) {
 function StartNewSection({
   onCreateSop,
   onCreateContract,
+  onCreateNda,
   onCreateLetter,
   onCreateJobDescription,
   onOpenTemplates,
@@ -621,6 +670,7 @@ function StartNewSection({
 }: {
   onCreateSop: () => void
   onCreateContract: () => void
+  onCreateNda: () => void
   onCreateLetter: () => void
   onCreateJobDescription: () => void
   onOpenTemplates: () => void
@@ -663,13 +713,19 @@ function StartNewSection({
         />
         <CreateTile
           label={t.documentsNewContract}
-          accent="var(--color-success)"
+          accent="var(--color-primary)"
           disabled={!canWrite}
           onClick={onCreateContract}
         />
         <CreateTile
+          label={t.documentsNewNda}
+          accent="var(--color-primary)"
+          disabled={!canWrite}
+          onClick={onCreateNda}
+        />
+        <CreateTile
           label={t.documentsNewJobDescription}
-          accent="var(--color-warning)"
+          accent="var(--color-primary)"
           disabled={!canWrite}
           onClick={onCreateJobDescription}
         />
@@ -895,6 +951,7 @@ function RecentFilters({
 function typeLabel(t: ReturnType<typeof useLang>['t'], type: DocumentType): string {
   if (type === 'sop') return t.documentsAllTypeBadgeSop
   if (type === 'contract') return t.documentsAllTypeBadgeContract
+  if (type === 'nda') return t.documentsAllTypeBadgeNda
   if (type === 'letter') return t.documentsAllTypeBadgeLetter
   return t.documentsAllTypeBadgeJobDescription
 }
@@ -927,6 +984,17 @@ function DocTypeIcon({ type, size = 20 }: { type: DocumentType; size?: number })
       <svg {...common}>
         <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
         <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+      </svg>
+    )
+  }
+  if (type === 'nda') {
+    return (
+      <svg {...common}>
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+        <polyline points="14 2 14 8 20 8" />
+        <line x1="16" y1="13" x2="8" y2="13" />
+        <line x1="16" y1="17" x2="8" y2="17" />
+        <line x1="10" y1="9" x2="8" y2="9" />
       </svg>
     )
   }
@@ -1028,13 +1096,15 @@ function RecentGrid({
     draft: t.statusDraft,
     archived: t.statusArchived,
   }
-  // Per-type accent for the footer type icon, matching the create-tile
-  // colour language.
+  // The type label/icon uses a neutral grey, not blue: blue now reads as
+  // "clickable" (the create tiles + buttons), so this non-interactive type cue
+  // stays neutral and leaves the Draft/Issued status badge as the only colour.
   const typeColors: Record<DocumentType, string> = {
-    sop: 'var(--color-primary)',
-    contract: 'var(--color-success)',
-    job_description: 'var(--color-warning)',
-    letter: 'var(--color-primary)',
+    sop: 'var(--color-text-secondary)',
+    contract: 'var(--color-text-secondary)',
+    job_description: 'var(--color-text-secondary)',
+    letter: 'var(--color-text-secondary)',
+    nda: 'var(--color-text-secondary)',
   }
 
   return (
@@ -1272,6 +1342,7 @@ function RecentList({ items, onOpen }: { items: AllDocItem[]; onOpen: (item: All
     contract: t.documentsAllTypeBadgeContract,
     job_description: t.documentsAllTypeBadgeJobDescription,
     letter: t.documentsAllTypeBadgeLetter,
+    nda: t.documentsAllTypeBadgeNda,
   }
 
   return (

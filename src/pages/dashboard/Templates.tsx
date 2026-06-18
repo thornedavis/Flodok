@@ -106,6 +106,7 @@ export function Templates({ user }: { user: User }) {
       contract: t.templateNewContractUntitled,
       job_description: t.jdTemplateUntitled,
       letter: t.templateNewLetterUntitled,
+      nda: t.templateNewNdaUntitled,
     }
     const { data, error } = await supabase
       .from('document_templates')
@@ -183,7 +184,7 @@ export function Templates({ user }: { user: User }) {
   // Counts per type from the unfiltered set so the filter always shows
   // total volume per type, not "volume given the other filters."
   const countByType: Record<DocumentType, number> = useMemo(() => {
-    const out: Record<DocumentType, number> = { sop: 0, contract: 0, job_description: 0, letter: 0 }
+    const out: Record<DocumentType, number> = { sop: 0, contract: 0, job_description: 0, letter: 0, nda: 0 }
     for (const item of items) {
       if (DOCUMENT_TYPES.includes(item.type)) out[item.type] += 1
     }
@@ -343,6 +344,7 @@ function TypePickerTile({
     contract: t.documentsAllTypeBadgeContract,
     job_description: t.documentsAllTypeBadgeJobDescription,
     letter: t.documentsAllTypeBadgeLetter,
+    nda: t.documentsAllTypeBadgeNda,
   }
   return (
     <button
@@ -558,11 +560,13 @@ function DocTypeIcon({ type }: { type: DocumentType }) {
   )
 }
 
+// Neutral grey accent for the (non-clickable) type label — see Documents.tsx typeColors.
 const TYPE_COLORS: Record<DocumentType, string> = {
-  sop: 'var(--color-primary)',
-  contract: 'var(--color-success)',
-  job_description: 'var(--color-warning)',
-  letter: 'var(--color-primary)',
+  sop: 'var(--color-text-secondary)',
+  contract: 'var(--color-text-secondary)',
+  job_description: 'var(--color-text-secondary)',
+  letter: 'var(--color-text-secondary)',
+  nda: 'var(--color-text-secondary)',
 }
 
 function TemplateGridSkeleton({ count }: { count: number }) {
@@ -706,6 +710,7 @@ function TemplateList({ items, onOpen, onUse, usingId, canWrite }: { items: Temp
     contract: t.documentsAllTypeBadgeContract,
     job_description: t.documentsAllTypeBadgeJobDescription,
     letter: t.documentsAllTypeBadgeLetter,
+    nda: t.documentsAllTypeBadgeNda,
   }
 
   return (

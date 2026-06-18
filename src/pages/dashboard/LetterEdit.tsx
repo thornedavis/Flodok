@@ -1,15 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useParams, Link, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { DocumentEditor } from '../../components/editor/bilingual/DocumentEditor'
 import { DocumentEditShell, EDITOR_STICKY_TOP_PX } from '../../components/editor/DocumentEditShell'
-import { SaveAsTemplateButton } from '../../components/SaveAsTemplateButton'
+import { SaveAsTemplateModal } from '../../components/SaveAsTemplateButton'
+import { ToolbarButton } from '../../components/editor/ToolbarButton'
+import { ToolbarMoreMenu, type ToolbarMenuItem } from '../../components/editor/ToolbarMoreMenu'
 import { EmployeeSelect } from '../../components/EmployeeSelect'
 import { DateTimePicker } from '../../components/DateTimePicker'
 import { useLang } from '../../contexts/LanguageContext'
 import { type EmpDeptShape } from '../../lib/employee'
 import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning'
 import { useDocumentViewPref } from '../../hooks/useDocumentViewPref'
+import { useSaveFlash } from '../../hooks/useSaveFlash'
 import { emptyDocumentDoc, type DocumentDoc } from '../../lib/documentDoc'
 import { useBilling } from '../../contexts/BillingContext'
 import { documentHistoryPath } from '../../lib/documentTypes'
@@ -36,6 +39,8 @@ export function LetterEdit({ user }: { user: User }) {
   const { t } = useLang()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const [tplOpen, setTplOpen] = useState(false)
+  const { flash: savedFlash, show: showSaved } = useSaveFlash()
   const { canWrite } = useBilling()
   const { view, setView } = useDocumentViewPref('letter', id ?? null)
   const [downloading, setDownloading] = useState(false)
@@ -224,8 +229,10 @@ export function LetterEdit({ user }: { user: User }) {
 
   async function handleSaveAsDraft() {
     setSavingMode('draft')
-    try { await persistLetter() }
-    finally { setSavingMode(null) }
+    try {
+      const saved = await persistLetter()
+      if (saved) showSaved(false)
+    } finally { setSavingMode(null) }
   }
 
   async function handleIssue() {
@@ -250,6 +257,10 @@ export function LetterEdit({ user }: { user: User }) {
     backgroundColor: 'var(--color-bg)',
     color: 'var(--color-text)',
   } as React.CSSProperties
+  // Required-but-empty fields get a red border (same condition as the
+  // missing-field dot) so the "fill me before issuing" cue is unmissable.
+  const fieldStyle = (key: string): React.CSSProperties =>
+    missingKeys.has(key) ? { ...inputStyle, borderColor: 'color-mix(in srgb, var(--color-danger) 50%, transparent)' } : inputStyle
 
   const isIssued = status === 'issued'
   const isArchived = status === 'archived'
@@ -328,40 +339,27 @@ export function LetterEdit({ user }: { user: User }) {
     setDownloading(false)
   }
 
+  const menuItems: ToolbarMenuItem[] = [
+    { key: 'download', icon: 'download', label: downloading ? t.generatingPdf : t.downloadPdf, onClick: handleDownloadPdf, disabled: downloading },
+    { key: 'template', icon: 'template', label: t.contractSaveAsTemplate, onClick: () => setTplOpen(true), disabled: !canWrite, title: !canWrite ? t.dunningWriteBlocked : undefined },
+    { key: 'history', icon: 'history', label: t.historyLinkLabel, to: documentHistoryPath('letter', letter.id) },
+    { key: 'delete', icon: 'trash', label: t.delete, onClick: handleDelete, danger: true, disabled: saving || !canWrite, title: !canWrite ? t.dunningWriteBlocked : undefined },
+  ]
+
   const actions = (
     <>
-      <button type="button" onClick={handleDelete} disabled={saving || !canWrite} title={!canWrite ? t.dunningWriteBlocked : undefined}
-        className="rounded-lg border px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
-        style={{ borderColor: 'var(--color-border)', color: 'var(--color-danger)' }}>
-        {t.delete}
-      </button>
-      <Link to={documentHistoryPath('letter', letter.id)} className="rounded-lg border px-3 py-1.5 text-xs font-medium" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>
-        {t.historyLinkLabel}
-      </Link>
-      <button type="button" onClick={handleDownloadPdf} disabled={downloading}
-        className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-50"
-        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>
-        {downloading && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>}
-        {downloading ? t.generatingPdf : t.downloadPdf}
-      </button>
-      <SaveAsTemplateButton
-        orgId={user.org_id}
-        defaultTitle={title}
-        disabled={!canWrite}
-        getSource={() => ({ type: 'letter', contentDoc })}
-      />
-      <button
+      <ToolbarMoreMenu items={menuItems} />
+      <ToolbarButton
+        variant="save"
         onClick={handleSaveAsDraft}
         disabled={saving || !canWrite || (!hasChanges && status === 'draft')}
         title={!canWrite ? t.dunningWriteBlocked : undefined}
-        className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
-        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+        loading={savingMode === 'draft'}
       >
-        {savingMode === 'draft' ? (
-          <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>{t.saving}</>
-        ) : t.saveAsDraft}
-      </button>
-      <button
+        {savingMode === 'draft' ? t.saving : t.saveAsDraft}
+      </ToolbarButton>
+      <ToolbarButton
+        variant="primary"
         onClick={handleIssue}
         disabled={saving || !canWrite || !canIssue}
         title={
@@ -372,13 +370,18 @@ export function LetterEdit({ user }: { user: User }) {
           isArchived ? t.letterIssueDisabledArchived :
           undefined
         }
-        className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
-        style={{ backgroundColor: 'var(--color-primary)' }}
+        loading={savingMode === 'issue'}
       >
-        {savingMode === 'issue' ? (
-          <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>{t.letterIssuing}</>
-        ) : isIssued ? t.letterIssuedButton : t.letterIssueButton}
-      </button>
+        {savingMode === 'issue' ? t.letterIssuing : isIssued ? t.letterIssuedButton : t.letterIssueButton}
+      </ToolbarButton>
+      {tplOpen && (
+        <SaveAsTemplateModal
+          orgId={user.org_id}
+          defaultTitle={title}
+          source={{ type: 'letter', contentDoc }}
+          onClose={() => setTplOpen(false)}
+        />
+      )}
     </>
   )
 
@@ -388,6 +391,7 @@ export function LetterEdit({ user }: { user: User }) {
       <div>
         <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>{t.letterRecipientLabel}{missingDot('employee')}</label>
         <EmployeeSelect
+          invalid={missingKeys.has('employee')}
           value={employeeId}
           onChange={setEmployeeId}
           employees={allEmployees}
@@ -405,7 +409,7 @@ export function LetterEdit({ user }: { user: User }) {
             onChange={e => setSenderUserId(e.target.value || null)}
             disabled={!canWrite || isIssued || isArchived}
             className="w-full appearance-none rounded-lg border px-3 py-2 pr-8 text-sm disabled:opacity-50"
-            style={inputStyle}
+            style={fieldStyle('sender')}
           >
             <option value="">{t.letterNoSender}</option>
             {senderCandidates.map(u => (
@@ -561,13 +565,15 @@ export function LetterEdit({ user }: { user: User }) {
     <DocumentEditShell
       storageKey="letterEdit"
       icon={<LetterIcon />}
-      accent="var(--color-primary)"
+      accent="var(--color-text-secondary)"
       typeLabel={t.letterTypeLabel}
       title={title}
       onTitleChange={setTitle}
       canEditTitle={canWrite && !isIssued && !isArchived}
       badge={badge}
       backTo="/dashboard/documents"
+      dirty={hasChanges}
+      savedFlash={savedFlash}
       actions={actions}
       error={error}
       sidebar={sidebar}

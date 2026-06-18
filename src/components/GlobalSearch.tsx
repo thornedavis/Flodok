@@ -21,6 +21,7 @@ type GroupKey =
   | 'recruitment'
   | 'sop'
   | 'contract'
+  | 'nda'
   | 'job_description'
   | 'letter'
   | 'template'
@@ -65,6 +66,7 @@ function sectionOf(group: GroupKey): SectionKey {
       return 'recruitment'
     case 'sop':
     case 'contract':
+    case 'nda':
     case 'job_description':
     case 'letter':
       return 'documents'
@@ -115,6 +117,8 @@ function pathFor(row: Pick<SearchRow, 'group_key' | 'id'>): string {
       return documentEditPath('sop', row.id)
     case 'contract':
       return documentEditPath('contract', row.id)
+    case 'nda':
+      return documentEditPath('nda', row.id)
     case 'job_description':
       return documentEditPath('job_description', row.id)
     case 'letter':
@@ -158,6 +162,7 @@ function GroupIcon({ group }: { group: GroupKey }) {
       )
     case 'sop':
     case 'contract':
+    case 'nda':
     case 'job_description':
     case 'letter':
       return (

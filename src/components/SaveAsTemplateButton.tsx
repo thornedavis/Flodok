@@ -30,6 +30,7 @@ export type SaveAsTemplateSource =
   | { type: 'sop'; contentDoc: DocumentDoc }
   | { type: 'job_description'; contentDoc: DocumentDoc }
   | { type: 'letter'; contentDoc: DocumentDoc }
+  | { type: 'nda'; contentDoc: DocumentDoc }
   | {
       type: 'contract'
       contentDoc: DocumentDoc
@@ -84,7 +85,7 @@ export function SaveAsTemplateButton({
   )
 }
 
-function SaveAsTemplateModal({
+export function SaveAsTemplateModal({
   orgId,
   source,
   defaultTitle,

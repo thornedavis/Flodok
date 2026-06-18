@@ -20,6 +20,8 @@ import { SOPEdit } from './pages/dashboard/SOPEdit'
 import { SOPHistory } from './pages/dashboard/SOPHistory'
 import { ContractEdit } from './pages/dashboard/ContractEdit'
 import { ContractHistory } from './pages/dashboard/ContractHistory'
+import { NDAEdit } from './pages/dashboard/NDAEdit'
+import { NDAHistory } from './pages/dashboard/NDAHistory'
 import { LetterEdit } from './pages/dashboard/LetterEdit'
 import { LetterHistory } from './pages/dashboard/LetterHistory'
 import { JobDescriptionHistory } from './pages/dashboard/JobDescriptionHistory'
@@ -134,6 +136,8 @@ function AppRoutes() {
             <Route path="/dashboard/documents/sop/:id/history" element={<SOPHistory />} />
             <Route path="/dashboard/documents/contract/:id/edit" element={<ContractEdit user={user} />} />
             <Route path="/dashboard/documents/contract/:id/history" element={<ContractHistory />} />
+            <Route path="/dashboard/documents/nda/:id/edit" element={<NDAEdit user={user} />} />
+            <Route path="/dashboard/documents/nda/:id/history" element={<NDAHistory />} />
             <Route path="/dashboard/documents/letter/:id/edit" element={<LetterEdit user={user} />} />
             <Route path="/dashboard/documents/letter/:id/history" element={<LetterHistory />} />
             <Route path="/dashboard/documents/job_description/:id/history" element={<JobDescriptionHistory />} />

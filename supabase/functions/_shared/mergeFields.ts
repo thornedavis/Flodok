@@ -41,10 +41,17 @@ export type ContractShape = {
   days_per_week?: number | null;
 };
 
+export type NdaShape = {
+  effective_date?: string | null;
+  survival_years?: number | null;
+  penalty_idr?: number | null;
+};
+
 export type MergeContext = {
   employee?: EmployeeShape | null;
   organization?: OrganizationShape | null;
   contract?: ContractShape | null;
+  nda?: NdaShape | null;
   today?: Date;
   lang?: Lang;
 };
@@ -55,6 +62,13 @@ function formatIdr(value: number | null | undefined, lang: Lang): string {
   if (value == null) return '—';
   const locale = lang === 'id' ? 'id-ID' : 'en-US';
   return `Rp ${Math.round(value).toLocaleString(locale)}`;
+}
+
+// Survival period — rendered as "2 years" / "2 tahun" (kept identical to the
+// client). null when unset so the token falls back to its placeholder.
+function formatSurvival(years: number | null | undefined, lang: Lang): string | null {
+  if (years == null) return null;
+  return lang === 'id' ? `${years} tahun` : `${years} year${years === 1 ? '' : 's'}`;
 }
 
 function formatDateString(value: string | Date | null | undefined, lang: Lang): string | null {
@@ -107,6 +121,9 @@ const PLACEHOLDER_LABEL: Record<string, string> = {
   allowance_idr: 'allowance',
   hours_per_day: 'hours per day',
   days_per_week: 'days per week',
+  nda_effective_date: 'effective date',
+  nda_survival_period: 'survival period',
+  nda_penalty_idr: 'penalty',
 };
 
 const PLACEHOLDER_LABEL_ID: Record<string, string> = {
@@ -125,6 +142,9 @@ const PLACEHOLDER_LABEL_ID: Record<string, string> = {
   allowance_idr: 'tunjangan',
   hours_per_day: 'jam per hari',
   days_per_week: 'hari per minggu',
+  nda_effective_date: 'tanggal berlaku',
+  nda_survival_period: 'jangka waktu kerahasiaan',
+  nda_penalty_idr: 'denda',
 };
 
 const RESOLVERS: Record<string, (ctx: MergeContext) => string | null> = {
@@ -143,6 +163,9 @@ const RESOLVERS: Record<string, (ctx: MergeContext) => string | null> = {
   allowance_idr: ctx => ctx.contract?.allowance_idr == null ? null : formatIdr(ctx.contract.allowance_idr, ctx.lang ?? 'en'),
   hours_per_day: ctx => ctx.contract?.hours_per_day?.toString() ?? null,
   days_per_week: ctx => ctx.contract?.days_per_week?.toString() ?? null,
+  nda_effective_date: ctx => formatDateString(ctx.nda?.effective_date, ctx.lang ?? 'en'),
+  nda_survival_period: ctx => formatSurvival(ctx.nda?.survival_years, ctx.lang ?? 'en'),
+  nda_penalty_idr: ctx => ctx.nda?.penalty_idr == null ? null : formatIdr(ctx.nda.penalty_idr, ctx.lang ?? 'en'),
 };
 
 const TOKEN_RE = /\{\{\s*([a-z_]+)\s*\}\}/g;

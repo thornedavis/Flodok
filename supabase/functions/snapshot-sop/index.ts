@@ -33,7 +33,7 @@ Deno.serve(async (req: Request) => {
     if (!body.doc_id || !body.changed_by) {
       return jsonResponse({ error: 'Missing required fields: doc_id, changed_by' }, 400)
     }
-    const table = body.table === 'contracts' ? 'contracts' : 'sops'
+    const table = body.table === 'contracts' ? 'contracts' : body.table === 'ndas' ? 'ndas' : 'sops'
 
     const input: SnapshotInput = {
       table,

@@ -20,6 +20,7 @@ type DisplayType =
   | 'candidate'
   | 'sop'
   | 'contract'
+  | 'nda'
   | 'letter'
   | 'job_description'
   | 'hiring_request'
@@ -91,6 +92,7 @@ export function Trash({ user }: { user: User }) {
       candidate: 0,
       sop: 0,
       contract: 0,
+      nda: 0,
       letter: 0,
       job_description: 0,
       hiring_request: 0,
@@ -273,6 +275,7 @@ function TypeBadge({ type, t }: { type: DisplayType; t: Translations }) {
     type === 'candidate' ? t.trashTypeCandidate :
     type === 'sop' ? t.trashTypeSop :
     type === 'contract' ? t.trashTypeContract :
+    type === 'nda' ? t.trashTypeNda :
     type === 'letter' ? t.trashTypeLetter :
     type === 'job_description' ? t.trashTypeJobDescription :
     type === 'hiring_request' ? t.trashTypeHiringRequest :

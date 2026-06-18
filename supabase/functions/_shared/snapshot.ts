@@ -22,7 +22,7 @@ import { translateSOP } from './translate.ts';
 import { renderMergeFields } from './mergeFields.ts';
 import { docToMarkdown, isDocumentDoc, normalizeDoc, type DocNode, type DocumentDoc } from './documentDoc.ts';
 
-export type SnapshotTable = 'sops' | 'contracts';
+export type SnapshotTable = 'sops' | 'contracts' | 'ndas';
 export type TranslationStatus = 'complete' | 'failed';
 
 export type SnapshotInput = {
@@ -375,8 +375,12 @@ export async function writeSnapshot(
   supabase: SupabaseClient,
   input: SnapshotInput,
 ): Promise<SnapshotResult> {
-  const versionsTable = input.table === 'contracts' ? 'contract_versions' : 'sop_versions';
-  const docFk = input.table === 'contracts' ? 'contract_id' : 'sop_id';
+  const versionsTable = input.table === 'contracts' ? 'contract_versions'
+    : input.table === 'ndas' ? 'nda_versions'
+    : 'sop_versions';
+  const docFk = input.table === 'contracts' ? 'contract_id'
+    : input.table === 'ndas' ? 'nda_id'
+    : 'sop_id';
 
   // Load the live row so we know the current state (current_version, the
   // existing language pair, and structural fields for contracts).
@@ -533,7 +537,17 @@ async function renderAndInsert(args: {
     }
     : undefined;
 
-  const ctxBase = { employee, organization, contract: contractCtx, today: new Date() };
+  // NDAs carry their structural fields on the live row (the editor writes them
+  // directly before snapshotting), so we read them straight off `doc`.
+  const ndaCtx = input.table === 'ndas'
+    ? {
+      effective_date: (doc as { effective_date?: string | null }).effective_date ?? null,
+      survival_years: (doc as { survival_years?: number | null }).survival_years ?? null,
+      penalty_idr: (doc as { penalty_idr?: number | null }).penalty_idr ?? null,
+    }
+    : undefined;
+
+  const ctxBase = { employee, organization, contract: contractCtx, nda: ndaCtx, today: new Date() };
   const resolvedEn = renderMergeFields(finalEn, { ...ctxBase, lang: 'en' });
   const resolvedId = finalId ? renderMergeFields(finalId, { ...ctxBase, lang: 'id' }) : null;
 
@@ -582,6 +596,8 @@ async function renderAndInsert(args: {
     versionRow.allowance_idr = contractCtx?.allowance_idr ?? null;
     versionRow.hours_per_day = contractCtx?.hours_per_day ?? null;
     versionRow.days_per_week = contractCtx?.days_per_week ?? null;
+  } else if (input.table === 'ndas') {
+    versionRow.employee_id = employeeId;
   }
 
   const { error: insertErr } = await supabase

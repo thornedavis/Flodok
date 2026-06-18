@@ -7,7 +7,7 @@
 // to its table, edit-route, and human label. New doc types in later
 // phases (hiring forms, offer letters, policies) plug in here.
 
-export const DOCUMENT_TYPES = ['sop', 'contract', 'job_description', 'letter'] as const
+export const DOCUMENT_TYPES = ['sop', 'contract', 'job_description', 'letter', 'nda'] as const
 
 export type DocumentType = (typeof DOCUMENT_TYPES)[number]
 
@@ -20,10 +20,11 @@ export function isDocumentType(value: unknown): value is DocumentType {
  * to query both kinds (e.g. the unified Documents index page) without
  * hard-coding the table name at every call site.
  */
-export function tableForType(type: DocumentType): 'sops' | 'contracts' | 'job_descriptions' | 'letters' {
+export function tableForType(type: DocumentType): 'sops' | 'contracts' | 'job_descriptions' | 'letters' | 'ndas' {
   if (type === 'sop') return 'sops'
   if (type === 'contract') return 'contracts'
   if (type === 'letter') return 'letters'
+  if (type === 'nda') return 'ndas'
   return 'job_descriptions'
 }
 

@@ -70,6 +70,12 @@ interface DocumentEditShellProps {
   // edits trips the page's useUnsavedChangesWarning guard, which prompts a
   // discard confirm. Omit to hide the Cancel button.
   backTo?: string
+  // Whether the document has unsaved edits. Drives the exit button's label:
+  // "Cancel" while dirty (leaving discards — trips the unsaved-changes guard)
+  // vs. "Back to documents" once clean (a calm, safe exit after saving).
+  dirty?: boolean
+  // Transient post-save confirmation pill (auto-clears); hidden once dirty.
+  savedFlash?: { translated: boolean } | null
   // Right-aligned action buttons (Save / Publish / Delete …).
   actions: ReactNode
   error?: string | null
@@ -89,7 +95,7 @@ interface DocumentEditShellProps {
 export function DocumentEditShell({
   storageKey,
   icon,
-  accent = 'var(--color-primary)',
+  accent = 'var(--color-text-secondary)',
   typeLabel,
   title,
   onTitleChange,
@@ -98,6 +104,8 @@ export function DocumentEditShell({
   badge,
   headerHint,
   backTo,
+  dirty = true,
+  savedFlash,
   actions,
   error,
   sidebar,
@@ -225,6 +233,17 @@ export function DocumentEditShell({
               {headerHint}
             </span>
           )}
+          {savedFlash && !dirty && (
+            <span
+              className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium"
+              style={{ backgroundColor: 'color-mix(in srgb, var(--color-success) 16%, transparent)', color: 'var(--color-success)' }}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+              {savedFlash.translated ? t.savedAndTranslated : t.savedConfirmation}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {backTo && (
@@ -236,7 +255,7 @@ export function DocumentEditShell({
               onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
               onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
             >
-              {t.cancel}
+              {dirty ? t.cancel : t.exitToDocuments}
             </button>
           )}
           {actions}

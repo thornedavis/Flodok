@@ -66,7 +66,7 @@ export type DocumentDoc = DocNode & { type: 'document' }
 
 export type ViewMode = 'stacked' | 'side_by_side'
 
-export const DEFAULT_VIEW_MODE: ViewMode = 'stacked'
+export const DEFAULT_VIEW_MODE: ViewMode = 'side_by_side'
 
 // ─── Builders for empty content ─────────────────────────────────────
 

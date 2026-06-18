@@ -39,10 +39,11 @@ import { supabase } from './supabase'
 export async function captureSignatureIp(
   signatureId: string,
   auth: { type: 'jwt'; token: string } | { type: 'portal'; slug: string; accessToken: string },
+  docType: 'contract' | 'nda' = 'contract',
 ): Promise<void> {
   const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sign-contract-ip`
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-  let body: Record<string, string> = { signature_id: signatureId }
+  let body: Record<string, string> = { signature_id: signatureId, doc_type: docType }
   if (auth.type === 'jwt') {
     headers.Authorization = `Bearer ${auth.token}`
   } else {

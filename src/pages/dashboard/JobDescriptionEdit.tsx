@@ -13,15 +13,18 @@
 // the live row in place — no version churn while you're still iterating.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
 import { useBilling } from '../../contexts/BillingContext'
 import { useBreadcrumbTrailing } from '../../contexts/BreadcrumbContext'
 import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning'
+import { useSaveFlash } from '../../hooks/useSaveFlash'
 import { DocumentEditor } from '../../components/editor/bilingual/DocumentEditor'
 import { DocumentEditShell, EDITOR_STICKY_TOP_PX } from '../../components/editor/DocumentEditShell'
-import { SaveAsTemplateButton } from '../../components/SaveAsTemplateButton'
+import { SaveAsTemplateModal } from '../../components/SaveAsTemplateButton'
+import { ToolbarButton } from '../../components/editor/ToolbarButton'
+import { ToolbarMoreMenu, type ToolbarMenuItem } from '../../components/editor/ToolbarMoreMenu'
 import { DateTimePicker } from '../../components/DateTimePicker'
 import { EmployeeSelect } from '../../components/EmployeeSelect'
 import { type EmpDeptShape } from '../../lib/employee'
@@ -71,6 +74,8 @@ const DEFAULT_FORM: FormState = {
 export function JobDescriptionEdit({ user }: { user: User }) {
   const { t } = useLang()
   const navigate = useNavigate()
+  const [tplOpen, setTplOpen] = useState(false)
+  const { flash: savedFlash, show: showSaved } = useSaveFlash()
   const { canWrite } = useBilling()
   const { id } = useParams<{ id?: string }>()
   const [searchParams] = useSearchParams()
@@ -85,7 +90,7 @@ export function JobDescriptionEdit({ user }: { user: User }) {
   const [status, setStatus] = useState<JobDescriptionStatus>('draft')
   const [currentVersion, setCurrentVersion] = useState(1)
   const [hiringRequestId, setHiringRequestId] = useState<string | null>(null)
-  const [view, setView] = useState<ViewMode>('stacked')
+  const [view, setView] = useState<ViewMode>('side_by_side')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [downloading, setDownloading] = useState(false)
@@ -303,6 +308,7 @@ export function JobDescriptionEdit({ user }: { user: User }) {
     if (!newId) return
     // Saved — rebaseline so the page is no longer "dirty".
     setSavedSnapshot(currentSnapshot)
+    showSaved(false)
     // Stay in the editor — saving is decoupled from navigation. A brand-new
     // JD was just inserted on the `/new` URL, so route to its real edit path
     // (flips isNew off) instead of re-inserting on the next save. Carry the
@@ -443,62 +449,60 @@ export function JobDescriptionEdit({ user }: { user: User }) {
     </span>
   )
 
+  const menuItems: ToolbarMenuItem[] = [
+    { key: 'download', icon: 'download', label: downloading ? t.generatingPdf : t.downloadPdf, onClick: handleDownloadPdf, disabled: downloading },
+  ]
+  if (!isNew && (status === 'draft' || status === 'published')) {
+    menuItems.push({ key: 'template', icon: 'template', label: t.contractSaveAsTemplate, onClick: () => setTplOpen(true), disabled: !canWrite, title: writeDisabledTitle })
+  }
+  if (!isNew) {
+    menuItems.push({ key: 'history', icon: 'history', label: t.historyLinkLabel, to: documentHistoryPath('job_description', id!) })
+  }
+  if (!isNew && status === 'draft') {
+    menuItems.push({ key: 'delete', icon: 'trash', label: t.jdActionDelete, onClick: handleDelete, danger: true, disabled: saving || !canWrite, title: writeDisabledTitle })
+  }
+
   const actions = (
     <>
-      {!isNew && (
-        <Link to={documentHistoryPath('job_description', id!)} className="rounded-lg border px-3 py-1.5 text-xs font-medium" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>
-          {t.historyLinkLabel}
-        </Link>
-      )}
-      <button type="button" onClick={handleDownloadPdf} disabled={downloading}
-        className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-50"
-        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>
-        {downloading && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>}
-        {downloading ? t.generatingPdf : t.downloadPdf}
-      </button>
+      <ToolbarMoreMenu items={menuItems} />
       {status === 'draft' && (
         <>
-          {!isNew && (
-            <button type="button" onClick={handleDelete} disabled={saving || !canWrite} title={writeDisabledTitle}
-              className="rounded-lg border px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
-              style={{ borderColor: 'var(--color-border)', color: 'var(--color-danger)' }}>
-              {t.jdActionDelete}
-            </button>
-          )}
-          {!isNew && (
-            <SaveAsTemplateButton
-              orgId={user.org_id}
-              defaultTitle={form.title}
-              disabled={!canWrite}
-              getSource={() => ({ type: 'job_description', contentDoc: content })}
-            />
-          )}
-          <button type="button" onClick={handleSaveDraft} disabled={saving || !canWrite} title={writeDisabledTitle}
-            className="rounded-lg border px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
-            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+          <ToolbarButton
+            variant="save"
+            onClick={handleSaveDraft}
+            disabled={saving || !canWrite}
+            title={writeDisabledTitle}
+            loading={saving}
+          >
             {saving ? t.jdSaving : t.jdActionSaveDraft}
-          </button>
-          <button type="button" onClick={handlePublish} disabled={saving || !canWrite} title={writeDisabledTitle}
-            className="rounded-lg px-3 py-1.5 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
-            style={{ backgroundColor: 'var(--color-primary)' }}>
+          </ToolbarButton>
+          <ToolbarButton
+            variant="primary"
+            onClick={handlePublish}
+            disabled={saving || !canWrite}
+            title={writeDisabledTitle}
+          >
             {t.jdActionPublish}
-          </button>
+          </ToolbarButton>
         </>
       )}
       {status === 'published' && (
-        <>
-          <SaveAsTemplateButton
-            orgId={user.org_id}
-            defaultTitle={form.title}
-            disabled={!canWrite}
-            getSource={() => ({ type: 'job_description', contentDoc: content })}
-          />
-          <button type="button" onClick={handleArchive} disabled={saving || !canWrite} title={writeDisabledTitle}
-            className="rounded-lg border px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
-            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-            {t.jdActionArchive}
-          </button>
-        </>
+        <ToolbarButton
+          variant="ghost"
+          onClick={handleArchive}
+          disabled={saving || !canWrite}
+          title={writeDisabledTitle}
+        >
+          {t.jdActionArchive}
+        </ToolbarButton>
+      )}
+      {tplOpen && (
+        <SaveAsTemplateModal
+          orgId={user.org_id}
+          defaultTitle={form.title}
+          source={{ type: 'job_description', contentDoc: content }}
+          onClose={() => setTplOpen(false)}
+        />
       )}
     </>
   )
@@ -597,7 +601,7 @@ export function JobDescriptionEdit({ user }: { user: User }) {
     <DocumentEditShell
       storageKey="jdEdit"
       icon={<JdIcon />}
-      accent="var(--color-warning)"
+      accent="var(--color-text-secondary)"
       typeLabel={t.documentTypeJobDescription}
       title={form.title}
       onTitleChange={v => update('title', v)}
@@ -605,6 +609,8 @@ export function JobDescriptionEdit({ user }: { user: User }) {
       canEditTitle={!readOnly && canWrite}
       badge={badge}
       backTo="/dashboard/documents"
+      dirty={hasChanges}
+      savedFlash={savedFlash}
       actions={actions}
       error={error}
       sidebar={sidebar}

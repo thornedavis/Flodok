@@ -1,15 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useParams, Link, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { DocumentEditor } from '../../components/editor/bilingual/DocumentEditor'
 import { DocumentEditShell, EDITOR_STICKY_TOP_PX } from '../../components/editor/DocumentEditShell'
-import { SaveAsTemplateButton } from '../../components/SaveAsTemplateButton'
+import { SaveAsTemplateModal } from '../../components/SaveAsTemplateButton'
+import { ToolbarButton } from '../../components/editor/ToolbarButton'
+import { ToolbarMoreMenu, type ToolbarMenuItem } from '../../components/editor/ToolbarMoreMenu'
 import { AudiencePicker, type AudienceTarget, type AudienceEmployee, type NamedRef } from '../../components/AudiencePicker'
 import { SopSignatureProgress, type SignatureProgressData } from '../../components/SopSignatureProgress'
 import { useLang } from '../../contexts/LanguageContext'
 import { primaryDept, type EmpDeptShape } from '../../lib/employee'
 import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning'
 import { useDocumentViewPref } from '../../hooks/useDocumentViewPref'
+import { useSaveFlash } from '../../hooks/useSaveFlash'
 import { writeSnapshot } from '../../lib/snapshotApi'
 import { emptyDocumentDoc, type DocumentDoc } from '../../lib/documentDoc'
 import { exportDocumentPdf } from '../../lib/pdfExport'
@@ -27,6 +30,8 @@ export function SOPEdit({ user }: { user: User }) {
   const { t } = useLang()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const [tplOpen, setTplOpen] = useState(false)
+  const { flash: savedFlash, show: showSaved } = useSaveFlash()
   const { canWrite } = useBilling()
   const { view, setView } = useDocumentViewPref('sop', id ?? null)
   const [sop, setSOP] = useState<Sop | null>(null)
@@ -323,6 +328,7 @@ export function SOPEdit({ user }: { user: User }) {
     if (!docChanged) {
       setSOP({ ...sop, title, employee_id: compatEmployeeId, owner_department_id: ownerDepartmentId, status: nextStatus })
       setSaving(false)
+      showSaved(false)
       return
     }
 
@@ -375,6 +381,8 @@ export function SOPEdit({ user }: { user: User }) {
       setError(t.snapshotTranslationFailed)
       return
     }
+
+    showSaved(true)
 
     // Persist and stay — saving is decoupled from navigation. Leaving is
     // an explicit action via the header exit link.
@@ -454,40 +462,42 @@ export function SOPEdit({ user }: { user: User }) {
     }
   }
 
+  const menuItems: ToolbarMenuItem[] = [
+    { key: 'download', icon: 'download', label: downloading ? t.generatingPdf : t.downloadPdf, onClick: handleDownloadPdf, disabled: downloading },
+    { key: 'template', icon: 'template', label: t.contractSaveAsTemplate, onClick: () => setTplOpen(true), disabled: !canWrite, title: !canWrite ? t.dunningWriteBlocked : undefined },
+    { key: 'history', icon: 'history', label: t.historyLinkLabel, to: documentHistoryPath('sop', sop.id) },
+    { key: 'delete', icon: 'trash', label: t.delete, onClick: handleDelete, danger: true, disabled: saving || !canWrite, title: !canWrite ? t.dunningWriteBlocked : undefined },
+  ]
+
   const actions = (
     <>
-      <button type="button" onClick={handleDelete} disabled={saving || !canWrite} title={!canWrite ? t.dunningWriteBlocked : undefined}
-        className="rounded-lg border px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
-        style={{ borderColor: 'var(--color-border)', color: 'var(--color-danger)' }}>
-        {t.delete}
-      </button>
-      <Link to={documentHistoryPath('sop', sop.id)} className="rounded-lg border px-3 py-1.5 text-xs font-medium" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>
-        {t.historyLinkLabel}
-      </Link>
-      <button onClick={handleDownloadPdf} disabled={downloading} className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-50" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>
-        {downloading && (
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
-        )}
-        {downloading ? t.generatingPdf : t.downloadPdf}
-      </button>
-      <SaveAsTemplateButton
-        orgId={user.org_id}
-        defaultTitle={title}
-        disabled={!canWrite}
-        getSource={() => ({ type: 'sop', contentDoc })}
-      />
-      <button onClick={handleSaveAsDraft} disabled={saving || !canWrite || (!hasChanges && status === 'draft')} title={!canWrite ? t.dunningWriteBlocked : undefined}
-        className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-        {savingMode === 'draft' ? (
-          <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>{translating ? t.savingTranslating : t.saving}</>
-        ) : t.saveAsDraft}
-      </button>
-      <button onClick={handlePublish} disabled={saving || !canWrite || (!hasChanges && status === 'active')} title={!canWrite ? t.dunningWriteBlocked : undefined}
-        className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-50" style={{ backgroundColor: 'var(--color-primary)' }}>
-        {savingMode === 'active' ? (
-          <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>{translating ? t.savingTranslating : t.publishing}</>
-        ) : t.publish}
-      </button>
+      <ToolbarMoreMenu items={menuItems} />
+      <ToolbarButton
+        variant="save"
+        onClick={handleSaveAsDraft}
+        disabled={saving || !canWrite || (!hasChanges && status === 'draft')}
+        title={!canWrite ? t.dunningWriteBlocked : undefined}
+        loading={savingMode === 'draft'}
+      >
+        {savingMode === 'draft' ? (translating ? t.savingTranslating : t.saving) : t.saveAsDraft}
+      </ToolbarButton>
+      <ToolbarButton
+        variant="primary"
+        onClick={handlePublish}
+        disabled={saving || !canWrite || (!hasChanges && status === 'active')}
+        title={!canWrite ? t.dunningWriteBlocked : undefined}
+        loading={savingMode === 'active'}
+      >
+        {savingMode === 'active' ? (translating ? t.savingTranslating : t.publishing) : t.publish}
+      </ToolbarButton>
+      {tplOpen && (
+        <SaveAsTemplateModal
+          orgId={user.org_id}
+          defaultTitle={title}
+          source={{ type: 'sop', contentDoc }}
+          onClose={() => setTplOpen(false)}
+        />
+      )}
     </>
   )
 
@@ -590,7 +600,7 @@ export function SOPEdit({ user }: { user: User }) {
     <DocumentEditShell
       storageKey="sopEdit"
       icon={<SopIcon />}
-      accent="var(--color-primary)"
+      accent="var(--color-text-secondary)"
       typeLabel={t.documentTypeSop}
       title={title}
       onTitleChange={setTitle}
@@ -598,6 +608,8 @@ export function SOPEdit({ user }: { user: User }) {
       badge={badge}
       headerHint={status === 'active' && hasChanges ? t.editingActiveWillBumpVersion : undefined}
       backTo="/dashboard/documents"
+      dirty={hasChanges}
+      savedFlash={savedFlash}
       actions={actions}
       error={error}
       sidebar={sidebar}

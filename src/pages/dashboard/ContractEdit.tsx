@@ -1,14 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useParams, Link, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { DocumentEditor } from '../../components/editor/bilingual/DocumentEditor'
 import { DocumentEditShell, EDITOR_STICKY_TOP_PX } from '../../components/editor/DocumentEditShell'
-import { SaveAsTemplateButton } from '../../components/SaveAsTemplateButton'
+import { SaveAsTemplateModal } from '../../components/SaveAsTemplateButton'
+import { ToolbarButton } from '../../components/editor/ToolbarButton'
+import { ToolbarMoreMenu, type ToolbarMenuItem } from '../../components/editor/ToolbarMoreMenu'
 import { useLang } from '../../contexts/LanguageContext'
 import { type EmpDeptShape } from '../../lib/employee'
 import { bucketReferenceValues, referenceNames } from '../../lib/companyReference'
 import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning'
 import { useDocumentViewPref } from '../../hooks/useDocumentViewPref'
+import { useSaveFlash } from '../../hooks/useSaveFlash'
 import { exportDocumentPdf } from '../../lib/pdfExport'
 import { formatIdrDigits } from '../../lib/credits'
 import { InfoTooltip } from '../../components/InfoTooltip'
@@ -51,6 +54,8 @@ export function ContractEdit({ user }: { user: User }) {
   const { t } = useLang()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const [tplOpen, setTplOpen] = useState(false)
+  const { flash: savedFlash, show: showSaved } = useSaveFlash()
   const { canWrite } = useBilling()
   const { view, setView } = useDocumentViewPref('contract', id ?? null)
   const [contract, setContract] = useState<Contract | null>(null)
@@ -325,6 +330,7 @@ export function ContractEdit({ user }: { user: User }) {
         probation_months: parsedProbationMonths,
       })
       setSaving(false)
+      showSaved(false)
       return { versionNumber: null }
     }
 
@@ -392,6 +398,7 @@ export function ContractEdit({ user }: { user: User }) {
       return { versionNumber: result.version_number }
     }
 
+    showSaved(true)
     return { versionNumber: result.version_number }
   }
 
@@ -507,6 +514,10 @@ export function ContractEdit({ user }: { user: User }) {
   if (!contract) return <div style={{ color: 'var(--color-text-secondary)' }}>{t.loading}</div>
 
   const inputStyle = { borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' } as React.CSSProperties
+  // Required-but-empty fields get a red border (same condition as the
+  // missing-field dot) so the "fill me before publishing" cue is unmissable.
+  const fieldStyle = (key: string): React.CSSProperties =>
+    missingKeys.has(key) ? { ...inputStyle, borderColor: 'color-mix(in srgb, var(--color-danger) 50%, transparent)' } : inputStyle
 
   const statusColors: Record<string, string> = {
     active: 'var(--color-success)',
@@ -577,64 +588,74 @@ export function ContractEdit({ user }: { user: User }) {
     }
   }
 
+  const menuItems: ToolbarMenuItem[] = [
+    { key: 'download', icon: 'download', label: downloading ? t.generatingPdf : t.downloadPdf, onClick: handleDownloadPdf, disabled: downloading },
+  ]
+  if (!contract.is_template) {
+    menuItems.push({ key: 'template', icon: 'template', label: t.contractSaveAsTemplate, onClick: () => setTplOpen(true), disabled: !canWrite, title: !canWrite ? t.dunningWriteBlocked : undefined })
+  }
+  menuItems.push(
+    { key: 'history', icon: 'history', label: t.historyLinkLabel, to: documentHistoryPath('contract', contract.id) },
+    { key: 'delete', icon: 'trash', label: t.delete, onClick: handleDelete, danger: true, disabled: saving || !canWrite, title: !canWrite ? t.dunningWriteBlocked : undefined },
+  )
+
   const actions = (
     <>
-      <button type="button" onClick={handleDelete} disabled={saving || !canWrite} title={!canWrite ? t.dunningWriteBlocked : undefined}
-        className="rounded-lg border px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
-        style={{ borderColor: 'var(--color-border)', color: 'var(--color-danger)' }}>
-        {t.delete}
-      </button>
-      <Link to={documentHistoryPath('contract', contract.id)} className="rounded-lg border px-3 py-1.5 text-xs font-medium" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>{t.historyLinkLabel}</Link>
-      <button onClick={handleDownloadPdf} disabled={downloading} className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-50" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>
-        {downloading && (
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
-            <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-          </svg>
-        )}
-        {downloading ? t.generatingPdf : t.downloadPdf}
-      </button>
+      <ToolbarMoreMenu items={menuItems} />
       {contract.is_template ? (
-        <button onClick={handleSaveAsDraft} disabled={saving || !canWrite || !hasChanges} title={!canWrite ? t.dunningWriteBlocked : undefined}
-          className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50" style={{ backgroundColor: 'var(--color-primary)' }}>
-          {savingMode === 'draft' ? (
-            <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>{translating ? t.savingTranslating : t.saving}</>
-          ) : t.saveTemplate}
-        </button>
+        <ToolbarButton
+          variant="primary"
+          onClick={handleSaveAsDraft}
+          disabled={saving || !canWrite || !hasChanges}
+          title={!canWrite ? t.dunningWriteBlocked : undefined}
+          loading={savingMode === 'draft'}
+        >
+          {savingMode === 'draft' ? (translating ? t.savingTranslating : t.saving) : t.saveTemplate}
+        </ToolbarButton>
       ) : (
         <>
-          <SaveAsTemplateButton
-            orgId={user.org_id}
-            defaultTitle={title}
-            disabled={!canWrite}
-            getSource={() => ({
-              type: 'contract',
-              contentDoc,
-              contractType,
-              baseWageIdr: parsedBaseWage,
-              allowanceIdr: parsedAllowance,
-              hoursPerDay: parsedHoursPerDay,
-              daysPerWeek: parsedDaysPerWeek,
-              annualLeaveDays: parsedAnnualLeave,
-              probationMonths: parsedProbationMonths,
-              jobPositions,
-            })}
-          />
-          <button onClick={handleSaveAsDraft} disabled={saving || !canWrite || (!hasChanges && status === 'draft')} title={!canWrite ? t.dunningWriteBlocked : undefined}
-            className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-50"
-            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-            {savingMode === 'draft' ? (
-              <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>{translating ? t.savingTranslating : t.saving}</>
-            ) : t.saveAsDraft}
-          </button>
-          <button onClick={handleActivateAndSign} disabled={activateDisabled} title={activateTitle}
-            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50" style={{ backgroundColor: 'var(--color-primary)' }}>
-            {savingMode === 'activate' ? (
-              <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>{translating ? t.savingTranslating : t.saving}</>
-            ) : missingRequiredFields.length > 0
-              ? t.activateNeedsFields(missingRequiredFields.length)
-              : t.activateAndSign}
-          </button>
+          <ToolbarButton
+            variant="save"
+            onClick={handleSaveAsDraft}
+            disabled={saving || !canWrite || (!hasChanges && status === 'draft')}
+            title={!canWrite ? t.dunningWriteBlocked : undefined}
+            loading={savingMode === 'draft'}
+          >
+            {savingMode === 'draft' ? (translating ? t.savingTranslating : t.saving) : t.saveAsDraft}
+          </ToolbarButton>
+          <ToolbarButton
+            variant="primary"
+            onClick={handleActivateAndSign}
+            disabled={activateDisabled}
+            title={activateTitle}
+            loading={savingMode === 'activate'}
+          >
+            {savingMode === 'activate'
+              ? (translating ? t.savingTranslating : t.saving)
+              : missingRequiredFields.length > 0
+                ? t.activateNeedsFields(missingRequiredFields.length)
+                : t.activateAndSign}
+          </ToolbarButton>
         </>
+      )}
+      {tplOpen && (
+        <SaveAsTemplateModal
+          orgId={user.org_id}
+          defaultTitle={title}
+          source={{
+            type: 'contract',
+            contentDoc,
+            contractType,
+            baseWageIdr: parsedBaseWage,
+            allowanceIdr: parsedAllowance,
+            hoursPerDay: parsedHoursPerDay,
+            daysPerWeek: parsedDaysPerWeek,
+            annualLeaveDays: parsedAnnualLeave,
+            probationMonths: parsedProbationMonths,
+            jobPositions,
+          }}
+          onClose={() => setTplOpen(false)}
+        />
       )}
     </>
   )
@@ -673,6 +694,7 @@ export function ContractEdit({ user }: { user: User }) {
                   {missingDot('employee')}
                 </label>
                 <EmployeeSelect
+                  invalid={missingKeys.has('employee')}
                   value={employeeId}
                   onChange={next => {
                     setEmployeeId(next)
@@ -728,7 +750,7 @@ export function ContractEdit({ user }: { user: User }) {
                 {t.startDateLabel}
                 {missingDot('startDate')}
               </label>
-              <DateTimePicker mode="date" value={startDate} onChange={setStartDate} />
+              <DateTimePicker mode="date" value={startDate} onChange={setStartDate} invalid={missingKeys.has('startDate')} />
             </div>
 
             {/* End date (PKWT) or probation (PKWTT) */}
@@ -738,7 +760,7 @@ export function ContractEdit({ user }: { user: User }) {
                   {t.endDateLabel}
                   {missingDot('endDate')}
                 </label>
-                <DateTimePicker mode="date" value={endDate} onChange={setEndDate} />
+                <DateTimePicker mode="date" value={endDate} onChange={setEndDate} invalid={missingKeys.has('endDate')} />
               </div>
             ) : (
               <div>
@@ -750,7 +772,7 @@ export function ContractEdit({ user }: { user: User }) {
                   value={probationMonths}
                   onChange={e => setProbationMonths(e.target.value)}
                   className="w-full rounded-lg border px-3 py-2 text-sm"
-                  style={inputStyle}
+                  style={fieldStyle('probationMonths')}
                 >
                   <option value="">—</option>
                   <option value="1">{t.monthOption(1)}</option>
@@ -775,7 +797,7 @@ export function ContractEdit({ user }: { user: User }) {
                   onChange={e => setBaseWageIdr(e.target.value.replace(/\D/g, ''))}
                   placeholder={t.amountIdrPlaceholder}
                   className="w-full rounded-lg border px-3 py-2 pr-12 text-sm"
-                  style={inputStyle}
+                  style={fieldStyle('baseWage')}
                 />
                 <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.idr}</span>
               </div>
@@ -812,7 +834,7 @@ export function ContractEdit({ user }: { user: User }) {
                   value={hoursPerDay}
                   onChange={e => setHoursPerDay(e.target.value)}
                   className="w-full rounded-lg border px-2 py-2 text-sm"
-                  style={inputStyle}
+                  style={fieldStyle('hoursPerDay')}
                 >
                   <option value="">—</option>
                   <option value="6">{t.hoursOption(6)}</option>
@@ -831,7 +853,7 @@ export function ContractEdit({ user }: { user: User }) {
                   value={daysPerWeek}
                   onChange={e => setDaysPerWeek(e.target.value)}
                   className="w-full rounded-lg border px-2 py-2 text-sm"
-                  style={inputStyle}
+                  style={fieldStyle('daysPerWeek')}
                 >
                   <option value="">—</option>
                   <option value="4">{t.daysOption(4)}</option>
@@ -896,7 +918,7 @@ export function ContractEdit({ user }: { user: User }) {
     <DocumentEditShell
       storageKey="contractEdit"
       icon={<ContractTypeIcon />}
-      accent="var(--color-success)"
+      accent="var(--color-text-secondary)"
       typeLabel={t.documentTypeContract}
       title={title}
       onTitleChange={setTitle}
@@ -905,6 +927,8 @@ export function ContractEdit({ user }: { user: User }) {
       headerHint={status === 'active' && hasChanges ? t.editingActiveWillBumpVersion : undefined}
       detailsBadge={detailsBadge}
       backTo="/dashboard/documents"
+      dirty={hasChanges}
+      savedFlash={savedFlash}
       actions={actions}
       error={error}
       sidebar={sidebar}

@@ -54,6 +54,15 @@ export async function createDocFromTemplate(
     return documentEditPath('letter', data.id)
   }
 
+  if (type === 'nda') {
+    // `document_templates` carries no NDA-specific columns (survival_years /
+    // penalty_idr), so seed the draft from the base fields only; the editor
+    // applies its own defaults.
+    const { data, error } = await supabase.from('ndas').insert(base).select('id').single()
+    if (error || !data) throw new Error(error?.message ?? 'Could not create NDA')
+    return documentEditPath('nda', data.id)
+  }
+
   // Contract — copy the structured starter fields alongside the body.
   const { data, error } = await supabase
     .from('contracts')

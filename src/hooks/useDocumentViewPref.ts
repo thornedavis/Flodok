@@ -2,7 +2,7 @@
 //
 // Backed by the `document_view_prefs` table (Phase A migration). When
 // no row exists for a given (user, document_type, document_id) tuple,
-// returns the default `stacked` mode. Writes upsert through Supabase
+// returns the default `side_by_side` mode. Writes upsert through Supabase
 // so a flipped toggle survives reloads, browser changes, and logouts.
 //
 // Used by SOPEdit / ContractEdit to drive the `view` prop on
@@ -36,7 +36,12 @@ export function useDocumentViewPref(documentType: DocumentType, documentId: stri
         .eq('document_id', documentId!)
         .maybeSingle()
       if (cancelled) return
-      const view: ViewMode = data?.view_mode === 'side_by_side' ? 'side_by_side' : DEFAULT_VIEW_MODE
+      // Honor an explicitly-saved mode (either value); fall back to the
+      // app default only when no/invalid row exists. Checking both literals
+      // (not just side_by_side) is what lets a user who chose stacked keep
+      // it now that side_by_side is the default.
+      const saved = data?.view_mode
+      const view: ViewMode = saved === 'side_by_side' || saved === 'stacked' ? saved : DEFAULT_VIEW_MODE
       setState({ view, loaded: true })
     }
     load()
