@@ -1897,7 +1897,7 @@ const JOB_DESCRIPTIONS: ReactNode = (
 )
 
 const LETTERS: ReactNode = (
-<><P>Letters let you draft and issue offer letters, reference letters, and announcement letters to employees. Each letter must have a recipient and sender before it’s issued, and can optionally require the recipient to acknowledge they’ve read it in the employee portal.</P><H3 id="letter-creation">Creating a letter</H3><P>From <strong>Dashboard → Documents</strong>, click <strong>Create</strong> and choose <strong>Letter</strong>. A blank letter draft opens in the editor. The status badge shows <strong>Draft</strong>.</P><H3 id="letter-fields">Required and optional fields</H3><P>In the right sidebar, configure:</P><Bullets items={[<><strong>Recipient</strong> — Required to issue. Pick an employee from your list.</>, <><strong>Sender</strong> — Required to issue. The person issuing the letter (chosen from your organization\'s users; defaults to you).</>, <><strong>Category</strong> — e.g., "Offering Letter" (display-only, helps organize letters).</>, <><strong>Type code</strong> — A short code substituted into the reference number (e.g., "OL" for Offering Letter).</>, <><strong>Reference number</strong> — Unique identifier. If left blank, Flodok auto-generates one on issue using the type code.</>, <><strong>Subject</strong> — The letter\'s subject line (shown to the recipient).</>, <><strong>Response by</strong> — Optional deadline. Shown in the employee portal if the letter requires acknowledgement.</>, <><strong>Requires acknowledgement</strong> — Toggle on to force the recipient to confirm they\'ve read the letter in the portal.</>]} /><H3 id="letter-bilingual">Bilingual editing</H3><P>Edit Indonesian and English independently. Use merge fields like <code>[Employee Name]</code>, <code>[Sender]</code>, and <code>[Today]</code> to personalize each letter. Merge fields resolve automatically when you issue or export.</P><H3 id="letter-draft">Draft stage</H3><P>While a letter is in Draft, you can edit all fields and content freely. Click <strong>Save as draft</strong> to persist changes without issuing.</P><H3 id="letter-issue">Issuing a letter</H3><P>Once you have a recipient and sender, click <strong>Issue</strong>. The letter is marked <strong>Issued</strong>, a reference number is generated (if blank), and a version snapshot is saved. The recipient receives the letter in their employee portal and can view it. If acknowledgement is required, they must click to confirm they’ve read it.</P><Callout type="warn">Once issued, you cannot edit the recipient or sender. You can edit the reference number and subject after issuing, but the letter content is locked.</Callout><H3 id="letter-versioning">Version history</H3><P>Click <strong>History</strong> in the editor menu to view previous versions and see who issued each one.</P><H3 id="letter-export">Exporting to PDF</H3><P>Click <strong>Download PDF</strong> in the editor menu. The PDF renders the full bilingual letter (side-by-side or stacked layout) with all merge fields resolved for the recipient, sender, and today’s date. Filenames include the letter title and reference number.</P><H3 id="letter-status">Letter statuses</H3><Bullets items={[<><strong>Draft</strong> — Being prepared. You can edit all fields.</>, <><strong>Issued</strong> — Sent to the recipient. Recipient is notified; content is frozen but metadata (subject, deadline) can still be edited.</>, <><strong>Archived</strong> — Hidden but kept for records. You can restore to a new draft.</>]} /><Callout type="tip">Letters are a flexible way to formalize communications — use them for offer letters, promotion announcements, exit letters, or any official notice that needs a version record.</Callout></>
+<><P>Letters let you draft and issue offer letters, reference letters, and announcement letters to employees. Each letter must have a recipient and sender before it’s issued, and can optionally require the recipient to acknowledge they’ve read it in the employee portal.</P><H3 id="letter-creation">Creating a letter</H3><P>From <strong>Dashboard → Documents</strong>, click <strong>Create</strong> and choose <strong>Letter</strong>. A blank letter draft opens in the editor. The status badge shows <strong>Draft</strong>.</P><H3 id="letter-fields">Required and optional fields</H3><P>In the right sidebar, configure:</P><Bullets items={[<><strong>Recipient</strong> — Required to issue. Pick an employee from your list.</>, <><strong>Sender</strong> — Required to issue. The person issuing the letter (chosen from your organization’s users; defaults to you).</>, <><strong>Category</strong> — e.g., "Offering Letter" (display-only, helps organize letters).</>, <><strong>Type code</strong> — A short code substituted into the reference number (e.g., "OL" for Offering Letter).</>, <><strong>Reference number</strong> — Unique identifier. If left blank, Flodok auto-generates one on issue using the type code.</>, <><strong>Subject</strong> — The letter’s subject line (shown to the recipient).</>, <><strong>Response by</strong> — Optional deadline. Shown in the employee portal if the letter requires acknowledgement.</>, <><strong>Requires acknowledgement</strong> — Toggle on to force the recipient to confirm they’ve read the letter in the portal.</>]} /><H3 id="letter-bilingual">Bilingual editing</H3><P>Edit Indonesian and English independently. Use merge fields like <code>[Employee Name]</code>, <code>[Sender]</code>, and <code>[Today]</code> to personalize each letter. Merge fields resolve automatically when you issue or export.</P><H3 id="letter-draft">Draft stage</H3><P>While a letter is in Draft, you can edit all fields and content freely. Click <strong>Save as draft</strong> to persist changes without issuing.</P><H3 id="letter-issue">Issuing a letter</H3><P>Once you have a recipient and sender, click <strong>Issue</strong>. The letter is marked <strong>Issued</strong>, a reference number is generated (if blank), and a version snapshot is saved. The recipient receives the letter in their employee portal and can view it. If acknowledgement is required, they must click to confirm they’ve read it.</P><Callout type="warn">Once issued, you cannot edit the recipient or sender. You can edit the reference number and subject after issuing, but the letter content is locked.</Callout><H3 id="letter-versioning">Version history</H3><P>Click <strong>History</strong> in the editor menu to view previous versions and see who issued each one.</P><H3 id="letter-export">Exporting to PDF</H3><P>Click <strong>Download PDF</strong> in the editor menu. The PDF renders the full bilingual letter (side-by-side or stacked layout) with all merge fields resolved for the recipient, sender, and today’s date. Filenames include the letter title and reference number.</P><H3 id="letter-status">Letter statuses</H3><Bullets items={[<><strong>Draft</strong> — Being prepared. You can edit all fields.</>, <><strong>Issued</strong> — Sent to the recipient. Recipient is notified; content is frozen but metadata (subject, deadline) can still be edited.</>, <><strong>Archived</strong> — Hidden but kept for records. You can restore to a new draft.</>]} /><Callout type="tip">Letters are a flexible way to formalize communications — use them for offer letters, promotion announcements, exit letters, or any official notice that needs a version record.</Callout></>
 )
 
 const DOCUMENTS_EXPORT: ReactNode = (
@@ -2453,17 +2453,17 @@ const DASHBOARD_OVERVIEW: ReactNode = (
   <P>The <strong>Dashboard → Overview</strong> page is your operations hub. It shows key metrics, recent activity, and upcoming milestones so you know the health of your team and document workflows at a glance.</P>
   <H3 id="quick-actions">Quick actions</H3>
   <P>Four buttons let you jump straight to common workflows:</P>
-  <Bullets items={["<strong>Add Employee</strong> — go to Employees to invite a team member", "<strong>New SOP</strong> — create a Standard Operating Procedure", "<strong>New Contract</strong> — create an employment contract"]} />
+  <Bullets items={[<><strong>Add Employee</strong> — go to Employees to invite a team member</>, <><strong>New SOP</strong> — create a Standard Operating Procedure</>, <><strong>New Contract</strong> — create an employment contract</>]} />
   <H3 id="stat-cards">Stat cards</H3>
   <P>Six cards show live counts. Each is a link to the full list:</P>
-  <Bullets items={["<strong>Employees</strong> — active team members", "<strong>Candidates</strong> — prospects in recruitment (shortlisted through offer stage)", "<strong>Active SOPs</strong> — live Standard Operating Procedures", "<strong>Active Contracts</strong> — live employment contracts", "<strong>Awaiting Signature</strong> — SOPs & contracts employees haven’t signed yet", "<strong>Pending Updates</strong> — SOP change proposals from meeting transcripts awaiting your review"]} />
+  <Bullets items={[<><strong>Employees</strong> — active team members</>, <><strong>Candidates</strong> — prospects in recruitment (shortlisted through offer stage)</>, <><strong>Active SOPs</strong> — live Standard Operating Procedures</>, <><strong>Active Contracts</strong> — live employment contracts</>, <><strong>Awaiting Signature</strong> — SOPs & contracts employees haven’t signed yet</>, <><strong>Pending Updates</strong> — SOP change proposals from meeting transcripts awaiting your review</>]} />
   <H3 id="activity-pulse">Activity pulse</H3>
   <P>A stacked bar chart shows activity over the last 30 days, broken down by:</P>
-  <Bullets items={["<em>Blue</em> — SOPs updated or assigned", "<em>Green</em> — signatures (SOPs, contracts, job descriptions signed)", "<em>Orange</em> — employee events (onboarded, hired, etc.)", "<em>Purple</em> — contracts updated or assigned"]} />
+  <Bullets items={[<><em>Blue</em> — SOPs updated or assigned</>, <><em>Green</em> — signatures (SOPs, contracts, job descriptions signed)</>, <><em>Orange</em> — employee events (onboarded, hired, etc.)</>, <><em>Purple</em> — contracts updated or assigned</>]} />
   <P>Hover over a day to see exact counts. This helps you spot busy periods and slow weeks at a glance.</P>
   <H3 id="signature-coverage">Signature coverage</H3>
   <P>A circular gauge shows what percentage of assigned SOPs and contracts have been signed (employee signature). The center displays the coverage % and the breakdown (signed / total). Click the stat cards above to open and assign unsigned documents.</P>
-  <Bullets items={["<em>Green</em> (90%+) — most of your documents are signed", "<em>Amber</em> (60–89%) — good progress, follow up on stragglers", "<em>Red</em> (below 60%) — send reminders or chase unsigned docs"]} />
+  <Bullets items={[<><em>Green</em> (90%+) — most of your documents are signed</>, <><em>Amber</em> (60–89%) — good progress, follow up on stragglers</>, <><em>Red</em> (below 60%) — send reminders or chase unsigned docs</>]} />
   <H3 id="team-composition">Team composition</H3>
   <P>A donut chart shows your headcount by department. The center number is true headcount (employees in one department only count once). If an employee is tagged in multiple departments, they appear in each slice, so the slice total may exceed the center number — hover the info icon to learn more.</P>
   <H3 id="upcoming-calendar">Upcoming calendar</H3>
@@ -2483,15 +2483,15 @@ const INBOX: ReactNode = (
   <P>The <strong>Dashboard → Inbox</strong> page is your action list. Items surface here because they need a decision from you or they’re waiting on someone else. It’s organized by urgency and type.</P>
   <H3 id="inbox-tabs">Tabs (urgency buckets)</H3>
   <P>Four tabs organize your inbox:</P>
-  <Bullets items={["<strong>All</strong> — every item, unfiltered", "<strong>Action Required</strong> — decisions sitting with you (review a pending update, approve a form, decide on a probation case)", "<strong>Awaiting Others</strong> — you’ve sent them (contracts/SOPs awaiting employee signature)", "<strong>Upcoming</strong> — heads up on things coming soon (probation ending in 7–30 days, passport expiring soon)"]} />
+  <Bullets items={[<><strong>All</strong> — every item, unfiltered</>, <><strong>Action Required</strong> — decisions sitting with you (review a pending update, approve a form, decide on a probation case)</>, <><strong>Awaiting Others</strong> — you’ve sent them (contracts/SOPs awaiting employee signature)</>, <><strong>Upcoming</strong> — heads up on things coming soon (probation ending in 7–30 days, passport expiring soon)</>]} />
   <H3 id="categories">Category filters</H3>
   <P>Within each tab, click a category pill to narrow further:</P>
-  <Bullets items={["<strong>Contract</strong> — contracts awaiting your or the employee’s signature", "<strong>SOP</strong> — SOPs awaiting employee signature", "<strong>Probation</strong> — probation decisions due or probation ending soon", "<strong>Document</strong> — passports expiring soon", "<strong>Pending Update</strong> — SOP changes from meeting transcripts to review", "<strong>Form</strong> — leave requests and overtime requests awaiting approval"]} />
+  <Bullets items={[<><strong>Contract</strong> — contracts awaiting your or the employee’s signature</>, <><strong>SOP</strong> — SOPs awaiting employee signature</>, <><strong>Probation</strong> — probation decisions due or probation ending soon</>, <><strong>Document</strong> — passports expiring soon</>, <><strong>Pending Update</strong> — SOP changes from meeting transcripts to review</>, <><strong>Form</strong> — leave requests and overtime requests awaiting approval</>]} />
   <H3 id="item-actions">Item actions</H3>
   <P>Each item has three controls:</P>
-  <Bullets items={["<strong>Action button</strong> (right side) — opens the document or decision screen (Review, Open Contract, Open SOP, etc.)", "<strong>Due date</strong> (hidden on mobile) — red if overdue, gray if upcoming", "<strong>Menu (three dots)</strong> — snooze for 7 days or dismiss"]} />
+  <Bullets items={[<><strong>Action button</strong> (right side) — opens the document or decision screen (Review, Open Contract, Open SOP, etc.)</>, <><strong>Due date</strong> (hidden on mobile) — red if overdue, gray if upcoming</>, <><strong>Menu (three dots)</strong> — snooze for 7 days or dismiss</>]} />
   <H3 id="snooze-dismiss">Snooze vs. dismiss</H3>
-  <Bullets items={["<strong>Snooze (7 days)</strong> — hides the item for a week, then it reappears. Good for <>I’ll get to this later</>", "<strong>Dismiss</strong> — hides it permanently. The item still exists (e.g., the contract is still unsigned); it just won’t bother you again unless the underlying situation changes (e.g., the contract is signed, or a new contract is assigned)"]} />
+  <Bullets items={[<><strong>Snooze (7 days)</strong> — hides the item for a week, then it reappears. Good for <>I’ll get to this later</></>, <><strong>Dismiss</strong> — hides it permanently. The item still exists (e.g., the contract is still unsigned); it just won’t bother you again unless the underlying situation changes (e.g., the contract is signed, or a new contract is assigned)</>]} />
   <H3 id="search">Search</H3>
   <P>Use the search box to find items by title (document name, employee name, etc.).</P>
   <Callout type="tip">Action Required and Awaiting Others are the most urgent — check those first thing.</Callout>
@@ -2504,14 +2504,14 @@ const PENDING: ReactNode = (
   <P>The <strong>Dashboard → Pending</strong> page shows SOP update proposals automatically extracted from your meeting recordings. Review diffs, edit the proposed text, then accept or reject each one.</P>
   <H3 id="pending-section">Pending updates</H3>
   <P>Unresolved proposals appear here, newest first. Each item shows:</P>
-  <Bullets items={["<strong>Employee avatar</strong> — whose SOP is being updated", "<strong>Title × timestamp</strong> — which employee and when the meeting was", "<strong>Source meeting</strong> — Fireflies meeting name (if available)", "<strong>AI summary</strong> — what changed (e.g., <>Added daily standup requirement</>)"]} />
+  <Bullets items={[<><strong>Employee avatar</strong> — whose SOP is being updated</>, <><strong>Title × timestamp</strong> — which employee and when the meeting was</>, <><strong>Source meeting</strong> — Fireflies meeting name (if available)</>, <><strong>AI summary</strong> — what changed (e.g., <>Added daily standup requirement</>)</>]} />
   <P>Click any proposal to expand it.</P>
   <H3 id="review-workflow">Review workflow</H3>
-  <Steps items={["Expand a proposal by clicking its row", "If the proposal is unmatched (no employee yet), pick one from the dropdown at the top", "Review the <strong>diff</strong> panel showing what changed (old on the left, new on the right)", "Read the <strong>final version</strong> in the markdown editor — you can tweak wording here before approval", "Click <strong>Approve</strong> to apply the new version to that employee’s SOP, or <strong>Reject</strong> to discard it"]} />
+  <Steps items={["Expand a proposal by clicking its row", "If the proposal is unmatched (no employee yet), pick one from the dropdown at the top", <>Review the <strong>diff</strong> panel showing what changed (old on the left, new on the right)</>, <>Read the <strong>final version</strong> in the markdown editor — you can tweak wording here before approval</>, <>Click <strong>Approve</strong> to apply the new version to that employee’s SOP, or <strong>Reject</strong> to discard it</>]} />
   <Callout type="tip">The editor is plain Markdown. If the extracted text looks weird, fix it here before approving — your edit will be recorded in the SOP version history.</Callout>
   <H3 id="resolved-section">Resolved updates</H3>
   <P>Below the pending section, a <strong>Resolved</strong> section shows all approved, rejected, and auto-applied updates (if any). Filter by employee, status, or date range. Click an item to see the before–after diff.</P>
-  <Bullets items={["<strong>Approved</strong> — you accepted it, and the new version is live", "<strong>Rejected</strong> — you declined it; the SOP was not changed", "<strong>Auto-applied</strong> — the system auto-approved it (rare; usually requires manual review)"]} />
+  <Bullets items={[<><strong>Approved</strong> — you accepted it, and the new version is live</>, <><strong>Rejected</strong> — you declined it; the SOP was not changed</>, <><strong>Auto-applied</strong> — the system auto-approved it (rare; usually requires manual review)</>]} />
   <H3 id="check-for-updates">Check for updates button</H3>
   <P>Click the blue <strong>Check for Updates</strong> button (top right) to poll your Fireflies account for new meeting transcripts. The app fetches recently recorded meetings, runs them through the AI extraction pipeline, and creates pending proposals.</P>
   <Bullets items={["Requires an active Fireflies account (free plan works for API access)", "Looks for meetings from the last 7 days", "May take a few seconds — the button shows a spinner while checking"]} />
@@ -2524,26 +2524,26 @@ const SPOTLIGHT: ReactNode = (
   <P>The <strong>Dashboard → Spotlight</strong> page lets you post internal announcements to your team. Posts can be drafted, scheduled for a future time, published immediately, or archived. Employees see them in a notification bell and optionally must acknowledge them.</P>
   <H3 id="post-status">Post status</H3>
   <P>Every post has one of four statuses:</P>
-  <Bullets items={["<strong>Draft</strong> — saved but not sent to anyone yet", "<strong>Scheduled</strong> — will be published at a future date/time you set", "<strong>Published</strong> — live and visible to your audience", "<strong>Archived</strong> — hidden from employees (but kept in Spotlight for your records)"]} />
+  <Bullets items={[<><strong>Draft</strong> — saved but not sent to anyone yet</>, <><strong>Scheduled</strong> — will be published at a future date/time you set</>, <><strong>Published</strong> — live and visible to your audience</>, <><strong>Archived</strong> — hidden from employees (but kept in Spotlight for your records)</>]} />
   <H3 id="priority-levels">Priority levels</H3>
   <P>Mark each post as:</P>
-  <Bullets items={["<strong>Critical</strong> — red pill; urgent, must read", "<strong>Important</strong> — blue pill; significant news", "<strong>FYI</strong> — gray pill; nice to know, low urgency"]} />
+  <Bullets items={[<><strong>Critical</strong> — red pill; urgent, must read</>, <><strong>Important</strong> — blue pill; significant news</>, <><strong>FYI</strong> — gray pill; nice to know, low urgency</>]} />
   <H3 id="display-modes">Display modes</H3>
   <P>Choose how employees see your post:</P>
-  <Bullets items={["<strong>Modal</strong> — full-screen popup when they open Flodok", "<strong>Banner</strong> — sticky bar at the top of the page", "<strong>Bell only</strong> — only in the notification bell; no interruption"]} />
+  <Bullets items={[<><strong>Modal</strong> — full-screen popup when they open Flodok</>, <><strong>Banner</strong> — sticky bar at the top of the page</>, <><strong>Bell only</strong> — only in the notification bell; no interruption</>]} />
   <H3 id="acknowledgement">Acknowledgement</H3>
   <P>If you check <strong>Requires Acknowledgement</strong>, employees must click 'I’ve read this' before it goes away. The post card shows a counter (e.g., '12 / 45 acknowledged') so you know who’s still pending.</P>
   <H3 id="visibility">Visibility</H3>
   <P>Control who sees the post:</P>
-  <Bullets items={["<strong>Org-wide</strong> — everyone", "<strong>Specific departments</strong> — e.g., Engineering & Product", "<strong>Specific employees</strong> — e.g., Sam, Kristi, Jan"]} />
+  <Bullets items={[<><strong>Org-wide</strong> — everyone</>, <><strong>Specific departments</strong> — e.g., Engineering & Product</>, <><strong>Specific employees</strong> — e.g., Sam, Kristi, Jan</>]} />
   <H3 id="post-actions">Post actions</H3>
   <P>Each post card has a menu (three dots). Options vary by status:</P>
-  <Bullets items={["<strong>Draft</strong> — Publish or Delete", "<strong>Published</strong> — Republish (re-send to audience), Archive, or Delete", "<strong>Archived</strong> — Unarchive or Delete"]} />
+  <Bullets items={[<><strong>Draft</strong> — Publish or Delete</>, <><strong>Published</strong> — Republish (re-send to audience), Archive, or Delete</>, <><strong>Archived</strong> — Unarchive or Delete</>]} />
   <H3 id="republish">Republish</H3>
   <P>If you edit a published post’s content and want employees to see the update, click <strong>Republish</strong>. This re-fires the announcement to your audience. A counter tracks how many times a post has been republished.</P>
   <H3 id="create-new">Create a new post</H3>
   <P>Click the blue <strong>New</strong> button (top right) to open the editor.</P>
-  <Bullets items={["<strong>Title & description</strong> — what happened and what to do about it", "<strong>Image</strong> — optional header image (drag & drop or click to upload, up to 5 MB, JPEG/PNG/WebP/GIF)", "<strong>Posted as</strong> — your name or your org’s name", "<strong>Priority</strong> — critical / important / FYI", "<strong>Display mode</strong> — modal / banner / bell only", "<strong>Requires acknowledgement</strong> — check to force read confirmation", "<strong>Visibility</strong> — org-wide / specific departments / specific employees", "<strong>Publish at</strong> — leave blank to publish now, or set a future date/time to schedule"]} />
+  <Bullets items={[<><strong>Title & description</strong> — what happened and what to do about it</>, <><strong>Image</strong> — optional header image (drag & drop or click to upload, up to 5 MB, JPEG/PNG/WebP/GIF)</>, <><strong>Posted as</strong> — your name or your org’s name</>, <><strong>Priority</strong> — critical / important / FYI</>, <><strong>Display mode</strong> — modal / banner / bell only</>, <><strong>Requires acknowledgement</strong> — check to force read confirmation</>, <><strong>Visibility</strong> — org-wide / specific departments / specific employees</>, <><strong>Publish at</strong> — leave blank to publish now, or set a future date/time to schedule</>]} />
   <P>Click <strong>Save Draft</strong> (keep working later), <strong>Schedule</strong> (if you set a future date), or <strong>Publish</strong> (send now).</P>
   <Callout type="tip">Use Critical priority and Modal display for time-sensitive announcements (outages, policy changes). Save FYI posts as drafts and batch-publish them during team meetings.</Callout>
 </>
@@ -2557,7 +2557,7 @@ const TRASH: ReactNode = (
   <Bullets items={["Employees (active staff & candidates)", "SOPs, Contracts, NDAs, Job Descriptions, Letters", "Hiring Requests", "Spotlight posts (announcements)"]} />
   <H3 id="trash-table">Trash table</H3>
   <P>Each row shows:</P>
-  <Bullets items={["<strong>Type</strong> — item type (SOP, Contract, Employee, etc.)", "<strong>Name</strong> — title or employee name", "<strong>Deleted by</strong> — who deleted it", "<strong>Days left</strong> — countdown to permanent deletion (shown in red if ≤ 3 days)", "<strong>Restore</strong> — bring it back to active", "<strong>Delete forever</strong> — skip the wait and purge now (requires confirmation)"]} />
+  <Bullets items={[<><strong>Type</strong> — item type (SOP, Contract, Employee, etc.)</>, <><strong>Name</strong> — title or employee name</>, <><strong>Deleted by</strong> — who deleted it</>, <><strong>Days left</strong> — countdown to permanent deletion (shown in red if ≤ 3 days)</>, <><strong>Restore</strong> — bring it back to active</>, <><strong>Delete forever</strong> — skip the wait and purge now (requires confirmation)</>]} />
   <H3 id="filters">Filters</H3>
   <P>Use the pill buttons to narrow by type:</P>
   <Bullets items={["All, Employees, Candidates, SOPs, Contracts, Letters, Job Descriptions, Hiring Requests, Spotlight"]} />
@@ -2606,18 +2606,18 @@ const SETTINGS_ACHIEVEMENTS: ReactNode = (
 
   <H3 id="badge-types">Types of badges</H3>
   <Bullets items={[
-    "<strong>Tenure badges</strong> — awarded automatically for service milestones (e.g., 1 day, 1 month, 1 year).",
-    "<strong>Compensation badges</strong> — awarded when salary or allowances hit a milestone (e.g., first salary, 5M IDR base).",
-    "<strong>Leaderboard badges</strong> — earned by ranking #1, top 3, or consistently topping credits/performance metrics.",
-    "<strong>Custom badges</strong> — you create these manually. Award them whenever you choose via the Performance page."
+    <><strong>Tenure badges</strong> — awarded automatically for service milestones (e.g., 1 day, 1 month, 1 year).</>,
+    <><strong>Compensation badges</strong> — awarded when salary or allowances hit a milestone (e.g., first salary, 5M IDR base).</>,
+    <><strong>Leaderboard badges</strong> — earned by ranking #1, top 3, or consistently topping credits/performance metrics.</>,
+    <><strong>Custom badges</strong> — you create these manually. Award them whenever you choose via the Performance page.</>
   ]} />
 
   <H3 id="manage-badges">Manage existing badges</H3>
   <P>The badge list groups them by type. For each badge you can:</P>
   <Bullets items={[
-    "<strong>Toggle Active</strong> — stop awarding a badge without deleting it.",
-    "<strong>Mark as Featured</strong> — highlight the badge as special (shows a <>featured</> label in the portal).",
-    "<strong>Edit</strong> — change the name, description, or icon (for custom badges only; built-in badges are managed by Flodok)."
+    <><strong>Toggle Active</strong> — stop awarding a badge without deleting it.</>,
+    <><strong>Mark as Featured</strong> — highlight the badge as special (shows a <>featured</> label in the portal).</>,
+    <><strong>Edit</strong> — change the name, description, or icon (for custom badges only; built-in badges are managed by Flodok).</>
   ]} />
 
   <Callout type="tip">Built-in badges (tenure, compensation, leaderboard) have their names and descriptions set by Flodok. You can still toggle them active, mark them featured, or turn the entire badges feature off if you don’t want them.</Callout>
@@ -2630,15 +2630,15 @@ const INTEGRATIONS_OVERVIEW: ReactNode = (
 
   <H3 id="available-integrations">Available integrations</H3>
   <Bullets items={[
-    "<strong>Fireflies</strong> — auto-fetch meeting transcripts and extract action items into Flodok for follow-up.",
-    "<strong>Asana</strong> — create Asana tasks from action items Flodok finds in meeting notes."
+    <><strong>Fireflies</strong> — auto-fetch meeting transcripts and extract action items into Flodok for follow-up.</>,
+    <><strong>Asana</strong> — create Asana tasks from action items Flodok finds in meeting notes.</>
   ]} />
 
   <H3 id="connect-fireflies">Connect Fireflies</H3>
   <P>Go to <strong>Settings → Integrations → Fireflies</strong> and click <strong>Connect</strong>. You’ll need a Fireflies API key from your Fireflies account settings.</P>
   <Bullets items={[
-    "<strong>Free plan:</strong> Flodok polls your Fireflies account every 5 minutes for new transcripts. No webhook setup needed.",
-    "<strong>Business plan:</strong> You can optionally set up a webhook so Flodok gets transcripts in real-time. Paste the webhook URL from Flodok into Fireflies → Settings → Webhooks."
+    <><strong>Free plan:</strong> Flodok polls your Fireflies account every 5 minutes for new transcripts. No webhook setup needed.</>,
+    <><strong>Business plan:</strong> You can optionally set up a webhook so Flodok gets transcripts in real-time. Paste the webhook URL from Flodok into Fireflies → Settings → Webhooks.</>
   ]} />
 
   <H3 id="connect-asana">Connect Asana</H3>
