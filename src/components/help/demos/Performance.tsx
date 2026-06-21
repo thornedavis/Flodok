@@ -57,7 +57,7 @@ const REVIEW_STEPS: TourStep[] = [
   { target: 'r-employee-card', caption: 'Open an employee card to see their detailed performance' },
   { target: 'r-compensation-ring', caption: 'Review their compensation adjustments and badges' },
   { target: 'r-activity-log', caption: 'Scroll the activity log of every adjustment and award' },
-  { target: 'r-award-button', caption: 'Award an achievement from the Achievements section' },
+  { target: 'r-award-button', caption: 'Award an achievement from the Badges section' },
 ]
 
 function MonthStrip({ active }: { active: boolean }) {
@@ -122,7 +122,7 @@ export function PerformanceReviewsDemo() {
             <Avatar initials="BS" />
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Budi Santoso</div>
-              <div className="text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>Sales · Account Executive</div>
+              <div className="text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>Operations · Sales Lead</div>
             </div>
             <Adjustment positive>+Rp 500K</Adjustment>
             <div className="flex items-center gap-1">
@@ -137,21 +137,21 @@ export function PerformanceReviewsDemo() {
           <div className="mt-3 grid grid-cols-2 gap-3">
             <DCard title="Compensation" demoId="r-compensation-ring" active={at === 'r-compensation-ring'}>
               <KV k="Base wage" v="Rp 8,000,000" />
-              <KV k="Adjustments" v="+Rp 500,000" />
-              <KV k="Achievements" v="3 badges" />
+              <KV k="Net adjustments" v="+Rp 500,000" />
+              <KV k="Badges" v="3 badges" />
             </DCard>
             <DCard title="Activity log" demoId="r-activity-log" active={at === 'r-activity-log'}>
               <TimelineStep label="Reward · +Rp 500K" detail="Closed Q2 target · 18 Jun" state="done" />
-              <TimelineStep label="Achievement · Top Closer" detail="Awarded · 12 Jun" state="done" />
-              <TimelineStep label="Achievement · Mentor" detail="Awarded · 4 Jun" state="done" />
+              <TimelineStep label="Badge · Top Performer" detail="Awarded · 12 Jun" state="done" />
+              <TimelineStep label="Badge · Team Player" detail="Awarded · 4 Jun" state="done" />
             </DCard>
           </div>
         )}
 
         <div className="mt-3 flex items-center justify-between">
-          <span className="text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>Achievements</span>
+          <span className="text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>Badges</span>
           <div style={{ width: 180 }}>
-            <Btn demoId="r-award-button" active={at === 'r-award-button'}>+ Award achievement</Btn>
+            <Btn demoId="r-award-button" active={at === 'r-award-button'}>+ Award badge</Btn>
           </div>
         </div>
       </div>
@@ -282,9 +282,9 @@ export function OneOnOnesDemo() {
 
 const RECOGNITION_STEPS: TourStep[] = [
   { target: 'r-employee-row', caption: 'Find the employee in the roster you want to recognise' },
-  { target: 'r-actions-menu', caption: 'Open their actions menu — Reward, Penalise, Award' },
-  { target: 'r-award-achievement', caption: 'Click Award Achievement to give a badge' },
-  { target: 'm-achievement-select', caption: 'Pick the achievement to award' },
+  { target: 'r-actions-menu', caption: 'Open their actions menu — Reward, Penalise, Award badge' },
+  { target: 'r-award-achievement', caption: 'Click Award badge to give a badge' },
+  { target: 'm-achievement-select', caption: 'Pick the badge to award' },
   { target: 'm-reason-textarea', caption: 'Add a reason — and optionally backdate it' },
   { target: 'm-submit-award', caption: 'Submit — the badge lands on their card' },
 ]
@@ -340,7 +340,7 @@ export function RecognitionDemo() {
           }}
         >
           <div className="flex items-center gap-3">
-            <Avatar initials="MY" />
+            <Avatar initials="MP" />
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Maya Putri</div>
               <div className="text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>Design · Product Designer</div>
@@ -366,16 +366,16 @@ export function RecognitionDemo() {
             <div className="mt-2 w-48 rounded-lg border p-1" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }}>
               <MenuItem label="Reward" color="var(--color-success)" />
               <MenuItem label="Penalise" color="var(--color-danger)" />
-              <MenuItem label="Award Achievement" color="var(--color-primary)" demoId="r-award-achievement" active={at === 'r-award-achievement'} />
+              <MenuItem label="Award badge" color="var(--color-primary)" demoId="r-award-achievement" active={at === 'r-award-achievement'} />
             </div>
           )}
         </div>
 
         {modalOpen && (
           <div className="mt-3 rounded-xl border p-3" style={{ borderColor: 'var(--color-border-strong)', backgroundColor: 'var(--color-bg)' }}>
-            <div className="mb-2 text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Award achievement</div>
+            <div className="mb-2 text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Award badge</div>
 
-            <div className="mb-1 text-[11px] font-medium" style={{ color: 'var(--color-text-tertiary)' }}>Achievement</div>
+            <div className="mb-1 text-[11px] font-medium" style={{ color: 'var(--color-text-tertiary)' }}>Pick a badge</div>
             <div
               data-demo-id="m-achievement-select"
               className="mb-3 flex items-center justify-between rounded-lg border px-3 py-2 text-sm"
@@ -395,7 +395,7 @@ export function RecognitionDemo() {
             </div>
 
             <div style={{ width: 160 }}>
-              <Btn demoId="m-submit-award" active={at === 'm-submit-award'}>Submit award</Btn>
+              <Btn demoId="m-submit-award" active={at === 'm-submit-award'}>Award</Btn>
             </div>
           </div>
         )}

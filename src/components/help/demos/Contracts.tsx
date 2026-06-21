@@ -18,21 +18,21 @@ import {
 // ─── Creating a contract ───────────────────────────────
 
 const CREATE_STEPS: TourStep[] = [
-  { target: 'doc-create-sop', caption: 'On Documents, the “Start a new document” band offers a tile per type' },
+  { target: 'doc-create-sop', caption: 'On Documents, the "Start a new document" band offers a tile per type' },
   { target: 'doc-create-contract', caption: 'Click Contract — Flodok creates a blank PKWT draft and opens it' },
   { target: 'contract-title-input', caption: 'The editor opens with an empty title and a sidebar of contract fields' },
   { target: 'contract-employee-select', caption: 'Pick the employee this contract is for' },
-  { target: 'contract-save-draft-button', caption: 'Unsaved changes enable “Save as draft” — your work is kept safe' },
+  { target: 'contract-save-draft-button', caption: 'Unsaved changes enable "Save as draft" — your work is kept safe' },
 ]
 
 function CreateTile({ label, sub, demoId, active, dim }: { label: string; sub: string; demoId?: string; active?: boolean; dim?: boolean }) {
   return (
     <div
       data-demo-id={demoId}
-      className="rounded-lg border px-3 py-2.5"
+      className="flex flex-col items-center justify-center rounded-lg border px-3 py-4 text-center"
       style={{
         borderColor: active ? 'var(--color-primary)' : 'var(--color-border)',
-        backgroundColor: 'var(--color-bg-secondary)',
+        backgroundColor: 'var(--color-bg)',
         opacity: dim ? 0.55 : 1,
         ...ringStyle(!!active),
       }}
@@ -70,30 +70,20 @@ export function ContractsCreateDemo() {
       url="app.flodok.com/dashboard/documents"
     >
       {!inEditor ? (
-        <div className="p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <div className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Documents</div>
-            <FakePill>Import existing</FakePill>
-          </div>
-          <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-tertiary)' }}>Start a new document</div>
-          <div className="grid grid-cols-3 gap-2">
-            <CreateTile label="SOP" sub="Procedure" demoId="doc-create-sop" active={at === 'doc-create-sop'} />
-            <CreateTile label="Contract" sub="PKWT / PKWTT" demoId="doc-create-contract" active={at === 'doc-create-contract'} />
-            <CreateTile label="NDA" sub="Confidentiality" dim />
-            <CreateTile label="Job Description" sub="Role spec" dim />
-            <CreateTile label="Letter" sub="Free-form" dim />
-            <CreateTile label="Template gallery" sub="Browse all" dim />
-          </div>
-          <div className="mt-3 text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-tertiary)' }}>Recent documents</div>
-          <div className="mt-2 grid grid-cols-3 gap-2">
-            <CreateTile label="Employment — Siti" sub="Active · v2" dim />
-            <CreateTile label="Employment — Andi" sub="Draft · v1" dim />
-            <CreateTile label="Safety SOP" sub="Active · v3" dim />
+        <div className="space-y-6 p-4">
+          <div>
+            <div className="mb-3 text-base font-semibold" style={{ color: 'var(--color-text)' }}>Documents</div>
+            <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-tertiary)' }}>Start a new document</div>
+            <div className="grid grid-cols-3 gap-2">
+              <CreateTile label="SOP" sub="Procedure" demoId="doc-create-sop" active={at === 'doc-create-sop'} />
+              <CreateTile label="Contract" sub="PKWT / PKWTT" demoId="doc-create-contract" active={at === 'doc-create-contract'} />
+              <CreateTile label="NDA" sub="Confidentiality" dim />
+            </div>
           </div>
         </div>
       ) : (
-        <div className="p-4">
-          <div className="mb-3 flex items-center justify-between gap-2">
+        <div className="space-y-4 p-4">
+          <div className="flex items-center justify-between">
             <FakePill>PKWT · Draft</FakePill>
             <Btn
               demoId="contract-save-draft-button"
@@ -107,14 +97,14 @@ export function ContractsCreateDemo() {
             <div className="space-y-3">
               <Field
                 label="Contract title"
-                value="Employment Agreement — John Doe"
+                value="Employment Agreement — Budi Santoso"
                 placeholder="Untitled contract"
                 demoId="contract-title-input"
                 active={at === 'contract-title-input'}
               />
               <div className="rounded-lg border p-3 text-xs leading-relaxed" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text-secondary)' }}>
                 <div className="mb-1 font-semibold" style={{ color: 'var(--color-text)' }}>Bilingual body</div>
-                This Employment Agreement is made between the Company and the Employee…
+                This Employment Agreement is made between Acme Indonesia and the Employee…
               </div>
             </div>
             <DCard title="Contract details">
@@ -147,7 +137,7 @@ const TEMPLATE_STEPS: TourStep[] = [
   { target: 'template-grid', caption: 'The gallery lists every template you can start from' },
   { target: 'template-card-contract', caption: 'Click a contract template to open its editor' },
   { target: 'template-title-field', caption: 'The editor shows the template title and bilingual body side-by-side' },
-  { target: 'template-save-button', caption: 'Set “For position” and base wage, then Save back to the gallery' },
+  { target: 'template-save-button', caption: 'Set "For position" and base wage, then Save back to the gallery' },
 ]
 
 function TemplateCard({ title, sub, badge, demoId, active, dim }: { title: string; sub: string; badge?: string; demoId?: string; active?: boolean; dim?: boolean }) {
@@ -193,29 +183,28 @@ export function ContractTemplatesDemo() {
       url="app.flodok.com/dashboard/templates"
     >
       {!inEditor ? (
-        <div className="p-4">
-          <div className="mb-3 flex items-center justify-between gap-2">
+        <div className="space-y-4 p-4">
+          <div className="flex items-center justify-between gap-2">
             <div className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Templates</div>
             <FakePill demoId="template-gallery-link" active={at === 'template-gallery-link'}>Template gallery</FakePill>
           </div>
-          <div className="mb-3 flex items-center gap-2">
+          <div className="flex items-center gap-2">
             <FakePill>All</FakePill>
             <FakePill>Contract</FakePill>
             <FakePill>NDA</FakePill>
-            <div className="ml-auto h-7 w-32 rounded-md border" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }} />
           </div>
           <div data-demo-id="template-grid" className="grid grid-cols-3 gap-2 rounded-lg p-1" style={ringStyle(at === 'template-grid')}>
             <TemplateCard title="Engineer PKWT" sub="for Software Engineer" badge="Contract" demoId="template-card-contract" active={at === 'template-card-contract'} />
             <TemplateCard title="Sales PKWT" sub="for Sales Executive" badge="Contract" dim />
-            <TemplateCard title="Standard NDA" sub="One-way" badge="NDA" dim />
             <TemplateCard title="Manager PKWTT" sub="for Manager" badge="Contract" dim />
-            <TemplateCard title="Intern Letter" sub="for Intern" badge="Letter" dim />
+            <TemplateCard title="Standard NDA" sub="One-way" badge="NDA" dim />
             <TemplateCard title="Designer PKWT" sub="for Product Designer" badge="Contract" dim />
+            <TemplateCard title="Intern Letter" sub="for Intern" badge="Letter" dim />
           </div>
         </div>
       ) : (
-        <div className="p-4">
-          <div className="mb-3 flex items-center justify-between gap-2">
+        <div className="space-y-4 p-4">
+          <div className="flex items-center justify-between gap-2">
             <FakePill>Template</FakePill>
             <Btn demoId="template-save-button" active={at === 'template-save-button'} variant="ghost">Save template</Btn>
           </div>
@@ -259,8 +248,8 @@ export function ContractTemplatesDemo() {
 
 const SIGN_STEPS: TourStep[] = [
   { target: 'contract-save-draft-button', caption: 'All required fields are filled, so save the draft' },
-  { target: 'contract-activate-and-sign-button', caption: 'Click “Activate & sign” — it saves and reveals the signature panel' },
-  { target: 'sign-as-employer-panel', caption: 'The “Sign as Employer” panel appears below the editor' },
+  { target: 'contract-activate-and-sign-button', caption: 'Click "Activate & sign" — it saves and reveals the signature panel' },
+  { target: 'sign-as-employer-panel', caption: 'The "Sign as Employer" panel appears below the editor' },
   { target: 'signature-font-option', caption: 'Pick a signature font — your name renders in that handwriting style' },
   { target: 'confirm-and-activate-button', caption: 'Confirm & Activate writes the employer signature and sets the contract active' },
 ]
@@ -311,8 +300,8 @@ export function ContractsSignDemo() {
       activeNav="Documents"
       url="app.flodok.com/dashboard/documents/contracts/edit"
     >
-      <div className="p-4">
-        <div className="mb-3 flex items-center justify-between gap-2">
+      <div className="space-y-4 p-4">
+        <div className="flex items-center justify-between gap-2">
           <FakePill>{active ? 'PKWT · Active' : 'PKWT · Draft'}</FakePill>
           <div className="flex items-center gap-2">
             <Btn demoId="contract-save-draft-button" active={at === 'contract-save-draft-button'} variant="ghost">
@@ -331,7 +320,7 @@ export function ContractsSignDemo() {
 
         <div
           data-demo-id="sign-as-employer-panel"
-          className="mt-3 rounded-lg border p-3"
+          className="rounded-lg border p-3"
           style={{
             borderColor: at === 'sign-as-employer-panel' ? 'var(--color-primary)' : 'var(--color-border)',
             backgroundColor: 'var(--color-bg-secondary)',
@@ -426,7 +415,7 @@ export function ContractsHistoryDemo() {
       activeNav="Documents"
       url="app.flodok.com/dashboard/documents/contracts/history"
     >
-      <div className="p-4">
+      <div className="space-y-4 p-4">
         <div className="mb-3 flex items-center justify-between gap-2">
           <div className="min-w-0">
             <div className="truncate text-base font-semibold" style={{ color: 'var(--color-text)' }}>Contract History — Budi Santoso</div>
@@ -445,8 +434,8 @@ export function ContractsHistoryDemo() {
             <VersionRow v="v1" who="You" summary="Initial draft" date="1 Jun" demoId="version-rail-item" active={at === 'version-rail-item'} selected={olderSelected} />
           </div>
 
-          <div data-demo-id="version-pane" className="rounded-lg border p-3" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', ...ringStyle(at === 'version-pane') }}>
-            <div className="mb-2 flex items-center justify-between gap-2">
+          <div data-demo-id="version-pane" className="rounded-lg border p-3 space-y-3" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', ...ringStyle(at === 'version-pane') }}>
+            <div className="flex items-center justify-between gap-2">
               <FakePill>EN · ID</FakePill>
               <FakePill demoId="view-mode-toggle" active={at === 'view-mode-toggle'}>{template ? 'Template' : 'Rendered'}</FakePill>
             </div>
@@ -456,9 +445,9 @@ export function ContractsHistoryDemo() {
                 : `This Agreement is between Acme Indonesia and Budi Santoso, for the position of Software Engineer at ${wage} per month.`}
             </div>
 
-            <div data-demo-id="structural-snapshot-strip" className="mt-2 rounded-md border p-2" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)', ...ringStyle(at === 'structural-snapshot-strip') }}>
+            <div data-demo-id="structural-snapshot-strip" className="rounded-md border p-2" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)', ...ringStyle(at === 'structural-snapshot-strip') }}>
               <div className="mb-1 text-[9px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-tertiary)' }}>Snapshot at this version</div>
-              <div className="grid grid-cols-2 gap-x-3">
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1">
                 <KV k="Employee" v="Budi Santoso" />
                 <KV k="Base wage" v={wage} />
                 <KV k="Allowance" v={allowance} />

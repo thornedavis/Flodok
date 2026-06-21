@@ -18,10 +18,10 @@ import {
 
 const CREATE_STEPS: TourStep[] = [
   { target: 'sop-tile', caption: 'Click the New SOP tile to start a blank draft' },
-  { target: 'sop-title', caption: 'Give it a title — “Employee Safety Guidelines”' },
+  { target: 'sop-title', caption: 'Give it a title — "Employee Safety Guidelines"' },
   { target: 'editor-add-block', caption: 'Add the first section block' },
-  { target: 'block-en-input', caption: 'Write the section in English — “Introduction”' },
-  { target: 'block-id-input', caption: 'Add the Indonesian translation — “Pengenalan”' },
+  { target: 'block-en-input', caption: 'Write the section in English — "Introduction"' },
+  { target: 'block-id-input', caption: 'Add the Indonesian translation — "Pengenalan"' },
   { target: 'publish-button', caption: 'Publish — the SOP goes Active as v1' },
 ]
 
@@ -66,15 +66,15 @@ export function SopCreateDemo() {
             style={{
               backgroundColor: published
                 ? 'color-mix(in srgb, var(--color-success) 16%, transparent)'
-                : 'var(--color-bg-tertiary)',
-              color: published ? 'var(--color-success)' : 'var(--color-text-tertiary)',
+                : 'color-mix(in srgb, var(--color-warning) 16%, transparent)',
+              color: published ? 'var(--color-success)' : 'var(--color-warning)',
             }}
           >
             {published ? 'Active · v1' : 'Draft'}
           </span>
         </div>
 
-        {/* Create tile — present the whole time; it's the entry point */}
+        {/* Create tile — present the whole time; it’s the entry point */}
         <div
           data-demo-id="sop-tile"
           className="mb-3 flex items-center gap-3 rounded-lg border px-3 py-2.5"

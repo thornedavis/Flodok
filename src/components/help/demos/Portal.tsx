@@ -16,7 +16,7 @@ import {
   type TourStep,
 } from '../GuidedDemo'
 
-// ─── Shared tiny helpers ───────────────────────────────
+// ─── Shared tiny helpers ───────────────────────────────────
 
 function StatRow({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
@@ -65,6 +65,7 @@ const ABOUT_STEPS: TourStep[] = [
   { target: 'p-compensation-ring', caption: 'The ring breaks pay into base, allowance and credits' },
   { target: 'p-activity-feed', caption: 'Recent activity logs signings, badges and bonuses' },
   { target: 'p-notifications', caption: 'The bell collects to-dos and recent rewards' },
+  { target: 'p-nav-tabs', caption: 'Five tabs: home, docs, requests, badges and leaderboard' },
 ]
 
 const MONTHS = ['Feb', 'Mar', 'Apr', 'May']
@@ -73,18 +74,20 @@ export function PortalAboutDemo() {
   const [month, setMonth] = useState('May')
   const [ringFocus, setRingFocus] = useState(false)
   const [bellOpen, setBellOpen] = useState(false)
+  const [tabView, setTabView] = useState<'home' | 'docs' | 'requests'>('home')
 
   const apply = useCallback((i: number) => {
     if (i === 1) setMonth('Apr')
     else if (i === 2) { setMonth('May'); setRingFocus(true) }
     else if (i === 4) setBellOpen(true)
+    else if (i === 5) setTabView('docs')
   }, [])
-  const reset = useCallback(() => { setMonth('May'); setRingFocus(false); setBellOpen(false) }, [])
+  const reset = useCallback(() => { setMonth('May'); setRingFocus(false); setBellOpen(false); setTabView('home') }, [])
   const tour = useGuidedTour(ABOUT_STEPS, apply, reset)
   const at = tour.activeTarget
 
   return (
-    <PhoneStage tour={tour} label="The portal home tab — an employee's pay-and-progress overview." steps={ABOUT_STEPS}>
+    <PhoneStage tour={tour} label="The portal home tab — an employee’s pay-and-progress overview." steps={ABOUT_STEPS}>
       <div className="space-y-3">
         <div data-demo-id="p-home-tab" className="flex items-center justify-between" style={ringStyle(at === 'p-home-tab')}>
           <ScreenTitle>Overview</ScreenTitle>
@@ -108,10 +111,14 @@ export function PortalAboutDemo() {
             <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-tertiary)' }}>Recent</div>
             <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
               <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: 'var(--color-success)' }} />
-              Bonus awarded · +Rp 250K
+              Bonus awarded · +Rp 250,000
+            </div>
+            <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+              <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: '#f59e0b' }} />
+              Achievement unlocked · Top Closer
             </div>
           </div>
-        ) : (
+        ) : tabView === 'home' ? (
           <>
             <div data-demo-id="p-month-strip" className="flex gap-1.5" style={ringStyle(at === 'p-month-strip')}>
               {MONTHS.map((m) => (
@@ -161,14 +168,46 @@ export function PortalAboutDemo() {
               </div>
             </div>
           </>
+        ) : tabView === 'docs' ? (
+          <div className="space-y-3">
+            <div className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Documents</div>
+            <div className="space-y-2">
+              <div className="rounded-xl border p-2.5" style={{ borderColor: 'var(--color-warning)', backgroundColor: 'color-mix(in srgb, var(--color-warning) 8%, transparent)' }}>
+                <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-warning)' }}>Action needed</div>
+                <div className="mt-1.5 text-[11px] font-medium" style={{ color: 'var(--color-text)' }}>Cash handling — daily close</div>
+                <div className="text-[9px]" style={{ color: 'var(--color-warning)' }}>Tap to sign</div>
+              </div>
+              <div className="rounded-xl border p-2.5" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)' }}>
+                <div className="text-[11px] font-medium" style={{ color: 'var(--color-text)' }}>Employment agreement</div>
+                <div className="text-[9px]" style={{ color: 'var(--color-text-tertiary)' }}>v1.0 · Signed 18 Jan</div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>My requests</div>
+              <span className="text-xs font-medium" style={{ color: 'var(--color-primary)' }}>New</span>
+            </div>
+            <div className="rounded-xl border p-3" style={{ borderColor: 'var(--color-border)' }}>
+              <div className="text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>Annual leave balance</div>
+              <div className="mt-1 flex items-baseline gap-2">
+                <span className="text-2xl font-semibold" style={{ color: 'var(--color-primary)' }}>12</span>
+                <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>/ 14 days</span>
+              </div>
+            </div>
+            <div className="rounded-lg border py-6 text-center text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-tertiary)' }}>
+              You haven’t submitted any requests yet.
+            </div>
+          </div>
         )}
 
-        <div className="flex gap-1 border-t pt-2" style={{ borderColor: 'var(--color-border)' }}>
-          <TabPill label="Home" current />
-          <TabPill label="Docs" badge="1" />
-          <TabPill label="News" />
+        <div data-demo-id="p-nav-tabs" className="flex gap-1 border-t pt-2" style={{ borderColor: 'var(--color-border)', ...ringStyle(at === 'p-nav-tabs') }}>
+          <TabPill label="Home" current={tabView === 'home'} />
+          <TabPill label="Docs" current={tabView === 'docs'} />
+          <TabPill label="Requests" />
           <TabPill label="Badges" />
-          <TabPill label="Rank" />
+          <TabPill label="Leaderboard" />
         </div>
       </div>
     </PhoneStage>
@@ -185,6 +224,7 @@ const ONBOARD_STEPS: TourStep[] = [
   { target: 'o-contract-preview', caption: 'Step 2 is reviewing and signing the contract' },
   { target: 'o-font-picker', caption: 'Pick a signature style — the name renders live' },
   { target: 'o-sign-btn', caption: 'Confirm to sign and move to the next step' },
+  { target: 'o-progress', caption: 'Progress bar shows completion across all 7 steps' },
 ]
 
 const FONTS = ['cursive', 'serif', 'monospace', 'system-ui']
@@ -210,14 +250,14 @@ export function PortalOnboardingDemo() {
           <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-tertiary)' }}>{signing ? 'Step 2 of 7' : 'Step 1 of 7'}</span>
           <span className="text-[10px]" style={{ color: 'var(--color-text-tertiary)' }}>Acme Indonesia</span>
         </div>
-        <div className="h-1.5 w-full overflow-hidden rounded-full" style={{ backgroundColor: 'var(--color-bg-tertiary)' }}>
+        <div data-demo-id="o-progress" className="h-1.5 w-full overflow-hidden rounded-full" style={{ backgroundColor: 'var(--color-bg-tertiary)', ...ringStyle(at === 'o-progress') }}>
           <span className="block h-full rounded-full transition-all" style={{ width: signing ? '28%' : '14%', backgroundColor: 'var(--color-primary)' }} />
         </div>
 
         {!signing ? (
           <div data-demo-id="o-welcome-step" className="space-y-2 rounded-xl border p-3" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)', ...ringStyle(at === 'o-welcome-step') }}>
             <div className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Welcome to Acme Indonesia</div>
-            <div className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>Let's finish setting up your profile and sign your contract.</div>
+            <div className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>Let’s finish setting up your profile and sign your contract.</div>
             <div className="mt-1 flex items-center justify-between text-[11px]">
               <span style={{ color: 'var(--color-text-tertiary)' }}>Profile complete</span>
               <span className="font-semibold" style={{ color: 'var(--color-primary)' }}>45%</span>
@@ -457,10 +497,9 @@ export function PortalCustomizeDemo() {
           <div className="flex flex-wrap gap-1.5">
             <PreviewTab label="Home" shown />
             <PreviewTab label="Docs" shown />
-            <PreviewTab label="News" shown />
-            <PreviewTab label="Forms" shown />
+            <PreviewTab label="Requests" shown />
             <PreviewTab label="Badges" shown={badges} />
-            <PreviewTab label="Rank" shown={credits} />
+            <PreviewTab label="Leaderboard" shown={credits} />
           </div>
         </div>
       </div>

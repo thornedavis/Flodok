@@ -25,7 +25,7 @@ const QS_STEPS: TourStep[] = [
   { target: 'qs-sop-create-btn', caption: 'Click Create to open the bilingual editor' },
   { target: 'qs-editor-main', caption: 'Write once in English, Indonesian sits side by side' },
   { target: 'qs-save-draft', caption: 'Save your draft — you can publish later' },
-  { target: 'qs-settings-nav', caption: 'Next stop: invite your team from Settings' },
+  { target: 'qs-settings-nav', caption: 'Next: invite your team from Settings' },
 ]
 
 function QSCard({ title, sub, demoId, active, accent }: { title: string; sub: string; demoId?: string; active?: boolean; accent?: boolean }) {
@@ -74,8 +74,8 @@ export function QuickstartDemo() {
     >
       <div className="p-4">
         <div className="mb-3">
-          <div className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Welcome to Flodok</div>
-          <div className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>A few quick steps to set up your workspace.</div>
+          <div className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Overview</div>
+          <div className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>A quick snapshot of your work and team.</div>
         </div>
 
         <div className="grid grid-cols-3 gap-2">
@@ -141,7 +141,7 @@ export function QuickstartDemo() {
           <span className="flex h-6 w-6 items-center justify-center rounded-md" style={{ backgroundColor: 'color-mix(in srgb, var(--color-primary) 14%, transparent)', color: 'var(--color-primary)' }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>
           </span>
-          <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Settings → Team Members</span>
+          <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Settings → Team members</span>
         </div>
       </div>
     </DesktopStage>
@@ -178,10 +178,10 @@ function FeatureLine({ label, free, pro }: { label: string; free: boolean | stri
 }
 
 export function PlansDemo() {
-  // false = 10 employees (Rp 1,000,000), true = 25 employees (Rp 2,700,000).
+  // false = 10 employees (Rp 1,000,000), true = 25 employees (Rp 2,200,000).
   const [big, setBig] = useState(false)
   const seats = big ? 25 : 10
-  const total = big ? 'Rp 2.700.000' : 'Rp 1.000.000'
+  const total = big ? 'Rp 2.200.000' : 'Rp 1.000.000'
 
   const apply = useCallback((i: number) => {
     if (i === 2) setBig(true)
@@ -272,7 +272,7 @@ export function PlansDemo() {
           <FeatureLine label="SOPs & contracts" free pro />
           <FeatureLine label="AI drafting" free={false} pro />
           <FeatureLine label="Integrations" free={false} pro />
-          <FeatureLine label="Team size" free="5" pro="∞" />
+          <FeatureLine label="Team size" free="5" pro="Unlimited" />
         </div>
       </div>
     </DesktopStage>
@@ -395,7 +395,7 @@ export function RolesDemo() {
 // ─── Invite team: open the form, set a role, send, see the pending row ─
 
 const INVITE_STEPS: TourStep[] = [
-  { target: 'invite-btn', caption: 'Open the invite form from Team Members' },
+  { target: 'invite-btn', caption: 'Open the invite form from Team members' },
   { target: 'invite-email', caption: 'Enter your teammate’s email address' },
   { target: 'invite-role', caption: 'Pick the role they should have' },
   { target: 'invite-role-hr', caption: 'Choose HR — can manage team and approvals' },
@@ -480,13 +480,13 @@ export function InviteTeamDemo() {
     >
       <div className="p-4">
         <div className="mb-3 flex items-center justify-between">
-          <div className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Team Members</div>
+          <div className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Team members</div>
           <div className="flex items-center gap-2">
             <div style={{ width: 140 }}>
               <Btn variant="ghost">Transfer ownership</Btn>
             </div>
             <div style={{ width: 130 }}>
-              <Btn demoId="invite-btn" active={at === 'invite-btn'}>Invite people</Btn>
+              <Btn demoId="invite-btn" active={at === 'invite-btn'}>Invite member</Btn>
             </div>
           </div>
         </div>
@@ -505,13 +505,13 @@ export function InviteTeamDemo() {
         {/* Invite panel: flips in place between collapsed → form → success. */}
         <div className="mt-3 rounded-lg border p-3" style={{ borderColor: open ? 'var(--color-primary)' : 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)' }}>
           {!open ? (
-            <div className="text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>Use “Invite people” to add a teammate by email.</div>
+            <div className="text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>Use "Invite member" to add a teammate by email.</div>
           ) : !sent ? (
             <div className="space-y-3">
               <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-tertiary)' }}>Invite a teammate</div>
               <Field
                 label="Email"
-                value={emailed ? 'teammate@company.com' : ''}
+                value={emailed ? 'budi@acme.id' : ''}
                 placeholder="name@company.com"
                 demoId="invite-email"
                 active={at === 'invite-email'}
@@ -557,7 +557,7 @@ export function InviteTeamDemo() {
             {sent ? (
               <div data-demo-id="pending-invite-row" className="flex items-center gap-3 px-3 py-2 text-xs" style={{ backgroundColor: 'color-mix(in srgb, var(--color-primary) 6%, transparent)', ...ringStyle(at === 'pending-invite-row') }}>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate font-medium" style={{ color: 'var(--color-text)' }}>teammate@company.com</div>
+                  <div className="truncate font-medium" style={{ color: 'var(--color-text)' }}>budi@acme.id</div>
                   <div className="truncate text-[10px]" style={{ color: 'var(--color-text-tertiary)' }}>Expires in 7 days</div>
                 </div>
                 <RolePill label="HR" tone="primary" />

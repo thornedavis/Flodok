@@ -4,52 +4,62 @@
 // present in the DOM. Built on the shared GuidedDemo kit.
 
 import { useCallback, useState } from 'react'
-import { DesktopStage, useGuidedTour, ringStyle, Btn, DCard, KV, type TourStep } from '../GuidedDemo'
+import { DesktopStage, useGuidedTour, ringStyle, Btn, type TourStep } from '../GuidedDemo'
 
 // ─── Shared bits ───────────────────────────────────────
 
 function BillingTabs({ at }: { at: string | null }) {
-  const tabs = ['Account', 'Team', 'Integrations', 'Payroll', 'Approvals']
+  const tabs = ['Account', 'Team', 'Integrations', 'Payroll', 'Approvals', 'Billing']
   return (
-    <div className="mb-4 flex flex-wrap items-center gap-1 border-b pb-2" style={{ borderColor: 'var(--color-border)' }}>
-      {tabs.map((t) => (
-        <span key={t} className="rounded-md px-2.5 py-1 text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>{t}</span>
-      ))}
-      <span
-        data-demo-id="settings-billing-tab"
-        className="rounded-md px-2.5 py-1 text-xs font-semibold"
-        style={{
-          color: 'var(--color-primary)',
-          backgroundColor: 'color-mix(in srgb, var(--color-primary) 12%, transparent)',
-          ...ringStyle(at === 'settings-billing-tab'),
-        }}
-      >
-        Billing
-      </span>
+    <div className="mb-6 flex flex-wrap items-center gap-1 border-b pb-2" style={{ borderColor: 'var(--color-border)' }}>
+      {tabs.map((t) => {
+        const isActive = t === 'Billing'
+        return (
+          <button
+            key={t}
+            className="relative px-4 py-2 text-sm font-medium transition-colors"
+            style={{ color: isActive ? 'var(--color-text)' : 'var(--color-text-tertiary)' }}
+            data-demo-id={t === 'Billing' ? 'settings-billing-tab' : undefined}
+          >
+            {t}
+            {isActive && (
+              <span
+                className="absolute -bottom-px left-0 right-0 h-0.5"
+                style={{ backgroundColor: 'var(--color-primary)', ...ringStyle(at === 'settings-billing-tab') }}
+              />
+            )}
+          </button>
+        )
+      })}
     </div>
   )
 }
 
 function CardGlyph() {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-secondary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-text-tertiary)' }}>
       <rect x="2" y="5" width="20" height="14" rx="2" />
       <line x1="2" y1="10" x2="22" y2="10" />
     </svg>
   )
 }
 
-function PaymentMethodCard({ at, demoId }: { at: string | null; demoId: string }) {
+function BillingSection({ title, at, demoId, children }: { title: string; at: string | null; demoId?: string; children: React.ReactNode }) {
   return (
-    <div
-      data-demo-id={demoId}
-      className="flex items-center gap-3 rounded-lg border p-3"
-      style={{ borderColor: at === demoId ? 'var(--color-primary)' : 'var(--color-border)', backgroundColor: 'var(--color-bg)', ...ringStyle(at === demoId) }}
-    >
-      <CardGlyph />
-      <div className="min-w-0">
-        <div className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Mastercard •••• 4242</div>
-        <div className="text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>Expires 12/26</div>
+    <div>
+      <div className="mb-3 text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-text-tertiary)' }}>
+        {title}
+      </div>
+      <div
+        data-demo-id={demoId}
+        className="rounded-xl border p-5"
+        style={{
+          borderColor: at === demoId ? 'var(--color-primary)' : 'var(--color-border)',
+          backgroundColor: 'var(--color-bg)',
+          ...ringStyle(at === demoId),
+        }}
+      >
+        {children}
       </div>
     </div>
   )
@@ -59,23 +69,21 @@ function PaymentMethodCard({ at, demoId }: { at: string | null; demoId: string }
 
 const MANAGE_STEPS: TourStep[] = [
   { target: 'settings-billing-tab', caption: 'Open the Billing tab in Settings' },
-  { target: 'plan-section', caption: 'Your plan and seat usage at a glance' },
+  { target: 'plan-section', caption: 'Current plan and employee count at a glance' },
   { target: 'adjust-plan-button', caption: 'Adjust plan opens the seat picker' },
-  { target: 'payment-method-display', caption: 'Your saved card lives here' },
-  { target: 'update-payment-button', caption: 'Update payment details opens the secure Stripe portal' },
+  { target: 'billing-info-section', caption: 'Billing information with company details' },
   { target: 'change-info-button', caption: 'Change billing information edits the company name and email' },
+  { target: 'payment-section', caption: 'Your saved payment method' },
 ]
 
 export function BillingManageDemo() {
   const [adjusting, setAdjusting] = useState(false)
-  const [redirecting, setRedirecting] = useState(false)
   const apply = useCallback((i: number) => {
     if (i === 2) setAdjusting(true)
-    else if (i === 4) setRedirecting(true)
+    else if (i >= 3) setAdjusting(false)
   }, [])
   const reset = useCallback(() => {
     setAdjusting(false)
-    setRedirecting(false)
   }, [])
   const tour = useGuidedTour(MANAGE_STEPS, apply, reset)
   const at = tour.activeTarget
@@ -83,63 +91,95 @@ export function BillingManageDemo() {
   return (
     <DesktopStage
       tour={tour}
-      label="Managing your subscription — plan, billing details, and payment in one place."
+      label="Managing your subscription — plan, seat count, billing details, and payment in one place."
       steps={MANAGE_STEPS}
       activeNav="Settings"
       url="app.flodok.com/dashboard/settings?tab=billing"
     >
-      <div className="p-4">
-        <div className="mb-3 text-base font-semibold" style={{ color: 'var(--color-text)' }}>Billing</div>
+      <div className="space-y-6 p-4">
+        <div>
+          <div className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>Settings</div>
+        </div>
         <BillingTabs at={at} />
 
-        {/* Plan */}
-        <div
-          data-demo-id="plan-section"
-          className="rounded-lg border p-3"
-          style={{ borderColor: at === 'plan-section' ? 'var(--color-primary)' : 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)', ...ringStyle(at === 'plan-section') }}
-        >
-          <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-tertiary)' }}>Plan</div>
-          <div className="mt-1 flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <div className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Pro · Rp 1.500.000 / month</div>
-              <div className="text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>25 employees across 25 billable seats</div>
+        {/* Plan Section */}
+        <BillingSection title="Plan" at={at} demoId="plan-section">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>
+                  Pro · Rp 5,250,000 / month
+                </span>
+              </div>
+              <div className="mt-1 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+                You have 18 employees on Pro · billed for 18 this cycle.
+              </div>
+              {/* Employee usage bar */}
+              <div className="mt-4 max-w-md">
+                <div className="mb-1 flex justify-between text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                  <span>Employees</span>
+                  <span>18 / 18</span>
+                </div>
+                <div className="h-1.5 w-full overflow-hidden rounded-full" style={{ backgroundColor: 'var(--color-bg-tertiary)' }}>
+                  <div className="h-full rounded-full" style={{ width: '100%', backgroundColor: 'var(--color-primary)' }} />
+                </div>
+              </div>
             </div>
-            <div style={{ width: 132 }}>
-              <Btn demoId="adjust-plan-button" active={at === 'adjust-plan-button'} variant="ghost">Adjust plan</Btn>
-            </div>
-          </div>
-          <div className="mt-2.5">
-            <div className="h-2 w-full overflow-hidden rounded-full" style={{ backgroundColor: 'var(--color-bg-tertiary)' }}>
-              <div className="h-full rounded-full" style={{ width: '100%', backgroundColor: 'var(--color-primary)' }} />
-            </div>
-            <div className="mt-1 text-[10px]" style={{ color: 'var(--color-text-tertiary)' }}>
-              {adjusting ? 'Seat picker open — choose how many seats to bill' : '25 / 25 seats used'}
-            </div>
-          </div>
-        </div>
-
-        {/* Billing information */}
-        <div className="mt-2">
-          <DCard title="Billing information">
-            <KV k="Company" v="PT Contoh Indonesia" />
-            <KV k="Email" v="finance@contoh.id" />
-            <div className="mt-2" style={{ width: 200 }}>
-              <Btn demoId="change-info-button" active={at === 'change-info-button'} variant="ghost">Change billing information</Btn>
-            </div>
-          </DCard>
-        </div>
-
-        {/* Payment details */}
-        <div className="mt-2">
-          <DCard title="Payment details">
-            <PaymentMethodCard at={at} demoId="payment-method-display" />
-            <div className="mt-2" style={{ width: 200 }}>
-              <Btn demoId="update-payment-button" active={at === 'update-payment-button'} variant="ghost">
-                {redirecting ? 'Opening Stripe…' : 'Update payment details'}
+            <div style={{ width: 120 }}>
+              <Btn demoId="adjust-plan-button" active={at === 'adjust-plan-button'} variant="ghost">
+                {adjusting ? 'Opening…' : 'Adjust plan'}
               </Btn>
             </div>
-          </DCard>
-        </div>
+          </div>
+        </BillingSection>
+
+        {/* Billing Information */}
+        <BillingSection title="Billing information" at={at} demoId="billing-info-section">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>
+                PT Acme Indonesia
+              </div>
+              <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+                admin@acme.id
+              </div>
+              <div className="mt-0.5 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>NPWP 01.234.567.8-901.000</div>
+            </div>
+            <div style={{ width: 200 }}>
+              <Btn demoId="change-info-button" active={at === 'change-info-button'} variant="ghost">
+                Change billing information
+              </Btn>
+            </div>
+          </div>
+        </BillingSection>
+
+        {/* Payment Details */}
+        <BillingSection title="Payment details" at={at} demoId="payment-section">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div
+                className="flex h-9 w-12 items-center justify-center rounded-md"
+                style={{ backgroundColor: 'var(--color-bg-tertiary)' }}
+              >
+                <CardGlyph />
+              </div>
+              <div>
+                <div className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+                  Mastercard
+                  <span className="ml-2 font-mono tracking-widest" style={{ color: 'var(--color-text-secondary)' }}>
+                    •••• 4242
+                  </span>
+                </div>
+                <div className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                  Expires 12/26
+                </div>
+              </div>
+            </div>
+            <div style={{ width: 170 }}>
+              <Btn variant="ghost">Update payment details</Btn>
+            </div>
+          </div>
+        </BillingSection>
       </div>
     </DesktopStage>
   )
@@ -149,10 +189,10 @@ export function BillingManageDemo() {
 
 const PAYMENT_STEPS: TourStep[] = [
   { target: 'settings-billing-tab', caption: 'Open the Billing tab in Settings' },
-  { target: 'payment-section', caption: 'Scroll to the Payment details section' },
-  { target: 'payment-method-display', caption: 'Your saved card — Mastercard •••• 4242' },
-  { target: 'update-payment-button', caption: 'Update payment details redirects to the secure Stripe portal' },
-  { target: 'payment-section', caption: 'Back from Stripe — your fresh card shows here' },
+  { target: 'payment-section', caption: 'Find the Payment details section' },
+  { target: 'payment-card-display', caption: 'Your saved card — Mastercard •••• 4242' },
+  { target: 'update-payment-button', caption: 'Update payment details opens Stripe’s secure portal' },
+  { target: 'payment-section', caption: 'Back from Stripe — your updated card shows here' },
 ]
 
 export function BillingPaymentDemo() {
@@ -168,44 +208,93 @@ export function BillingPaymentDemo() {
   return (
     <DesktopStage
       tour={tour}
-      label="Updating your card — payment changes happen in Stripe's secure portal."
+      label="Updating your card — payment changes happen in Stripe’s secure portal."
       steps={PAYMENT_STEPS}
       activeNav="Settings"
       url="app.flodok.com/dashboard/settings?tab=billing"
     >
-      <div className="p-4">
-        <div className="mb-3 text-base font-semibold" style={{ color: 'var(--color-text)' }}>Billing</div>
+      <div className="space-y-6 p-4">
+        <div>
+          <div className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>Settings</div>
+        </div>
         <BillingTabs at={at} />
 
-        {/* Payment details */}
-        <div
-          data-demo-id="payment-section"
-          className="rounded-lg border p-3"
-          style={{ borderColor: at === 'payment-section' ? 'var(--color-primary)' : 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)', ...ringStyle(at === 'payment-section') }}
-        >
-          <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-tertiary)' }}>Payment details</div>
-          <div className="mt-2">
-            <PaymentMethodCard at={at} demoId="payment-method-display" />
+        {/* Plan Section (faded) */}
+        <BillingSection title="Plan" at={at}>
+          <div className="flex items-start justify-between gap-4" style={{ opacity: 0.5 }}>
+            <div className="min-w-0 flex-1">
+              <span className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>
+                Pro · Rp 5,250,000 / month
+              </span>
+              <div className="mt-1 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+                You have 18 employees on Pro · billed for 18 this cycle.
+              </div>
+              <div className="mt-4 max-w-md">
+                <div className="mb-1 flex justify-between text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                  <span>Employees</span>
+                  <span>18 / 18</span>
+                </div>
+                <div className="h-1.5 w-full overflow-hidden rounded-full" style={{ backgroundColor: 'var(--color-bg-tertiary)' }}>
+                  <div className="h-full rounded-full" style={{ width: '100%', backgroundColor: 'var(--color-primary)' }} />
+                </div>
+              </div>
+            </div>
+            <div style={{ width: 120 }}>
+              <Btn variant="ghost">Adjust plan</Btn>
+            </div>
           </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <div style={{ width: 200 }}>
+        </BillingSection>
+
+        {/* Payment Details */}
+        <BillingSection title="Payment details" at={at} demoId="payment-section">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div
+                className="flex h-9 w-12 items-center justify-center rounded-md"
+                style={{ backgroundColor: 'var(--color-bg-tertiary)' }}
+              >
+                <CardGlyph />
+              </div>
+              <div
+                data-demo-id="payment-card-display"
+                style={ringStyle(at === 'payment-card-display')}
+              >
+                <div className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+                  Mastercard
+                  <span className="ml-2 font-mono tracking-widest" style={{ color: 'var(--color-text-secondary)' }}>
+                    •••• 4242
+                  </span>
+                </div>
+                <div className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                  Expires 12/26
+                </div>
+              </div>
+            </div>
+            <div style={{ width: 170 }}>
               <Btn demoId="update-payment-button" active={at === 'update-payment-button'} variant="ghost">
                 {redirecting ? 'Opening Stripe…' : 'Update payment details'}
               </Btn>
             </div>
-            <div style={{ width: 200 }}>
-              <Btn variant="ghost">Change billing information</Btn>
-            </div>
           </div>
-        </div>
+        </BillingSection>
 
-        {/* Danger zone (collapsed) */}
-        <div className="mt-3 flex items-center justify-between rounded-lg border px-3 py-2.5" style={{ borderColor: 'var(--color-danger)' }}>
-          <div className="min-w-0">
-            <div className="text-xs font-semibold" style={{ color: 'var(--color-danger)' }}>Danger zone · Cancel a subscription</div>
-            <div className="text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>Ends Pro at the next billing date</div>
+        {/* Danger Zone */}
+        <div className="overflow-hidden rounded-xl border transition-opacity" style={{ borderColor: 'var(--color-danger)', opacity: 0.5 }}>
+          <div className="flex cursor-pointer items-center justify-between px-5 py-4" style={{ backgroundColor: 'rgba(239, 68, 68, 0.04)' }}>
+            <div className="flex items-center gap-2">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ color: 'var(--color-danger)' }}>
+                <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                <line x1="12" y1="9" x2="12" y2="13" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+              <span className="text-xs font-semibold" style={{ color: 'var(--color-danger)' }}>
+                Danger zone · Cancel a subscription
+              </span>
+            </div>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
           </div>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-tertiary)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
         </div>
       </div>
     </DesktopStage>
@@ -218,21 +307,30 @@ const INVOICE_STEPS: TourStep[] = [
   { target: 'settings-billing-tab', caption: 'Open the Billing tab in Settings' },
   { target: 'billing-info-section', caption: 'Find the Billing information section' },
   { target: 'billing-history-button', caption: 'Billing history opens the Stripe portal' },
-  { target: 'stripe-invoices-list', caption: 'Every invoice is listed with date and amount' },
-  { target: 'invoice-pdf-download', caption: 'Download the PDF — a Faktur Pajak for PKP-registered orgs' },
+  { target: 'stripe-invoices-list', caption: 'Your invoices are listed with dates and amounts' },
+  { target: 'invoice-download-row', caption: 'Download each PDF for your records' },
+  { target: 'faktur-note', caption: 'A Faktur Pajak tax invoice is issued from your NPWP' },
 ]
 
 function InvoiceRow({ date, amount, demoId, active }: { date: string; amount: string; demoId?: string; active?: boolean }) {
   return (
     <div
       data-demo-id={demoId}
-      className="flex items-center justify-between gap-2 border-t px-3 py-2 text-xs first:border-t-0"
-      style={{ borderColor: 'var(--color-border)', backgroundColor: active ? 'color-mix(in srgb, var(--color-primary) 8%, transparent)' : 'transparent', boxShadow: active ? 'inset 0 0 0 2px color-mix(in srgb, var(--color-primary) 35%, transparent)' : 'none' }}
+      className="flex items-center justify-between gap-2 border-t px-4 py-2.5 text-xs first:border-t-0"
+      style={{
+        borderColor: 'var(--color-border)',
+        backgroundColor: active ? 'color-mix(in srgb, var(--color-primary) 8%, transparent)' : 'transparent',
+        boxShadow: active ? 'inset 0 0 0 2px color-mix(in srgb, var(--color-primary) 35%, transparent)' : 'none',
+      }}
     >
-      <span className="flex-1 truncate" style={{ color: 'var(--color-text-secondary)' }}>{date}</span>
-      <span className="w-28 text-right font-medium" style={{ color: 'var(--color-text)' }}>{amount}</span>
-      <span className="inline-flex items-center gap-1 text-[11px] font-medium" style={{ color: 'var(--color-primary)' }}>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+      <span style={{ color: 'var(--color-text-secondary)' }}>{date}</span>
+      <span className="font-medium" style={{ color: 'var(--color-text)' }}>{amount}</span>
+      <span className="inline-flex items-center gap-1 font-medium" style={{ color: 'var(--color-primary)' }}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <polyline points="7 10 12 15 17 10" />
+          <line x1="12" y1="15" x2="12" y2="3" />
+        </svg>
         PDF
       </span>
     </div>
@@ -256,46 +354,58 @@ export function BillingInvoicesDemo() {
       activeNav="Settings"
       url="app.flodok.com/dashboard/settings?tab=billing"
     >
-      <div className="p-4">
-        <div className="mb-3 text-base font-semibold" style={{ color: 'var(--color-text)' }}>Billing</div>
+      <div className="space-y-6 p-4">
+        <div>
+          <div className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>Settings</div>
+        </div>
         <BillingTabs at={at} />
 
-        {/* Billing information */}
-        <div
-          data-demo-id="billing-info-section"
-          className="rounded-lg border p-3"
-          style={{ borderColor: at === 'billing-info-section' ? 'var(--color-primary)' : 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)', ...ringStyle(at === 'billing-info-section') }}
-        >
-          <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-tertiary)' }}>Billing information</div>
-          <div className="mt-1.5">
-            <KV k="Company" v="PT Contoh Indonesia" />
-            <KV k="Email" v="finance@contoh.id" />
-          </div>
-          <div className="mt-2.5 flex flex-wrap gap-2">
-            <div style={{ width: 200 }}>
-              <Btn variant="ghost">Change billing information</Btn>
+        {/* Billing Information */}
+        <BillingSection title="Billing information" at={at} demoId="billing-info-section">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>
+                PT Acme Indonesia
+              </div>
+              <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+                admin@acme.id
+              </div>
+              <div className="mt-0.5 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>NPWP 01.234.567.8-901.000</div>
             </div>
-            <div style={{ width: 150 }}>
-              <Btn demoId="billing-history-button" active={at === 'billing-history-button'} variant="ghost">
-                {showStripe ? 'Opening…' : 'Billing history'}
-              </Btn>
+            <div className="flex flex-wrap gap-2">
+              <div style={{ width: 180 }}>
+                <Btn variant="ghost">Change billing information</Btn>
+              </div>
+              <div style={{ width: 130 }}>
+                <Btn demoId="billing-history-button" active={at === 'billing-history-button'} variant="ghost">
+                  {showStripe ? 'Opening…' : 'Billing history'}
+                </Btn>
+              </div>
             </div>
           </div>
-        </div>
+        </BillingSection>
 
-        {/* Stripe portal invoices — always in DOM, dims until the portal "opens" */}
+        {/* Stripe Portal Invoices */}
         <div
-          className="mt-3 overflow-hidden rounded-lg border transition-opacity"
+          className="overflow-hidden rounded-xl border transition-opacity"
           style={{ borderColor: 'var(--color-border)', opacity: showStripe ? 1 : 0.45 }}
         >
-          <div className="flex items-center gap-2 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider" style={{ backgroundColor: 'var(--color-bg-secondary)', color: 'var(--color-text-tertiary)' }}>
+          <div className="flex items-center gap-2 px-4 py-2.5 text-xs font-semibold uppercase tracking-widest" style={{ backgroundColor: 'var(--color-bg-secondary)', color: 'var(--color-text-tertiary)' }}>
             <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: showStripe ? 'var(--color-success)' : 'var(--color-text-tertiary)' }} />
             Stripe portal · Invoices
           </div>
           <div data-demo-id="stripe-invoices-list" style={ringStyle(at === 'stripe-invoices-list')}>
-            <InvoiceRow date="1 Jun 2026" amount="Rp 1.500.000" demoId="invoice-pdf-download" active={at === 'invoice-pdf-download'} />
-            <InvoiceRow date="1 May 2026" amount="Rp 1.500.000" />
-            <InvoiceRow date="1 Apr 2026" amount="Rp 1.500.000" />
+            <InvoiceRow date="1 Jun 2026" amount="Rp 5.250.000" demoId="invoice-download-row" active={at === 'invoice-download-row'} />
+            <InvoiceRow date="1 May 2026" amount="Rp 5.250.000" />
+            <InvoiceRow date="1 Apr 2026" amount="Rp 5.250.000" />
+          </div>
+        </div>
+
+        <div data-demo-id="faktur-note" className="flex items-start gap-2 rounded-lg border px-3 py-2.5 text-xs" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)', ...ringStyle(at === 'faktur-note') }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-tertiary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z" /><path d="M8 7h8" /><path d="M8 11h8" /></svg>
+          <div>
+            <span className="font-medium" style={{ color: 'var(--color-text)' }}>Faktur Pajak</span>
+            <span style={{ color: 'var(--color-text-tertiary)' }}> — add your NPWP above and we issue a Faktur Pajak (Indonesian tax invoice) for each payment.</span>
           </div>
         </div>
       </div>

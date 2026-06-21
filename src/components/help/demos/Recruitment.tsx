@@ -1,4 +1,4 @@
-// Self-playing guided demos for the Help Center's Recruitment section.
+// Self-playing guided demos for the Help Center’s Recruitment section.
 // Each is a single-screen, state-driven mock: a fake cursor visits targets and
 // "clicks", flipping a boolean to show the change. Every [data-demo-id] stays
 // mounted at all times — we flip text/style, never add/remove a target.
@@ -117,21 +117,22 @@ export function HiringFunnelDemo() {
   return (
     <DesktopStage tour={tour} label="The hiring funnel — move candidates between stages." steps={FUNNEL_STEPS} activeNav="Recruitment" url="app.flodok.com/dashboard/recruitment">
       <div className="relative p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <div className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Recruitment</div>
+        <div className="mb-4 flex items-center justify-between">
+          <div className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>Recruitment</div>
           <div className="w-32"><Btn>+ Add Candidate</Btn></div>
         </div>
+        <div className="mb-4 text-sm" style={{ color: 'var(--color-text-secondary)' }}>Track candidates from first meeting through signed contract.</div>
+
         <div className="mb-3 flex items-center gap-2">
           <FakePill demoId="r-filter" active={at === 'r-filter'}>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" /></svg>
             {filtered ? 'Stage: Signed' : 'Filter'}
           </FakePill>
-          <FakePill>All stages</FakePill>
           <div className="ml-auto h-7 w-32 rounded-md border" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }} />
         </div>
 
         <div data-demo-id="r-table" className="overflow-hidden rounded-lg border" style={{ borderColor: 'var(--color-border)', ...ringStyle(at === 'r-table') }}>
-          <div className="flex items-center gap-3 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider" style={{ backgroundColor: 'var(--color-bg-secondary)', color: 'var(--color-text-tertiary)' }}>
+          <div className="flex items-center gap-3 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider" style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-tertiary)' }}>
             <span className="flex-1">Name</span>
             <span className="hidden flex-1 sm:block">Position</span>
             <span className="w-[88px]">Stage</span>
@@ -167,7 +168,7 @@ export function HiringFunnelDemo() {
 
 const CAND_STEPS: TourStep[] = [
   { target: 'r-add-btn', caption: 'Click Add Candidate to open a fresh prospect form' },
-  { target: 'r-name-field', caption: 'Enter the candidate’s name' },
+  { target: 'r-name-field', caption: 'Enter the candidate’s full name' },
   { target: 'r-contact-fields', caption: 'Add their email and phone number' },
   { target: 'r-position-dropdown', caption: 'Pick the job position they’re applying for' },
   { target: 'r-department-dropdown', caption: 'Assign the department from your reference data' },
@@ -203,21 +204,21 @@ export function HiringCandidatesDemo() {
   return (
     <DesktopStage tour={tour} label="Adding a candidate — capture a new prospect." steps={CAND_STEPS} activeNav="Recruitment" url="app.flodok.com/dashboard/recruitment/new?new=1">
       <div className="p-4">
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-4 flex items-center justify-between">
           <div>
             <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-tertiary)' }}>New candidate · Personal</div>
-            <div className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>{name ? 'Fatima Aziz' : 'New Candidate'}</div>
+            <div className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{name ? 'Putri Maharani' : 'New Candidate'}</div>
           </div>
           <div className="w-24"><Btn demoId="r-add-btn" active={at === 'r-add-btn'}>+ Add</Btn></div>
         </div>
 
         <div className="space-y-3">
-          <Field label="Full name" value={name ? 'Fatima Aziz' : ''} placeholder="e.g. Fatima Aziz" demoId="r-name-field" active={at === 'r-name-field'} caret={name ? undefined : <span className="h-4 w-px" style={{ backgroundColor: 'var(--color-primary)' }} />} />
+          <Field label="Full name" value={name ? 'Putri Maharani' : ''} placeholder="e.g. Putri Maharani" demoId="r-name-field" active={at === 'r-name-field'} caret={name ? undefined : <span className="h-4 w-px" style={{ backgroundColor: 'var(--color-primary)' }} />} />
           <div data-demo-id="r-contact-fields" className="grid grid-cols-2 gap-3 rounded-lg p-1" style={ringStyle(at === 'r-contact-fields')}>
-            <Field label="Email" value={contact ? 'fatima@example.com' : ''} placeholder="name@email.com" />
+            <Field label="Email" value={contact ? 'putri@example.com' : ''} placeholder="name@email.com" />
             <Field label="Phone" value={contact ? '+62 812 3456' : ''} placeholder="+62…" />
           </div>
-          <Field label="Position" value={position ? 'Software Engineer' : ''} placeholder="Select position…" demoId="r-position-dropdown" active={at === 'r-position-dropdown'} caret={caret} />
+          <Field label="Job position" value={position ? 'Software Engineer' : ''} placeholder="Select position…" demoId="r-position-dropdown" active={at === 'r-position-dropdown'} caret={caret} />
           <Field label="Department" value={department ? 'Engineering' : ''} placeholder="Select department…" demoId="r-department-dropdown" active={at === 'r-department-dropdown'} caret={caret} />
         </div>
 
@@ -241,7 +242,7 @@ export function HiringCandidatesDemo() {
 
 const OFFER_STEPS: TourStep[] = [
   { target: 'r-actions-menu', caption: 'Open the action menu on Fatima’s row' },
-  { target: 'r-action-offer', caption: 'Choose Make Offer from the menu' },
+  { target: 'r-action-offer', caption: 'Choose Make offer from the menu' },
   { target: 'r-modal-template', caption: 'Flodok auto-matches a template to her position' },
   { target: 'r-modal-confirm', caption: 'Confirm to create the draft contract' },
   { target: 'r-modal-edit-contract', caption: 'Open Edit Contract to fine-tune the offer' },
@@ -271,13 +272,13 @@ export function HiringOffersDemo() {
   return (
     <DesktopStage tour={tour} label="Making an offer — turn a shortlisted candidate into a draft contract." steps={OFFER_STEPS} activeNav="Recruitment" url="app.flodok.com/dashboard/recruitment">
       <div className="relative p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <div className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Recruitment</div>
+        <div className="mb-4 flex items-center justify-between">
+          <div className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>Recruitment</div>
           <div className="w-32"><Btn>+ Add Candidate</Btn></div>
         </div>
 
         <div className="overflow-hidden rounded-lg border" style={{ borderColor: 'var(--color-border)' }}>
-          <div className="flex items-center gap-3 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider" style={{ backgroundColor: 'var(--color-bg-secondary)', color: 'var(--color-text-tertiary)' }}>
+          <div className="flex items-center gap-3 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider" style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-tertiary)' }}>
             <span className="flex-1">Name</span>
             <span className="hidden flex-1 sm:block">Position</span>
             <span className="w-[88px]">Stage</span>
@@ -298,7 +299,7 @@ export function HiringOffersDemo() {
             {menuOpen && (
               <div className="absolute right-2 top-8 z-10 w-36 overflow-hidden rounded-lg border py-1 text-xs" style={{ borderColor: 'var(--color-border-strong)', backgroundColor: 'var(--color-bg)', boxShadow: '0 12px 30px -10px rgba(0,0,0,0.5)' }}>
                 <span className="block px-3 py-1.5" style={{ color: 'var(--color-text-secondary)' }}>View profile</span>
-                <span data-demo-id="r-action-offer" className="block px-3 py-1.5 font-medium" style={{ color: 'var(--color-primary)', ...ringStyle(at === 'r-action-offer') }}>Make Offer</span>
+                <span data-demo-id="r-action-offer" className="block px-3 py-1.5 font-medium" style={{ color: 'var(--color-primary)', ...ringStyle(at === 'r-action-offer') }}>Make offer</span>
                 <span className="block px-3 py-1.5" style={{ color: 'var(--color-danger)' }}>Reject</span>
               </div>
             )}
@@ -315,26 +316,26 @@ export function HiringOffersDemo() {
           <ModalCard>
             {modal === 'form' ? (
               <>
-                <div className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Create Offer</div>
+                <div className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Make Offer</div>
                 <div className="mt-3 space-y-2">
                   <div className="rounded-lg border p-2.5" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)' }}>
-                    <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-tertiary)' }}>Candidate position</div>
+                    <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-tertiary)' }}>Position</div>
                     <div className="mt-0.5 text-sm font-medium" style={{ color: 'var(--color-text)' }}>Product Manager</div>
                   </div>
                   <div data-demo-id="r-modal-template" className="rounded-lg border p-2.5" style={{ borderColor: at === 'r-modal-template' ? 'var(--color-primary)' : 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)', ...ringStyle(at === 'r-modal-template') }}>
-                    <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-tertiary)' }}>Template</div>
-                    <div className="mt-0.5 text-sm" style={{ color: 'var(--color-text)' }}>Using Product Manager offer template</div>
+                    <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-tertiary)' }}>Contract template</div>
+                    <div className="mt-0.5 text-sm" style={{ color: 'var(--color-text)' }}>Will use "Product Manager offer"</div>
                   </div>
                 </div>
                 <div data-demo-id="r-modal-confirm" className="mt-3 rounded-lg" style={ringStyle(at === 'r-modal-confirm')}>
-                  <Btn>Confirm</Btn>
+                  <Btn>Confirm & create draft</Btn>
                 </div>
               </>
             ) : (
               <>
                 <div className="inline-flex items-center gap-1.5 text-sm font-semibold" style={{ color: 'var(--color-success)' }}>
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-                  Offer Created
+                  Offer extended
                 </div>
                 <div className="mt-1 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
                   A draft contract for Fatima is ready to customise.
