@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
+import { LeaveRequestDemo, LeaveJourneyDemo, ApprovingDemo, PayrollDemo, ConfigDemo } from '../../components/help/GuidedDemo'
 
 export interface DocTopic {
   slug: string
@@ -1473,6 +1474,343 @@ const BILLING_INVOICES: ReactNode = (
 
 // ─── Sections registry ──────────────────────────────────
 
+const FORMS_OVERVIEW: ReactNode = (
+<>
+    <P>
+      Forms are structured HR requests your employees submit from their
+      portal — not free-form documents or emails. They're the intake layer
+      that feeds your payroll and leave records, with a full audit trail
+      behind every entry. Today there are two types:{' '}
+      <strong>Leave Request (Cuti)</strong> and{' '}
+      <strong>Overtime Request (Lembur)</strong>.
+    </P>
+
+    <LeaveJourneyDemo />
+
+    <H3 id="why-it-matters">Why it matters</H3>
+    <P>
+      Forms replace the old Word-doc-emailed-to-HR routine. Instead of a
+      document someone has to read, retype, and file, every request is a
+      structured record that routes itself to the right approver and, once
+      approved, flows straight into payroll and leave balances. Nothing gets
+      lost in a chat thread, and you can always see who asked for what, who
+      approved it, and when.
+    </P>
+
+    <H3 id="who-does-what">Who does what</H3>
+    <Bullets
+      items={[
+        <><strong>Employees</strong> submit requests from the{' '}<strong>Requests</strong> tab of their portal. The portal is a shared link with no login — they just open it and fill in the form.</>,
+        <><strong>The approver</strong> — a designated reviewer (typically a manager or HR) — approves or rejects each request from <strong>Dashboard → Forms</strong>.</>,
+        <><strong>The owner</strong> can optionally give a final sign-off after the approver, if your organization turns on the owner-approval gate (see below).</>,
+        <><strong>HR and Admins</strong> can also file a request on an employee's behalf, and they configure which form types and fields are available.</>,
+      ]}
+    />
+
+    <H3 id="lifecycle">The lifecycle at a glance</H3>
+    <P>
+      A request moves through a fixed path:{' '}
+      <strong>Submitted → approver approves → (optional) owner approves → Approved</strong>.
+      The moment a request reaches <strong>Approved</strong>, it
+      automatically flows into payroll and leave balances — no re-keying.
+    </P>
+    <Callout type="warn">
+      Rejections are final. A rejected request can't be reopened or
+      un-rejected — the employee submits a fresh request instead. This keeps
+      the audit trail honest.
+    </Callout>
+
+    <H3 id="owner-approval">The optional owner-approval gate</H3>
+    <P>
+      Each organization can require a second, final sign-off from the{' '}
+      <strong>owner</strong> after the approver has approved. It's an
+      anti-collusion safeguard — a popular choice for Indonesian owners who
+      want the last word on leave and overtime — turned on per organization
+      in <strong>Settings → Approvals</strong>. With it off, an approver's
+      decision is the final step.
+    </P>
+
+    <H3 id="identity-automatic">Identity is filled in automatically</H3>
+    <P>
+      The employee's name, ID or code, department, position, and work status
+      are pulled straight from their Flodok record — never typed into a
+      free-text box. Because attribution comes from the record rather than
+      from what someone types, every request is tamper-resistant and reliably
+      tied to a real person.
+    </P>
+    <Callout type="note">
+      This is also why a request on someone's behalf still carries the right
+      identity: HR picks the employee, and Flodok resolves their details from
+      the record automatically.
+    </Callout>
+
+    <H3 id="where-to-find-it">Where to find it</H3>
+    <Bullets
+      items={[
+        <><strong>Employees</strong> — the <strong>Requests</strong> tab of their employee portal.</>,
+        <><strong>Approvers, owners, HR, and Admins</strong> — <strong>Dashboard → Forms</strong>, where requests are listed, reviewed, and filed on behalf of others.</>,
+      ]}
+    />
+
+    <H3 id="next">Where to go next</H3>
+    <Bullets
+      items={[
+        <><Link to="/help/docs/submitting-requests">Submitting requests</Link> — how an employee files Cuti or Lembur from the portal.</>,
+        <><Link to="/help/docs/approving-requests">Approving requests</Link> — reviewing, approving, rejecting, and the owner sign-off.</>,
+        <><Link to="/help/docs/configuring-forms">Configuring forms</Link> — fields, the approval gate, filing on behalf, and the portal landing.</>,
+        <><Link to="/help/docs/forms-payroll-leave">Forms, payroll &amp; leave</Link> — what happens to balances and pay once a request is approved.</>,
+        <><Link to="/help/docs/portal-about">About the portal</Link> — where employees find the Requests tab.</>,
+      ]}
+    />
+  </>
+)
+
+const FORMS_SUBMITTING: ReactNode = (
+<>
+<P>
+  This page shows you how to submit a leave or overtime request from the employee portal,
+  what each part of the form does, and how to read the status afterwards. You file everything
+  from the portal <strong>Requests</strong> tab.
+</P>
+
+<LeaveRequestDemo />
+
+<H3 id="leave-request">Submitting a leave request (Cuti)</H3>
+<P>
+  A leave request books time away from work — for annual leave, sickness, a national holiday,
+  and more. Your organization decides which leave types you can pick.
+</P>
+<Steps items={[
+  <>On the <strong>Requests</strong> tab, tap <strong>New request</strong> and choose <strong>Leave Request</strong>.</>,
+  <>Pick a <strong>Leave type</strong>. The options your organization has turned on appear here — for example Annual, Unpaid, National holiday, Sick (with or without a note), Short time, or Special.</>,
+  <>Set your dates. Most types use a <strong>From</strong> and <strong>To</strong> date, and the total number of days is calculated for you. If you chose <strong>Short time</strong>, you instead pick a single date plus a start and end time.</>,
+  <>Optionally add a <strong>reason</strong>, and name up to two replacement colleagues who will cover for you while you're away.</>,
+  <>Submit. The request appears in your list with a status.</>,
+]} />
+<Callout type="note">
+  Your organization may make the <strong>reason</strong> field required for some leave types. If so,
+  you won't be able to submit until it's filled in.
+</Callout>
+
+<H3 id="overtime-request">Submitting an overtime request (Lembur)</H3>
+<P>
+  An overtime request records extra hours you've worked. You can log several days in one request.
+</P>
+<Steps items={[
+  <>Tap <strong>New request</strong> and choose <strong>Overtime Request</strong>.</>,
+  <>Pick your <strong>work status</strong> — Permanent, Contract, Daily, or Piecework. Your organization chooses which of these appear.</>,
+  <>Add a <strong>row</strong> for each day of overtime, entering a date, a start time and an end time. The hours and totals are computed for you.</>,
+  <>Tick <strong>rest day / holiday</strong> on any row where the overtime fell on a day off — it's paid at a higher rate. You can also add an optional reason per row.</>,
+  <>Use <strong>Add row</strong> to log more days, then submit.</>,
+]} />
+
+<H3 id="leave-balance">Your leave balance</H3>
+<P>
+  The <strong>Requests</strong> tab shows your annual-leave balance as remaining out of your full
+  entitlement. In Indonesia, annual leave accrues with your length of service, so the number grows
+  as you stay.
+</P>
+<Callout type="note">
+  If your organization requires it, annual leave only becomes usable after 12 months of service.
+  Until then your balance shows as locked. See{' '}
+  <Link to="/help/docs/forms-payroll-leave">how leave accrues</Link>{' '}
+  for the full rules.
+</Callout>
+
+<H3 id="reading-statuses">Reading your request status</H3>
+<P>
+  Each request in your list carries a status so you always know where it stands:
+</P>
+<Bullets items={[
+  <><strong>Submitted</strong> — waiting for the approver to review it.</>,
+  <><strong>Manager approved</strong> — the manager said yes and it's waiting for owner sign-off, if your organization uses a second step.</>,
+  <><strong>Approved</strong> — done. It flows through to payroll and your leave balance.</>,
+  <><strong>Rejected</strong> — declined by the manager or owner. This is final.</>,
+]} />
+<Callout type="warn">
+  You can't edit a request after submitting it — if something's wrong, just submit a new one.
+  Your identity details are filled in automatically, so there's nothing to enter there.
+</Callout>
+
+<H3 id="hr-on-behalf">HR filing on behalf of an employee</H3>
+<P>
+  Admins and HR can submit a request for someone else from <strong>Dashboard → Forms → New request form</strong>.
+  Pick the employee first, then fill in the form — the steps are identical to the ones above.
+</P>
+
+<H3 id="related">Related</H3>
+<Bullets items={[
+  <><Link to="/help/docs/approving-requests">Approving requests</Link></>,
+  <><Link to="/help/docs/forms-payroll-leave">How requests reach payroll and leave</Link></>,
+]} />
+</>
+)
+
+const FORMS_APPROVING: ReactNode = (
+<>
+    <P>
+      When an employee submits a leave or overtime request, it lands with the people responsible for signing it off. This page explains the approval chain, where you act on requests, and the safeguards that keep one person from pushing a request through on their own.
+    </P>
+
+    <ApprovingDemo />
+
+    <H3 id="the-chain">The two-tier chain</H3>
+    <P>
+      Every request runs through up to two steps. First comes the{' '}
+      <strong>Manager step</strong>, handled by your org's designated approver — set in{' '}
+      <strong>Settings → Approvals</strong>, and defaulting to the owner if none is chosen. Then, if your org has turned on{' '}
+      <strong>owner approval</strong>, the request moves to the <strong>Owner step</strong> for a final sign-off. If owner approval is off, the approver's decision on the Manager step is final.
+    </P>
+
+    <H3 id="where-to-approve">Where to approve</H3>
+    <P>
+      Open <strong>Dashboard → Forms</strong>, click the request to open it, then choose{' '}
+      <strong>Approve</strong> or <strong>Reject</strong>. You can add an optional note with your decision. Any pending request assigned to you also shows up in your <strong>Inbox</strong>, so you don't have to go hunting.
+    </P>
+    <P>
+      The request page shows the full workflow timeline — submitted, then the Manager step, then the Owner step — with who decided and when, so the history is always clear.
+    </P>
+
+    <H3 id="who-can-do-what">Who can do what</H3>
+    <Bullets
+      items={[
+        <>The <strong>Manager step</strong> is decided by the designated approver (or an admin acting in their place).</>,
+        <>The <strong>Owner step</strong> is decided by the owner, and admins can act here as an override.</>,
+        <>No one can approve their own request. Even if you'd normally decide a step, Flodok won't let you sign off something you submitted — it routes around you so the decision stays with someone else.</>,
+      ]}
+    />
+
+    <Callout type="note">
+      For small teams, the steps collapse automatically so nobody taps twice for no reason. If the approver <em>is</em> the owner, the two steps become one. And if the person submitting is also the approver, their own step is auto-stamped and the request moves on — but it never lets someone fully self-approve when an owner gate applies.
+    </Callout>
+
+    <H3 id="the-owner-gate">The owner gate</H3>
+    <P>
+      Turning on owner approval in <strong>Settings → Approvals</strong> means money and leave are only committed after the owner's final approval. That's the anti-collusion safeguard: HR and staff can't push a payout or a leave balance through on their own — the owner is always the last signature before anything posts.
+    </P>
+    <Callout type="warn">
+      Changing the owner-approval setting only affects <em>new</em> requests. Anything already in flight keeps the rule it was submitted under, so flipping the toggle won't reroute or unblock requests that are mid-approval.
+    </Callout>
+
+    <H3 id="rejections">Rejections</H3>
+    <P>
+      A rejection is final. The employee sees the rejected status on their request, and there's no way to reopen it. To proceed, they submit a new request — which starts the chain fresh.
+    </P>
+
+    <H3 id="related">Related</H3>
+    <Bullets
+      items={[
+        <Link to="/help/docs/configuring-forms">Configure approvals and form fields</Link>,
+        <Link to="/help/docs/forms-payroll-leave">How approved requests post to payroll and leave</Link>,
+      ]}
+    />
+  </>
+)
+
+const FORMS_PAYROLL_LEAVE: ReactNode = (
+<>
+<P>When you approve a Leave or Overtime request, Flodok records the financial side for you automatically — no re-keying into payroll or leave spreadsheets. This page explains exactly what gets posted, how Indonesian rules are applied, and what happens when a pay period is already closed.</P>
+
+<PayrollDemo />
+
+<H3 id="what-gets-recorded">What gets recorded on approval</H3>
+<P>What Flodok posts depends on the request type. Once a request is <strong>Approved</strong>, it’s recorded against the right employee and period without any further action from you.</P>
+<Bullets items={[
+  <><strong>Overtime</strong> → a pay adjustment, calculated under Indonesian <strong>PP35/2021</strong>. The hourly rate is the employee’s monthly base wage ÷ 173 (base wage only — allowances are excluded). Multipliers stack by the hour: on a normal working day the 1st hour is 1.5× and later hours 2×; on a rest day or public holiday the rate starts at 2× and rises to 3× and 4× for the longest days. The exact steps depend on whether the employee is on a 5- or 6-day week. Marking a row as rest day or holiday on the request is what triggers the higher rates.</>,
+  <><strong>Unpaid leave</strong> → a deduction from pay at the employee’s daily rate, for the days taken.</>,
+  <><strong>Annual leave</strong> → decremented from the employee’s leave balance.</>,
+  <><strong>Sick, national holiday, special leave</strong> → recorded for the audit trail with no pay effect.</>,
+]} />
+
+<H3 id="leave-accrual">How annual leave accrues</H3>
+<P>Annual leave isn’t granted all at once — it builds up with service, following Indonesian practice.</P>
+<Bullets items={[
+  <>Leave accrues with service: roughly one-twelfth of the yearly entitlement per completed month, reaching the full entitlement at 12 months.</>,
+  <>A configurable <strong>12-month service gate</strong> (on by default) means that until an employee completes 12 months, the balance is shown but locked — they accrue days but can’t use them yet. Admins control this on the leave form’s config page (see{' '}<Link to="/help/docs/configuring-forms">Configuring forms</Link>).</>,
+]} />
+<Callout type="note">Balances reset each leave year — unused annual leave does <strong>not</strong> carry over, in line with the Manpower Law. Plan time off within the year it’s earned.</Callout>
+
+<H3 id="reference-numbers">Reference numbers</H3>
+<P>Every approved request is assigned a reference number, numbered per type per year:</P>
+<Bullets items={[
+  <>Leave → <code>CUTI/2026/001</code></>,
+  <>Overtime → <code>LEMBUR/2026/001</code></>,
+]} />
+<P>The reference appears on the request and on its PDF, so you can cite it in payroll records or correspondence.</P>
+
+<H3 id="frozen-periods">Frozen periods and reposting</H3>
+<Callout type="warn">If the pay period a request belongs to is already closed or settled, Flodok will <em>not</em> post into it. The request still shows <strong>Approved</strong>, but its payroll line is skipped and flagged with the reason in the request’s Payroll section.</Callout>
+<P>To get a skipped request posted once the period is reopened:</P>
+<Steps items={[
+  <>Reopen the affected pay period for that employee.</>,
+  <>Open the request and go to its <strong>Payroll</strong> section, where the skip reason is shown.</>,
+  <>Press <strong>Repost</strong>. Flodok re-attempts the posting; if the period is still frozen, it simply skips again with the same flag.</>,
+]} />
+<Callout type="note">For an overtime request that spans two pay periods, posting is all-or-nothing: if <em>either</em> period is frozen, the whole request is held rather than half-posted. Reopen both periods before reposting.</Callout>
+
+<H3 id="pdf">Downloading the PDF</H3>
+<P>Every request can be saved as a PDF using the <strong>Download PDF</strong> button on the request page. The PDF carries the filled details, the reference number, and the approval signatures — handy for your records or for wet-signature filing.</P>
+
+<H3 id="related">Related</H3>
+<Bullets items={[
+  <><Link to="/help/docs/approving-requests">Approving requests</Link></>,
+  <><Link to="/help/docs/configuring-forms">Configuring forms</Link></>,
+]} />
+</>
+)
+
+const FORMS_CONFIG: ReactNode = (
+<>
+<P>
+This page is for admins setting up Forms for your organization. You'll decide what each form offers, choose who approves requests, and learn how to file a request on an employee's behalf.
+</P>
+
+<ConfigDemo />
+
+<H3 id="choosing-what-each-form-offers">Choosing what each form offers</H3>
+<P>
+From <strong>Dashboard → Forms</strong>, click a form-type tile (Leave Request or Overtime Request) to open its configuration page. What you can tune depends on the form:
+</P>
+<Bullets items={[
+  <><strong>Leave Request</strong> — turn individual <strong>leave types</strong> on or off (at least one must stay on), make a <strong>reason required</strong>, and toggle the <strong>12-month service gate</strong> that governs annual leave eligibility.</>,
+  <><strong>Overtime Request</strong> — turn individual <strong>work statuses</strong> on or off: Permanent, Contract, Daily, and Piecework.</>,
+]} />
+<Callout type="note">
+  You can only narrow or require — you can't add new fields or change the calculations. The forms ship with correct Indonesian defaults, so the safest setup is to leave most things as they are and only switch off what your organization doesn't use.
+</Callout>
+
+<H3 id="setting-up-approvals">Setting up approvals</H3>
+<P>
+Go to <strong>Settings → Approvals</strong> to decide who signs off on requests:
+</P>
+<Bullets items={[
+  <>Choose the <strong>approver</strong> — the team member who approves requests at the Manager step. Leave it on the default and the organization owner approves.</>,
+  <>Turn <strong>Require owner approval</strong> on or off. This is the anti-collusion gate that adds a final owner sign-off before anything commits to payroll or leave. See{' '}
+  <Link to="/help/docs/approving-requests">Approving Requests</Link>{' '}for exactly how the gate behaves.</>,
+]} />
+<Callout type="warn">
+  Changing these settings only affects new requests — anything already in flight keeps the approval path it had when it was submitted.
+</Callout>
+
+<H3 id="filing-on-behalf">Filing on behalf of an employee</H3>
+<P>
+Admins and HR can submit a request for someone else via <strong>Dashboard → Forms → New request form</strong>. Pick the employee, then fill in the same form the employee would. This is handy for staff who don't use the portal.
+</P>
+
+<H3 id="enabling-and-permissions">Enabling Forms and who can do what</H3>
+<P>
+Forms can be enabled or disabled for the whole organization. Who can see and do each of the things above follows your roles — see{' '}
+<Link to="/help/docs/roles">Understanding Roles</Link>{' '}for the details.
+</P>
+
+<H3 id="related">Related</H3>
+<Bullets items={[
+  <><Link to="/help/docs/forms-overview">Forms Overview</Link></>,
+  <><Link to="/help/docs/approving-requests">Approving Requests</Link></>,
+]} />
+</>
+)
+
 export const sections: DocSection[] = [
   {
     id: 'getting-started',
@@ -1632,6 +1970,48 @@ export const sections: DocSection[] = [
         description: 'Badges, credits, and bonuses — three layers of recognition with their own rules.',
         iconKey: 'star',
         body: RECOGNITION,
+      },
+    ],
+  },
+  {
+    id: 'forms',
+    title: 'Forms & Requests',
+    description: 'Employee-fillable leave and overtime requests — how staff submit them, how approvals flow, and how admins set them up.',
+    topics: [
+      {
+        slug: 'forms-overview',
+        title: 'Forms Overview',
+        description: "What Forms are, who does what, and how a request flows from an employee's portal into payroll and leave.",
+        iconKey: 'workflow',
+        body: FORMS_OVERVIEW,
+      },
+      {
+        slug: 'submitting-requests',
+        title: 'Submitting a request',
+        description: 'How employees submit leave and overtime requests from the portal, read their status, and how HR files on their behalf.',
+        iconKey: 'clock',
+        body: FORMS_SUBMITTING,
+      },
+      {
+        slug: 'approving-requests',
+        title: 'Approving requests',
+        description: 'How the two-tier approval chain works, where to approve or reject, and who can act at each step.',
+        iconKey: 'handshake',
+        body: FORMS_APPROVING,
+      },
+      {
+        slug: 'forms-payroll-leave',
+        title: 'How requests reach payroll & leave',
+        description: 'What Flodok records automatically once a Leave or Overtime request is approved — overtime pay under PP35/2021, leave accrual and balances, reference numbers, and frozen-period reposting.',
+        iconKey: 'wallet',
+        body: FORMS_PAYROLL_LEAVE,
+      },
+      {
+        slug: 'configuring-forms',
+        title: 'Configuring Forms',
+        description: 'Admin setup for Forms — what each form offers, who approves, the owner gate, and filing on behalf.',
+        iconKey: 'settings',
+        body: FORMS_CONFIG,
       },
     ],
   },
