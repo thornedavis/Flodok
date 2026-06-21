@@ -7,7 +7,7 @@ import { useBilling } from '../../contexts/BillingContext'
 import { generateUniqueSlug, generateAccessToken } from '../../lib/slug'
 import { getAvatarGradient } from '../../lib/avatar'
 import { getEmployeeDepts, type EmpDeptShape } from '../../lib/employee'
-import { findTemplateForPosition, buildContractFromTemplate } from '../../lib/contractTemplates'
+import { findTemplateForPosition, buildContractFromTemplate, seedContractComponentsFromTemplate } from '../../lib/contractTemplates'
 import { documentEditPath } from '../../lib/documentTypes'
 import { docAsJson, emptyDocumentDoc } from '../../lib/documentDoc'
 import { advanceSignedToActiveForOrg } from '../../lib/lifecycleAdvance'
@@ -984,6 +984,11 @@ function MakeOfferModal({ candidate, orgId, onClose, onCompleted, onEditContract
       setSubmitting(false)
       setError(insertError?.message || t.makeOfferError)
       return
+    }
+
+    // Seed the allowance breakdown from the template (trigger derives allowance_idr).
+    if (template) {
+      await seedContractComponentsFromTemplate(newContract.id, orgId, template)
     }
 
     const { error: stageError } = await supabase

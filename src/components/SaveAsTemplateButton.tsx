@@ -25,6 +25,8 @@ import { Modal } from './Modal'
 import { docAsJson, type DocumentDoc } from '../lib/documentDoc'
 import { documentTemplateEditPath } from '../lib/documentTypes'
 import type { PkwtType } from '../lib/pkwtStarterDoc'
+import type { CompensationComponentInput } from '../lib/snapshotApi'
+import type { Json } from '../types/database'
 
 export type SaveAsTemplateSource =
   | { type: 'sop'; contentDoc: DocumentDoc }
@@ -37,6 +39,7 @@ export type SaveAsTemplateSource =
       contractType: PkwtType
       baseWageIdr: number | null
       allowanceIdr: number | null
+      compensationComponents: CompensationComponentInput[]
       hoursPerDay: number | null
       daysPerWeek: number | null
       annualLeaveDays: number | null
@@ -125,6 +128,9 @@ export function SaveAsTemplateModal({
           contract_type: source.contractType,
           base_wage_idr: source.baseWageIdr,
           allowance_idr: source.allowanceIdr,
+          compensation_components: (source.compensationComponents.length > 0
+            ? source.compensationComponents
+            : null) as unknown as Json,
           hours_per_day: source.hoursPerDay,
           days_per_week: source.daysPerWeek,
           annual_leave_days: source.annualLeaveDays,

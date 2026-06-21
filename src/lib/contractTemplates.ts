@@ -1,6 +1,7 @@
 import { supabase } from './supabase'
 import type { Contract, DocumentTemplate } from '../types/aliases'
 import type { Json } from '../types/database'
+import type { CompensationComponentInput } from './snapshotApi'
 
 // Find a contract template configured for the given job position.
 // Reads from the typed `document_templates` table (Phase G.1) — the
@@ -59,4 +60,50 @@ export function buildContractFromTemplate(template: DocumentTemplate, employeeId
     status: 'draft',
     is_template: false,
   }
+}
+
+// Read a template's stored allowance breakdown as typed earning lines. Empty
+// when the template isn't itemised. Tolerant of malformed rows.
+export function templateComponents(tpl: { compensation_components?: Json | null }): CompensationComponentInput[] {
+  const raw = tpl.compensation_components
+  if (!Array.isArray(raw)) return []
+  return raw.flatMap((r, i) => {
+    if (!r || typeof r !== 'object') return []
+    const o = r as Record<string, unknown>
+    const name = typeof o.name === 'string' ? o.name.trim() : ''
+    const amount = typeof o.amount_idr === 'number' ? o.amount_idr : Number(o.amount_idr)
+    if (name === '' || !Number.isFinite(amount)) return []
+    const kind = o.kind === 'deduction' || o.kind === 'benefit' ? o.kind : 'earning'
+    return [{
+      name,
+      kind: kind as CompensationComponentInput['kind'],
+      is_fixed: o.is_fixed === true,
+      amount_idr: Math.max(0, Math.round(amount)),
+      display_order: typeof o.display_order === 'number' ? o.display_order : i,
+    }]
+  })
+}
+
+// Seed contract_compensation_components for a freshly-created contract from a
+// template's breakdown. The DB trigger then derives contracts.allowance_idr.
+// No-op when the template has no components (the contract keeps the single
+// allowance_idr copied by buildContractFromTemplate / createDocFromTemplate).
+export async function seedContractComponentsFromTemplate(
+  contractId: string,
+  orgId: string,
+  tpl: { compensation_components?: Json | null },
+): Promise<void> {
+  const comps = templateComponents(tpl)
+  if (comps.length === 0) return
+  await supabase.from('contract_compensation_components').insert(
+    comps.map((c, i) => ({
+      org_id: orgId,
+      contract_id: contractId,
+      name: c.name,
+      kind: c.kind,
+      is_fixed: c.is_fixed,
+      amount_idr: c.amount_idr,
+      display_order: c.display_order ?? i,
+    })),
+  )
 }

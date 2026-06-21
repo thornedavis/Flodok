@@ -36,10 +36,16 @@ export type EmployerSignatureSnapshot = SignatureSnapshot & {
   employer_title?: string | null
 }
 
+// One earning allowance line, for the {{allowance_components}} breakdown.
+// Carried on the contract context (the lines live in a separate table, not on
+// the contract row). is_fixed is a Talenta/payslip label and is not shown in
+// the contract text.
+export type ContractAllowanceComponent = { name: string; amount_idr: number; is_fixed?: boolean }
+
 export type MergeContext = {
   employee?: (Employee & EmpDeptShape) | null
   organization?: Organization | null
-  contract?: Contract | null
+  contract?: (Contract & { compensation_components?: ContractAllowanceComponent[] | null }) | null
   // NDA structural fields, for the nda_* tokens (effective date / survival / penalty).
   nda?: { effective_date?: string | null; survival_years?: number | null; penalty_idr?: number | null } | null
   today?: Date
@@ -72,6 +78,7 @@ export type MergeFieldKey =
   | 'contract_end_date'
   | 'base_wage_idr'
   | 'allowance_idr'
+  | 'allowance_components'
   | 'hours_per_day'
   | 'days_per_week'
   | 'annual_leave_days'
@@ -155,6 +162,27 @@ function renderSignatureHtml(sig: SignatureSnapshot | null | undefined): string 
     .replace(/>/g, '&gt;')
   const escapedFont = font.replace(/'/g, '')
   return `<span class="signature-name" style="font-family: '${escapedFont}', cursive; font-size: 1.5em; line-height: 1; display: inline-block; min-width: 12em; border-bottom: 1px solid currentColor; padding-bottom: 2px;">${escapedName}</span>`
+}
+
+// Escapes user-entered text (component names) for safe inline HTML output.
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+// Renders the allowance breakdown as an inline HTML fragment: one <br/>-led
+// line per component plus a bold Total. Inline-safe (consumed by ReactMarkdown
+// via rehype-raw and by PDF export — the same path signatures use). Falls back
+// to the single allowance total when no components are itemised.
+function renderAllowanceComponents(ctx: MergeContext): string | null {
+  const lang = ctx.lang ?? 'en'
+  const comps = ctx.contract?.compensation_components
+  if (!comps || comps.length === 0) {
+    const v = ctx.contract?.allowance_idr
+    return v == null ? null : formatIdr(v, lang)
+  }
+  const rows = comps.map(c => `<br/>${escapeHtml(c.name)}: ${formatIdr(c.amount_idr, lang)}`)
+  const total = comps.reduce((s, c) => s + (c.amount_idr || 0), 0)
+  return `${rows.join('')}<br/><strong>Total: ${formatIdr(total, lang)}</strong>`
 }
 
 // ─── Field registry ─────────────────────────────────────────────────────────
@@ -263,12 +291,20 @@ export const MERGE_FIELDS: Record<MergeFieldKey, MergeFieldDef> = {
   allowance_idr: {
     key: 'allowance_idr',
     scope: 'contract',
-    label: { en: 'Allowance', id: 'Tunjangan' },
-    description: { en: 'Monthly allowance baseline in IDR', id: 'Tunjangan bulanan dasar dalam IDR' },
+    label: { en: 'Allowance (total)', id: 'Tunjangan (total)' },
+    description: { en: 'Total monthly allowance in IDR', id: 'Total tunjangan bulanan dalam IDR' },
     resolve: ctx => {
       const v = ctx.contract?.allowance_idr
       return v == null ? null : formatIdr(v, ctx.lang ?? 'en')
     },
+  },
+  allowance_components: {
+    key: 'allowance_components',
+    scope: 'contract',
+    label: { en: 'Allowance breakdown', id: 'Rincian tunjangan' },
+    description: { en: 'Itemised allowance lines with a total', id: 'Rincian tunjangan per komponen beserta total' },
+    resolve: ctx => renderAllowanceComponents(ctx),
+    editorDisplay: (_ctx, lang) => (lang === 'id' ? 'Rincian tunjangan' : 'Allowance breakdown'),
   },
   hours_per_day: {
     key: 'hours_per_day',

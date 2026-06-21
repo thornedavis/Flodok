@@ -15,6 +15,7 @@ import { useSaveFlash } from '../../hooks/useSaveFlash'
 import { exportDocumentPdf } from '../../lib/pdfExport'
 import { formatIdrDigits } from '../../lib/credits'
 import { InfoTooltip } from '../../components/InfoTooltip'
+import { AllowanceComponentsEditor, type CompLine } from '../../components/AllowanceComponentsEditor'
 import { writeSnapshot } from '../../lib/snapshotApi'
 import { emptyDocumentDoc, type DocumentDoc } from '../../lib/documentDoc'
 import { buildPkwtStarterDoc, type PkwtType } from '../../lib/pkwtStarterDoc'
@@ -74,7 +75,13 @@ export function ContractEdit({ user }: { user: User }) {
   const [translating, setTranslating] = useState(false)
   const [status, setStatus] = useState<'active' | 'draft' | 'archived'>('draft')
   const [baseWageIdr, setBaseWageIdr] = useState<string>('')
-  const [allowanceIdr, setAllowanceIdr] = useState<string>('')
+  // Itemised allowance components (replaces the single allowance number).
+  // contracts.allowance_idr is derived from the sum of these on save (DB
+  // trigger). `savedComponents` mirrors the last persisted set for dirty
+  // detection — a renamed line or a shifted amount counts as a change even
+  // when the total is unchanged.
+  const [components, setComponents] = useState<CompLine[]>([])
+  const [savedComponents, setSavedComponents] = useState<CompLine[]>([])
   const [hoursPerDay, setHoursPerDay] = useState<string>('')
   const [daysPerWeek, setDaysPerWeek] = useState<string>('')
   const [startDate, setStartDate] = useState<string>('')
@@ -110,14 +117,24 @@ export function ContractEdit({ user }: { user: User }) {
 
   useEffect(() => {
     async function load() {
-      const [contractResult, tagsResult, contractTagsResult, empsResult, orgResult, refResult] = await Promise.all([
+      const [contractResult, tagsResult, contractTagsResult, empsResult, orgResult, refResult, compsResult] = await Promise.all([
         supabase.from('contracts').select('*').eq('id', id!).single(),
         supabase.from('tags').select('*').eq('org_id', user.org_id).order('name'),
         supabase.from('contract_tags').select('tag_id').eq('contract_id', id!),
         supabase.from('employees').select(EMPLOYEE_WITH_DEPTS_SELECT).eq('org_id', user.org_id).order('name'),
         supabase.from('organizations').select('*').eq('id', user.org_id).single(),
         supabase.from('company_reference_values').select('*').eq('org_id', user.org_id).order('display_order').order('name'),
+        supabase.from('contract_compensation_components').select('*').eq('contract_id', id!).eq('kind', 'earning').order('display_order'),
       ])
+
+      const loadedComponents: CompLine[] = (compsResult.data || []).map(c => ({
+        key: c.id,
+        name: c.name,
+        amount: c.amount_idr?.toString() ?? '',
+        isFixed: c.is_fixed,
+      }))
+      setComponents(loadedComponents)
+      setSavedComponents(loadedComponents)
 
       setAllEmployees((empsResult.data || []) as EmployeeWithDepartments[])
       setOrganization(orgResult.data)
@@ -135,7 +152,6 @@ export function ContractEdit({ user }: { user: User }) {
         setStatus(contractResult.data.status as typeof status)
         setEmployeeId(contractResult.data.employee_id)
         setBaseWageIdr(contractResult.data.base_wage_idr?.toString() ?? '')
-        setAllowanceIdr(contractResult.data.allowance_idr?.toString() ?? '')
         setHoursPerDay(contractResult.data.hours_per_day?.toString() ?? '')
         setDaysPerWeek(contractResult.data.days_per_week?.toString() ?? '')
         setStartDate(contractResult.data.start_date ?? '')
@@ -202,7 +218,14 @@ export function ContractEdit({ user }: { user: User }) {
   }
 
   const parsedBaseWage = baseWageIdr.trim() === '' ? null : Number(baseWageIdr)
-  const parsedAllowance = allowanceIdr.trim() === '' ? null : Number(allowanceIdr)
+  // Derived allowance = sum of the earning components (blank lines ignored).
+  // Null (not 0) when there are no real lines, preserving the "no allowance
+  // defined" vs "zero" split the DB relies on and matching what the trigger
+  // computes after the edge function drops blank lines. This is what flows to
+  // {{allowance_idr}}, the settlement engine, and the version snapshot.
+  const nonBlankComponents = components.filter(c => c.name.trim() !== '' || c.amount.trim() !== '')
+  const componentSum = nonBlankComponents.reduce((s, c) => s + (c.amount.trim() === '' ? 0 : (Number(c.amount) || 0)), 0)
+  const parsedAllowance = nonBlankComponents.length === 0 ? null : componentSum
   const parsedHoursPerDay = hoursPerDay.trim() === '' ? null : Number(hoursPerDay)
   const parsedDaysPerWeek = daysPerWeek.trim() === '' ? null : Number(daysPerWeek)
   const parsedAnnualLeave = annualLeaveDays.trim() === '' ? null : Number(annualLeaveDays)
@@ -216,6 +239,13 @@ export function ContractEdit({ user }: { user: User }) {
     [contentDoc, savedContentDoc],
   )
   const employeeChanged = contract ? employeeId !== contract.employee_id : false
+  // True when any allowance line changed — name, amount, or fixed/variable —
+  // even if the total is unchanged. Drives the snapshot so each version
+  // captures an honest breakdown.
+  const componentsChanged = useMemo(() => {
+    const norm = (list: CompLine[]) => list.map(c => ({ n: c.name.trim(), a: c.amount.trim(), f: c.isFixed }))
+    return JSON.stringify(norm(components)) !== JSON.stringify(norm(savedComponents))
+  }, [components, savedComponents])
   const wagesChanged = contract ? (
     parsedBaseWage !== contract.base_wage_idr ||
     parsedAllowance !== contract.allowance_idr ||
@@ -256,7 +286,7 @@ export function ContractEdit({ user }: { user: User }) {
   const missingKeys = new Set(missingRequiredFields.map(f => f.key))
 
   const hasChanges = contract ? (
-    docChanged || employeeChanged || wagesChanged || datesChanged || structuredChanged ||
+    docChanged || employeeChanged || wagesChanged || componentsChanged || datesChanged || structuredChanged ||
     title !== contract.title ||
     status !== contract.status ||
     changeSummary !== ''
@@ -281,12 +311,20 @@ export function ContractEdit({ user }: { user: User }) {
     // leave / probation changes don't need a snapshot — they re-render the
     // existing merge-field tokens, the structured-doc representation is
     // unchanged.
-    const structuralChanged = wagesChanged || employeeChanged
+    const structuralChanged = wagesChanged || componentsChanged || employeeChanged
     const snapshotNeeded = docChanged || structuralChanged
 
+    // Drop fully-blank lines; a half-filled line (name without amount, or vice
+    // versa) is invalid and blocks the save.
+    const cleanedComponents = components
+      .map(c => ({ name: c.name.trim(), amount: c.amount.trim(), isFixed: c.isFixed }))
+      .filter(c => c.name !== '' || c.amount !== '')
+    const componentsValid = cleanedComponents.every(
+      c => c.name !== '' && c.amount !== '' && Number.isFinite(Number(c.amount)) && Number(c.amount) >= 0,
+    )
+
     const baseWageValid = parsedBaseWage === null || (Number.isFinite(parsedBaseWage) && parsedBaseWage >= 0)
-    const allowanceValid = parsedAllowance === null || (Number.isFinite(parsedAllowance) && parsedAllowance >= 0)
-    if (!baseWageValid || !allowanceValid) {
+    if (!baseWageValid || !componentsValid) {
       setError(t.contractInvalidWages)
       setSaving(false)
       return null
@@ -348,6 +386,13 @@ export function ContractEdit({ user }: { user: User }) {
         allowance_idr: parsedAllowance,
         hours_per_day: parsedHoursPerDay,
         days_per_week: parsedDaysPerWeek,
+        compensation_components: cleanedComponents.map((c, i) => ({
+          name: c.name,
+          kind: 'earning' as const,
+          is_fixed: c.isFixed,
+          amount_idr: Number(c.amount),
+          display_order: i,
+        })),
       })
     } catch (err) {
       setTranslating(false)
@@ -360,6 +405,13 @@ export function ContractEdit({ user }: { user: User }) {
     const finalDoc = (result.content_doc as DocumentDoc | null) ?? contentDoc
     setContentDoc(finalDoc)
     setSavedContentDoc(finalDoc)
+    // Reflect exactly what was persisted (blank lines dropped) and reset the
+    // dirty baseline so the breakdown isn't flagged as unsaved after a save.
+    const persistedComponents: CompLine[] = cleanedComponents.map(c => ({
+      key: crypto.randomUUID(), name: c.name, amount: c.amount, isFixed: c.isFixed,
+    }))
+    setComponents(persistedComponents)
+    setSavedComponents(persistedComponents)
     setContract({
       ...contract,
       title,
@@ -431,6 +483,7 @@ export function ContractEdit({ user }: { user: User }) {
           contract_type: contractType,
           annual_leave_days: parsedAnnualLeave,
           probation_months: parsedProbationMonths,
+          compensation_components: nonBlankComponents.map(c => ({ name: c.name.trim(), amount_idr: Number(c.amount) || 0, is_fixed: c.isFixed })),
         } : null,
         today: new Date(),
         signer: { name: user.name, title: user.title },
@@ -648,6 +701,13 @@ export function ContractEdit({ user }: { user: User }) {
             contractType,
             baseWageIdr: parsedBaseWage,
             allowanceIdr: parsedAllowance,
+            compensationComponents: nonBlankComponents.map((c, i) => ({
+              name: c.name.trim(),
+              kind: 'earning' as const,
+              is_fixed: c.isFixed,
+              amount_idr: Number(c.amount) || 0,
+              display_order: i,
+            })),
             hoursPerDay: parsedHoursPerDay,
             daysPerWeek: parsedDaysPerWeek,
             annualLeaveDays: parsedAnnualLeave,
@@ -803,24 +863,13 @@ export function ContractEdit({ user }: { user: User }) {
               </div>
             </div>
 
-            {/* Allowance */}
+            {/* Allowances — itemised components (Meal, Transport, ...) */}
             <div>
               <label className="mb-1 flex items-center gap-1.5 text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>
-                {t.allowanceLabel}
-                <InfoTooltip text={t.allowanceHelp} />
+                {t.allowancesLabel}
+                <InfoTooltip text={t.allowancesHelp} />
               </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={formatIdrDigits(allowanceIdr)}
-                  onChange={e => setAllowanceIdr(e.target.value.replace(/\D/g, ''))}
-                  placeholder={t.amountIdrPlaceholder}
-                  className="w-full rounded-lg border px-3 py-2 pr-12 text-sm"
-                  style={inputStyle}
-                />
-                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.idr}</span>
-              </div>
+              <AllowanceComponentsEditor components={components} onChange={setComponents} />
             </div>
 
             {/* Hours + days side-by-side */}
@@ -956,6 +1005,7 @@ export function ContractEdit({ user }: { user: User }) {
                     contract_type: contractType,
                     annual_leave_days: parsedAnnualLeave,
                     probation_months: parsedProbationMonths,
+                    compensation_components: nonBlankComponents.map(c => ({ name: c.name.trim(), amount_idr: Number(c.amount) || 0, is_fixed: c.isFixed })),
                   } : null,
                   today: new Date(),
                   lang: 'en',

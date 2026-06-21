@@ -50,6 +50,19 @@ export type SnapshotInput = {
   hours_per_day?: number | null;
   days_per_week?: number | null;
   employee_id?: string | null;
+  // Contract-only: the earning component lines in force at save time. When
+  // provided, the contract's earning component rows are replaced (the DB
+  // trigger then recomputes contracts.allowance_idr = SUM(earning)) and the
+  // breakdown is snapshotted into contract_versions.compensation_components.
+  compensation_components?: CompensationComponentInput[] | null;
+};
+
+export type CompensationComponentInput = {
+  name: string;
+  kind: 'earning' | 'deduction' | 'benefit';
+  is_fixed: boolean;
+  amount_idr: number;
+  display_order: number;
 };
 
 export type SnapshotResult = {
@@ -534,6 +547,8 @@ async function renderAndInsert(args: {
       allowance_idr: input.allowance_idr !== undefined ? input.allowance_idr : (doc as { allowance_idr?: number | null }).allowance_idr,
       hours_per_day: input.hours_per_day !== undefined ? input.hours_per_day : (doc as { hours_per_day?: number | null }).hours_per_day,
       days_per_week: input.days_per_week !== undefined ? input.days_per_week : (doc as { days_per_week?: number | null }).days_per_week,
+      // Earning component lines for the {{allowance_components}} merge token.
+      compensation_components: input.compensation_components ?? null,
     }
     : undefined;
 
@@ -563,12 +578,45 @@ async function renderAndInsert(args: {
     current_version: newVersion,
     updated_at: new Date().toISOString(),
   };
+  const componentsProvided = input.table === 'contracts' && input.compensation_components !== undefined;
   if (input.table === 'contracts') {
     if (input.base_wage_idr !== undefined) liveUpdate.base_wage_idr = input.base_wage_idr;
-    if (input.allowance_idr !== undefined) liveUpdate.allowance_idr = input.allowance_idr;
+    // When component lines are provided, the DB trigger owns allowance_idr
+    // (= SUM of earning components). Writing it here too would create a second
+    // source of truth. Legacy single-allowance saves still set it directly.
+    if (!componentsProvided && input.allowance_idr !== undefined) liveUpdate.allowance_idr = input.allowance_idr;
     if (input.hours_per_day !== undefined) liveUpdate.hours_per_day = input.hours_per_day;
     if (input.days_per_week !== undefined) liveUpdate.days_per_week = input.days_per_week;
     if (input.employee_id !== undefined) liveUpdate.employee_id = input.employee_id;
+  }
+
+  // Replace the contract's earning component rows when the editor sent them.
+  // The AFTER trigger on contract_compensation_components recomputes
+  // contracts.allowance_idr = SUM(earning). Deduction/benefit rows (managed
+  // elsewhere) are left intact. Done before the live-row update so the derived
+  // allowance is settled before the version bump.
+  if (componentsProvided) {
+    const lines = input.compensation_components ?? [];
+    const { error: delErr } = await supabase
+      .from('contract_compensation_components')
+      .delete()
+      .eq('contract_id', doc.id)
+      .eq('kind', 'earning');
+    if (delErr) throw new Error(delErr.message);
+    if (lines.length > 0) {
+      const { error: insErr } = await supabase
+        .from('contract_compensation_components')
+        .insert(lines.map((l, i) => ({
+          org_id: doc.org_id,
+          contract_id: doc.id,
+          name: l.name,
+          kind: l.kind,
+          is_fixed: l.is_fixed,
+          amount_idr: l.amount_idr,
+          display_order: l.display_order ?? i,
+        })));
+      if (insErr) throw new Error(insErr.message);
+    }
   }
 
   const { error: updateErr } = await supabase
@@ -596,6 +644,9 @@ async function renderAndInsert(args: {
     versionRow.allowance_idr = contractCtx?.allowance_idr ?? null;
     versionRow.hours_per_day = contractCtx?.hours_per_day ?? null;
     versionRow.days_per_week = contractCtx?.days_per_week ?? null;
+    // Freeze the component breakdown in force at this version. NULL when the
+    // caller didn't send components (legacy single-allowance save).
+    versionRow.compensation_components = input.compensation_components ?? null;
   } else if (input.table === 'ndas') {
     versionRow.employee_id = employeeId;
   }

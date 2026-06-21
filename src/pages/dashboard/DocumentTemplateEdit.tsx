@@ -19,9 +19,12 @@ import { bucketReferenceValues, referenceNames } from '../../lib/companyReferenc
 import { useBilling } from '../../contexts/BillingContext'
 import { formatIdrDigits } from '../../lib/credits'
 import { InfoTooltip } from '../../components/InfoTooltip'
+import { AllowanceComponentsEditor, cleanCompLines, compLinesSum, type CompLine } from '../../components/AllowanceComponentsEditor'
+import { templateComponents } from '../../lib/contractTemplates'
 import { docAsJson, emptyDocumentDoc, type DocumentDoc } from '../../lib/documentDoc'
 import { documentsIndexPath, type DocumentType } from '../../lib/documentTypes'
 import type { User, DocumentTemplate, Organization } from '../../types/aliases'
+import type { Json } from '../../types/database'
 
 // Per-type accent for the top-bar icon chip, matching the document card
 // colour language (SOPs=primary, contracts=success, JDs=warning).
@@ -112,7 +115,8 @@ export function DocumentTemplateEdit({ user }: { user: User }) {
   const [title, setTitle] = useState('')
   const [position, setPosition] = useState('')
   const [baseWageIdr, setBaseWageIdr] = useState('')
-  const [allowanceIdr, setAllowanceIdr] = useState('')
+  const [components, setComponents] = useState<CompLine[]>([])
+  const [savedComponents, setSavedComponents] = useState<CompLine[]>([])
   const [hoursPerDay, setHoursPerDay] = useState('')
   const [daysPerWeek, setDaysPerWeek] = useState('')
   const [contentDoc, setContentDoc] = useState<DocumentDoc>(() => emptyDocumentDoc())
@@ -141,7 +145,16 @@ export function DocumentTemplateEdit({ user }: { user: User }) {
         setTitle(tplResult.data.title)
         setPosition(tplResult.data.template_for_position ?? '')
         setBaseWageIdr(tplResult.data.base_wage_idr?.toString() ?? '')
-        setAllowanceIdr(tplResult.data.allowance_idr?.toString() ?? '')
+        // Prefer the itemised breakdown; fall back to a single line from the
+        // legacy allowance total for templates created before the split.
+        const loadedComps = templateComponents(tplResult.data)
+        const compLines: CompLine[] = loadedComps.length > 0
+          ? loadedComps.map(c => ({ key: crypto.randomUUID(), name: c.name, amount: String(c.amount_idr), isFixed: c.is_fixed }))
+          : (tplResult.data.allowance_idr != null
+              ? [{ key: crypto.randomUUID(), name: 'Tunjangan', amount: String(tplResult.data.allowance_idr), isFixed: false }]
+              : [])
+        setComponents(compLines)
+        setSavedComponents(compLines)
         setHoursPerDay(tplResult.data.hours_per_day?.toString() ?? '')
         setDaysPerWeek(tplResult.data.days_per_week?.toString() ?? '')
         const doc = (tplResult.data.content_doc as DocumentDoc | null) ?? emptyDocumentDoc()
@@ -153,9 +166,16 @@ export function DocumentTemplateEdit({ user }: { user: User }) {
   }, [id, user.org_id])
 
   const parsedBaseWage = baseWageIdr.trim() === '' ? null : Number(baseWageIdr)
-  const parsedAllowance = allowanceIdr.trim() === '' ? null : Number(allowanceIdr)
+  // Derived allowance total = sum of the earning components (null when none).
+  const nonBlankComponents = components.filter(c => c.name.trim() !== '' || c.amount.trim() !== '')
+  const parsedAllowance = nonBlankComponents.length === 0 ? null : compLinesSum(nonBlankComponents)
   const parsedHoursPerDay = hoursPerDay.trim() === '' ? null : Number(hoursPerDay)
   const parsedDaysPerWeek = daysPerWeek.trim() === '' ? null : Number(daysPerWeek)
+
+  const componentsChanged = (() => {
+    const norm = (list: CompLine[]) => list.map(c => ({ n: c.name.trim(), a: c.amount.trim(), f: c.isFixed }))
+    return JSON.stringify(norm(components)) !== JSON.stringify(norm(savedComponents))
+  })()
 
   const docChanged = JSON.stringify(contentDoc) !== JSON.stringify(savedContentDoc)
   const hasChanges = template ? (
@@ -163,7 +183,7 @@ export function DocumentTemplateEdit({ user }: { user: User }) {
     title !== template.title ||
     (position || null) !== template.template_for_position ||
     parsedBaseWage !== template.base_wage_idr ||
-    parsedAllowance !== template.allowance_idr ||
+    componentsChanged ||
     parsedHoursPerDay !== template.hours_per_day ||
     parsedDaysPerWeek !== template.days_per_week
   ) : false
@@ -174,6 +194,10 @@ export function DocumentTemplateEdit({ user }: { user: User }) {
     if (!template || saving) return
     setError('')
     setSaving(true)
+    const cleaned = cleanCompLines(components)
+    const compsJson = cleaned.length > 0
+      ? cleaned.map((c, i) => ({ name: c.name, kind: 'earning', is_fixed: c.isFixed, amount_idr: Number(c.amount) || 0, display_order: i }))
+      : null
     const { data, error: updateError } = await supabase
       .from('document_templates')
       .update({
@@ -181,6 +205,7 @@ export function DocumentTemplateEdit({ user }: { user: User }) {
         template_for_position: position || null,
         base_wage_idr: parsedBaseWage,
         allowance_idr: parsedAllowance,
+        compensation_components: compsJson as unknown as Json,
         hours_per_day: parsedHoursPerDay,
         days_per_week: parsedDaysPerWeek,
         content_doc: docAsJson(contentDoc),
@@ -284,24 +309,13 @@ export function DocumentTemplateEdit({ user }: { user: User }) {
             </div>
           </div>
 
-          {/* Allowance */}
+          {/* Allowances — itemised components (pre-seed for new contracts) */}
           <div>
             <label className="mb-1 flex items-center gap-1.5 text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>
-              {t.allowanceLabel}
-              <InfoTooltip text={t.allowanceHelp} />
+              {t.allowancesLabel}
+              <InfoTooltip text={t.allowancesHelp} />
             </label>
-            <div className="relative">
-              <input
-                type="text"
-                inputMode="numeric"
-                value={formatIdrDigits(allowanceIdr)}
-                onChange={e => setAllowanceIdr(e.target.value.replace(/\D/g, ''))}
-                placeholder={t.amountIdrPlaceholder}
-                className="w-full rounded-lg border px-3 py-2 pr-12 text-sm"
-                style={inputStyle}
-              />
-              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.idr}</span>
-            </div>
+            <AllowanceComponentsEditor components={components} onChange={setComponents} />
           </div>
 
           {/* Hours + days side-by-side */}

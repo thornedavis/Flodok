@@ -204,13 +204,13 @@ export function buildPkwtStarterDoc(type: PkwtType): DocumentDoc {
     block(
       [
         para(bold('Base salary. '), text('The Employee shall receive a monthly base salary of '), mergeField('base_wage_idr'), text(' (gross), payable on the last working day of each month.')),
-        para(bold('Allowances. '), mergeField('allowance_idr'), text(' per month, covering transport, meals, and other elastic components of compensation.')),
+        para(bold('Allowances. '), text('In addition to the base salary, the Employee receives the following monthly allowances:'), mergeField('allowance_components')),
         para(bold('THR. '), text('The Employee is entitled to a religious holiday allowance (Tunjangan Hari Raya) equivalent to one month\'s salary after twelve (12) months of continuous service, or pro-rated for service less than twelve (12) months.')),
         para(bold('Tax. '), text('Income tax (PPh 21) shall be calculated and withheld in accordance with applicable tax regulations.')),
       ],
       [
         para(bold('Gaji pokok. '), text('Pekerja menerima gaji pokok bulanan sebesar '), mergeField('base_wage_idr'), text(' (bruto), yang dibayarkan pada hari kerja terakhir setiap bulan.')),
-        para(bold('Tunjangan. '), mergeField('allowance_idr'), text(' per bulan, mencakup tunjangan transportasi, makan, dan komponen kompensasi tidak tetap lainnya.')),
+        para(bold('Tunjangan. '), text('Selain gaji pokok, Pekerja menerima tunjangan bulanan sebagai berikut:'), mergeField('allowance_components')),
         para(bold('THR. '), text('Pekerja berhak atas Tunjangan Hari Raya (THR) sebesar satu kali gaji setelah dua belas (12) bulan masa kerja, atau secara proporsional untuk masa kerja kurang dari dua belas (12) bulan.')),
         para(bold('Pajak. '), text('Pajak penghasilan (PPh 21) dihitung dan dipotong sesuai dengan peraturan perpajakan yang berlaku.')),
       ],

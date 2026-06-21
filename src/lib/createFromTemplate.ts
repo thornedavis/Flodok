@@ -11,6 +11,7 @@
 import { supabase } from './supabase'
 import { docAsJson, emptyDocumentDoc } from './documentDoc'
 import { documentEditPath, type DocumentType } from './documentTypes'
+import { seedContractComponentsFromTemplate } from './contractTemplates'
 
 export async function createDocFromTemplate(
   templateId: string,
@@ -79,5 +80,7 @@ export async function createDocFromTemplate(
     .select('id')
     .single()
   if (error || !data) throw new Error(error?.message ?? 'Could not create contract')
+  // Seed the itemised allowance breakdown (trigger then derives allowance_idr).
+  await seedContractComponentsFromTemplate(data.id, user.org_id, tpl)
   return documentEditPath('contract', data.id)
 }

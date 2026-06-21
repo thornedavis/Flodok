@@ -310,6 +310,60 @@ export type Database = {
           },
         ]
       }
+      contract_compensation_components: {
+        Row: {
+          amount_idr: number
+          contract_id: string
+          created_at: string
+          display_order: number
+          id: string
+          is_fixed: boolean
+          kind: string
+          name: string
+          org_id: string
+          updated_at: string
+        }
+        Insert: {
+          amount_idr: number
+          contract_id: string
+          created_at?: string
+          display_order?: number
+          id?: string
+          is_fixed?: boolean
+          kind?: string
+          name: string
+          org_id: string
+          updated_at?: string
+        }
+        Update: {
+          amount_idr?: number
+          contract_id?: string
+          created_at?: string
+          display_order?: number
+          id?: string
+          is_fixed?: boolean
+          kind?: string
+          name?: string
+          org_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contract_compensation_components_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contract_compensation_components_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contract_signatures: {
         Row: {
           consent_text: string | null
@@ -425,6 +479,7 @@ export type Database = {
           base_wage_idr: number | null
           change_summary: string | null
           changed_by: string
+          compensation_components: Json | null
           content_doc: Json | null
           content_markdown: string
           content_markdown_id: string | null
@@ -445,6 +500,7 @@ export type Database = {
           base_wage_idr?: number | null
           change_summary?: string | null
           changed_by: string
+          compensation_components?: Json | null
           content_doc?: Json | null
           content_markdown: string
           content_markdown_id?: string | null
@@ -465,6 +521,7 @@ export type Database = {
           base_wage_idr?: number | null
           change_summary?: string | null
           changed_by?: string
+          compensation_components?: Json | null
           content_doc?: Json | null
           content_markdown?: string
           content_markdown_id?: string | null
@@ -610,6 +667,7 @@ export type Database = {
           allowance_idr: number | null
           annual_leave_days: number | null
           base_wage_idr: number | null
+          compensation_components: Json | null
           content_doc: Json | null
           content_markdown: string
           content_markdown_id: string | null
@@ -629,6 +687,7 @@ export type Database = {
           allowance_idr?: number | null
           annual_leave_days?: number | null
           base_wage_idr?: number | null
+          compensation_components?: Json | null
           content_doc?: Json | null
           content_markdown?: string
           content_markdown_id?: string | null
@@ -648,6 +707,7 @@ export type Database = {
           allowance_idr?: number | null
           annual_leave_days?: number | null
           base_wage_idr?: number | null
+          compensation_components?: Json | null
           content_doc?: Json | null
           content_markdown?: string
           content_markdown_id?: string | null
@@ -3098,6 +3158,60 @@ export type Database = {
           },
         ]
       }
+      pay_period_settlement_lines: {
+        Row: {
+          amount_idr: number
+          created_at: string
+          display_order: number
+          id: string
+          is_fixed: boolean
+          kind: string
+          line_type: string
+          name: string
+          org_id: string
+          settlement_id: string
+        }
+        Insert: {
+          amount_idr: number
+          created_at?: string
+          display_order?: number
+          id?: string
+          is_fixed?: boolean
+          kind: string
+          line_type: string
+          name: string
+          org_id: string
+          settlement_id: string
+        }
+        Update: {
+          amount_idr?: number
+          created_at?: string
+          display_order?: number
+          id?: string
+          is_fixed?: boolean
+          kind?: string
+          line_type?: string
+          name?: string
+          org_id?: string
+          settlement_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pay_period_settlement_lines_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pay_period_settlement_lines_settlement_id_fkey"
+            columns: ["settlement_id"]
+            isOneToOne: false
+            referencedRelation: "pay_period_settlements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pay_period_settlements: {
         Row: {
           adjustment_net_idr: number
@@ -4025,6 +4139,10 @@ export type Database = {
         Args: { p_employee_id: string; p_period_month: string }
         Returns: Json
       }
+      admin_payslip: {
+        Args: { p_employee_id: string; p_period: string }
+        Returns: Json
+      }
       admin_rewards_roster: {
         Args: { all_time?: boolean; target_period_month?: string }
         Returns: Json
@@ -4938,6 +5056,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      preview_payroll: { Args: { p_period: string }; Returns: Json }
       publish_job_description: {
         Args: { p_id: string }
         Returns: {
@@ -5020,6 +5139,7 @@ export type Database = {
           unlocks_awarded: number
         }[]
       }
+      run_payroll: { Args: { p_period: string }; Returns: Json }
       seed_v1_achievement_definitions: {
         Args: { p_org_id: string }
         Returns: undefined

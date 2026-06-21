@@ -14,13 +14,16 @@ import { DunningBanner } from './DunningBanner'
 import { NotificationBell } from './NotificationBell'
 import { GlobalSearchButton } from './GlobalSearch'
 
-type NavKey = 'navOverview' | 'navInbox' | 'navEmployees' | 'navHiring' | 'navForms' | 'navRecruitment' | 'navCompany' | 'navDocuments' | 'navPerformance' | 'navSpotlight' | 'navPending' | 'navTrash' | 'navSettings'
+type NavKey = 'navOverview' | 'navInbox' | 'navEmployees' | 'navHiring' | 'navForms' | 'navRecruitment' | 'navCompany' | 'navDocuments' | 'navPerformance' | 'navPayroll' | 'navSpotlight' | 'navPending' | 'navTrash' | 'navSettings'
 
 interface NavItemDef {
   path: string
   labelKey: NavKey
   icon: React.ReactNode
   exact?: boolean
+  // Hidden from non-admins (owner/admin only). Used for sensitive surfaces
+  // like Payroll. The server RPCs enforce this too.
+  adminOnly?: boolean
 }
 
 const navItems: NavItemDef[] = [
@@ -66,6 +69,13 @@ const navItems: NavItemDef[] = [
     path: '/dashboard/performance',
     labelKey: 'navPerformance',
     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>,
+  },
+  {
+    path: '/dashboard/payroll',
+    labelKey: 'navPayroll',
+    adminOnly: true,
+    // Wallet icon — payroll is the money surface.
+    icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>,
   },
   {
     path: '/dashboard/spotlight',
@@ -341,7 +351,7 @@ function Sidebar({ user, mobileOpen, onCloseMobile }: {
             (overflow-y-auto would compute overflow-x to auto and clip them). */}
         <nav className={`flex-1 px-3 py-4 ${isCollapsed ? 'overflow-visible' : 'overflow-y-auto'}`}>
           <ul className="space-y-0.5">
-            {navItems.map(item => {
+            {navItems.filter(item => !item.adminOnly || isAdmin).map(item => {
               const isActive = item.exact
                 ? location.pathname === item.path
                 : location.pathname.startsWith(item.path)

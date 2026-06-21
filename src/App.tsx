@@ -32,6 +32,7 @@ import { DocumentTemplateEdit } from './pages/dashboard/DocumentTemplateEdit'
 import { Templates } from './pages/dashboard/Templates'
 import { Performance } from './pages/dashboard/Performance'
 import { PerformanceDetail } from './pages/dashboard/PerformanceDetail'
+import { Payroll } from './pages/dashboard/Payroll'
 import { Spotlight } from './pages/dashboard/Spotlight'
 import { SpotlightEdit } from './pages/dashboard/SpotlightEdit'
 import { Pending } from './pages/dashboard/Pending'
@@ -161,6 +162,7 @@ function AppRoutes() {
             <Route path="/dashboard/contracts/:id/history" element={<LegacyDocRedirect type="contract" action="history" />} />
             <Route path="/dashboard/performance" element={<Performance user={user} />} />
             <Route path="/dashboard/performance/:id" element={<PerformanceDetail user={user} />} />
+            <Route path="/dashboard/payroll" element={<Payroll user={user} />} />
             <Route path="/dashboard/spotlight" element={<Spotlight user={user} />} />
             <Route path="/dashboard/spotlight/new" element={<SpotlightEdit user={user} />} />
             <Route path="/dashboard/spotlight/:id/edit" element={<SpotlightEdit user={user} />} />

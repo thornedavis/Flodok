@@ -39,6 +39,7 @@ export type ContractShape = {
   allowance_idr?: number | null;
   hours_per_day?: number | null;
   days_per_week?: number | null;
+  compensation_components?: { name?: string | null; amount_idr?: number | null }[] | null;
 };
 
 export type NdaShape = {
@@ -102,6 +103,25 @@ function joinDepartments(emp: EmployeeShape): string | null {
   return list.length > 0 ? list.join(', ') : null;
 }
 
+// Escapes user-entered text (component names) for safe inline HTML output.
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// Allowance breakdown as an inline HTML fragment — kept identical to the client
+// renderer so server-rendered snapshots match the live editor. Falls back to
+// the single allowance total when no components are itemised.
+function renderAllowanceComponents(ctx: MergeContext): string | null {
+  const lang = ctx.lang ?? 'en';
+  const comps = ctx.contract?.compensation_components;
+  if (!comps || comps.length === 0) {
+    return ctx.contract?.allowance_idr == null ? null : formatIdr(ctx.contract.allowance_idr, lang);
+  }
+  const rows = comps.map(c => `<br/>${escapeHtml(c.name ?? '')}: ${formatIdr(c.amount_idr ?? 0, lang)}`);
+  const total = comps.reduce((s, c) => s + (c.amount_idr ?? 0), 0);
+  return `${rows.join('')}<br/><strong>Total: ${formatIdr(total, lang)}</strong>`;
+}
+
 // Placeholder labels for un-resolvable fields. Mirrors the client labels —
 // we only need the lowercased English form since the placeholder is the
 // fallback ("[employee phone]") regardless of doc language.
@@ -119,6 +139,7 @@ const PLACEHOLDER_LABEL: Record<string, string> = {
   contract_start_date: 'contract start date',
   base_wage_idr: 'base wage',
   allowance_idr: 'allowance',
+  allowance_components: 'allowance breakdown',
   hours_per_day: 'hours per day',
   days_per_week: 'days per week',
   nda_effective_date: 'effective date',
@@ -140,6 +161,7 @@ const PLACEHOLDER_LABEL_ID: Record<string, string> = {
   contract_start_date: 'tanggal mulai kontrak',
   base_wage_idr: 'gaji pokok',
   allowance_idr: 'tunjangan',
+  allowance_components: 'rincian tunjangan',
   hours_per_day: 'jam per hari',
   days_per_week: 'hari per minggu',
   nda_effective_date: 'tanggal berlaku',
@@ -161,6 +183,7 @@ const RESOLVERS: Record<string, (ctx: MergeContext) => string | null> = {
   contract_start_date: ctx => formatDateString(ctx.contract?.created_at, ctx.lang ?? 'en'),
   base_wage_idr: ctx => ctx.contract?.base_wage_idr == null ? null : formatIdr(ctx.contract.base_wage_idr, ctx.lang ?? 'en'),
   allowance_idr: ctx => ctx.contract?.allowance_idr == null ? null : formatIdr(ctx.contract.allowance_idr, ctx.lang ?? 'en'),
+  allowance_components: ctx => renderAllowanceComponents(ctx),
   hours_per_day: ctx => ctx.contract?.hours_per_day?.toString() ?? null,
   days_per_week: ctx => ctx.contract?.days_per_week?.toString() ?? null,
   nda_effective_date: ctx => formatDateString(ctx.nda?.effective_date, ctx.lang ?? 'en'),

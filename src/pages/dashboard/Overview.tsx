@@ -12,6 +12,7 @@ import {
   YAxis,
 } from 'recharts'
 import { supabase } from '../../lib/supabase'
+import { PayrollReminder } from '../../components/PayrollReminder'
 import { useLang } from '../../contexts/LanguageContext'
 import { getEmployeeDepts, type EmployeeDepartmentRow } from '../../lib/employee'
 import { formatIdr } from '../../lib/credits'
@@ -113,6 +114,7 @@ export function Overview({ user }: { user: User }) {
 
   return (
     <div className="space-y-6">
+      <PayrollReminder user={user} />
       <div>
         <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.navOverview}</h1>
         <p className="mt-1 max-w-3xl text-sm" style={{ color: 'var(--color-text-secondary)' }}>{t.overviewSubtitle}</p>
