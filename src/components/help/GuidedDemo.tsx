@@ -280,16 +280,16 @@ export function Field({ label, value, placeholder, demoId, active, caret }: { la
   )
 }
 
-export function Btn({ children, demoId, active, variant = 'primary', onClick }: { children: ReactNode; demoId?: string; active?: boolean; variant?: 'primary' | 'ghost'; onClick?: () => void }) {
+export function Btn({ children, demoId, active, variant = 'primary', block, onClick }: { children: ReactNode; demoId?: string; active?: boolean; variant?: 'primary' | 'ghost'; block?: boolean; onClick?: () => void }) {
   const primary = variant === 'primary'
   return (
     <button
       type="button"
       data-demo-id={demoId}
       onClick={onClick}
-      className="rounded-lg px-3 py-2 text-sm font-medium transition-shadow"
+      className="inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition-shadow"
       style={{
-        width: variant === 'primary' ? '100%' : undefined,
+        width: block ? '100%' : undefined,
         backgroundColor: primary ? 'var(--color-primary)' : 'transparent',
         color: primary ? '#ffffff' : 'var(--color-text)',
         border: primary ? 'none' : '1px solid var(--color-border)',
@@ -350,7 +350,7 @@ function MList({ onNew, active }: { onNew?: () => void; active: string | null })
           <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}> / 12 days remaining</span>
         </div>
       </div>
-      <Btn demoId="new-request" active={active === 'new-request'} onClick={onNew}>+ New request</Btn>
+      <Btn demoId="new-request" active={active === 'new-request'} onClick={onNew} block>+ New request</Btn>
       <div className="pt-1 text-center text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>No requests yet</div>
     </div>
   )
@@ -402,7 +402,7 @@ function MForm({ leaveType, dates, active, onSubmit }: { leaveType: string; date
         <div className="mb-1 text-[11px] font-medium" style={{ color: 'var(--color-text-tertiary)' }}>Reason</div>
         <div className="rounded-lg border px-3 py-2 text-sm" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text-tertiary)', minHeight: 44 }}>Family event</div>
       </div>
-      <Btn demoId="submit" active={active === 'submit'} onClick={onSubmit}>Submit request</Btn>
+      <Btn demoId="submit" active={active === 'submit'} onClick={onSubmit} block>Submit request</Btn>
     </div>
   )
 }
