@@ -24,9 +24,12 @@ import { useAutoCollapseSidebar, useFullWidthLayout } from '../Layout'
 import { SectionOutline } from './SectionOutline'
 import type { DocumentDoc } from '../../lib/documentDoc'
 
-// Stacked sticky-positioning offsets. The DashboardLayout header sits at
-// top-0 (h-14 = 56px); our page top bar sits below it. Anything inside the
-// editor pane that wants to stick below both uses APP_HEADER + PAGE_TOP_BAR.
+// Stacked sticky-positioning offsets, in absolute px. The DashboardLayout
+// header is pinned to `h-[56px]` (absolute, NOT `h-14`) on purpose: the app
+// runs at a 90% root font-size (index.css), so rem-based `h-14` would render
+// ~50.4px and leave a gap above this px-based offset. Keep the header an
+// absolute 56px so these match. Our page top bar sits below it; anything that
+// wants to stick below both uses APP_HEADER + PAGE_TOP_BAR.
 export const PAGE_TOP_BAR_HEIGHT = 56
 export const APP_HEADER_HEIGHT = 56
 export const EDITOR_STICKY_TOP_PX = APP_HEADER_HEIGHT + PAGE_TOP_BAR_HEIGHT
