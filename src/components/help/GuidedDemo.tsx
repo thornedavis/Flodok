@@ -37,12 +37,12 @@ function usePrefersReducedMotion(): boolean {
   return reduced
 }
 
-interface TourStep {
+export interface TourStep {
   target: string
   caption: string
 }
 
-interface GuidedTour {
+export interface GuidedTour {
   stageRef: React.RefObject<HTMLDivElement | null>
   cursor: { x: number; y: number }
   moved: boolean
@@ -63,7 +63,7 @@ interface GuidedTour {
  * by `[data-demo-id]` inside the stage at the moment each step runs, so the
  * element only needs to exist on the screen that step points at.
  */
-function useGuidedTour(steps: TourStep[], apply: (i: number) => void, reset: () => void): GuidedTour {
+export function useGuidedTour(steps: TourStep[], apply: (i: number) => void, reset: () => void): GuidedTour {
   const reduced = usePrefersReducedMotion()
   const stageRef = useRef<HTMLDivElement | null>(null)
   const timers = useRef<number[]>([])
@@ -154,7 +154,7 @@ function useGuidedTour(steps: TourStep[], apply: (i: number) => void, reset: () 
 
 // ─── Cursor + controls ─────────────────────────────────
 
-function Cursor({ x, y, clicking, reduced, visible }: { x: number; y: number; clicking: boolean; reduced: boolean; visible: boolean }) {
+export function Cursor({ x, y, clicking, reduced, visible }: { x: number; y: number; clicking: boolean; reduced: boolean; visible: boolean }) {
   return (
     <div
       aria-hidden
@@ -187,7 +187,7 @@ function Cursor({ x, y, clicking, reduced, visible }: { x: number; y: number; cl
   )
 }
 
-function DemoChrome({
+export function DemoChrome({
   label,
   tour,
   steps,
@@ -254,11 +254,11 @@ function DemoChrome({
 
 // ─── Shared primitives ─────────────────────────────────
 
-function ScreenTitle({ children }: { children: ReactNode }) {
+export function ScreenTitle({ children }: { children: ReactNode }) {
   return <div className="mb-3 text-[15px] font-semibold" style={{ color: 'var(--color-text)' }}>{children}</div>
 }
 
-function Field({ label, value, placeholder, demoId, active, caret }: { label: string; value?: string; placeholder: string; demoId?: string; active?: boolean; caret?: ReactNode }) {
+export function Field({ label, value, placeholder, demoId, active, caret }: { label: string; value?: string; placeholder: string; demoId?: string; active?: boolean; caret?: ReactNode }) {
   return (
     <div>
       <div className="mb-1 text-[11px] font-medium" style={{ color: 'var(--color-text-tertiary)' }}>{label}</div>
@@ -280,7 +280,7 @@ function Field({ label, value, placeholder, demoId, active, caret }: { label: st
   )
 }
 
-function Btn({ children, demoId, active, variant = 'primary', onClick }: { children: ReactNode; demoId?: string; active?: boolean; variant?: 'primary' | 'ghost'; onClick?: () => void }) {
+export function Btn({ children, demoId, active, variant = 'primary', onClick }: { children: ReactNode; demoId?: string; active?: boolean; variant?: 'primary' | 'ghost'; onClick?: () => void }) {
   const primary = variant === 'primary'
   return (
     <button
@@ -301,7 +301,7 @@ function Btn({ children, demoId, active, variant = 'primary', onClick }: { child
   )
 }
 
-function StatusPill({ status }: { status: 'submitted' | 'approved' }) {
+export function StatusPill({ status }: { status: 'submitted' | 'approved' }) {
   const approved = status === 'approved'
   const color = approved ? 'var(--color-success)' : 'var(--color-primary)'
   return (
@@ -316,7 +316,7 @@ function StatusPill({ status }: { status: 'submitted' | 'approved' }) {
 
 // ─── Phone (employee portal) ───────────────────────────
 
-function PortalHeader() {
+export function PortalHeader() {
   return (
     <div className="flex items-center gap-2 border-b px-4 py-3" style={{ borderColor: 'var(--color-border)' }}>
       <div className="flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-semibold text-white" style={{ background: 'linear-gradient(135deg, var(--color-primary), #7c3aed)' }}>BS</div>
@@ -328,7 +328,7 @@ function PortalHeader() {
   )
 }
 
-function PhoneShell({ children, innerRef }: { children: ReactNode; innerRef?: React.Ref<HTMLDivElement> }) {
+export function PhoneShell({ children, innerRef }: { children: ReactNode; innerRef?: React.Ref<HTMLDivElement> }) {
   return (
     <div className="rounded-[30px] border p-2" style={{ borderColor: 'var(--color-border-strong)', backgroundColor: 'var(--color-bg-tertiary)', boxShadow: '0 18px 40px -18px rgba(0,0,0,0.55)' }}>
       <div ref={innerRef} className="relative overflow-hidden rounded-[22px]" style={{ backgroundColor: 'var(--color-bg)', height: 470, width: 300 }}>
@@ -431,7 +431,7 @@ function MStatus({ approved }: { approved: boolean }) {
 // Sidebar mirrors the real app's nav (src/components/Layout.tsx) so the mock
 // reads as Flodok, not a generic dashboard. Icons are 14px versions of the
 // real ones; Forms is the active item.
-function ni(children: ReactNode) {
+export function ni(children: ReactNode) {
   return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{children}</svg>
 }
 
@@ -468,7 +468,7 @@ function NavRow({ label, icon, active }: { label: string; icon: ReactNode; activ
   )
 }
 
-function DesktopFrame({ children, activeNav = 'Forms', url = 'app.flodok.com/dashboard/forms' }: { children: ReactNode; activeNav?: string; url?: string }) {
+export function DesktopFrame({ children, activeNav = 'Forms', url = 'app.flodok.com/dashboard/forms' }: { children: ReactNode; activeNav?: string; url?: string }) {
   return (
     <div className="overflow-hidden rounded-xl border" style={{ borderColor: 'var(--color-border-strong)', backgroundColor: 'var(--color-bg)', boxShadow: '0 22px 60px -24px rgba(0,0,0,0.5)' }}>
       <div className="flex items-center gap-2 border-b px-3" style={{ height: 34, borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)' }}>
@@ -499,19 +499,19 @@ function DesktopFrame({ children, activeNav = 'Forms', url = 'app.flodok.com/das
   )
 }
 
-function ringStyle(on: boolean): CSSProperties {
+export function ringStyle(on: boolean): CSSProperties {
   return on ? { boxShadow: '0 0 0 3px color-mix(in srgb, var(--color-primary) 26%, transparent)' } : {}
 }
 
-function FakePill({ children }: { children: ReactNode }) {
+export function FakePill({ children, demoId, active }: { children: ReactNode; demoId?: string; active?: boolean }) {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>
+    <span data-demo-id={demoId} className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium" style={{ borderColor: active ? 'var(--color-primary)' : 'var(--color-border)', color: active ? 'var(--color-primary)' : 'var(--color-text-secondary)', ...ringStyle(!!active) }}>
       {children}
     </span>
   )
 }
 
-function DRow({ name, type, date, status, demoId, neu, active }: { name: string; type: string; date: string; status: 'submitted' | 'approved'; demoId?: string; neu?: boolean; active?: boolean }) {
+export function DRow({ name, type, date, status, demoId, neu, active }: { name: string; type: string; date: string; status: 'submitted' | 'approved'; demoId?: string; neu?: boolean; active?: boolean }) {
   return (
     <div
       data-demo-id={demoId}
@@ -560,16 +560,16 @@ function DesktopList({ hasPending, active }: { hasPending: boolean; active: stri
   )
 }
 
-function DCard({ title, children }: { title: string; children: ReactNode }) {
+export function DCard({ title, children, demoId, active }: { title: string; children: ReactNode; demoId?: string; active?: boolean }) {
   return (
-    <div className="rounded-lg border p-3" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)' }}>
+    <div data-demo-id={demoId} className="rounded-lg border p-3" style={{ borderColor: active ? 'var(--color-primary)' : 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)', ...ringStyle(!!active) }}>
       <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-tertiary)' }}>{title}</div>
       {children}
     </div>
   )
 }
 
-function KV({ k, v }: { k: string; v: string }) {
+export function KV({ k, v }: { k: string; v: string }) {
   return (
     <div className="flex items-center justify-between gap-2 py-0.5 text-xs">
       <span style={{ color: 'var(--color-text-tertiary)' }}>{k}</span>
@@ -578,7 +578,7 @@ function KV({ k, v }: { k: string; v: string }) {
   )
 }
 
-function TimelineStep({ label, detail, state }: { label: string; detail: string; state: 'done' | 'active' | 'todo' }) {
+export function TimelineStep({ label, detail, state }: { label: string; detail: string; state: 'done' | 'active' | 'todo' }) {
   const color = state === 'done' ? 'var(--color-success)' : state === 'active' ? 'var(--color-primary)' : 'var(--color-text-tertiary)'
   return (
     <div className="flex items-start gap-2 py-1">
@@ -1007,6 +1007,32 @@ export function ConfigDemo() {
           <ConfigScreen unpaidOff={unpaidOff} requireReason={requireReason} gateOff={gateOff} active={tour.activeTarget} />
         </DesktopFrame>
         <Cursor x={tour.cursor.x} y={tour.cursor.y} clicking={tour.clicking} reduced={tour.reduced} visible={tour.moved} />
+      </div>
+    </DemoChrome>
+  )
+}
+
+// ─── Reusable stage wrappers (for the per-section demos) ─
+
+export function DesktopStage({ tour, label, steps, activeNav = 'Forms', url = 'app.flodok.com/dashboard', maxWidth = 820, children }: { tour: GuidedTour; label: string; steps: TourStep[]; activeNav?: string; url?: string; maxWidth?: number; children: ReactNode }) {
+  return (
+    <DemoChrome label={label} tour={tour} steps={steps}>
+      <div ref={tour.stageRef} className="relative mx-auto" style={{ maxWidth }}>
+        <DesktopFrame activeNav={activeNav} url={url}>{children}</DesktopFrame>
+        <Cursor x={tour.cursor.x} y={tour.cursor.y} clicking={tour.clicking} reduced={tour.reduced} visible={tour.moved} />
+      </div>
+    </DemoChrome>
+  )
+}
+
+export function PhoneStage({ tour, label, steps, children }: { tour: GuidedTour; label: string; steps: TourStep[]; children: ReactNode }) {
+  return (
+    <DemoChrome label={label} tour={tour} steps={steps}>
+      <div className="mx-auto" style={{ maxWidth: 320 }}>
+        <PhoneShell innerRef={tour.stageRef}>
+          {children}
+          <Cursor x={tour.cursor.x} y={tour.cursor.y} clicking={tour.clicking} reduced={tour.reduced} visible={tour.moved} />
+        </PhoneShell>
       </div>
     </DemoChrome>
   )
