@@ -45,6 +45,7 @@ Deno.serve(async (req: Request) => {
       new_content_en: body.new_content_en,
       new_content_id: body.new_content_id,
       auto_translate: body.auto_translate,
+      language_mode: body.language_mode,
       change_summary: body.change_summary,
       changed_by: body.changed_by,
       base_wage_idr: body.base_wage_idr,

@@ -37,6 +37,10 @@ export type SnapshotInput = {
   new_content_en?: string | null
   new_content_id?: string | null
   auto_translate?: boolean
+  // Document language mode. 'bilingual' (default) auto-translates the empty
+  // side; 'en'/'id' is monolingual — the snapshot writer never translates and
+  // clears the off-language side. Omit to leave the live row's mode unchanged.
+  language_mode?: 'bilingual' | 'en' | 'id'
   change_summary?: string | null
   // Contract-only structural snapshot fields. Ignored for sops.
   base_wage_idr?: number | null

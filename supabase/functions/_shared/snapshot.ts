@@ -42,6 +42,13 @@ export type SnapshotInput = {
   // When true (default), translate the missing side. Only consulted on
   // the legacy markdown path; structured-doc saves skip translation.
   auto_translate?: boolean;
+  // Document language mode. 'bilingual' (default) keeps today's behaviour:
+  // auto-translate the empty side. 'en'/'id' is monolingual — never
+  // translate, and clear the off-language side so content_doc, the markdown
+  // columns, and the bilingual renderer all agree on one language. When
+  // omitted, the value is read from the live row (so it persists across
+  // saves even if the editor doesn't resend it).
+  language_mode?: 'bilingual' | 'en' | 'id';
   change_summary?: string | null;
   changed_by: string;
   // Contract-only structural snapshot fields. Ignored for sops.
@@ -186,6 +193,31 @@ async function translateMissingSides(
   }
 
   return { doc: out, error: firstError };
+}
+
+// Monolingual clear-on-switch. Walks every bilingualBlock and empties the
+// off-language blockBody (replacing its content with the schema's empty-body
+// state, a single empty paragraph). The kept side is untouched. This makes a
+// monolingual save self-consistent: docToMarkdown projects '' for the off
+// side, and the bilingual renderer (PDF/portal) has nothing to print there.
+// Prior translations are NOT lost — they remain in earlier version rows.
+function clearOffSide(doc: DocumentDoc, keepLang: 'en' | 'id'): DocumentDoc {
+  const offLang = keepLang === 'en' ? 'id' : 'en';
+  const walk = (node: DocNode): DocNode => {
+    if (node.type === 'bilingualBlock' && Array.isArray(node.content)) {
+      const content = node.content.map(child =>
+        child.type === 'blockBody' && child.attrs?.lang === offLang
+          ? { ...child, content: [{ type: 'paragraph' }] }
+          : child,
+      );
+      return { ...node, content };
+    }
+    if (Array.isArray(node.content)) {
+      return { ...node, content: node.content.map(walk) };
+    }
+    return node;
+  };
+  return { ...doc, content: (doc.content || []).map(walk) } as DocumentDoc;
 }
 
 // True when a body has no rendered text (every text node is empty
@@ -406,6 +438,15 @@ export async function writeSnapshot(
     throw new Error(`${input.table} ${input.doc_id} not found`);
   }
 
+  // Resolve the document's language mode: the caller's value wins (so a mode
+  // toggle saved with the content takes effect atomically), otherwise read
+  // the live row. Defaults to bilingual, so pre-migration / untoggled docs
+  // behave exactly as before.
+  const langMode: 'bilingual' | 'en' | 'id' =
+    input.language_mode
+    ?? ((doc as { language_mode?: string }).language_mode as 'bilingual' | 'en' | 'id' | undefined)
+    ?? 'bilingual';
+
   let translationStatus: TranslationStatus = 'complete';
   let translationError: string | null = null;
 
@@ -422,15 +463,24 @@ export async function writeSnapshot(
     if (!isDocumentDoc(newDoc)) {
       throw new Error('new_content_doc is not a valid DocumentDoc');
     }
-    if (input.auto_translate !== false) {
-      const existingDoc = (doc as { content_doc?: DocumentDoc | null }).content_doc ?? null;
-      const orgId = (doc as { org_id: string }).org_id;
-      const r = await translateMissingSides(newDoc, existingDoc, supabase, orgId);
-      newDoc = r.doc;
-      if (r.error) {
-        translationStatus = 'failed';
-        translationError = r.error;
+    if (langMode === 'bilingual') {
+      if (input.auto_translate !== false) {
+        const existingDoc = (doc as { content_doc?: DocumentDoc | null }).content_doc ?? null;
+        const orgId = (doc as { org_id: string }).org_id;
+        const r = await translateMissingSides(newDoc, existingDoc, supabase, orgId);
+        newDoc = r.doc;
+        if (r.error) {
+          translationStatus = 'failed';
+          translationError = r.error;
+        }
       }
+    } else {
+      // Monolingual: never translate; clear the off-language side so the
+      // stored doc, the markdown columns, and every renderer agree. Normalize
+      // first so legacy section-nested docs flatten — otherwise off-language
+      // section *titles* (carried on section.attrs, not in a blockBody) would
+      // survive into the off-side markdown.
+      newDoc = clearOffSide(normalizeDoc(newDoc), langMode);
     }
     const finalEn = docToMarkdown(newDoc, 'en');
     const finalId = docToMarkdown(newDoc, 'id');
@@ -445,6 +495,7 @@ export async function writeSnapshot(
       finalDoc: newDoc,
       translationStatus,
       translationError,
+      languageMode: langMode,
     });
   }
 
@@ -454,14 +505,20 @@ export async function writeSnapshot(
   // markdown. Preserves the existing auto-translation behavior so we
   // don't regress those paths during the C.2 transition.
 
-  const baseEn: string = input.new_content_en ?? doc.content_markdown ?? '';
+  let baseEn: string = input.new_content_en ?? doc.content_markdown ?? '';
   let baseId: string | null = input.new_content_id !== undefined
     ? input.new_content_id
     : (doc.content_markdown_id ?? null);
 
+  // Monolingual: drop the off-language side and never translate. (This path
+  // is the sop-updates webhook; monolingual is unlikely here, but the guard
+  // keeps it honest if a monolingual doc is ever saved through it.)
+  if (langMode === 'en') baseId = null;
+  else if (langMode === 'id') baseEn = '';
+
   const enIsNew = input.new_content_en !== undefined && input.new_content_en !== doc.content_markdown;
   const idIsNew = input.new_content_id !== undefined && input.new_content_id !== doc.content_markdown_id;
-  const autoTranslate = input.auto_translate !== false;
+  const autoTranslate = input.auto_translate !== false && langMode === 'bilingual';
 
   // Translate the missing side when exactly one side changed. If both sides
   // changed, treat both as user-authoritative; if neither changed, we're
@@ -487,6 +544,7 @@ export async function writeSnapshot(
         finalDoc: (doc as { content_doc?: DocumentDoc | null }).content_doc ?? null,
         translationStatus,
         translationError,
+        languageMode: langMode,
       });
       return result;
     } else {
@@ -506,6 +564,7 @@ export async function writeSnapshot(
     finalDoc: (doc as { content_doc?: DocumentDoc | null }).content_doc ?? null,
     translationStatus,
     translationError,
+    languageMode: langMode,
   });
 }
 
@@ -520,8 +579,9 @@ async function renderAndInsert(args: {
   finalDoc: DocumentDoc | Record<string, unknown> | null;
   translationStatus: TranslationStatus;
   translationError: string | null;
+  languageMode: 'bilingual' | 'en' | 'id';
 }): Promise<SnapshotResult> {
-  const { supabase, doc, input, versionsTable, docFk, finalEn, finalId, finalDoc, translationStatus, translationError } = args;
+  const { supabase, doc, input, versionsTable, docFk, finalEn, finalId, finalDoc, translationStatus, translationError, languageMode } = args;
 
   // Render merge fields against the *current* world. This freezes the
   // resolved markdown into the snapshot so later edits to the employee or
@@ -575,6 +635,7 @@ async function renderAndInsert(args: {
     content_markdown: finalEn,
     content_markdown_id: finalId,
     content_doc: finalDoc,
+    language_mode: languageMode,
     current_version: newVersion,
     updated_at: new Date().toISOString(),
   };
@@ -631,6 +692,7 @@ async function renderAndInsert(args: {
     content_markdown: finalEn,
     content_markdown_id: finalId,
     content_doc: finalDoc,
+    language_mode: languageMode,
     resolved_markdown_en: resolvedEn,
     resolved_markdown_id: resolvedId,
     translation_status: translationStatus,
