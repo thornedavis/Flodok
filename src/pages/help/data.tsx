@@ -1,6 +1,15 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { LeaveRequestDemo, LeaveJourneyDemo, ApprovingDemo, PayrollDemo, ConfigDemo } from '../../components/help/GuidedDemo'
+import { InviteTeamDemo, PlansDemo, QuickstartDemo, RolesDemo } from '../../components/help/demos/GettingStarted'
+import { HiringCandidatesDemo, HiringFunnelDemo, HiringOffersDemo, HiringSeparationDemo } from '../../components/help/demos/Recruitment'
+import { SopCreateDemo, SopImportDemo, SopVersioningDemo } from '../../components/help/demos/Sops'
+import { ContractTemplatesDemo, ContractsCreateDemo, ContractsHistoryDemo, ContractsSignDemo } from '../../components/help/demos/Contracts'
+import { OneOnOnesDemo, PerformanceReviewsDemo, RecognitionDemo } from '../../components/help/demos/Performance'
+import { PortalAboutDemo, PortalCustomizeDemo, PortalOnboardingDemo, PortalShareDemo } from '../../components/help/demos/Portal'
+import { FirefliesDemo, SlackDemo, SsoDemo } from '../../components/help/demos/Integrations'
+import { SettingsLanguageDemo, SettingsOrgDemo, SettingsTimezonesDemo } from '../../components/help/demos/SettingsDemos'
+import { BillingInvoicesDemo, BillingManageDemo, BillingPaymentDemo } from '../../components/help/demos/Billing'
 
 export interface DocTopic {
   slug: string
@@ -106,6 +115,8 @@ const QUICKSTART: ReactNode = (
       you through your first ten minutes on the platform.
     </P>
 
+    <QuickstartDemo />
+
     <H3 id="create-account">1. Create your account</H3>
     <P>
       Head to <Link to="/signup">flodok.com/signup</Link> and create a free
@@ -182,6 +193,8 @@ const PLANS: ReactNode = (
       translation, and WIB/WITA/WIT time zones. Pro adds AI features,
       contracts, e-signatures, performance reviews, and integrations.
     </P>
+
+    <PlansDemo />
 
     <H3 id="comparison">What's different per plan</H3>
     <Bullets
@@ -260,6 +273,8 @@ const ROLES: ReactNode = (
       <Link to="/contact"> get in touch</Link> if you need this.
     </P>
 
+    <RolesDemo />
+
     <H3 id="admin">Admin</H3>
     <P>
       Full access to everything: settings, billing, employees, SOPs, contracts,
@@ -304,6 +319,8 @@ const INVITES: ReactNode = (
       managers, employees) and portal-only access (no account needed).
     </P>
 
+    <InviteTeamDemo />
+
     <H3 id="email-invites">Email invites</H3>
     <P>
       In <strong>Settings → Team Members</strong> click <strong>Invite people</strong>.
@@ -345,6 +362,8 @@ const SOP_CREATE: ReactNode = (
       choice, remembered per-doc), so reviewers can keep the two
       versions aligned as the document evolves.
     </P>
+
+    <SopCreateDemo />
 
     <H3 id="create">Creating a new SOP</H3>
     <Steps
@@ -399,6 +418,8 @@ const SOP_VERSIONING: ReactNode = (
       back, or branch off into a draft.
     </P>
 
+    <SopVersioningDemo />
+
     <H3 id="how-it-works">How it works</H3>
     <P>
       Each time you click <strong>Save draft</strong> or <strong>Publish</strong>,
@@ -437,6 +458,8 @@ const SOP_IMPORT: ReactNode = (
       EN/ID per block), so importing is a slightly more deliberate act
       than dumping a markdown file — but in practice it's still quick.
     </P>
+
+    <SopImportDemo />
 
     <H3 id="paste">Paste from Google Docs / Notion</H3>
     <P>
@@ -477,6 +500,8 @@ const HIRING_FUNNEL: ReactNode = (
       Employees list automatically once they start. No transfer step, no
       duplicate entry.
     </P>
+
+    <HiringFunnelDemo />
 
     <H3 id="stages">The five stages</H3>
     <P>
@@ -529,6 +554,8 @@ const HIRING_CANDIDATES: ReactNode = (
       The Recruitment page is designed for the actual rhythm of running interviews:
       add a candidate in 10 seconds, deal with details later.
     </P>
+
+    <HiringCandidatesDemo />
 
     <H3 id="add">Adding a candidate</H3>
     <P>
@@ -590,6 +617,8 @@ const HIRING_OFFERS: ReactNode = (
       starts blank.
     </P>
 
+    <HiringOffersDemo />
+
     <H3 id="flow">The flow</H3>
     <Steps
       items={[
@@ -640,6 +669,8 @@ const HIRING_SEPARATION: ReactNode = (
       directory under the <strong>Separated</strong> tab; nothing is
       deleted.
     </P>
+
+    <HiringSeparationDemo />
 
     <H3 id="record">Recording a separation</H3>
     <P>
@@ -694,6 +725,8 @@ const CONTRACTS_CREATE: ReactNode = (
       Flodok handles employment contracts end to end: draft, e-sign, store,
       and version. Two ways to create one.
     </P>
+
+    <ContractsCreateDemo />
 
     <H3 id="from-candidate">From a candidate (recommended)</H3>
     <P>
@@ -784,6 +817,8 @@ const CONTRACT_TEMPLATES: ReactNode = (
       into a fresh draft contract linked to them — start date, name, and
       any candidate-specific bits are typically all that's left to fill in.
     </P>
+
+    <ContractTemplatesDemo />
     <P>
       Templates live in their own area (the <strong>Templates</strong>{' '}
       tab under Contracts) with a slim editor: same bilingual document
@@ -839,6 +874,8 @@ const CONTRACTS_SIGN: ReactNode = (
       sufficient for non-disputed cases.
     </P>
 
+    <ContractsSignDemo />
+
     <H3 id="how">How signing works</H3>
     <Steps
       items={[
@@ -883,6 +920,8 @@ const CONTRACTS_HISTORY: ReactNode = (
       hours, dates) frozen alongside the bilingual document content.
     </P>
 
+    <ContractsHistoryDemo />
+
     <H3 id="view">Viewing history</H3>
     <P>
       <strong>Contracts → [contract] → History</strong> lists every revision
@@ -919,6 +958,8 @@ const PERFORMANCE_REVIEWS: ReactNode = (
       Lightweight performance reviews built around 360 feedback. No fifty-page
       forms — just the questions that matter, on a cycle that fits your team.
     </P>
+
+    <PerformanceReviewsDemo />
 
     <H3 id="setup">Setting up a cycle</H3>
     <Steps
@@ -958,6 +999,8 @@ const PERFORMANCE_ONE_ONES: ReactNode = (
       moments worth remembering between reviews.
     </P>
 
+    <OneOnOnesDemo />
+
     <H3 id="cadence">Setting a cadence</H3>
     <P>
       Each manager-direct pair has a 1:1 page. Pick a cadence (weekly,
@@ -988,6 +1031,8 @@ const RECOGNITION: ReactNode = (
       credits (small monetary), and bonuses (large monetary). Each has its own
       rules and limits.
     </P>
+
+    <RecognitionDemo />
 
     <H3 id="badges">Badges</H3>
     <P>
@@ -1029,6 +1074,8 @@ const PORTAL_ABOUT: ReactNode = (
       when they're added. The URL works without a login; it acts as the
       access credential.
     </P>
+
+    <PortalAboutDemo />
 
     <H3 id="who-it-is-for">Who it's for</H3>
     <P>
@@ -1076,6 +1123,8 @@ const PORTAL_CANDIDATE_ONBOARDING: ReactNode = (
       they're walked through a guided onboarding flow before getting
       the regular portal. Six steps, one screen at a time, mobile-first.
     </P>
+
+    <PortalOnboardingDemo />
 
     <H3 id="when">When the flow appears</H3>
     <P>
@@ -1134,6 +1183,8 @@ const PORTAL_SHARE: ReactNode = (
       access their content — no login required.
     </P>
 
+    <PortalShareDemo />
+
     <H3 id="get-link">Getting your portal link</H3>
     <P>
       <strong>Settings → Portal → Copy link</strong>. The link is unguessable
@@ -1164,6 +1215,8 @@ const PORTAL_CUSTOMIZE: ReactNode = (
       visible, and what's pinned to the top.
     </P>
 
+    <PortalCustomizeDemo />
+
     <H3 id="branding">Branding</H3>
     <P>
       Upload your logo and pick an accent colour in <strong>Settings →
@@ -1193,6 +1246,8 @@ const INTEGRATIONS_FIREFLIES: ReactNode = (
       Connect Fireflies and meeting recordings flow into Flodok automatically —
       transcripts attached to 1:1s, action items lifted into your follow-ups.
     </P>
+
+    <FirefliesDemo />
 
     <H3 id="connect">Connecting Fireflies</H3>
     <Steps
@@ -1226,6 +1281,8 @@ const INTEGRATIONS_SLACK: ReactNode = (
       performance cycles open or close.
     </P>
 
+    <SlackDemo />
+
     <H3 id="connect">Connecting Slack</H3>
     <P>
       <strong>Settings → Integrations → Slack → Connect</strong>. Authorise via
@@ -1253,6 +1310,8 @@ const INTEGRATIONS_SSO: ReactNode = (
       SAML 2.0 SSO (Okta, Azure AD, JumpCloud) is available on custom plans —
       <Link to="/contact"> get in touch</Link> if you need it.
     </P>
+
+    <SsoDemo />
 
     <H3 id="google">Google Workspace</H3>
     <P>
@@ -1285,6 +1344,8 @@ const SETTINGS_ORG: ReactNode = (
       Organization settings cover everything top-level: brand identity, time
       zones, language defaults, and contact details.
     </P>
+
+    <SettingsOrgDemo />
 
     <H3 id="identity">Identity</H3>
     <Bullets
@@ -1319,6 +1380,8 @@ const SETTINGS_TIMEZONES: ReactNode = (
       single organization.
     </P>
 
+    <SettingsTimezonesDemo />
+
     <H3 id="org-default">Organization default</H3>
     <P>
       <strong>Settings → Organization → Time zone</strong>. The default applies
@@ -1348,6 +1411,8 @@ const SETTINGS_LANGUAGE: ReactNode = (
       Flodok ships in Bahasa Indonesia and English. Both are first-class —
       every screen, error message, and email template is fully translated.
     </P>
+
+    <SettingsLanguageDemo />
 
     <H3 id="user-pref">Per-user preference</H3>
     <P>
@@ -1386,6 +1451,8 @@ const BILLING_MANAGE: ReactNode = (
       <strong>Settings → Billing</strong>.
     </P>
 
+    <BillingManageDemo />
+
     <H3 id="upgrade">Upgrading</H3>
     <P>
       Click <strong>Upgrade</strong> and pick the new plan. We prorate the
@@ -1415,6 +1482,8 @@ const BILLING_PAYMENT: ReactNode = (
       Flodok accepts every common Indonesian payment method, plus international
       cards for teams paying from abroad.
     </P>
+
+    <BillingPaymentDemo />
 
     <H3 id="local">Local methods</H3>
     <Bullets
@@ -1448,6 +1517,8 @@ const BILLING_INVOICES: ReactNode = (
       registered as PKP (Pengusaha Kena Pajak), Flodok issues a Faktur Pajak
       Elektronik (e-Faktur).
     </P>
+
+    <BillingInvoicesDemo />
 
     <H3 id="standard">Standard invoices</H3>
     <P>
