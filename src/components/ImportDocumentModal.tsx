@@ -20,15 +20,16 @@ import { useLang } from '../contexts/LanguageContext'
 import { Modal } from './Modal'
 import { EmployeeSelect } from './EmployeeSelect'
 import { analyseDocument, type AnalyseDocType, type AnalyseDocumentResult } from '../lib/analyseDocument'
-import { docAsJson } from '../lib/documentDoc'
-import { documentEditPath, type DocumentType } from '../lib/documentTypes'
+import { importDocx } from '../lib/htmlToDoc'
+import { docAsJson, docPreviewLines, type LanguageMode } from '../lib/documentDoc'
+import { documentEditPath, tableForType, type DocumentType } from '../lib/documentTypes'
 import { type EmpDeptShape } from '../lib/employee'
 import type { Employee, User } from '../types/aliases'
 
 type EmployeeWithDepartments = Employee & EmpDeptShape
 
 const MAX_SIZE = 15 * 1024 * 1024 // 15 MB
-const ACCEPT = '.pdf,application/pdf'
+const ACCEPT = '.pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 
 type Step = 'select' | 'analysing' | 'review' | 'error'
 
@@ -58,10 +59,14 @@ export function ImportDocumentModal({
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({})
   const [error, setError] = useState('')
   const [creating, setCreating] = useState(false)
+  // Set from the DOCX import (the detected source language → a monolingual
+  // draft). PDF imports stay 'bilingual'. Persisted on the created row.
+  const [languageMode, setLanguageMode] = useState<LanguageMode>('bilingual')
 
   const typeOptions: Array<{ value: AnalyseDocType; label: string }> = [
     { value: 'contract', label: t.documentImportTypeContract },
     { value: 'nda', label: t.documentImportTypeNda },
+    { value: 'job_description', label: t.documentImportTypeJd },
     { value: 'sop', label: t.documentImportTypeSop },
   ]
 
@@ -94,6 +99,7 @@ export function ImportDocumentModal({
     setFieldValues({})
     setError('')
     setCreating(false)
+    setLanguageMode('bilingual')
   }
 
   function handleClose() {
@@ -106,7 +112,9 @@ export function ImportDocumentModal({
     const picked = e.target.files?.[0]
     e.target.value = ''
     if (!picked) return
-    if (picked.type !== 'application/pdf') {
+    // Validate by extension — the .docx MIME type is unreliable across OSes.
+    const name = picked.name.toLowerCase()
+    if (!name.endsWith('.pdf') && !name.endsWith('.docx')) {
       setError(t.documentImportInvalidType)
       return
     }
@@ -126,9 +134,23 @@ export function ImportDocumentModal({
     setError('')
     setStep('analysing')
     try {
+      if (file.name.toLowerCase().endsWith('.docx')) {
+        // DOCX is structured — extract it deterministically in the browser
+        // (mammoth), no AI/vision call. The result lands as a monolingual
+        // draft in the detected source language.
+        const { doc, title: docxTitle, language } = await importDocx(file)
+        setResult({ doc, title: docxTitle, fields: {}, confidence: {} })
+        setTitle(docxTitle)
+        setLanguageMode(language)
+        setFieldValues({})
+        setStep('review')
+        return
+      }
+      // PDF: the vision model reads the visual document.
       const res = await analyseDocument(file, docType)
       setResult(res)
       setTitle(res.title)
+      setLanguageMode('bilingual')
       const fv: Record<string, string> = {}
       for (const desc of (docType === 'contract' ? contractFields : docType === 'nda' ? ndaFields : [])) {
         const v = res.fields[desc.key]
@@ -200,6 +222,24 @@ export function ImportDocumentModal({
         .single()
       id = data?.id ?? null
       errMsg = e?.message ?? null
+    } else if (docType === 'job_description') {
+      // job_descriptions has no employee_id column (it carries
+      // assignee_employee_id with different semantics), so we can't reuse
+      // `common`. Insert the role body as a draft and let the JD editor's
+      // existing-row load path open it pre-populated; department resolves
+      // in-editor (it's only enforced on save, not on load).
+      const { data, error: e } = await supabase
+        .from('job_descriptions')
+        .insert({
+          org_id: user.org_id,
+          title: title.trim(),
+          status: 'draft' as const,
+          content_doc: docAsJson(result.doc),
+        })
+        .select()
+        .single()
+      id = data?.id ?? null
+      errMsg = e?.message ?? null
     } else {
       const { data, error: e } = await supabase
         .from('sops')
@@ -215,19 +255,25 @@ export function ImportDocumentModal({
       setCreating(false)
       return
     }
+    // DOCX imports are monolingual — persist the detected mode on the new row
+    // so it renders full-width. (PDF imports stay 'bilingual', the column
+    // default, so no extra write.) Done as a follow-up update to keep the
+    // typed inserts above type-safe despite database.ts lacking the column.
+    if (languageMode !== 'bilingual') {
+      await supabase
+        .from(tableForType(docType as DocumentType))
+        .update({ language_mode: languageMode } as never)
+        .eq('id', id)
+    }
     resetAll()
     onClose()
     navigate(documentEditPath(docType as DocumentType, id))
   }
 
-  const sectionTitles: string[] = (result?.doc.content ?? [])
-    .filter(n => n.type === 'section')
-    .map(n => {
-      const attrs = (n.attrs ?? {}) as { titleEn?: unknown; titleId?: unknown }
-      return (typeof attrs.titleEn === 'string' && attrs.titleEn)
-        || (typeof attrs.titleId === 'string' && attrs.titleId)
-        || ''
-    })
+  // Body preview — works for both the section-structured PDF result and the
+  // flat-block DOCX result. Reads the side that actually has content.
+  const previewLang: 'en' | 'id' = languageMode === 'id' ? 'id' : 'en'
+  const previewLines = result ? docPreviewLines(result.doc, previewLang, 6) : []
 
   const modalTitle =
     step === 'review' ? t.documentImportReviewTitle
@@ -247,7 +293,7 @@ export function ImportDocumentModal({
             <label className="mb-1.5 block text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
               {t.documentImportPickType}
             </label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               {typeOptions.map(opt => {
                 const active = docType === opt.value
                 return (
@@ -344,17 +390,21 @@ export function ImportDocumentModal({
             />
           </div>
 
-          <div>
-            <label className="mb-1.5 block text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
-              {t.documentImportLinkEmployee}
-            </label>
-            <EmployeeSelect
-              value={employeeId}
-              onChange={setEmployeeId}
-              employees={employees}
-              emptyLabel={t.noEmployeeLinked}
-            />
-          </div>
+          {/* Job descriptions describe a role, not a person — and the
+              job_descriptions table has no employee_id — so no link here. */}
+          {docType !== 'job_description' && (
+            <div>
+              <label className="mb-1.5 block text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+                {t.documentImportLinkEmployee}
+              </label>
+              <EmployeeSelect
+                value={employeeId}
+                onChange={setEmployeeId}
+                employees={employees}
+                emptyLabel={t.noEmployeeLinked}
+              />
+            </div>
+          )}
 
           {fieldDescs.length > 0 && (
             <div>
@@ -384,20 +434,14 @@ export function ImportDocumentModal({
               className="rounded-lg border px-3 py-2 text-sm"
               style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}
             >
-              <p className="mb-1" style={{ color: 'var(--color-text)' }}>
-                {t.documentImportSectionsCount.replace('{count}', String(sectionTitles.length))}
-              </p>
-              {sectionTitles.length > 0 && (
-                <ul className="list-inside list-disc space-y-0.5">
-                  {sectionTitles.slice(0, 8).map((st, i) => (
-                    <li key={i} className="truncate">{st || t.documentImportUntitledSection}</li>
+              {previewLines.length > 0 ? (
+                <ul className="space-y-0.5">
+                  {previewLines.map((line, i) => (
+                    <li key={i} className="truncate">{line}</li>
                   ))}
-                  {sectionTitles.length > 8 && (
-                    <li style={{ color: 'var(--color-text-tertiary)' }}>
-                      {t.documentImportMoreSections.replace('{count}', String(sectionTitles.length - 8))}
-                    </li>
-                  )}
                 </ul>
+              ) : (
+                <p style={{ color: 'var(--color-text-tertiary)' }}>{t.documentImportUntitledSection}</p>
               )}
             </div>
           </div>

@@ -9,7 +9,7 @@
 import { supabase } from './supabase'
 import type { DocumentDoc } from './documentDoc'
 
-export type AnalyseDocType = 'sop' | 'contract' | 'nda'
+export type AnalyseDocType = 'sop' | 'contract' | 'nda' | 'job_description'
 
 export type AnalyseDocumentResult = {
   doc: DocumentDoc

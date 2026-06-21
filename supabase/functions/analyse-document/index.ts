@@ -31,7 +31,7 @@ import { intermediateToDocumentDoc, type IntermediateDoc } from '../_shared/inte
 
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions'
 
-type DocType = 'sop' | 'contract' | 'nda'
+type DocType = 'sop' | 'contract' | 'nda' | 'job_description'
 
 const SYSTEM_PROMPT_BASE = `You analyse an existing workplace document (provided as a PDF) for an Indonesian HR platform and re-express it as a structured BILINGUAL record. The platform stores every document in BOTH English and Bahasa Indonesia, each block as a translated pair.
 
@@ -81,6 +81,11 @@ Document type: Indonesian employment contract.
 const NDA_TAIL = `
 Document type: Non-Disclosure Agreement (one-way employee NDA).
 - \`fields\` keys (extract only those stated): "effective_date" (ISO date the NDA takes effect), "survival_years" (integer years confidentiality survives after termination), "penalty_idr" (integer penalty/liquidated-damages amount in IDR, or null).`
+
+const JD_TAIL = `
+Document type: Job description.
+- \`fields\` is an empty object {} for job descriptions — there are no commercial terms to extract.
+- Capture the role overview, key responsibilities, required and preferred qualifications, and reporting relationships as sections. Describe the ROLE, not a specific person.`
 
 // Per-type whitelist + coercion. We never trust the model's field object
 // blindly — we keep only known keys and coerce to the column's type, so a
@@ -164,6 +169,7 @@ Deno.serve(async (req: Request) => {
   const docType: DocType =
     body.doc_type === 'contract' ? 'contract'
     : body.doc_type === 'nda' ? 'nda'
+    : body.doc_type === 'job_description' ? 'job_description'
     : 'sop'
 
   const fileData = typeof body.file_data === 'string' ? body.file_data : ''
@@ -186,6 +192,7 @@ Deno.serve(async (req: Request) => {
   const tail =
     docType === 'contract' ? CONTRACT_TAIL
     : docType === 'nda' ? NDA_TAIL
+    : docType === 'job_description' ? JD_TAIL
     : SOP_TAIL
   const systemPrompt = SYSTEM_PROMPT_BASE + tail
 
