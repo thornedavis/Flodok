@@ -7,7 +7,6 @@ import {
   loadOrgById,
   listActiveOrgs,
   claimMeeting,
-  autoClosePeriods,
   runDailyAchievements,
   runMonthlyLeaderboard,
 } from "./config";
@@ -136,13 +135,9 @@ export default {
     // expression to keep each job's concerns separate.
     if (controller.cron === "0 18 * * *") {
       // 18:00 UTC = 01:00 WIB next day. This block runs the daily WIB jobs.
-      try {
-        const result = await autoClosePeriods(env);
-        console.log("Cron: auto-close →", result);
-      } catch (err) {
-        console.error("Cron: auto-close failed:", err);
-      }
-
+      // NOTE: monthly pay periods are NO LONGER auto-closed here. Payroll is
+      // now an explicit owner/admin action (run_payroll) on the Payroll page,
+      // so a month is never silently frozen before HR has finalised it.
       try {
         const result = await runDailyAchievements(env);
         console.log("Cron: daily achievements →", result);

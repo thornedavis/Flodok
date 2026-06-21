@@ -127,18 +127,8 @@ export async function listActiveOrgs(env: Env): Promise<{ id: string; name: stri
   return res.orgs;
 }
 
-// Runs the Postgres auto-close RPC. Invoked from the daily cron. The edge
-// function delegates to the `auto_close_periods()` SQL function, which is
-// idempotent and only freezes periods for orgs whose `pay_day_of_month`
-// matches today's Asia/Jakarta date.
-export async function autoClosePeriods(env: Env): Promise<{
-  today_wib: string;
-  orgs_processed: number;
-  employees_closed: number;
-  closures: Array<{ org_id: string; period_month: string; pay_day_of_month: number }>;
-}> {
-  return callWorkerConfig(env, "/auto-close-periods", {});
-}
+// (Payroll auto-close has been removed — payroll is now an explicit owner/admin
+// action via run_payroll on the Payroll page, never a silent cron freeze.)
 
 // Achievements daily run: tenure + compensation firsts for every active employee.
 // Idempotent — safe to call repeatedly.
