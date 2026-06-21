@@ -468,7 +468,30 @@ function NavRow({ label, icon, active }: { label: string; icon: ReactNode; activ
   )
 }
 
-export function DesktopFrame({ children, activeNav = 'Forms', url = 'app.flodok.com/dashboard/forms' }: { children: ReactNode; activeNav?: string; url?: string }) {
+function DesktopHeader({ org, crumb }: { org: string; crumb: string }) {
+  return (
+    <div className="flex h-9 shrink-0 items-center justify-between border-b px-3" style={{ borderColor: 'var(--color-border)', backgroundColor: 'color-mix(in srgb, var(--color-bg) 92%, transparent)' }}>
+      <div className="flex min-w-0 items-center gap-1.5 text-xs">
+        <span className="truncate" style={{ color: 'var(--color-text-tertiary)' }}>{org}</span>
+        <span style={{ color: 'var(--color-text-tertiary)' }}>/</span>
+        <span className="truncate font-medium" style={{ color: 'var(--color-text)' }}>{crumb}</span>
+      </div>
+      <div className="flex shrink-0 items-center gap-2.5" style={{ color: 'var(--color-text-secondary)' }}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
+        <span className="text-[10px] font-semibold">EN</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5" /><line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" /><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" /><line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" /><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" /></svg>
+        <span className="relative inline-flex">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>
+          <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full" style={{ backgroundColor: 'var(--color-danger)' }} />
+        </span>
+        <span className="h-5 w-5 rounded-full" style={{ background: 'linear-gradient(135deg, var(--color-primary), #7c3aed)' }} />
+      </div>
+    </div>
+  )
+}
+
+export function DesktopFrame({ children, activeNav = 'Forms', url = 'app.flodok.com/dashboard/forms', org = 'Acme Indonesia', crumb }: { children: ReactNode; activeNav?: string; url?: string; org?: string; crumb?: string }) {
+  const heading = crumb ?? activeNav
   return (
     <div className="overflow-hidden rounded-xl border" style={{ borderColor: 'var(--color-border-strong)', backgroundColor: 'var(--color-bg)', boxShadow: '0 22px 60px -24px rgba(0,0,0,0.5)' }}>
       <div className="flex items-center gap-2 border-b px-3" style={{ height: 34, borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)' }}>
@@ -481,7 +504,7 @@ export function DesktopFrame({ children, activeNav = 'Forms', url = 'app.flodok.
           </div>
         </div>
       </div>
-      <div className="flex" style={{ height: 432 }}>
+      <div className="flex" style={{ height: 468 }}>
         <div className="hidden w-[150px] shrink-0 flex-col border-r p-2 sm:flex" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)' }}>
           <div className="mb-2 flex items-center px-1 py-1">
             <Wordmark height={15} />
@@ -493,7 +516,10 @@ export function DesktopFrame({ children, activeNav = 'Forms', url = 'app.flodok.
             {FOOTER_NAV.map((it) => <NavRow key={it.label} label={it.label} icon={it.icon} active={it.label === activeNav} />)}
           </div>
         </div>
-        <div className="min-w-0 flex-1 overflow-y-auto">{children}</div>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <DesktopHeader org={org} crumb={heading} />
+          <div className="min-w-0 flex-1 overflow-y-auto">{children}</div>
+        </div>
       </div>
     </div>
   )
