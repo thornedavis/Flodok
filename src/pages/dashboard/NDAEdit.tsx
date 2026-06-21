@@ -14,7 +14,7 @@ import { useSaveFlash } from '../../hooks/useSaveFlash'
 import { exportDocumentPdf } from '../../lib/pdfExport'
 import { formatIdrDigits } from '../../lib/credits'
 import { writeSnapshot } from '../../lib/snapshotApi'
-import { emptyDocumentDoc, type DocumentDoc } from '../../lib/documentDoc'
+import { emptyDocumentDoc, type DocumentDoc, type LanguageMode } from '../../lib/documentDoc'
 import { buildContractDocumentHash, captureSignatureIp, currentAuthToken, getUserAgent } from '../../lib/signatureFingerprint'
 import { SIGNATURE_FONTS, ensureSignatureFontsLoaded } from '../../lib/signatureFonts'
 import { DateTimePicker } from '../../components/DateTimePicker'
@@ -52,6 +52,9 @@ export function NDAEdit({ user }: { user: User }) {
   const { flash: savedFlash, show: showSaved } = useSaveFlash()
   const { canWrite } = useBilling()
   const { view, setView } = useDocumentViewPref('nda', id ?? null)
+  // language_mode read/written via cast — database.ts not regenerated yet.
+  const [languageMode, setLanguageMode] = useState<LanguageMode>('bilingual')
+  const [savedLanguageMode, setSavedLanguageMode] = useState<LanguageMode>('bilingual')
   const [nda, setNda] = useState<Nda | null>(null)
   const [organization, setOrganization] = useState<Organization | null>(null)
   const [allEmployees, setAllEmployees] = useState<EmployeeWithDepartments[]>([])
@@ -99,6 +102,11 @@ export function NDAEdit({ user }: { user: User }) {
       if (ndaResult.data) {
         setNda(ndaResult.data)
         setTitle(ndaResult.data.title)
+        {
+          const loadedMode = (ndaResult.data as { language_mode?: LanguageMode }).language_mode ?? 'bilingual'
+          setLanguageMode(loadedMode)
+          setSavedLanguageMode(loadedMode)
+        }
         const loadedDoc = (ndaResult.data.content_doc as DocumentDoc | null) ?? emptyDocumentDoc()
         setContentDoc(loadedDoc)
         setSavedContentDoc(loadedDoc)
@@ -163,9 +171,10 @@ export function NDAEdit({ user }: { user: User }) {
   }, [title, employeeId, effectiveDate])
 
   const missingKeys = new Set(missingRequiredFields.map(f => f.key))
+  const modeChanged = languageMode !== savedLanguageMode
 
   const hasChanges = nda ? (
-    docChanged || structuralChanged ||
+    docChanged || structuralChanged || modeChanged ||
     title !== nda.title ||
     status !== nda.status
   ) : false
@@ -177,7 +186,7 @@ export function NDAEdit({ user }: { user: User }) {
     setError('')
     setSaving(true)
 
-    const snapshotNeeded = docChanged || structuralChanged
+    const snapshotNeeded = docChanged || structuralChanged || modeChanged
 
     const { error: updateError } = await supabase
       .from('ndas')
@@ -227,6 +236,7 @@ export function NDAEdit({ user }: { user: User }) {
         table: 'ndas',
         doc_id: nda.id,
         new_content_doc: contentDoc,
+        language_mode: languageMode,
         change_summary: null,
         changed_by: user.id,
       })
@@ -263,7 +273,8 @@ export function NDAEdit({ user }: { user: User }) {
       return { versionNumber: result.version_number }
     }
 
-    showSaved(true)
+    setSavedLanguageMode(languageMode)
+    showSaved(languageMode === 'bilingual')
     return { versionNumber: result.version_number }
   }
 
@@ -291,6 +302,7 @@ export function NDAEdit({ user }: { user: User }) {
         doc: contentDoc,
         title: title || 'NDA',
         view,
+        languageMode,
         contextEn: { ...baseCtx, lang: 'en' },
         contextId: { ...baseCtx, lang: 'id' },
       })
@@ -606,6 +618,8 @@ export function NDAEdit({ user }: { user: User }) {
         onChange={setContentDoc}
         view={view}
         onViewChange={setView}
+        languageMode={languageMode}
+        onLanguageModeChange={setLanguageMode}
         mergeFields={{
           scope: 'nda',
           getContext: () => ({

@@ -40,7 +40,7 @@ import { MERGE_FIELD_STYLES } from '../MergeField'
 import { DOCUMENT_EDITOR_STYLES } from './styles'
 import { supabase } from '../../../lib/supabase'
 import { generateDocument } from '../../../lib/aiGenerate'
-import { normalizeDoc, type DocumentDoc } from '../../../lib/documentDoc'
+import { normalizeDoc, type DocumentDoc, type LanguageMode } from '../../../lib/documentDoc'
 import type { MergeContext } from '../../../lib/mergeFields'
 
 export type DocumentEditorView = 'side_by_side' | 'stacked'
@@ -70,6 +70,12 @@ interface DocumentEditorProps {
   // the choice (see `useDocumentViewPref`).
   view?: DocumentEditorView
   onViewChange?: (next: DocumentEditorView) => void
+  // Per-document language mode (P1 monolingual). 'bilingual' (default)
+  // shows both EN + ID sides; 'en'/'id' render a single full-width column.
+  // When onLanguageModeChange is provided, the toolbar renders a
+  // Bilingual / Single-language toggle + an EN/ID picker.
+  languageMode?: LanguageMode
+  onLanguageModeChange?: (next: LanguageMode) => void
   // Merge-fields integration. Omit for the sandbox / when not wiring
   // to a real document.
   mergeFields?: DocumentEditorMergeFields
@@ -95,6 +101,8 @@ export function DocumentEditor({
   onChange,
   view = 'side_by_side',
   onViewChange,
+  languageMode = 'bilingual',
+  onLanguageModeChange,
   mergeFields,
   aiGenerate,
   stickyToolbar = false,
@@ -330,13 +338,19 @@ export function DocumentEditor({
   if (!editor) return null
 
   return (
-    <div className={`doc-editor ${view === 'stacked' ? 'is-stacked' : ''}`}>
+    <div className={`doc-editor ${view === 'stacked' ? 'is-stacked' : ''} ${
+      languageMode === 'en' ? 'is-monolingual is-monolingual-en'
+      : languageMode === 'id' ? 'is-monolingual is-monolingual-id'
+      : ''
+    }`}>
       <Toolbar
         editor={editor}
         onSetLink={setLink}
         mergeFields={mergeFields}
         view={view}
         onViewChange={onViewChange}
+        languageMode={languageMode}
+        onLanguageModeChange={onLanguageModeChange}
         onGenerate={aiGenerate ? () => setGenerateOpen(true) : undefined}
         sticky={stickyToolbar}
         stickyOffset={stickyToolbarOffset}
@@ -356,6 +370,7 @@ export function DocumentEditor({
           onSetLink={setLink}
           onTranslate={translateSelection}
           translating={translating}
+          languageMode={languageMode}
         />
       </BubbleMenu>
       <BlockGutter editor={editor} />
@@ -375,7 +390,7 @@ export function DocumentEditor({
 
 // ─── Toolbar ──────────────────────────────────────────────────────
 
-function Toolbar({ editor, onSetLink, mergeFields, view, onViewChange, onGenerate, sticky = false, stickyOffset = '0px' }: {
+function Toolbar({ editor, onSetLink, mergeFields, view, onViewChange, languageMode = 'bilingual', onLanguageModeChange, onGenerate, sticky = false, stickyOffset = '0px' }: {
   editor: Editor
   onSetLink: () => void
   mergeFields?: DocumentEditorMergeFields
@@ -383,6 +398,8 @@ function Toolbar({ editor, onSetLink, mergeFields, view, onViewChange, onGenerat
   sticky?: boolean
   stickyOffset?: string
   onViewChange?: (next: DocumentEditorView) => void
+  languageMode?: LanguageMode
+  onLanguageModeChange?: (next: LanguageMode) => void
   onGenerate?: () => void
 }) {
   return (
@@ -472,6 +489,38 @@ function Toolbar({ editor, onSetLink, mergeFields, view, onViewChange, onGenerat
           </button>
         </>
       )}
+      {onLanguageModeChange && (
+        <>
+          {!onViewChange && <div className="ml-auto" />}
+          <Divider />
+          <button
+            type="button"
+            onClick={() => onLanguageModeChange(languageMode === 'bilingual' ? 'en' : 'bilingual')}
+            title={languageMode === 'bilingual'
+              ? 'Switch to a single language (the other side is cleared on save)'
+              : 'Switch back to bilingual'}
+            className="flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors"
+            style={{ color: 'var(--color-text-secondary)' }}
+            onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
+            onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
+          >
+            <LanguagesIcon />
+            <span>{languageMode === 'bilingual' ? 'Bilingual' : 'Single language'}</span>
+          </button>
+          {languageMode !== 'bilingual' && (
+            <select
+              value={languageMode}
+              onChange={e => onLanguageModeChange(e.target.value as 'en' | 'id')}
+              title="Document language"
+              className="h-8 rounded-md border px-1.5 text-xs font-medium"
+              style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+            >
+              <option value="en">EN</option>
+              <option value="id">ID</option>
+            </select>
+          )}
+        </>
+      )}
     </div>
   )
 }
@@ -545,6 +594,7 @@ function TableIcon() { return <svg {...s}><rect x="3" y="3" width="18" height="1
 function CodeBlockIcon() { return <svg {...s}><rect x="2" y="3" width="20" height="18" rx="2"/><polyline points="10 8 6 12 10 16"/><polyline points="14 8 18 12 14 16"/></svg> }
 function SideBySideIcon() { return <svg {...s}><rect x="3" y="4" width="8" height="16" rx="1"/><rect x="13" y="4" width="8" height="16" rx="1"/></svg> }
 function StackedIcon() { return <svg {...s}><rect x="3" y="3" width="18" height="8" rx="1"/><rect x="3" y="13" width="18" height="8" rx="1"/></svg> }
+function LanguagesIcon() { return <svg {...s}><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 3 2.5 15 0 18M12 3c-2.5 3-2.5 15 0 18"/></svg> }
 function SparklesIcon() { return <svg {...s}><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg> }
 
 // ─── AI Generate modal ─────────────────────────────────────────────

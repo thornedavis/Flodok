@@ -14,17 +14,22 @@
 import { useCallback, useState } from 'react'
 import type { Editor } from '@tiptap/core'
 import { rewriteText, type RewriteAction } from '../../../lib/rewriteText'
+import type { LanguageMode } from '../../../lib/documentDoc'
 
 export function SelectionBubble({
   editor,
   onSetLink,
   onTranslate,
   translating,
+  languageMode = 'bilingual',
 }: {
   editor: Editor
   onSetLink: () => void
   onTranslate: () => void
   translating: boolean
+  // Monolingual docs have no opposite side to translate into — hide the
+  // Translate action. The AI row (improve/proofread/explain) stays.
+  languageMode?: LanguageMode
 }) {
   const [busy, setBusy] = useState<RewriteAction | null>(null)
   const [explain, setExplain] = useState<string | null>(null)
@@ -88,16 +93,20 @@ export function SelectionBubble({
         <Btn active={editor.isActive('strike')} onClick={() => editor.chain().focus().toggleStrike().run()} label="S" title="Strikethrough" strike />
         <Btn active={editor.isActive('code')} onClick={() => editor.chain().focus().toggleCode().run()} label="</>" title="Inline code" />
         <Btn active={editor.isActive('link')} onClick={onSetLink} label="🔗" title="Link" />
-        <Sep />
-        <button
-          type="button"
-          className="sel-bubble-text-btn"
-          onClick={onTranslate}
-          disabled={translating}
-          title="Translate selection into the paired language side"
-        >
-          {translating ? 'Translating…' : 'Translate'}
-        </button>
+        {languageMode === 'bilingual' && (
+          <>
+            <Sep />
+            <button
+              type="button"
+              className="sel-bubble-text-btn"
+              onClick={onTranslate}
+              disabled={translating}
+              title="Translate selection into the paired language side"
+            >
+              {translating ? 'Translating…' : 'Translate'}
+            </button>
+          </>
+        )}
       </div>
       <div className="sel-bubble-row sel-bubble-ai">
         <span className="sel-bubble-ai-label">AI</span>

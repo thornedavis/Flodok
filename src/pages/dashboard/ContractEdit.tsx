@@ -17,7 +17,7 @@ import { formatIdrDigits } from '../../lib/credits'
 import { InfoTooltip } from '../../components/InfoTooltip'
 import { AllowanceComponentsEditor, type CompLine } from '../../components/AllowanceComponentsEditor'
 import { writeSnapshot } from '../../lib/snapshotApi'
-import { emptyDocumentDoc, type DocumentDoc } from '../../lib/documentDoc'
+import { emptyDocumentDoc, type DocumentDoc, type LanguageMode } from '../../lib/documentDoc'
 import { buildPkwtStarterDoc, type PkwtType } from '../../lib/pkwtStarterDoc'
 import { buildContractDocumentHash, captureSignatureIp, currentAuthToken, getUserAgent } from '../../lib/signatureFingerprint'
 import { SIGNATURE_FONTS, ensureSignatureFontsLoaded } from '../../lib/signatureFonts'
@@ -59,6 +59,9 @@ export function ContractEdit({ user }: { user: User }) {
   const { flash: savedFlash, show: showSaved } = useSaveFlash()
   const { canWrite } = useBilling()
   const { view, setView } = useDocumentViewPref('contract', id ?? null)
+  // language_mode read/written via cast — database.ts not regenerated yet.
+  const [languageMode, setLanguageMode] = useState<LanguageMode>('bilingual')
+  const [savedLanguageMode, setSavedLanguageMode] = useState<LanguageMode>('bilingual')
   const [contract, setContract] = useState<Contract | null>(null)
   const [organization, setOrganization] = useState<Organization | null>(null)
   const [, setEmployee] = useState<EmployeeWithDepartments | null>(null)
@@ -146,6 +149,11 @@ export function ContractEdit({ user }: { user: User }) {
       if (contractResult.data) {
         setContract(contractResult.data)
         setTitle(contractResult.data.title)
+        {
+          const loadedMode = (contractResult.data as { language_mode?: LanguageMode }).language_mode ?? 'bilingual'
+          setLanguageMode(loadedMode)
+          setSavedLanguageMode(loadedMode)
+        }
         const loadedDoc = (contractResult.data.content_doc as DocumentDoc | null) ?? emptyDocumentDoc()
         setContentDoc(loadedDoc)
         setSavedContentDoc(loadedDoc)
@@ -284,9 +292,10 @@ export function ContractEdit({ user }: { user: User }) {
   }, [contract?.is_template, title, employeeId, startDate, endDate, contractType, parsedProbationMonths, parsedBaseWage, parsedHoursPerDay, parsedDaysPerWeek])
 
   const missingKeys = new Set(missingRequiredFields.map(f => f.key))
+  const modeChanged = languageMode !== savedLanguageMode
 
   const hasChanges = contract ? (
-    docChanged || employeeChanged || wagesChanged || componentsChanged || datesChanged || structuredChanged ||
+    docChanged || employeeChanged || wagesChanged || componentsChanged || datesChanged || structuredChanged || modeChanged ||
     title !== contract.title ||
     status !== contract.status ||
     changeSummary !== ''
@@ -312,7 +321,9 @@ export function ContractEdit({ user }: { user: User }) {
     // existing merge-field tokens, the structured-doc representation is
     // unchanged.
     const structuralChanged = wagesChanged || componentsChanged || employeeChanged
-    const snapshotNeeded = docChanged || structuralChanged
+    // A language-mode toggle needs the snapshot round-trip too (server clears
+    // the off-side + persists the mode).
+    const snapshotNeeded = docChanged || structuralChanged || modeChanged
 
     // Drop fully-blank lines; a half-filled line (name without amount, or vice
     // versa) is invalid and blocks the save.
@@ -378,7 +389,10 @@ export function ContractEdit({ user }: { user: User }) {
       result = await writeSnapshot({
         table: 'contracts',
         doc_id: contract.id,
-        new_content_doc: docChanged ? contentDoc : undefined,
+        // Pass the doc when the mode changed too, so the server's structured
+        // path runs clearOffSide on the now-monolingual document.
+        new_content_doc: (docChanged || modeChanged) ? contentDoc : undefined,
+        language_mode: languageMode,
         change_summary: changeSummary || null,
         changed_by: user.id,
         employee_id: employeeId,
@@ -450,7 +464,8 @@ export function ContractEdit({ user }: { user: User }) {
       return { versionNumber: result.version_number }
     }
 
-    showSaved(true)
+    setSavedLanguageMode(languageMode)
+    showSaved(languageMode === 'bilingual')
     return { versionNumber: result.version_number }
   }
 
@@ -492,6 +507,7 @@ export function ContractEdit({ user }: { user: User }) {
         doc: contentDoc,
         title: title || 'Contract',
         view,
+        languageMode,
         contextEn: { ...baseCtx, lang: 'en' },
         contextId: { ...baseCtx, lang: 'id' },
       })
@@ -988,6 +1004,8 @@ export function ContractEdit({ user }: { user: User }) {
               onChange={setContentDoc}
               view={view}
               onViewChange={setView}
+              languageMode={languageMode}
+              onLanguageModeChange={setLanguageMode}
               stickyToolbar
               stickyToolbarOffset={`${EDITOR_STICKY_TOP_PX}px`}
               mergeFields={{

@@ -14,7 +14,7 @@ import { formatRelativeTime } from '../../lib/relativeTime'
 import { BadgeGlyph } from '../../components/BadgeGlyph'
 import { renderMergeFields, type MergeContext } from '../../lib/mergeFields'
 import { DocumentRenderer, DOCUMENT_RENDERER_STYLES } from '../../components/editor/bilingual/DocumentRenderer'
-import { isDocumentDoc } from '../../lib/documentDoc'
+import { isDocumentDoc, type LanguageMode } from '../../lib/documentDoc'
 import { CompensationRing, ShieldPath, WalletPath, CoinPath } from '../../components/portal/CompensationRing'
 import { StatRow } from '../../components/portal/StatRow'
 import { InfoTooltip } from '../../components/InfoTooltip'
@@ -304,6 +304,14 @@ export function Portal() {
   // resyncs every doc so "EN in the header" never silently means "this contract
   // is still in ID because that's what was sticky."
   const [docContentLang, setDocContentLang] = useState<'en' | 'id'>(() => lang)
+  // The currently-open document's language mode (read via cast — database.ts
+  // lacks the column). Monolingual docs are pinned to their single language:
+  // the header toggle doesn't move them and the per-doc EN/ID switch is hidden.
+  const activeDocMode: LanguageMode =
+    ((openDocType === 'sop' ? activeSop
+      : openDocType === 'contract' ? activeContract
+      : openDocType === 'letter' ? activeLetter
+      : null) as { language_mode?: LanguageMode } | null)?.language_mode ?? 'bilingual'
 
   // Version history (lazy-loaded per opened document)
   const [historyOpen, setHistoryOpen] = useState(false)
@@ -367,8 +375,11 @@ export function Portal() {
   // header toggle fires. A user who changes the header expects every
   // document to follow — any prior per-doc override is intentionally cleared.
   useEffect(() => {
+    // Monolingual docs are fixed to their single language; only bilingual
+    // docs follow the header language toggle.
+    if (activeDocMode !== 'bilingual') return
     setDocContentLang(lang)
-  }, [lang])
+  }, [lang, activeDocMode])
 
   useEffect(() => {
     async function load() {
@@ -603,11 +614,19 @@ export function Portal() {
     setPreviewVersion(null)
   }
 
+  // Pin the content language to a monolingual doc's single language on open,
+  // so an EN-only doc never opens showing the (empty) ID side and vice versa.
+  function forceContentLangForMono(row: { language_mode?: LanguageMode }) {
+    const mode = row.language_mode ?? 'bilingual'
+    if (mode !== 'bilingual') setDocContentLang(mode)
+  }
+
   function openSopDoc(sop: Sop) {
     resetHistoryState()
     setActiveSop(sop)
     setOpenDocType('sop')
     setTab('documents')
+    forceContentLangForMono(sop as { language_mode?: LanguageMode })
   }
 
   function openContractDoc(c: Contract) {
@@ -615,6 +634,7 @@ export function Portal() {
     setActiveContract(c)
     setOpenDocType('contract')
     setTab('documents')
+    forceContentLangForMono(c as { language_mode?: LanguageMode })
   }
 
   function openLetterDoc(l: Letter) {
@@ -622,6 +642,7 @@ export function Portal() {
     setActiveLetter(l)
     setOpenDocType('letter')
     setTab('documents')
+    forceContentLangForMono(l as { language_mode?: LanguageMode })
   }
 
   async function handleAcknowledgeLetter() {
@@ -1184,6 +1205,8 @@ export function Portal() {
                     </button>
                     {showDocMenu && (
                       <div className="absolute right-0 top-full mt-1 w-56 rounded-xl border py-1 shadow-lg" style={{ backgroundColor: 'var(--color-bg)', borderColor: 'var(--color-border)' }}>
+                        {activeDocMode === 'bilingual' && (
+                        <>
                         <div className="px-3 py-2">
                           <p className="mb-1.5 text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>{s.contentLang}</p>
                           <div className="flex gap-1 rounded-lg p-0.5" style={{ backgroundColor: 'var(--color-bg-tertiary)' }}>
@@ -1210,6 +1233,8 @@ export function Portal() {
                           </div>
                         </div>
                         <div className="my-1 border-t" style={{ borderColor: 'var(--color-border)' }} />
+                        </>
+                        )}
                         <button
                           onClick={() => { setShowDocMenu(false); loadHistory() }}
                           className="block w-full px-4 py-2 text-left text-sm font-medium transition-colors"

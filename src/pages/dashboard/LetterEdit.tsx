@@ -13,7 +13,7 @@ import { type EmpDeptShape } from '../../lib/employee'
 import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning'
 import { useDocumentViewPref } from '../../hooks/useDocumentViewPref'
 import { useSaveFlash } from '../../hooks/useSaveFlash'
-import { emptyDocumentDoc, type DocumentDoc } from '../../lib/documentDoc'
+import { emptyDocumentDoc, type DocumentDoc, type LanguageMode } from '../../lib/documentDoc'
 import { useBilling } from '../../contexts/BillingContext'
 import { documentHistoryPath } from '../../lib/documentTypes'
 import { trashDocument } from '../../lib/trash'
@@ -43,6 +43,11 @@ export function LetterEdit({ user }: { user: User }) {
   const { flash: savedFlash, show: showSaved } = useSaveFlash()
   const { canWrite } = useBilling()
   const { view, setView } = useDocumentViewPref('letter', id ?? null)
+  // language_mode read/written via cast — database.ts not regenerated yet.
+  // Letters save via a plain .update() (no snapshot translate), so the
+  // off-side is never auto-filled regardless; the mode only drives rendering.
+  const [languageMode, setLanguageMode] = useState<LanguageMode>('bilingual')
+  const [savedLanguageMode, setSavedLanguageMode] = useState<LanguageMode>('bilingual')
   const [downloading, setDownloading] = useState(false)
 
   const [letter, setLetter] = useState<Letter | null>(null)
@@ -77,6 +82,13 @@ export function LetterEdit({ user }: { user: User }) {
   const applyLetter = useCallback((row: Letter) => {
     setLetter(row)
     setTitle(row.title)
+    {
+      // applyLetter runs on load AND after each save, so it doubles as the
+      // dirty-tracking baseline reset for language_mode.
+      const loadedMode = (row as { language_mode?: LanguageMode }).language_mode ?? 'bilingual'
+      setLanguageMode(loadedMode)
+      setSavedLanguageMode(loadedMode)
+    }
     const loadedDoc = (row.content_doc as DocumentDoc | null) ?? emptyDocumentDoc()
     setContentDoc(loadedDoc)
     setSavedContentDoc(loadedDoc)
@@ -164,8 +176,9 @@ export function LetterEdit({ user }: { user: User }) {
   }, [letter, employeeId, senderUserId])
   const missingKeys = new Set(missingRequiredFields.map(f => f.key))
 
+  const modeChanged = languageMode !== savedLanguageMode
   const hasChanges = letter ? (
-    docChanged ||
+    docChanged || modeChanged ||
     title !== letter.title ||
     employeeId !== letter.employee_id ||
     senderUserId !== letter.sender_user_id ||
@@ -203,7 +216,8 @@ export function LetterEdit({ user }: { user: User }) {
     }
     const { data, error: updateError } = await supabase
       .from('letters')
-      .update(update)
+      // language_mode isn't in the generated LetterUpdate type yet → cast the payload.
+      .update({ ...update, language_mode: languageMode } as LetterUpdate)
       .eq('id', letter.id)
       .select()
       .single()
@@ -330,6 +344,7 @@ export function LetterEdit({ user }: { user: User }) {
         doc: contentDoc,
         title: title || t.letterTypeLabel,
         view,
+        languageMode,
         contextEn: { ...baseCtx, lang: 'en' },
         contextId: { ...baseCtx, lang: 'id' },
       })
@@ -584,6 +599,8 @@ export function LetterEdit({ user }: { user: User }) {
         onChange={setContentDoc}
         view={view}
         onViewChange={setView}
+        languageMode={languageMode}
+        onLanguageModeChange={setLanguageMode}
         stickyToolbar
         stickyToolbarOffset={`${EDITOR_STICKY_TOP_PX}px`}
         mergeFields={{

@@ -28,7 +28,7 @@ import { ToolbarMoreMenu, type ToolbarMenuItem } from '../../components/editor/T
 import { DateTimePicker } from '../../components/DateTimePicker'
 import { EmployeeSelect } from '../../components/EmployeeSelect'
 import { type EmpDeptShape } from '../../lib/employee'
-import { docAsJson, type DocumentDoc, type ViewMode } from '../../lib/documentDoc'
+import { docAsJson, type DocumentDoc, type LanguageMode, type ViewMode } from '../../lib/documentDoc'
 import { documentEditPath, documentHistoryPath } from '../../lib/documentTypes'
 import {
   archiveJobDescription, buildJobDescriptionSeedDoc, isJdEditable,
@@ -91,6 +91,8 @@ export function JobDescriptionEdit({ user }: { user: User }) {
   const [currentVersion, setCurrentVersion] = useState(1)
   const [hiringRequestId, setHiringRequestId] = useState<string | null>(null)
   const [view, setView] = useState<ViewMode>('side_by_side')
+  // language_mode read/written via cast — database.ts not regenerated yet.
+  const [languageMode, setLanguageMode] = useState<LanguageMode>('bilingual')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [downloading, setDownloading] = useState(false)
@@ -198,6 +200,7 @@ export function JobDescriptionEdit({ user }: { user: User }) {
       }
       const jd = jdResult.data as JobDescription
       setStatus(jd.status as JobDescriptionStatus)
+      setLanguageMode((jd as { language_mode?: LanguageMode }).language_mode ?? 'bilingual')
       setCurrentVersion(jd.current_version)
       setHiringRequestId(jd.hiring_request_id)
       setForm({
@@ -226,7 +229,7 @@ export function JobDescriptionEdit({ user }: { user: User }) {
   // /new → /:id/edit swap after the first save — which refetches — doesn't
   // read as dirty. The guard turns navigating away (including the shell's
   // Cancel button) into a discard confirm.
-  const currentSnapshot = useMemo(() => JSON.stringify({ form, content }), [form, content])
+  const currentSnapshot = useMemo(() => JSON.stringify({ form, content, languageMode }), [form, content, languageMode])
   const [savedSnapshot, setSavedSnapshot] = useState<string | null>(null)
   useEffect(() => { if (loading) setSavedSnapshot(null) }, [loading])
   useEffect(() => {
@@ -272,6 +275,9 @@ export function JobDescriptionEdit({ user }: { user: User }) {
       effective_date: form.effective_date || null,
       doc_version: form.doc_version.trim() || null,
       content_doc: docAsJson(content),
+      // Not in the generated type yet (cast at the .insert/.update call sites);
+      // carried here so both the draft save and the version snapshot record it.
+      language_mode: languageMode,
     }
   }
 
@@ -279,12 +285,13 @@ export function JobDescriptionEdit({ user }: { user: User }) {
     if (isNew) {
       const { data, error } = await supabase
         .from('job_descriptions')
+        // language_mode isn't in the generated Insert type yet → cast.
         .insert({
           ...payloadFromForm(),
           org_id: user.org_id,
           created_by: user.id,
           hiring_request_id: hiringRequestId,
-        })
+        } as never)
         .select('id')
         .single()
       if (error) { setError(error.message); return null }
@@ -292,7 +299,7 @@ export function JobDescriptionEdit({ user }: { user: User }) {
     }
     const { error } = await supabase
       .from('job_descriptions')
-      .update(payloadFromForm())
+      .update(payloadFromForm() as never)
       .eq('id', id!)
     if (error) { setError(error.message); return null }
     return id!
@@ -348,7 +355,11 @@ export function JobDescriptionEdit({ user }: { user: User }) {
       doc_version: form.doc_version.trim() || null,
       content_doc: docAsJson(content),
       changed_by: user.id,
-    })
+      // Record the mode in the version row too (column not in the generated
+      // type yet → cast). Without this the history row would default to
+      // 'bilingual' even for a monolingual JD.
+      language_mode: languageMode,
+    } as never)
     if (versionError) {
       setSaving(false)
       setError(versionError.message)
@@ -409,6 +420,7 @@ export function JobDescriptionEdit({ user }: { user: User }) {
         doc: content,
         title: form.title || t.documentTypeJobDescription,
         view,
+        languageMode,
         contextEn: { today: new Date(), lang: 'en' },
         contextId: { today: new Date(), lang: 'id' },
       })
@@ -622,6 +634,8 @@ export function JobDescriptionEdit({ user }: { user: User }) {
           onChange={handleDocChange}
           view={view}
           onViewChange={setView}
+          languageMode={languageMode}
+          onLanguageModeChange={setLanguageMode}
           stickyToolbar
           stickyToolbarOffset={`${EDITOR_STICKY_TOP_PX}px`}
           aiGenerate={readOnly ? undefined : { docType: 'job_description', title: form.title }}

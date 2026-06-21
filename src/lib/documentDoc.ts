@@ -59,6 +59,11 @@ export type BlockBodyAttrs = {
   lang: 'en' | 'id'
 }
 
+// Per-document language mode (P1 monolingual). 'bilingual' renders both
+// EN + ID sides; 'en'/'id' render a single full-width column, and the
+// snapshot writer stops auto-translating (and clears) the empty side.
+export type LanguageMode = 'bilingual' | 'en' | 'id'
+
 // Top-level alias for callers that want to be explicit about the
 // document type. The editor's output is `{ type: 'document', content: [...] }`
 // — this matches the TipTap node name we declared.

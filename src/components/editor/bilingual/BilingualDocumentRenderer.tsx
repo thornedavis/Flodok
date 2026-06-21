@@ -20,7 +20,7 @@ import {
   type Lang,
   type MergeContext,
 } from '../../../lib/mergeFields'
-import { normalizeDoc, type DocNode, type DocumentDoc, type ViewMode } from '../../../lib/documentDoc'
+import { normalizeDoc, type DocNode, type DocumentDoc, type LanguageMode, type ViewMode } from '../../../lib/documentDoc'
 
 export type BilingualDocumentRendererProps = {
   doc: DocumentDoc | DocNode | null | undefined
@@ -30,10 +30,15 @@ export type BilingualDocumentRendererProps = {
   // localization can pass the same context for both.
   contextEn?: MergeContext
   contextId?: MergeContext
+  // Per-document language mode. 'en'/'id' render a single full-width column
+  // (the other side has been cleared by the snapshot writer); 'bilingual'
+  // (default) renders both. Without this, a monolingual doc would render a
+  // stray empty second column + an EN/ID badge.
+  languageMode?: LanguageMode
   className?: string
 }
 
-export function BilingualDocumentRenderer({ doc, view, contextEn, contextId, className }: BilingualDocumentRendererProps) {
+export function BilingualDocumentRenderer({ doc, view, contextEn, contextId, languageMode = 'bilingual', className }: BilingualDocumentRendererProps) {
   if (!doc || typeof doc !== 'object') return null
   const root = doc as DocumentDoc
   if (root.type !== 'document' || !Array.isArray(root.content)) return null
@@ -46,28 +51,39 @@ export function BilingualDocumentRenderer({ doc, view, contextEn, contextId, cla
   // that drives the rehomed section counter.
   const flat = normalizeDoc(root)
 
+  const monoClass = languageMode === 'en' ? 'bidoc-monolingual bidoc-monolingual-en'
+    : languageMode === 'id' ? 'bidoc-monolingual bidoc-monolingual-id'
+    : ''
+
   return (
-    <div className={`bidoc-renderer bidoc-${view} ${className ?? ''}`}>
+    <div className={`bidoc-renderer bidoc-${view} ${monoClass} ${className ?? ''}`}>
       {(flat.content || []).map((block, i) => (
-        <BlockRender key={(block.attrs?.id as string) ?? i} block={block} ctxEn={ctxEn} ctxId={ctxId} />
+        <BlockRender key={(block.attrs?.id as string) ?? i} block={block} ctxEn={ctxEn} ctxId={ctxId} languageMode={languageMode} />
       ))}
     </div>
   )
 }
 
-function BlockRender({ block, ctxEn, ctxId }: { block: DocNode; ctxEn: MergeContext; ctxId: MergeContext }) {
+function BlockRender({ block, ctxEn, ctxId, languageMode }: { block: DocNode; ctxEn: MergeContext; ctxId: MergeContext; languageMode: LanguageMode }) {
   if (block.type !== 'bilingualBlock') return null
   const enBody = (block.content || []).find(b => b.type === 'blockBody' && b.attrs?.lang === 'en')
   const idBody = (block.content || []).find(b => b.type === 'blockBody' && b.attrs?.lang === 'id')
   const numbering = (block.attrs?.numbering as string | null) ?? null
+  const enCell = (
+    <div className="bidoc-cell bidoc-lang-en">
+      {enBody && (enBody.content || []).map((node, i) => <BlockNodeRender key={i} node={node} ctx={ctxEn} />)}
+    </div>
+  )
+  const idCell = (
+    <div className="bidoc-cell bidoc-lang-id">
+      {idBody && (idBody.content || []).map((node, i) => <BlockNodeRender key={i} node={node} ctx={ctxId} />)}
+    </div>
+  )
   return (
     <div className="bidoc-block" data-numbering={numbering ?? undefined}>
-      <div className="bidoc-cell bidoc-lang-en">
-        {enBody && (enBody.content || []).map((node, i) => <BlockNodeRender key={i} node={node} ctx={ctxEn} />)}
-      </div>
-      <div className="bidoc-cell bidoc-lang-id">
-        {idBody && (idBody.content || []).map((node, i) => <BlockNodeRender key={i} node={node} ctx={ctxId} />)}
-      </div>
+      {languageMode === 'en' ? enCell
+        : languageMode === 'id' ? idCell
+        : <>{enCell}{idCell}</>}
     </div>
   )
 }
@@ -254,6 +270,17 @@ export const BILINGUAL_DOCUMENT_RENDERER_STYLES = `
 /* Clause-heading blocks render a numbered title — no EN/ID badge over
  * the heading, matching the old section-header treatment. */
 .bidoc-block[data-numbering] .bidoc-cell::before {
+  display: none;
+}
+
+/* ─── Monolingual (P1): one full-width column, no EN/ID badge.
+ * The renderer emits only the active cell, so 1fr stretches it full
+ * width and the badge is redundant. Declared after the grid + badge
+ * rules so it wins on source order. */
+.bidoc-renderer.bidoc-monolingual .bidoc-block {
+  grid-template-columns: 1fr;
+}
+.bidoc-renderer.bidoc-monolingual .bidoc-cell::before {
   display: none;
 }
 

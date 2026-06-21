@@ -18,7 +18,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { supabase } from './supabase'
 import { BilingualDocumentRenderer, BILINGUAL_DOCUMENT_RENDERER_STYLES } from '../components/editor/bilingual/BilingualDocumentRenderer'
 import { MERGE_FIELD_STYLES } from '../components/editor/MergeField'
-import type { DocumentDoc, ViewMode } from './documentDoc'
+import type { DocumentDoc, LanguageMode, ViewMode } from './documentDoc'
 import type { MergeContext } from './mergeFields'
 
 // Light-theme overrides + page chrome that ride along with every PDF.
@@ -81,9 +81,13 @@ export type ExportDocumentPdfOptions = {
   // still pick up the lang override the renderer applies.
   contextEn?: MergeContext
   contextId?: MergeContext
+  // Per-document language mode. 'en'/'id' export a single full-width
+  // column; 'bilingual' (default) exports both. Without this a monolingual
+  // doc would print a blank second column + a stray EN/ID badge.
+  languageMode?: LanguageMode
 }
 
-export async function exportDocumentPdf({ doc, title, view, contextEn, contextId }: ExportDocumentPdfOptions): Promise<void> {
+export async function exportDocumentPdf({ doc, title, view, contextEn, contextId, languageMode = 'bilingual' }: ExportDocumentPdfOptions): Promise<void> {
   const workerUrl = import.meta.env.VITE_FLODOK_ROUTER_URL
   if (!workerUrl) {
     throw new Error('PDF export not configured — VITE_FLODOK_ROUTER_URL is missing')
@@ -105,6 +109,7 @@ export async function exportDocumentPdf({ doc, title, view, contextEn, contextId
       <BilingualDocumentRenderer
         doc={doc as DocumentDoc}
         view={view}
+        languageMode={languageMode}
         contextEn={contextEn}
         contextId={contextId ?? contextEn}
       />

@@ -251,6 +251,21 @@ export const DOCUMENT_EDITOR_STYLES = `
   grid-template-columns: 1fr;
 }
 
+/* ─── Monolingual mode (P1) ───────────────────────────────
+ * One full-width column; the off-language blockBody is hidden, and the
+ * EN/ID hover badge is suppressed (there's only one language on screen). */
+.doc-editor.is-monolingual .bilingual-block-wrap {
+  grid-template-columns: 1fr;
+}
+.doc-editor.is-monolingual-en .bilingual-block-wrap .block-body[data-lang="id"],
+.doc-editor.is-monolingual-id .bilingual-block-wrap .block-body[data-lang="en"] {
+  display: none;
+}
+.doc-editor.is-monolingual .block-body[data-lang="en"]::before,
+.doc-editor.is-monolingual .block-body[data-lang="id"]::before {
+  display: none;
+}
+
 .bilingual-block-wrap[data-needs-review="true"] {
   border-left-color: var(--color-warning);
 }

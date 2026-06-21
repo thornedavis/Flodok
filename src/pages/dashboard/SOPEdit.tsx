@@ -14,7 +14,7 @@ import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning'
 import { useDocumentViewPref } from '../../hooks/useDocumentViewPref'
 import { useSaveFlash } from '../../hooks/useSaveFlash'
 import { writeSnapshot } from '../../lib/snapshotApi'
-import { emptyDocumentDoc, type DocumentDoc } from '../../lib/documentDoc'
+import { emptyDocumentDoc, type DocumentDoc, type LanguageMode } from '../../lib/documentDoc'
 import { exportDocumentPdf } from '../../lib/pdfExport'
 import { useBilling } from '../../contexts/BillingContext'
 import { documentHistoryPath } from '../../lib/documentTypes'
@@ -34,6 +34,10 @@ export function SOPEdit({ user }: { user: User }) {
   const { flash: savedFlash, show: showSaved } = useSaveFlash()
   const { canWrite } = useBilling()
   const { view, setView } = useDocumentViewPref('sop', id ?? null)
+  // database.ts doesn't include language_mode yet (not regenerated — another
+  // session holds it uncommitted), so it's read/written via a narrowed cast.
+  const [languageMode, setLanguageMode] = useState<LanguageMode>('bilingual')
+  const [savedLanguageMode, setSavedLanguageMode] = useState<LanguageMode>('bilingual')
   const [sop, setSOP] = useState<Sop | null>(null)
   const [organization, setOrganization] = useState<Organization | null>(null)
   const [allEmployees, setAllEmployees] = useState<EmployeeWithDepartments[]>([])
@@ -123,6 +127,11 @@ export function SOPEdit({ user }: { user: User }) {
       if (sopResult.data) {
         setSOP(sopResult.data)
         setTitle(sopResult.data.title)
+        {
+          const loadedMode = (sopResult.data as { language_mode?: LanguageMode }).language_mode ?? 'bilingual'
+          setLanguageMode(loadedMode)
+          setSavedLanguageMode(loadedMode)
+        }
         const loadedDoc = (sopResult.data.content_doc as DocumentDoc | null) ?? emptyDocumentDoc()
         setContentDoc(loadedDoc)
         setSavedContentDoc(loadedDoc)
@@ -225,8 +234,9 @@ export function SOPEdit({ user }: { user: User }) {
     return savedAudienceTargets.some(t => !a.has(key(t)))
   }, [audienceTargets, savedAudienceTargets])
   const ownerDeptChanged = ownerDepartmentId !== savedOwnerDepartmentId
+  const modeChanged = languageMode !== savedLanguageMode
   const hasChanges = sop ? (
-    docChanged || audienceChanged || ownerDeptChanged ||
+    docChanged || audienceChanged || ownerDeptChanged || modeChanged ||
     title !== sop.title ||
     status !== sop.status ||
     changeSummary !== ''
@@ -325,7 +335,10 @@ export function SOPEdit({ user }: { user: User }) {
 
     setStatus(nextStatus)
 
-    if (!docChanged) {
+    // A pure language-mode toggle still needs the snapshot round-trip: the
+    // server clears the off-language side and persists language_mode. So only
+    // take the no-op shortcut when neither the doc nor the mode changed.
+    if (!docChanged && !modeChanged) {
       setSOP({ ...sop, title, employee_id: compatEmployeeId, owner_department_id: ownerDepartmentId, status: nextStatus })
       setSaving(false)
       showSaved(false)
@@ -342,6 +355,7 @@ export function SOPEdit({ user }: { user: User }) {
         table: 'sops',
         doc_id: sop.id,
         new_content_doc: contentDoc,
+        language_mode: languageMode,
         change_summary: changeSummary || null,
         changed_by: user.id,
       })
@@ -382,7 +396,9 @@ export function SOPEdit({ user }: { user: User }) {
       return
     }
 
-    showSaved(true)
+    setSavedLanguageMode(languageMode)
+    // Monolingual docs never auto-translate → never show "Saved & translated".
+    showSaved(languageMode === 'bilingual')
 
     // Persist and stay — saving is decoupled from navigation. Leaving is
     // an explicit action via the header exit link.
@@ -415,6 +431,7 @@ export function SOPEdit({ user }: { user: User }) {
         doc: contentDoc,
         title: title || 'SOP',
         view,
+        languageMode,
         contextEn: { ...baseCtx, lang: 'en' },
         contextId: { ...baseCtx, lang: 'id' },
       })
@@ -622,6 +639,8 @@ export function SOPEdit({ user }: { user: User }) {
         onChange={setContentDoc}
         view={view}
         onViewChange={setView}
+        languageMode={languageMode}
+        onLanguageModeChange={setLanguageMode}
         stickyToolbar
         stickyToolbarOffset={`${EDITOR_STICKY_TOP_PX}px`}
         mergeFields={{
