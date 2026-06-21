@@ -1882,325 +1882,1270 @@ Forms can be enabled or disabled for the whole organization. Who can see and do 
 </>
 )
 
+// ─── New gap-fill doc bodies (generated) ───
+
+const DOCUMENTS_OVERVIEW: ReactNode = (
+<><P>Your Documents hub is the central place to create, organize, and track every document your team relies on. You’ll find all five document types in one unified list — SOPs, contracts, NDAs, job descriptions, and letters — with quick-create buttons, search, and filters to find what you need.</P><H3 id="create-new-doc">Creating a new document</H3><P>Click <strong>Create</strong> in the top right, then pick a document type:</P><Bullets items={[<><strong>SOP</strong> — Start a blank SOP and fill in the title, assignee, and content in the editor.</>, <><strong>Contract</strong> — Create a contract with sensible defaults (PKWT template, 12 days annual leave). Customize contract type, probation, and wages in the editor.</>, <><strong>NDA</strong> — Draft a one-way employee NDA with an effective date and survival period.</>, <><strong>Job Description</strong> — Routes to <strong>Hiring → Job Descriptions</strong> to keep all recruiting work in one place.</>, <><strong>Letter</strong> — Issue offer letters, reference letters, or announcements. Specify a recipient and sender before issuing.</>]} /><H3 id="import-existing">Importing an existing document</H3><P>Click <strong>Import existing</strong> to upload a PDF (contract, NDA, or SOP you already have). Flodok reads the file with AI, pre-fills a draft, and you review and edit it in the editor.</P><H3 id="view-recent-docs">Viewing recent documents</H3><P>Below the create band, you’ll see all your documents sorted by most recently updated. Toggle between <strong>grid</strong> (card view) and <strong>list</strong> (table view) using the toggle in the top left. Each card shows the document status (Draft, Issued, Active, or Archived), a preview of the content, version number, and update date.</P><H3 id="filter-search">Filtering and searching</H3><P>Use the filter button to narrow by:</P><Bullets items={[<><strong>Type</strong> — SOP, Contract, NDA, Letter, or Job Description (multi-select).</>, <><strong>Date range</strong> — Show documents updated between two dates.</>, <><strong>Employee</strong> — Filter to documents assigned to one person (shows in the dropdown if you have employees).</>, <><strong>Search</strong> — Type a document title to find it instantly.</>]} /><H3 id="document-actions">Working with a document</H3><P>Click any document to open it in its editor. On grid cards, click the three-dot menu to rename, duplicate, or delete a document. You can also access the document’s version history from the editor’s menu.</P><Callout type="tip">Documents belong to your organization, not to individual people. Contractors or onboarding teams can view any document you share with them, depending on their role.</Callout></>
+)
+
+const NDA_OVERVIEW: ReactNode = (
+<><P>Non-disclosure agreements protect your confidential information when employees join or leave. Flodok’s NDA module handles bilingual templates, versioning, and employer signature capture.</P><H3 id="nda-creation">Creating an NDA</H3><P>From <strong>Dashboard → Documents</strong>, click <strong>Create</strong> and choose <strong>NDA</strong>. A blank NDA draft opens in the editor with a bilingual template. The initial survival period defaults to 2 years; adjust as needed.</P><H3 id="nda-required-fields">Required fields before activation</H3><P>Before you can activate and sign an NDA, you must fill in:</P><Bullets items={[<><strong>Title</strong> — e.g., "Confidentiality Agreement 2026"</>, <><strong>Employee (Receiving Party)</strong> — Who is signing the NDA. Pick from your employee list.</>, <><strong>Effective date</strong> — The date the NDA takes effect (usually the start date).</>]} /><P>The <strong>Activate & Sign</strong> button shows a red badge with the count of missing fields until all three are filled.</P><H3 id="nda-settings">Configuring the NDA</H3><P>In the right sidebar, set:</P><Bullets items={[<><strong>Survival period</strong> — How long confidentiality obligations last after employment ends (1, 2, 3, or 5 years).</>, <><strong>Penalty / liquidated damages</strong> — The IDR amount owed for breach (optional, for legal reference).</>, <><strong>Document number</strong> — Unique ID (e.g., "NDA/2026/001").</>, <><strong>Tags</strong> — Organize NDAs by category, department, or legal status.</>]} /><H3 id="nda-bilingual">Bilingual editing</H3><P>The editor shows Indonesian and English side-by-side (or stacked, depending on your view preference). Edit each language independently. Merge fields like <code>[Employee Name]</code> and <code>[Effective Date]</code> resolve automatically when you export or sign.</P><H3 id="nda-activate-sign">Activating and signing</H3><P>Once all required fields are complete, click <strong>Activate & Sign</strong>. A signing panel appears where you type your name (as the employer representative), pick a signature font, and confirm. The NDA becomes <strong>Active</strong>, a signature row is recorded with a timestamp and IP address for legal verification, and a version snapshot is saved.</P><H3 id="nda-versioning">Version history</H3><P>Every time you save an NDA with content changes, a snapshot is created. Click <strong>History</strong> in the editor menu to see all versions, compare them, and view who made each change.</P><H3 id="nda-status">NDA statuses</H3><Bullets items={[<><strong>Draft</strong> — Being prepared; not signed. You can edit freely.</>, <><strong>Active</strong> — Signed by you. The current version is locked; make a new draft to revise.</>, <><strong>Archived</strong> — Hidden but preserved for records. You can restore to a new draft.</>]} /><H3 id="nda-export">Exporting to PDF</H3><P>Click <strong>Download PDF</strong> in the editor menu. The PDF includes the full bilingual text (side-by-side or stacked) with all merge fields resolved for the assigned employee, effective date, and survival period. Filenames include the NDA title and version.</P><Callout type="note">Employee acknowledgement of NDAs (employee-side signing in the portal) is a future feature. For now, employer signature confirms legal intent.</Callout></>
+)
+
+const JOB_DESCRIPTIONS: ReactNode = (
+<><P>Job descriptions define the roles candidates sign off on during onboarding. They live in <strong>Hiring → Job Descriptions</strong> and are drafted, published (read-only), or archived as you refine your organizational structure.</P><H3 id="jd-creation">Creating a job description</H3><P>From <strong>Dashboard → Documents</strong>, click <strong>Create</strong> and choose <strong>Job Description</strong>. This routes you to <strong>Hiring → Job Descriptions</strong>, where a new blank draft opens. Alternatively, go directly to <strong>Hiring → Job Descriptions → New</strong>.</P><P>When creating a new JD, you can optionally seed it from:</P><Bullets items={[<><strong>A hiring request</strong> — The request’s position name, department, and qualifications pre-fill the JD so you don’t start from scratch.</>, <><strong>A JD template</strong> — Use a previous JD as a starting point (company policies, role descriptions remain consistent).</>]} /><H3 id="jd-fields">Key fields</H3><P>In the sidebar, fill in:</P><Bullets items={[<><strong>Department</strong> — Required. Where the role sits (e.g., Engineering, Sales).</>, <><strong>Assignee</strong> — The employee responsible for this role (optional, updated as the role is filled).</>, <><strong>Reporting line</strong> — Who does this role report to? (optional)</>, <><strong>Job level</strong> — e.g., "Senior Developer" or "Intern"</>, <><strong>Supervised team</strong> — Titles of roles this person manages (optional).</>, <><strong>Work location</strong> — Office, remote, or hybrid.</>, <><strong>Effective date</strong> — When the JD takes effect (optional).</>, <><strong>Doc version</strong> — An internal reference code (auto-suggested based on department).</>]} /><H3 id="jd-draft-stage">Draft stage</H3><P>While a JD is in Draft, only HR can see it. Edit the title, fields, and bilingual content freely. Click <strong>Save draft</strong> to persist changes without publishing.</P><H3 id="jd-publish">Publishing</H3><P>Click <strong>Publish</strong> to freeze the JD and make it visible across your organization. Once published, the JD becomes read-only — no edits. A version snapshot is automatically saved, preserving the published state for candidates who sign it during onboarding.</P><Callout type="tip">Published JDs cannot be edited directly. To revise a published JD, archive the old one and create a new draft.</Callout><H3 id="jd-archive-restore">Archiving and restoring</H3><P>Click <strong>Archive</strong> (visible when a JD is published) to hide it from new candidates while keeping it for records. You can restore an archived JD to a new draft at any time using the document’s menu in the Documents list.</P><H3 id="jd-export">Exporting to PDF</H3><P>Click <strong>Download PDF</strong> in the editor menu. The PDF renders the full bilingual JD (side-by-side or stacked layout) with all details resolved. Filenames include the JD title and version.</P><Callout type="note">Job descriptions are not signed by HR; candidates acknowledge them (by name and signature style) during onboarding. The acknowledgement is recorded in their onboarding checklist.</Callout></>
+)
+
+const LETTERS: ReactNode = (
+<><P>Letters let you draft and issue offer letters, reference letters, and announcement letters to employees. Each letter must have a recipient and sender before it’s issued, and can optionally require the recipient to acknowledge they’ve read it in the employee portal.</P><H3 id="letter-creation">Creating a letter</H3><P>From <strong>Dashboard → Documents</strong>, click <strong>Create</strong> and choose <strong>Letter</strong>. A blank letter draft opens in the editor. The status badge shows <strong>Draft</strong>.</P><H3 id="letter-fields">Required and optional fields</H3><P>In the right sidebar, configure:</P><Bullets items={[<><strong>Recipient</strong> — Required to issue. Pick an employee from your list.</>, <><strong>Sender</strong> — Required to issue. The person issuing the letter (chosen from your organization\'s users; defaults to you).</>, <><strong>Category</strong> — e.g., "Offering Letter" (display-only, helps organize letters).</>, <><strong>Type code</strong> — A short code substituted into the reference number (e.g., "OL" for Offering Letter).</>, <><strong>Reference number</strong> — Unique identifier. If left blank, Flodok auto-generates one on issue using the type code.</>, <><strong>Subject</strong> — The letter\'s subject line (shown to the recipient).</>, <><strong>Response by</strong> — Optional deadline. Shown in the employee portal if the letter requires acknowledgement.</>, <><strong>Requires acknowledgement</strong> — Toggle on to force the recipient to confirm they\'ve read the letter in the portal.</>]} /><H3 id="letter-bilingual">Bilingual editing</H3><P>Edit Indonesian and English independently. Use merge fields like <code>[Employee Name]</code>, <code>[Sender]</code>, and <code>[Today]</code> to personalize each letter. Merge fields resolve automatically when you issue or export.</P><H3 id="letter-draft">Draft stage</H3><P>While a letter is in Draft, you can edit all fields and content freely. Click <strong>Save as draft</strong> to persist changes without issuing.</P><H3 id="letter-issue">Issuing a letter</H3><P>Once you have a recipient and sender, click <strong>Issue</strong>. The letter is marked <strong>Issued</strong>, a reference number is generated (if blank), and a version snapshot is saved. The recipient receives the letter in their employee portal and can view it. If acknowledgement is required, they must click to confirm they’ve read it.</P><Callout type="warn">Once issued, you cannot edit the recipient or sender. You can edit the reference number and subject after issuing, but the letter content is locked.</Callout><H3 id="letter-versioning">Version history</H3><P>Click <strong>History</strong> in the editor menu to view previous versions and see who issued each one.</P><H3 id="letter-export">Exporting to PDF</H3><P>Click <strong>Download PDF</strong> in the editor menu. The PDF renders the full bilingual letter (side-by-side or stacked layout) with all merge fields resolved for the recipient, sender, and today’s date. Filenames include the letter title and reference number.</P><H3 id="letter-status">Letter statuses</H3><Bullets items={[<><strong>Draft</strong> — Being prepared. You can edit all fields.</>, <><strong>Issued</strong> — Sent to the recipient. Recipient is notified; content is frozen but metadata (subject, deadline) can still be edited.</>, <><strong>Archived</strong> — Hidden but kept for records. You can restore to a new draft.</>]} /><Callout type="tip">Letters are a flexible way to formalize communications — use them for offer letters, promotion announcements, exit letters, or any official notice that needs a version record.</Callout></>
+)
+
+const DOCUMENTS_EXPORT: ReactNode = (
+<><P>All document types (SOPs, contracts, NDAs, job descriptions, and letters) can be exported to PDF. The PDF respects your bilingual layout preference, resolves merge fields, and downloads with a sensible filename.</P><H3 id="export-basics">How to export</H3><P>Open any document in its editor. Click <strong>Download PDF</strong> in the three-dot menu (top right). Flodok renders the document, resolves all merge fields, and initiates the download.</P><H3 id="export-layout">Bilingual layout</H3><P>The PDF layout matches your current editor view preference:</P><Bullets items={[<><strong>Side-by-side</strong> — English on the left, Indonesian on the right, both visible at once.</>, <><strong>Stacked</strong> — English above, Indonesian below. Full width per language.</>]} /><P>To change the layout before exporting, toggle the view mode in the editor toolbar (grid icon near the top left).</P><H3 id="export-merge-fields">Merge field resolution</H3><P>Merge fields automatically resolve based on the document context:</P><Bullets items={[<><strong>Employee fields</strong> — <code>[Employee Name]</code>, <code>[Employee ID]</code>, etc., pull from the assigned employee.</>, <><strong>Organization fields</strong> — <code>[Organization Name]</code>, <code>[Organization Address]</code>, etc., pull from your org settings.</>, <><strong>Date fields</strong> — <code>[Today]</code> resolves to the current date in the PDF.</>, <><strong>Sender/signer fields</strong> — Letters and contracts use <code>[Sender Name]</code>, <code>[Sender Title]</code> resolved from the assigned user.</>, <><strong>Document-specific fields</strong> — NDAs use <code>[Effective Date]</code>, <code>[Survival Years]</code>, <code>[Penalty Amount]</code>; contracts use <code>[Contract Type]</code>, <code>[Annual Leave Days]</code>, etc.</>]} /><P>If a merge field is not available (e.g., no employee assigned), it appears as empty or a placeholder in the PDF.</P><H3 id="export-language-priority">Language priority</H3><P>PDFs are rendered in light theme (white background, dark text) regardless of your current app theme, so they print and share cleanly. English always renders; Indonesian is included if the document has been translated (or is originally Indonesian). If Indonesian translation failed or is missing, only English appears.</P><H3 id="export-filename">Filenames</H3><P>Downloads use the document title (e.g., <code>Employment Contract.pdf</code>, <code>NDA 2026.pdf</code>) or a generic name if the title is empty (e.g., <code>Letter.pdf</code>). Version numbers and timestamps are not included in the filename.</P><H3 id="export-for-signing">Exporting for wet signature</H3><P>For contracts and NDAs that will be printed and wet-signed (physical signature), export the PDF without signature blocks. The recipient can print, sign by hand, and return the marked-up copy. Flodok will record the digital signature separately when the employer signs in the app.</P><Callout type="tip">Use <strong>Download PDF</strong> to create shareable, archival copies of any document. The PDF is a snapshot at download time; later edits to the draft do not update previously downloaded files.</Callout></>
+)
+
+const HIRING_REQUESTS: ReactNode = (
+<>
+  <P>Submit hiring requests to open a new role. Requests route through department managers and your owner for approval before moving to recruitment.</P>
+
+  <H3 id="submitting-a-request">Submitting a request</H3>
+  <Steps items={[
+    <>Go to <strong>Hiring → Requests</strong></>,
+    <>Click <strong>New request</strong> at the top right</>,
+    <>Fill in position details: position name, department, employment type (permanent / fixed-term / freelance), hiring date, and remuneration (salary, allowances, benefits)</>,
+    <>Add supporting context: required qualifications, reason for the hire, whether it’s budgeted or not, and any other details for approvers</>,
+    <>Click <strong>Save as draft</strong> to save without submitting, or <strong>Submit for approval</strong> when ready</>,
+  ]} />
+
+  <H3 id="understanding-status">Understanding request status</H3>
+  <Bullets items={[
+    <><strong>Draft</strong> — you can still edit the request</>,
+    <><strong>Awaiting manager</strong> — your department manager is reviewing it</>,
+    <><strong>Awaiting owner</strong> — the owner is reviewing it after manager approval</>,
+    <><strong>Approved</strong> — green-lit and ready to move to recruitment</>,
+    <><strong>Rejected</strong> — either the manager or owner declined it (you’ll see their note)</>,
+    <><strong>Filled</strong> — you’ve hired someone for this role</>,
+  ]} />
+
+  <H3 id="approval-workflow">How approval works</H3>
+  <P>Requests follow a two-step approval path:</P>
+  <Bullets items={[
+    <>If you manage the department, submitting auto-records your manager approval and sends it straight to the owner</>,
+    <>Otherwise, your department manager reviews it first, then passes to the owner for final sign-off</>,
+    <>Managers and owners can add notes to approvals for context</>,
+  ]} />
+
+  <H3 id="managing-requests">Managing your requests</H3>
+  <P>Go to <strong>Hiring → Requests</strong> to see:</P>
+  <Bullets items={[
+    <><strong>My requests</strong> — requests you’ve submitted (draft, submitted, or awaiting owner approval). Edit drafts or duplicate them to speed up similar requests</>,
+    <><strong>Approvals</strong> — requests awaiting your decision as a manager or owner (only visible if you can approve)</>,
+    <><strong>All</strong> — the full pipeline (only visible to owners and HR)</>,
+  ]} />
+  <P>Use the search box to find requests by position name, department, or requester.</P>
+
+  <H3 id="drafting-a-job-description">Drafting a job description</H3>
+  <P>Once a request is approved, HR can draft a job description from it. Open the request detail view, click <strong>Draft job description</strong>, and either start blank or pick from your templates. The request’s position details will pre-fill the JD.</P>
+
+  <Callout type="tip">Duplicate a request to reuse most of its fields for similar roles. You’ll land in the edit form as a new draft, so you can tweak the details before submitting.</Callout>
+
+  <Callout type="note">Department managers are determined in <strong>Company → Structure</strong>. Only users linked to an employee record can be set as managers.</Callout>
+</>
+  
+)
+
+const EMPLOYEES_DIRECTORY: ReactNode = (
+<>
+  <P>The Employees page is your team roster. Switch between list and card views, filter by status, department, role, and branch, and take bulk actions like import and export.</P>
+
+  <H3 id="views">Switching views</H3>
+  <Bullets items={[
+    <><strong>List view</strong> — sortable table with 20+ column options (departments, phone, status, portal link, personal info, employment details, documents). Pick which columns to show</>,
+    <><strong>Card view</strong> — visual grid showing name, photo, departments, phone, and portal link for each employee</>,
+  ]} />
+
+  <H3 id="filtering-and-sorting">Filtering and sorting</H3>
+  <P>Click <strong>Filter</strong> to refine by:</P>
+  <Bullets items={[
+    <><strong>Status</strong> — active, probation, or separated</>,
+    <><strong>Department</strong> — multi-select (only if departments are set in <strong>Company → Structure</strong>)</>,
+    <><strong>Job position</strong>, <strong>Job level</strong>, <strong>Class</strong> — pick from values configured in your company structure</>,
+    <><strong>Sort</strong> — by name, recently added, oldest, or by other fields</>,
+  ]} />
+  <P>In list view, click a column header to sort by that field. Use the search box to find by name, phone, email, department, or position.</P>
+
+  <H3 id="employee-actions">Employee actions</H3>
+  <P>Click an employee to open their full profile. From the list or card view, right-click (list view) or use the menu (card view) to:</P>
+  <Bullets items={[
+    <><strong>Edit</strong> — open the employee record to update personal, employment, education, experience, and other details</>,
+    <><strong>Duplicate</strong> — copy an employee’s record as a new entry (useful for quickly adding similar employees); you’ll be prompted for a new name and phone</>,
+    <><strong>Delete</strong> — move the employee and their linked documents (SOPs, contracts) to Trash (recoverable for 30 days)</>,
+  ]} />
+
+  <H3 id="bulk-actions">Bulk actions</H3>
+  <P>In list view, select multiple employees with the checkboxes. A bar appears with options:</P>
+  <Bullets items={[
+    <>Clear selection or <strong>Delete</strong> (move selected employees to Trash)</>,
+  ]} />
+
+  <H3 id="import-export">Import and export</H3>
+  <Bullets items={[
+    <><strong>Export</strong> — download current employees as Excel (filtered by your search and status)</>,
+    <><strong>Import</strong> — upload an Excel file to create or update employees in bulk (guided import, maps columns automatically)</>,
+  ]} />
+
+  <H3 id="portal-link">Portal link</H3>
+  <P>In list view, the <strong>Portal link</strong> column shows each employee’s personal link. Click the link text to copy it, or use the copy icon next to it. Share this link with the employee to let them access their documents, contracts, and forms from the employee portal.</P>
+
+  <Callout type="tip">To show more columns in list view (e.g. address, KTP/NIK, passport, notes), click <strong>Columns</strong> and check the ones you need. Your choice is saved.</Callout>
+
+  <Callout type="note">Status is derived automatically from probation end date, resignation date, and separation type. It’s read-only in the list — update it by editing the employee record’s employment section.</Callout>
+</>
+  
+)
+
+const EMPLOYEE_PROFILE: ReactNode = (
+<>
+  <P>The employee profile is your central place to record everything about a team member: personal details, employment history, education, experience, and linked documents.</P>
+
+  <H3 id="accessing-profile">Accessing the profile</H3>
+  <P>From <strong>Employees</strong>, click an employee’s name or card to open their full profile. Click the employee’s name in the sidebar to return to the employees list.</P>
+
+  <H3 id="sections">Profile sections</H3>
+  <Bullets items={[
+    <><strong>Personal</strong> — name, avatar, phone, email, departments, date of birth, address, KTP/NIK, notes</>,
+    <><strong>Employment</strong> — branch, job position, job level, class, employment type, join date, probation end date, and active contract info</>,
+    <><strong>Education</strong> — schools, majors, dates attended, and certificates</>,
+    <><strong>Experience</strong> — previous employers, roles, dates, and descriptions</>,
+    <><strong>Additional</strong> — gender, religion, marital status, blood type, passport details, and place of birth</>,
+    <><strong>Documents</strong> — uploaded files (contracts, certificates, letters, etc.)</>,
+    <><strong>Compensation</strong> — read-only view of the employee’s active contract and pay components</>,
+  ]} />
+
+  <H3 id="editing-fields">Editing fields</H3>
+  <P>Click into any section to edit. Most fields update on blur (when you click away); some require you to click <strong>Save</strong>. If you lack permission to edit, fields will be read-only.</P>
+  <P>New employees default to probation status. As they complete probation or if they resign or are terminated, update their status in the <strong>Employment</strong> section:</P>
+  <Bullets items={[
+    <>Click <strong>Resign</strong> to set a resignation date, separation type (resigned / terminated), and reason</>,
+    <>Click <strong>Terminate</strong> for the same flow (separation type auto-sets to terminated)</>,
+  ]} />
+
+  <H3 id="departments">Setting departments</H3>
+  <P>In the <strong>Personal</strong> section, click the department field to pick from your configured departments (or type to create a new one). Set one as primary (you’ll see a highlight). This affects their appearance in department filters across the app.</P>
+
+  <H3 id="avatar">Uploading a photo</H3>
+  <P>Click the avatar area in the sidebar to upload a photo (JPEG, PNG, or WebP, max 2 MB). Click <strong>Change</strong> to replace it or <strong>Remove</strong> to delete it.</P>
+
+  <H3 id="documents">Adding documents</H3>
+  <P>Go to the <strong>Documents</strong> section to upload files (passports, certificates, IDs, etc.). Click <strong>Upload</strong>, pick a file, and optionally add a label. Files are kept here for easy reference.</P>
+
+  <H3 id="discard-new">New employee flow</H3>
+  <P>When you create a new employee, you land in the profile with a <strong>Discard</strong> button in the top right. Fill in at least the required fields (name, phone), then click <strong>Save</strong> or navigate away. If you click <strong>Discard</strong>, the employee record is permanently deleted.</P>
+
+  <H3 id="separation">Resignation and termination</H3>
+  <P>Click <strong>Resign</strong> or <strong>Terminate</strong> in the sidebar. A modal asks for the last day of work, separation type, and reason. Once confirmed, the employee moves to separated status and their profile reflects the resignation date.</P>
+
+  <Callout type="tip">Download or print the employee’s portal link (in the sidebar) to share with them. They can access their SOPs, contracts, and forms from that link.</Callout>
+
+  <Callout type="warn">Deleting an employee from the Trash moves it permanently. Employee records deleted from Trash cannot be recovered.</Callout>
+</>
+  
+)
+
+const COMPANY_STRUCTURE: ReactNode = (
+<>
+  <P>Organize your company hierarchy, define job roles, and manage payroll settings in the <strong>Company</strong> section.</P>
+
+  <H3 id="navigating">Accessing company settings</H3>
+  <P>Click <strong>Company</strong> in the sidebar, then select a tab:</P>
+  <Bullets items={[
+    <><strong>Profile</strong> — company name, logo, address, tax info (NPWP, BPJS, KLU), and payroll settings</>,
+    <><strong>Structure</strong> — departments, branches, job positions, levels, and classes</>,
+    <><strong>Assets</strong> — (coming soon)</>,
+    <><strong>Activity</strong> — (coming soon)</>,
+  ]} />
+
+  <H3 id="profile-tab">Profile tab</H3>
+  <Bullets items={[
+    <><strong>Branding</strong> — upload a company logo, set legal and display names</>,
+    <><strong>Contact info</strong> — phone, email, website, industry, company size range</>,
+    <><strong>Address</strong> — street, city, province, postal code</>,
+    <><strong>Tax info</strong> — NPWP (15 & 16 digit), NITKU, taxable date, tax person name and NPWP, BPJS number, JKK rate, KLU code, registration & business license numbers</>,
+    <><strong>Payroll settings</strong> — pay day (1–28, or last day of month) and timezone (WIB, WITA, or WIT)</>,
+  ]} />
+  <P>Only admins can edit the profile. Click <strong>Save</strong> to update.</P>
+
+  <H3 id="structure-tab">Structure tab</H3>
+  <P>Four main sections, each with add, edit, and delete:</P>
+
+  <H3 id="departments">Departments</H3>
+  <Bullets items={[
+    <>Type a name and click <strong>Add</strong> to create a new department</>,
+    <>Click <strong>Edit</strong> on a department to rename it</>,
+    <>Click <strong>Delete</strong> to remove it (employees linked to the department won’t lose it, but new hires can’t select it)</>,
+    <>Set a <strong>Manager</strong> (dropdown) — pick from users who are also linked to an employee record</>,
+  ]} />
+  <P>Departments are used to route hiring requests to the right approvers and to organize the employees list.</P>
+
+  <H3 id="branches">Branches</H3>
+  <Bullets items={[
+    <>Add branches to represent physical or operational locations</>,
+    <>Assign branches to employees in their employment section</>,
+    <>Delete a branch to remove it from all employee records</>,
+  ]} />
+
+  <H3 id="job-roles">Job positions, levels, and classes</H3>
+  <Bullets items={[
+    <><strong>Job positions</strong> — e.g., Senior Engineer, HR Manager (denormalized onto each employee)</>,
+    <><strong>Job levels</strong> — e.g., Senior, Junior, IC4, M2</>,
+    <><strong>Classes</strong> — e.g., Level A, Tier 1 (for internal classification)</>,
+  ]} />
+  <P>Add, edit, or delete each one. When you edit a value (e.g., rename "Senior Engineer" to "Senior Software Engineer"), the change automatically updates all employee records using that value. Deleting a value clears it from affected employee records.</P>
+
+  <Callout type="note">When you delete a department, branch, job position, level, or class, any SOPs that target it as an audience will be detached, and employees using that value will have it cleared.</Callout>
+
+  <Callout type="tip">Set up departments early so hiring requests route correctly. Department managers must be users linked to an employee record — the system enforces this to ensure approvers can actually log in.</Callout>
+</>
+  
+)
+
+const PAYROLL_OVERVIEW: ReactNode = (
+<>
+  <P>
+    Manage your organization’s monthly payroll in one place. The Payroll page shows the total payout, settled vs. open status, and a line breakdown of each employee’s gross pay before the owner runs it.
+  </P>
+
+  <H3 id="access-payroll-page">
+    Go to the Payroll page
+  </H3>
+  <P>
+    <strong>Dashboard → Payroll</strong> (owner/admin only). Pick a month from the top strip to see a preview, or stay on the current month to run it.
+  </P>
+
+  <H3 id="payroll-summary">
+    What you see at the top
+  </H3>
+  <Bullets items={[
+    <>Total payout for the month in Rupiah</>,
+    <>Count of settled employees (payroll already run)</>,
+    <>Count of open employees (payroll ready to run)</>,
+    <>Warning badge if any employee has no active contract</>,
+  ]} />
+
+  <H3 id="per-employee-breakdown">
+    Per-employee line breakdown
+  </H3>
+  <P>
+    The roster table shows each employee’s base salary, allowances, adjustments (rewards/penalties), and final payout. Click the arrow next to a name to expand and see the exact line items — base, each allowance (marked fixed or variable), and any adjustments that month.
+  </P>
+
+  <H3 id="freeze-and-run">
+    Freeze & Run Payroll
+  </H3>
+  <Steps items={[
+    <>Go to <strong>Dashboard → Payroll</strong> for the month you want to finalize.</>,
+    <>Click the blue <strong>Freeze & Run Payroll</strong> button at the top right.</>,
+    <>Confirm the count of open employees in the dialog.</>,
+    <>The button will show as busy while processing. When done, the roster updates to show all employees as settled.</>,
+  ]} />
+  <Callout type="note">
+    You can only run the payroll once per month. Once settled, the payslip become downloadable and the row status badges turn green.
+  </Callout>
+
+  <H3 id="download-payslips">
+    Download payslips
+  </H3>
+  <P>
+    After payroll is frozen & run, each employee row shows a <strong>Payslip</strong> button. Click it to download that employee’s PDF payslip for the month.
+  </P>
+  <P>
+    To download <em>all</em> payslips at once, click <strong>Download All</strong> at the top right. A ZIP file containing one PDF per settled employee will be created.
+  </P>
+
+  <H3 id="navigate-months">
+    Browsing past months
+  </H3>
+  <P>
+    Use the month strip at the top to jump to any month in the past 12 months. The preview updates automatically — you can see prior payrolls but cannot re-run them. The view is read-only for past months.
+  </P>
+
+  <H3 id="no-contract-warning">
+    Employees with no contract
+  </H3>
+  <P>
+    If an employee has no active contract, they will appear in the roster with a "No contract" label underneath their name. They cannot be included in payroll until an active contract is assigned.
+  </P>
+
+  <Bullets items={[
+    <><Link to="/help/docs/manage-employees">Link an employee to a contract</Link></>,
+    <><Link to="/help/docs/pay-components">Configure pay components (allowances)</Link></>,
+  ]} />
+</>
+)
+
+const PAY_COMPONENTS: ReactNode = (
+<>
+  <P>
+    Pay components are the line items that make up each employee’s paycheck — base salary, allowances (housing, transport), bonuses, deductions, and benefits. You configure the catalog once, then assign amounts per employee on their contract.
+  </P>
+
+  <H3 id="access-components">
+    Go to Pay Components
+  </H3>
+  <P>
+    <strong>Settings → Payroll tab → Pay Components</strong> (admin only).
+  </P>
+
+  <H3 id="component-types">
+    Types of pay components
+  </H3>
+  <Bullets items={[
+    <>Earning — salary, allowances, bonuses, overtime pay (adds to gross)</>,
+    <>Deduction — tax, loan, BPJS contributions (subtracts from gross)</>,
+    <>Benefit — insurance, pension, food vouchers (tracked but depends on your payroll integration)</>,
+  ]} />
+
+  <H3 id="fixed-vs-variable">
+    Fixed vs. variable
+  </H3>
+  <P>
+    Mark a component <strong>Fixed</strong> if it’s the same every month (e.g., housing allowance). Mark it <strong>Variable</strong> if the amount changes (e.g., commission, overtime). The distinction helps Flodok know whether to prompt for an amount when you’re setting up a contract.
+  </P>
+
+  <H3 id="add-component">
+    Add a new component
+  </H3>
+  <Steps items={[
+    <>Click the <strong>+ Add</strong> button at the bottom of the components list.</>,
+    <>Type a name (e.g., "Mobile Allowance", "Health Insurance").</>,
+    <>Choose the kind (Earning, Deduction, Benefit) and category (Base, Allowance, Bonus, etc.).</>,
+    <>Toggle Fixed or Variable, and Taxable (whether it counts toward income tax).</>,
+    <>Enter the Talenta name if you’re exporting payroll to Talenta. Leave blank if you’re not using Talenta yet.</>,
+  ]} />
+
+  <H3 id="talenta-sync">
+    Sync with Talenta
+  </H3>
+  <P>
+    If you use Talenta for payroll, the "In Talenta" badge tracks which components you’ve already set up there. Once you’ve created a component in both Flodok and Talenta:
+  </P>
+  <Steps items={[
+    <>Go back to <strong>Settings → Payroll → Pay Components</strong>.</>,
+    <>Find the component and click the "In Talenta" badge to check it off.</>,
+    <>The component is now ready to export when you run payroll.</>,
+  ]} />
+  <Callout type="tip">
+    Only components marked "In Talenta" will be exported when you sync payroll data. This acts as a safety checklist — ensure your Flodok components match your Talenta setup before exporting.
+  </Callout>
+
+  <H3 id="edit-component">
+    Edit or delete a component
+  </H3>
+  <P>
+    Click the component card to edit its name, kind, or flags. Click the × icon to delete it. Deleting a component does not affect payroll history — only future payrolls.
+  </P>
+
+  <Bullets items={[
+    <><Link to="/help/docs/payroll-overview">View monthly payroll</Link></>,
+    <><Link to="/help/docs/manage-employees">Set up employee contracts with allowances</Link></>,
+  ]} />
+</>
+)
+
+const FORMS_LEAVE_RULES: ReactNode = (
+<>
+  <P>
+    Indonesian labor law requires annual leave to accrue monthly based on continuous service. Flodok automates this so employees can’t take more leave than they’ve earned, and ensures the statutory 12-month gate is respected.
+  </P>
+
+  <H3 id="annual-leave-accrual">
+    How annual leave accrues
+  </H3>
+  <P>
+    Employees earn annual leave each month they work:
+  </P>
+  <Bullets items={[
+    <>In the first year of service: accrue 1/12th of their annual entitlement each month (pro-rated by join date)</>,
+    <>After 12 months of continuous service: the full annual entitlement becomes available and resets yearly</>,
+    <>No carry-over: any unused annual leave expires at the end of the leave year (no rollover to the next year)</>,
+  ]} />
+
+  <H3 id="service-gate">
+    The 12-month service gate
+  </H3>
+  <P>
+    By default, annual leave is <em>locked</em> until an employee completes 12 months of service. During the first year:
+  </P>
+  <Bullets items={[
+    <>Leave accrues in the background each month, but the employee cannot submit a leave request</>,
+    <>The leave request form shows "Available after 12 months of service" as a locked notice</>,
+    <>Once 12 months are up, all accrued leave becomes usable at once</>,
+  ]} />
+  <Callout type="note">
+    Your organization can turn off the 12-month service gate in <strong>Settings → Forms → Leave settings</strong> if your policy is different. The default respects Indonesian statutory requirements.
+  </Callout>
+
+  <H3 id="leave-types">
+    Leave types employees can request
+  </H3>
+  <Bullets items={[
+    <>Annual leave (Cuti Tahunan) — paid, counts against the annual entitlement</>,
+    <>Unpaid leave / permission (Cuti Tidak Dibayar / Izin) — no pay impact, unlimited (subject to approval)</>,
+    <>National holiday substitution (Libur Nasional / Penggantian) — when work falls on a holiday</>,
+    <>Sick leave without doctor’s note (Cuti Sakit tanpa Surat Dokter) — usually 1–2 days, no documentation required</>,
+    <>Sick leave with doctor’s note (Cuti Sakit dengan Surat Dokter) — longer illnesses, requires medical proof</>,
+    <>Short time (Datang Terlambat / Pulang Cepat) — partial day off (e.g., late arrival or early departure with hours specified)</>,
+    <>Special leave (Cuti Khusus) — marriage, bereavement, religious observance, etc.</>,
+  ]} />
+
+  <H3 id="work-statuses">
+    Work status & entitlements
+  </H3>
+  <P>
+    An employee’s leave entitlements depend on their contract work status:
+  </P>
+  <Bullets items={[
+    <>Permanent (PKWPT) — full annual entitlement; accrual rules apply</>,
+    <>Contract (PKWT) — annual entitlement pro-rated by contract length; accrual still applies</>,
+    <>Daily — may have reduced or no annual leave; check your organization’s policy</>,
+    <>Piece-rate — usually no paid leave; treated as unpaid leave requests</>,
+  ]} />
+
+  <H3 id="submit-leave-request">
+    Submitting a leave request
+  </H3>
+  <P>
+    Employees go to <strong>Portal → Forms → Requests</strong> and click <strong>New Request</strong>, then pick a leave type. The form collects:
+  </P>
+  <Bullets items={[
+    <>Leave type (dropdown) and dates</>,
+    <>For short-time leaves: the clock-in and clock-out times</>,
+    <>Reason (optional but encouraged)</>,
+    <>Up to 2 replacement employees (optional) if the work needs to be covered</>,
+  ]} />
+  <P>
+    Once submitted, the request goes to the manager for approval, then the owner (if two-step approval is enabled). Approved leave is auto-posted to the employee’s leave balance.
+  </P>
+
+  <H3 id="check-leave-balance">
+    Check an employee’s leave balance
+  </H3>
+  <P>
+    In a leave or overtime request detail view, scroll to <strong>Payroll section → Annual leave balance</strong>. You’ll see:
+  </P>
+  <Bullets items={[
+    <>Entitlement: the full annual allocation from their contract</>,
+    <>Used: days already taken this leave year</>,
+    <>Remaining: days left to use</>,
+    <>A note if they’re still in the first year and the service gate is active</>,
+  ]} />
+
+  <Bullets items={[
+    <><Link to="/help/docs/manage-forms">Review and approve leave requests</Link></>,
+    <><Link to="/help/docs/payroll-overview">View payroll & posted leave</Link></>,
+  ]} />
+</>
+)
+
+const PERFORMANCE_CYCLES: ReactNode = (
+<>
+  <P>
+    Performance cycles let you run structured 360° reviews: employees receive feedback from managers, peers, and sometimes direct reports. Flodok manages the timeline, participants, and response collection.
+  </P>
+
+  <Callout type="note">
+    Performance reviews are an <strong>upcoming feature</strong> coming soon to Flodok. The details below describe the intended workflow; availability may vary by plan.
+  </Callout>
+
+  <H3 id="create-cycle">
+    Create a performance cycle
+  </H3>
+  <P>
+    (Available in a future release.)
+  </P>
+  <P>
+    Expected workflow:
+  </P>
+  <Steps items={[
+    <>Go to <strong>Dashboard → Performance</strong>.</>,
+    <>Click <strong>+ New Review Cycle</strong> (or similar).</>,
+    <>Name the cycle (e.g., "Q2 2026 Performance Review") and set the date range.</>,
+    <>Choose review participants: peer reviewers, managers, and the employees themselves.</>,
+    <>Set visibility and reminder dates.</>,
+    <>Launch the cycle to send invitations to reviewers.</>,
+  ]} />
+
+  <H3 id="cycle-structure">
+    How a 360 review cycle works
+  </H3>
+  <Bullets items={[
+    <>Self-assessment: employees reflect on their performance</>,
+    <>Manager feedback: direct managers provide structured or free-form input</>,
+    <>Peer feedback: colleagues (you pick them) give their perspective</>,
+    <>Multi-rater: feedback from multiple sources gets anonymized and aggregated</>,
+    <>Review meeting: manager sits down with the employee to discuss results and goals</>,
+  ]} />
+
+  <H3 id="set-participants">
+    Add participants & reviewers
+  </H3>
+  <P>
+    When setting up a cycle, you choose who gives feedback to whom:
+  </P>
+  <Bullets items={[
+    <>Employees included in the cycle</>,
+    <>Their direct manager (usually auto-filled if linked in <strong>Settings → Team Members</strong>)</>,
+    <>Peer reviewers (manually selected; you pick up to 3–5 per employee)</>,
+    <>Optional: skip-level manager (their manager’s manager) for additional perspective</>,
+  ]} />
+
+  <H3 id="review-dates">
+    Set cycle dates
+  </H3>
+  <P>
+    Define key milestones:
+  </P>
+  <Bullets items={[
+    <>Start date: when self-assessments open</>,
+    <>Peer review deadline: when peer feedback must be submitted</>,
+    <>Manager review deadline: when managers finalize feedback</>,
+    <>Review meeting date: when the results are discussed with each employee</>,
+  ]} />
+  <P>
+    Flodok sends reminders as each deadline approaches.
+  </P>
+
+  <H3 id="view-results">
+    Review aggregate feedback
+  </H3>
+  <P>
+    After the cycle completes, managers and admins can view:
+  </P>
+  <Bullets items={[
+    <>Anonymous peer comments (no names shown to the employee unless you configure otherwise)</>,
+    <>Manager notes and ratings (if a rating scale was used)</>,
+    <>Employee self-assessment</>,
+    <>A summary dashboard showing how many reviews are pending or completed</>,
+  ]} />
+
+  <H3 id="close-cycle">
+    Close a review cycle
+  </H3>
+  <P>
+    Once all reviews are collected and discussed, you can mark the cycle as closed. This locks responses from further editing and archives the cycle for records. Past cycles remain visible in read-only mode.
+  </P>
+
+  <H3 id="link-to-monthly-rewards">
+    Connect reviews to monthly performance rewards
+  </H3>
+  <P>
+    Review cycles are separate from monthly performance rewards (credits & badges). However, you can use the feedback and ratings from a cycle to inform bonus or credit decisions. Go to <strong>Dashboard → Performance</strong> to award credits or badges based on cycle outcomes.
+  </P>
+
+  <Bullets items={[
+    <><Link to="/help/docs/payroll-overview">Award monthly performance bonuses</Link></>,
+  ]} />
+</>
+)
+
+const DASHBOARD_OVERVIEW: ReactNode = (
+<>
+  <P>The <strong>Dashboard → Overview</strong> page is your operations hub. It shows key metrics, recent activity, and upcoming milestones so you know the health of your team and document workflows at a glance.</P>
+  <H3 id="quick-actions">Quick actions</H3>
+  <P>Four buttons let you jump straight to common workflows:</P>
+  <Bullets items={["<strong>Add Employee</strong> — go to Employees to invite a team member", "<strong>New SOP</strong> — create a Standard Operating Procedure", "<strong>New Contract</strong> — create an employment contract"]} />
+  <H3 id="stat-cards">Stat cards</H3>
+  <P>Six cards show live counts. Each is a link to the full list:</P>
+  <Bullets items={["<strong>Employees</strong> — active team members", "<strong>Candidates</strong> — prospects in recruitment (shortlisted through offer stage)", "<strong>Active SOPs</strong> — live Standard Operating Procedures", "<strong>Active Contracts</strong> — live employment contracts", "<strong>Awaiting Signature</strong> — SOPs & contracts employees haven’t signed yet", "<strong>Pending Updates</strong> — SOP change proposals from meeting transcripts awaiting your review"]} />
+  <H3 id="activity-pulse">Activity pulse</H3>
+  <P>A stacked bar chart shows activity over the last 30 days, broken down by:</P>
+  <Bullets items={["<em>Blue</em> — SOPs updated or assigned", "<em>Green</em> — signatures (SOPs, contracts, job descriptions signed)", "<em>Orange</em> — employee events (onboarded, hired, etc.)", "<em>Purple</em> — contracts updated or assigned"]} />
+  <P>Hover over a day to see exact counts. This helps you spot busy periods and slow weeks at a glance.</P>
+  <H3 id="signature-coverage">Signature coverage</H3>
+  <P>A circular gauge shows what percentage of assigned SOPs and contracts have been signed (employee signature). The center displays the coverage % and the breakdown (signed / total). Click the stat cards above to open and assign unsigned documents.</P>
+  <Bullets items={["<em>Green</em> (90%+) — most of your documents are signed", "<em>Amber</em> (60–89%) — good progress, follow up on stragglers", "<em>Red</em> (below 60%) — send reminders or chase unsigned docs"]} />
+  <H3 id="team-composition">Team composition</H3>
+  <P>A donut chart shows your headcount by department. The center number is true headcount (employees in one department only count once). If an employee is tagged in multiple departments, they appear in each slice, so the slice total may exceed the center number — hover the info icon to learn more.</P>
+  <H3 id="upcoming-calendar">Upcoming calendar</H3>
+  <P>A 30-day look-ahead shows employee birthdays and work anniversaries coming up. Filter by type and click an employee to open their record.</P>
+  <H3 id="recent-activity">Recent activity</H3>
+  <P>A timeline shows the 10 most recent events in your org (signatures, SOP updates, new hires, etc.). Click a filter pill to narrow by type, or search by name. Click <strong>Load more</strong> to paginate.</P>
+  <H3 id="recognition-moments">Recognition moments (if enabled)</H3>
+  <P>If your org has badges enabled, this section shows employee achievement unlocks (today, next 7 days, next 30 days). Click an employee to see their profile.</P>
+  <H3 id="compensation-total">Compensation total</H3>
+  <P>A summary of monthly payroll costs: base wages (blue) + allowances (green) across all active employees with active contracts. Useful for budgeting and payroll planning.</P>
+  <Callout type="tip">Bookmark this page — it’s the first place to check on a busy day.</Callout>
+</>
+)
+
+const INBOX: ReactNode = (
+<>
+  <P>The <strong>Dashboard → Inbox</strong> page is your action list. Items surface here because they need a decision from you or they’re waiting on someone else. It’s organized by urgency and type.</P>
+  <H3 id="inbox-tabs">Tabs (urgency buckets)</H3>
+  <P>Four tabs organize your inbox:</P>
+  <Bullets items={["<strong>All</strong> — every item, unfiltered", "<strong>Action Required</strong> — decisions sitting with you (review a pending update, approve a form, decide on a probation case)", "<strong>Awaiting Others</strong> — you’ve sent them (contracts/SOPs awaiting employee signature)", "<strong>Upcoming</strong> — heads up on things coming soon (probation ending in 7–30 days, passport expiring soon)"]} />
+  <H3 id="categories">Category filters</H3>
+  <P>Within each tab, click a category pill to narrow further:</P>
+  <Bullets items={["<strong>Contract</strong> — contracts awaiting your or the employee’s signature", "<strong>SOP</strong> — SOPs awaiting employee signature", "<strong>Probation</strong> — probation decisions due or probation ending soon", "<strong>Document</strong> — passports expiring soon", "<strong>Pending Update</strong> — SOP changes from meeting transcripts to review", "<strong>Form</strong> — leave requests and overtime requests awaiting approval"]} />
+  <H3 id="item-actions">Item actions</H3>
+  <P>Each item has three controls:</P>
+  <Bullets items={["<strong>Action button</strong> (right side) — opens the document or decision screen (Review, Open Contract, Open SOP, etc.)", "<strong>Due date</strong> (hidden on mobile) — red if overdue, gray if upcoming", "<strong>Menu (three dots)</strong> — snooze for 7 days or dismiss"]} />
+  <H3 id="snooze-dismiss">Snooze vs. dismiss</H3>
+  <Bullets items={["<strong>Snooze (7 days)</strong> — hides the item for a week, then it reappears. Good for <>I’ll get to this later</>", "<strong>Dismiss</strong> — hides it permanently. The item still exists (e.g., the contract is still unsigned); it just won’t bother you again unless the underlying situation changes (e.g., the contract is signed, or a new contract is assigned)"]} />
+  <H3 id="search">Search</H3>
+  <P>Use the search box to find items by title (document name, employee name, etc.).</P>
+  <Callout type="tip">Action Required and Awaiting Others are the most urgent — check those first thing.</Callout>
+  <Callout type="note">Inbox items are computed from live data, not stored. Dismiss an item without acting on it, and if the situation changes (e.g., the contract gets assigned), it may reappear.</Callout>
+</>
+)
+
+const PENDING: ReactNode = (
+<>
+  <P>The <strong>Dashboard → Pending</strong> page shows SOP update proposals automatically extracted from your meeting recordings. Review diffs, edit the proposed text, then accept or reject each one.</P>
+  <H3 id="pending-section">Pending updates</H3>
+  <P>Unresolved proposals appear here, newest first. Each item shows:</P>
+  <Bullets items={["<strong>Employee avatar</strong> — whose SOP is being updated", "<strong>Title × timestamp</strong> — which employee and when the meeting was", "<strong>Source meeting</strong> — Fireflies meeting name (if available)", "<strong>AI summary</strong> — what changed (e.g., <>Added daily standup requirement</>)"]} />
+  <P>Click any proposal to expand it.</P>
+  <H3 id="review-workflow">Review workflow</H3>
+  <Steps items={["Expand a proposal by clicking its row", "If the proposal is unmatched (no employee yet), pick one from the dropdown at the top", "Review the <strong>diff</strong> panel showing what changed (old on the left, new on the right)", "Read the <strong>final version</strong> in the markdown editor — you can tweak wording here before approval", "Click <strong>Approve</strong> to apply the new version to that employee’s SOP, or <strong>Reject</strong> to discard it"]} />
+  <Callout type="tip">The editor is plain Markdown. If the extracted text looks weird, fix it here before approving — your edit will be recorded in the SOP version history.</Callout>
+  <H3 id="resolved-section">Resolved updates</H3>
+  <P>Below the pending section, a <strong>Resolved</strong> section shows all approved, rejected, and auto-applied updates (if any). Filter by employee, status, or date range. Click an item to see the before–after diff.</P>
+  <Bullets items={["<strong>Approved</strong> — you accepted it, and the new version is live", "<strong>Rejected</strong> — you declined it; the SOP was not changed", "<strong>Auto-applied</strong> — the system auto-approved it (rare; usually requires manual review)"]} />
+  <H3 id="check-for-updates">Check for updates button</H3>
+  <P>Click the blue <strong>Check for Updates</strong> button (top right) to poll your Fireflies account for new meeting transcripts. The app fetches recently recorded meetings, runs them through the AI extraction pipeline, and creates pending proposals.</P>
+  <Bullets items={["Requires an active Fireflies account (free plan works for API access)", "Looks for meetings from the last 7 days", "May take a few seconds — the button shows a spinner while checking"]} />
+  <Callout type="note">Automatic polling isn’t turned on by default — you must click this button to trigger an update fetch.</Callout>
+</>
+)
+
+const SPOTLIGHT: ReactNode = (
+<>
+  <P>The <strong>Dashboard → Spotlight</strong> page lets you post internal announcements to your team. Posts can be drafted, scheduled for a future time, published immediately, or archived. Employees see them in a notification bell and optionally must acknowledge them.</P>
+  <H3 id="post-status">Post status</H3>
+  <P>Every post has one of four statuses:</P>
+  <Bullets items={["<strong>Draft</strong> — saved but not sent to anyone yet", "<strong>Scheduled</strong> — will be published at a future date/time you set", "<strong>Published</strong> — live and visible to your audience", "<strong>Archived</strong> — hidden from employees (but kept in Spotlight for your records)"]} />
+  <H3 id="priority-levels">Priority levels</H3>
+  <P>Mark each post as:</P>
+  <Bullets items={["<strong>Critical</strong> — red pill; urgent, must read", "<strong>Important</strong> — blue pill; significant news", "<strong>FYI</strong> — gray pill; nice to know, low urgency"]} />
+  <H3 id="display-modes">Display modes</H3>
+  <P>Choose how employees see your post:</P>
+  <Bullets items={["<strong>Modal</strong> — full-screen popup when they open Flodok", "<strong>Banner</strong> — sticky bar at the top of the page", "<strong>Bell only</strong> — only in the notification bell; no interruption"]} />
+  <H3 id="acknowledgement">Acknowledgement</H3>
+  <P>If you check <strong>Requires Acknowledgement</strong>, employees must click 'I’ve read this' before it goes away. The post card shows a counter (e.g., '12 / 45 acknowledged') so you know who’s still pending.</P>
+  <H3 id="visibility">Visibility</H3>
+  <P>Control who sees the post:</P>
+  <Bullets items={["<strong>Org-wide</strong> — everyone", "<strong>Specific departments</strong> — e.g., Engineering & Product", "<strong>Specific employees</strong> — e.g., Sam, Kristi, Jan"]} />
+  <H3 id="post-actions">Post actions</H3>
+  <P>Each post card has a menu (three dots). Options vary by status:</P>
+  <Bullets items={["<strong>Draft</strong> — Publish or Delete", "<strong>Published</strong> — Republish (re-send to audience), Archive, or Delete", "<strong>Archived</strong> — Unarchive or Delete"]} />
+  <H3 id="republish">Republish</H3>
+  <P>If you edit a published post’s content and want employees to see the update, click <strong>Republish</strong>. This re-fires the announcement to your audience. A counter tracks how many times a post has been republished.</P>
+  <H3 id="create-new">Create a new post</H3>
+  <P>Click the blue <strong>New</strong> button (top right) to open the editor.</P>
+  <Bullets items={["<strong>Title & description</strong> — what happened and what to do about it", "<strong>Image</strong> — optional header image (drag & drop or click to upload, up to 5 MB, JPEG/PNG/WebP/GIF)", "<strong>Posted as</strong> — your name or your org’s name", "<strong>Priority</strong> — critical / important / FYI", "<strong>Display mode</strong> — modal / banner / bell only", "<strong>Requires acknowledgement</strong> — check to force read confirmation", "<strong>Visibility</strong> — org-wide / specific departments / specific employees", "<strong>Publish at</strong> — leave blank to publish now, or set a future date/time to schedule"]} />
+  <P>Click <strong>Save Draft</strong> (keep working later), <strong>Schedule</strong> (if you set a future date), or <strong>Publish</strong> (send now).</P>
+  <Callout type="tip">Use Critical priority and Modal display for time-sensitive announcements (outages, policy changes). Save FYI posts as drafts and batch-publish them during team meetings.</Callout>
+</>
+)
+
+const TRASH: ReactNode = (
+<>
+  <P>The <strong>Dashboard → Trash</strong> page shows all soft-deleted items in your org. Nothing is truly gone for 30 days — you can restore it or permanently purge it.</P>
+  <H3 id="what-soft-deletes">What gets soft-deleted</H3>
+  <P>These item types end up in Trash:</P>
+  <Bullets items={["Employees (active staff & candidates)", "SOPs, Contracts, NDAs, Job Descriptions, Letters", "Hiring Requests", "Spotlight posts (announcements)"]} />
+  <H3 id="trash-table">Trash table</H3>
+  <P>Each row shows:</P>
+  <Bullets items={["<strong>Type</strong> — item type (SOP, Contract, Employee, etc.)", "<strong>Name</strong> — title or employee name", "<strong>Deleted by</strong> — who deleted it", "<strong>Days left</strong> — countdown to permanent deletion (shown in red if ≤ 3 days)", "<strong>Restore</strong> — bring it back to active", "<strong>Delete forever</strong> — skip the wait and purge now (requires confirmation)"]} />
+  <H3 id="filters">Filters</H3>
+  <P>Use the pill buttons to narrow by type:</P>
+  <Bullets items={["All, Employees, Candidates, SOPs, Contracts, Letters, Job Descriptions, Hiring Requests, Spotlight"]} />
+  <P>Search by name to find a specific item.</P>
+  <H3 id="recovery-window">Recovery window</H3>
+  <P>Every deleted item gets a 30-day grace period. After 30 days, it’s automatically and permanently purged. The <strong>Days left</strong> column counts down.</P>
+  <H3 id="restore">Restore</H3>
+  <P>Click <strong>Restore</strong> to bring an item back to active use. It reappears in its original location (Employees, Documents, etc.) with no data loss.</P>
+  <H3 id="permanent-delete">Permanent delete</H3>
+  <P>Click <strong>Delete forever</strong> to skip the 30-day wait and purge the item immediately. This is irreversible — you cannot recover it later. You’ll be asked to confirm.</P>
+  <H3 id="empty-all">Empty all (admin only)</H3>
+  <P>The <strong>Empty trash</strong> button (top right, visible to admins only) permanently deletes everything in Trash right now. Useful for housekeeping before exporting data. Requires confirmation.</P>
+  <Callout type="warn">Permanent deletion cannot be undone. Be careful when clicking <strong>Delete forever</strong> or <strong>Empty trash</strong>.</Callout>
+  <Callout type="tip">Don’t panic if you delete something by mistake — it’s in Trash for 30 days. Restore it immediately or wait if you need to verify it’s safe to bring back.</Callout>
+</>
+)
+
+const SETTINGS_APPROVALS: ReactNode = (
+<>
+  <P>Request approvals govern the workflow for leave and overtime forms. You can assign a manager to handle initial approvals and optionally require the owner to sign off as well.</P>
+
+  <H3 id="default-approver">Set the default approver</H3>
+  <P>The default approver is the person who reviews leave and overtime requests first. Go to <strong>Settings → Approvals</strong> and use the <strong>Default approver</strong> dropdown to pick a team member. If you don’t assign anyone, the owner approves all requests.</P>
+
+  <H3 id="owner-approval-gate">Require owner approval</H3>
+  <P>Toggle <strong>Require owner approval</strong> to add a second sign-off step. When on, requests move from the manager to the owner for final approval before they take effect. This is useful if the owner wants visibility over all leave and overtime decisions.</P>
+
+  <H3 id="how-it-works">How the workflow works</H3>
+  <Bullets items={[
+    "An employee submits a leave or overtime request from their portal.",
+    "The form goes to the default approver (or owner if unset). They can approve, reject, or request changes.",
+    "If owner approval is required, it then goes to the owner for final sign-off.",
+    "Once both steps are complete (or just the manager step if owner approval is off), the request is marked approved."
+  ]} />
+
+  <Callout type="note">These settings apply organization-wide. You can further customize which fields are required for each form type in the per-form configuration pages.</Callout>
+</>
+)
+
+const SETTINGS_ACHIEVEMENTS: ReactNode = (
+<>
+  <P>Badges are awards your team earns for hitting milestones, ranking high on leaderboards, or special recognition. They appear in the employee portal and on the manager dashboard’s Performance page.</P>
+
+  <H3 id="enable-badges">Turn badges on or off</H3>
+  <P>Go to <strong>Settings → Badges</strong>. Use the <strong>Enable badges</strong> toggle to switch the feature on or off for your organization. When off, no new badges are awarded and the Badges tab disappears from the employee portal. Existing badges remain in the database; they reappear if you turn badges back on.</P>
+
+  <H3 id="badge-types">Types of badges</H3>
+  <Bullets items={[
+    "<strong>Tenure badges</strong> — awarded automatically for service milestones (e.g., 1 day, 1 month, 1 year).",
+    "<strong>Compensation badges</strong> — awarded when salary or allowances hit a milestone (e.g., first salary, 5M IDR base).",
+    "<strong>Leaderboard badges</strong> — earned by ranking #1, top 3, or consistently topping credits/performance metrics.",
+    "<strong>Custom badges</strong> — you create these manually. Award them whenever you choose via the Performance page."
+  ]} />
+
+  <H3 id="manage-badges">Manage existing badges</H3>
+  <P>The badge list groups them by type. For each badge you can:</P>
+  <Bullets items={[
+    "<strong>Toggle Active</strong> — stop awarding a badge without deleting it.",
+    "<strong>Mark as Featured</strong> — highlight the badge as special (shows a <>featured</> label in the portal).",
+    "<strong>Edit</strong> — change the name, description, or icon (for custom badges only; built-in badges are managed by Flodok)."
+  ]} />
+
+  <Callout type="tip">Built-in badges (tenure, compensation, leaderboard) have their names and descriptions set by Flodok. You can still toggle them active, mark them featured, or turn the entire badges feature off if you don’t want them.</Callout>
+</>
+)
+
+const INTEGRATIONS_OVERVIEW: ReactNode = (
+<>
+  <P>Integrations let Flodok pull data from and push actions to external services — so meeting notes and action items stay in sync across your tools.</P>
+
+  <H3 id="available-integrations">Available integrations</H3>
+  <Bullets items={[
+    "<strong>Fireflies</strong> — auto-fetch meeting transcripts and extract action items into Flodok for follow-up.",
+    "<strong>Asana</strong> — create Asana tasks from action items Flodok finds in meeting notes."
+  ]} />
+
+  <H3 id="connect-fireflies">Connect Fireflies</H3>
+  <P>Go to <strong>Settings → Integrations → Fireflies</strong> and click <strong>Connect</strong>. You’ll need a Fireflies API key from your Fireflies account settings.</P>
+  <Bullets items={[
+    "<strong>Free plan:</strong> Flodok polls your Fireflies account every 5 minutes for new transcripts. No webhook setup needed.",
+    "<strong>Business plan:</strong> You can optionally set up a webhook so Flodok gets transcripts in real-time. Paste the webhook URL from Flodok into Fireflies → Settings → Webhooks."
+  ]} />
+
+  <H3 id="connect-asana">Connect Asana</H3>
+  <P>Go to <strong>Settings → Integrations → Asana</strong> and click <strong>Connect</strong>. You’ll need:</P>
+  <Bullets items={[
+    "An Asana personal access token (create one at app.asana.com/0/my-apps).",
+    "Your Asana workspace GID and project GID — both are numbers you’ll find in your Asana project URL."
+  ]} />
+
+  <H3 id="review-mode">Review API updates (optional)</H3>
+  <P>At the top of the Integrations page, toggle <strong>Require approval for API-submitted updates</strong> to control how Flodok handles data from your integrations. When on, updates sit in a Pending queue for you to review before they go live. When off, Flodok applies API updates immediately.</P>
+
+  <H3 id="disconnect">Disconnect an integration</H3>
+  <P>Find the integration in <strong>Settings → Integrations</strong> and click <strong>Disconnect</strong>. Flodok will stop pulling data from that service. Existing data stays in Flodok; only future syncs stop.</P>
+
+  <Callout type="note">Only admins can connect and manage integrations. Billing access may be required to enable or modify integrations.</Callout>
+</>
+)
+
+
 export const sections: DocSection[] = [
   {
-    id: 'getting-started',
-    title: 'Getting Started',
-    description: 'The basics: account, plans, roles, and inviting your team.',
+    id: "getting-started",
+    title: "Getting Started",
+    description: "The basics: the dashboard, account, plans, roles, and inviting your team.",
     topics: [
       {
-        slug: 'quickstart',
-        title: 'Quickstart',
-        description: 'Everything you need to know to start running your operation on Flodok in ten minutes.',
-        iconKey: 'sparkles',
+        slug: "quickstart",
+        title: "Quickstart",
+        description: "Everything you need to know to start running your operation on Flodok in ten minutes.",
+        iconKey: "sparkles",
         body: QUICKSTART,
       },
       {
-        slug: 'plans',
-        title: 'Plans & Pricing',
+        slug: "dashboard-overview",
+        title: "Overview",
+        description: "See your org at a glance: employee count, active documents, signature coverage, recent activity, and team composition.",
+        iconKey: "sparkles",
+        body: DASHBOARD_OVERVIEW,
+      },
+      {
+        slug: "plans",
+        title: "Plans & Pricing",
         description: "Compare Flodok's three plans, what's in each, and how billing works.",
-        iconKey: 'card',
+        iconKey: "card",
         body: PLANS,
       },
       {
-        slug: 'roles',
-        title: 'Understanding Roles',
-        description: 'Admins, managers, employees, and portal-only access — what each can see and do.',
-        iconKey: 'shield',
+        slug: "roles",
+        title: "Understanding Roles",
+        description: "Admins, managers, employees, and portal-only access — what each can see and do.",
+        iconKey: "shield",
         body: ROLES,
       },
       {
-        slug: 'invite-team',
-        title: 'Inviting Your Team',
-        description: 'Email invites, bulk uploads, and sharing the public portal link.',
-        iconKey: 'users',
+        slug: "invite-team",
+        title: "Inviting Your Team",
+        description: "Email invites, bulk uploads, and sharing the public portal link.",
+        iconKey: "users",
         body: INVITES,
       },
     ],
   },
   {
-    id: 'hiring',
-    title: 'Recruitment',
-    description: 'The candidate-to-employee funnel — interview decisions, offers, and onboarding.',
+    id: "documents",
+    title: "Documents",
+    description: "One home for every document — SOPs, contracts, NDAs, job descriptions, and letters — plus importing, exporting, templates, and version control.",
     topics: [
       {
-        slug: 'hiring-funnel',
-        title: 'The hiring funnel',
-        description: 'How lifecycle stages work, what each one means, and how candidates auto-graduate to employees.',
-        iconKey: 'workflow',
+        slug: "documents-overview",
+        title: "Documents Hub",
+        description: "Unified hub for SOPs, contracts, NDAs, job descriptions, and letters with filtering and search.",
+        iconKey: "file",
+        body: DOCUMENTS_OVERVIEW,
+      },
+      {
+        slug: "sop-create",
+        title: "Creating an SOP",
+        description: "Use the bilingual editor and AI Generate to write SOPs your team will actually read.",
+        iconKey: "pen",
+        body: SOP_CREATE,
+      },
+      {
+        slug: "sop-versioning",
+        title: "SOP Versioning",
+        description: "How history, diffs, and acknowledgements stay in sync as you update.",
+        iconKey: "history",
+        body: SOP_VERSIONING,
+      },
+      {
+        slug: "contracts-create",
+        title: "Creating Contracts",
+        description: "PKWT vs PKWTT, merge fields, and how the candidate flow auto-creates contracts.",
+        iconKey: "file",
+        body: CONTRACTS_CREATE,
+      },
+      {
+        slug: "contract-templates",
+        title: "Contract Templates",
+        description: "Define a reusable contract per job position so new offers auto-fill in seconds.",
+        iconKey: "briefcase",
+        body: CONTRACT_TEMPLATES,
+      },
+      {
+        slug: "contracts-sign",
+        title: "E-signatures",
+        description: "Legally enforceable e-signing under UU 11/2008 (ITE), with structured audit trail.",
+        iconKey: "pen",
+        body: CONTRACTS_SIGN,
+      },
+      {
+        slug: "contracts-history",
+        title: "Contract History",
+        description: "Versioning and signature pinning for signed contracts.",
+        iconKey: "history",
+        body: CONTRACTS_HISTORY,
+      },
+      {
+        slug: "nda-overview",
+        title: "NDAs",
+        description: "One-way employee NDAs with effective date, survival period, and employer signing.",
+        iconKey: "lock",
+        body: NDA_OVERVIEW,
+      },
+      {
+        slug: "job-descriptions",
+        title: "Job Descriptions",
+        description: "Role blueprints that candidates review on onboarding; create under Hiring → Job Descriptions.",
+        iconKey: "briefcase",
+        body: JOB_DESCRIPTIONS,
+      },
+      {
+        slug: "letters",
+        title: "Letters",
+        description: "Offer, reference, and announcement letters with recipients, senders, and acknowledgement tracking.",
+        iconKey: "mail",
+        body: LETTERS,
+      },
+      {
+        slug: "sop-import",
+        title: "Importing SOPs",
+        description: "Move from Google Docs, Notion, or Word with formatting preserved.",
+        iconKey: "upload",
+        body: SOP_IMPORT,
+      },
+      {
+        slug: "documents-export",
+        title: "Exporting to PDF",
+        description: "Download documents in bilingual PDF format with merge fields resolved and custom layouts.",
+        iconKey: "upload",
+        body: DOCUMENTS_EXPORT,
+      },
+    ],
+  },
+  {
+    id: "hiring",
+    title: "Recruitment",
+    description: "From a hiring request to a signed employee — requests, the candidate funnel, offers, and separations.",
+    topics: [
+      {
+        slug: "hiring-requests",
+        title: "Hiring requests",
+        description: "Submit and approve role requests through your pre-hiring approval workflow.",
+        iconKey: "workflow",
+        body: HIRING_REQUESTS,
+      },
+      {
+        slug: "hiring-funnel",
+        title: "The hiring funnel",
+        description: "How lifecycle stages work, what each one means, and how candidates auto-graduate to employees.",
+        iconKey: "workflow",
         body: HIRING_FUNNEL,
       },
       {
-        slug: 'hiring-candidates',
-        title: 'Adding & managing candidates',
-        description: 'Adding candidates fast, shortlisting, the talent pool, and inline status changes.',
-        iconKey: 'users',
+        slug: "hiring-candidates",
+        title: "Adding & managing candidates",
+        description: "Adding candidates fast, shortlisting, the talent pool, and inline status changes.",
+        iconKey: "users",
         body: HIRING_CANDIDATES,
       },
       {
-        slug: 'hiring-offers',
-        title: 'Making an offer',
-        description: 'How Make offer creates a draft contract from your position template and links it to the candidate.',
-        iconKey: 'handshake',
+        slug: "hiring-offers",
+        title: "Making an offer",
+        description: "How Make offer creates a draft contract from your position template and links it to the candidate.",
+        iconKey: "handshake",
         body: HIRING_OFFERS,
       },
       {
-        slug: 'hiring-separation',
-        title: 'Resignations & terminations',
-        description: 'Recording an employee leaving — voluntary vs involuntary — and where their record goes.',
-        iconKey: 'door-out',
+        slug: "hiring-separation",
+        title: "Resignations & terminations",
+        description: "Recording an employee leaving — voluntary vs involuntary — and where their record goes.",
+        iconKey: "door-out",
         body: HIRING_SEPARATION,
       },
     ],
   },
   {
-    id: 'sops',
-    title: 'SOPs',
-    description: 'Standard Operating Procedures — write, version, publish, and import.',
+    id: "employees",
+    title: "Employees",
+    description: "Your team directory and individual employee records.",
     topics: [
       {
-        slug: 'sop-create',
-        title: 'Creating an SOP',
-        description: 'Use the bilingual editor and AI Generate to write SOPs your team will actually read.',
-        iconKey: 'pen',
-        body: SOP_CREATE,
+        slug: "employees-directory",
+        title: "Employees directory",
+        description: "View, filter, and manage your team in list or card view.",
+        iconKey: "users",
+        body: EMPLOYEES_DIRECTORY,
       },
       {
-        slug: 'sop-versioning',
-        title: 'SOP Versioning',
-        description: 'How history, diffs, and acknowledgements stay in sync as you update.',
-        iconKey: 'history',
-        body: SOP_VERSIONING,
-      },
-      {
-        slug: 'sop-import',
-        title: 'Importing SOPs',
-        description: 'Move from Google Docs, Notion, or Word with formatting preserved.',
-        iconKey: 'upload',
-        body: SOP_IMPORT,
+        slug: "employee-profile",
+        title: "Employee profile",
+        description: "Edit employee personal, employment, education, and document information.",
+        iconKey: "users",
+        body: EMPLOYEE_PROFILE,
       },
     ],
   },
   {
-    id: 'contracts',
-    title: 'Contracts',
-    description: 'Draft, sign, and store Indonesian employment contracts (PKWT and PKWTT) — with reusable templates.',
+    id: "company",
+    title: "Company",
+    description: "Your organization structure — departments, branches, positions, and the company profile.",
     topics: [
       {
-        slug: 'contracts-create',
-        title: 'Creating Contracts',
-        description: 'PKWT vs PKWTT, merge fields, and how the candidate flow auto-creates contracts.',
-        iconKey: 'file',
-        body: CONTRACTS_CREATE,
-      },
-      {
-        slug: 'contract-templates',
-        title: 'Contract Templates',
-        description: 'Define a reusable contract per job position so new offers auto-fill in seconds.',
-        iconKey: 'briefcase',
-        body: CONTRACT_TEMPLATES,
-      },
-      {
-        slug: 'contracts-sign',
-        title: 'E-signatures',
-        description: "Legally enforceable e-signing under UU 11/2008 (ITE), with structured audit trail.",
-        iconKey: 'pen',
-        body: CONTRACTS_SIGN,
-      },
-      {
-        slug: 'contracts-history',
-        title: 'Contract History',
-        description: 'Versioning and signature pinning for signed contracts.',
-        iconKey: 'history',
-        body: CONTRACTS_HISTORY,
+        slug: "company-structure",
+        title: "Company structure",
+        description: "Set up and manage departments, branches, job positions, levels, and classes.",
+        iconKey: "globe",
+        body: COMPANY_STRUCTURE,
       },
     ],
   },
   {
-    id: 'performance',
-    title: 'Performance',
-    description: 'Reviews, 1:1 trackers, and recognition — without the spreadsheet sprawl.',
+    id: "performance",
+    title: "Performance",
+    description: "Review cycles, 1:1s, and recognition.",
     topics: [
       {
-        slug: 'performance-reviews',
-        title: 'Performance Reviews',
-        description: '360-style review cycles, configurable per quarter, year, or custom cadence.',
-        iconKey: 'star',
+        slug: "performance-reviews",
+        title: "Performance Reviews",
+        description: "360-style review cycles, configurable per quarter, year, or custom cadence.",
+        iconKey: "star",
         body: PERFORMANCE_REVIEWS,
       },
       {
-        slug: 'one-on-ones',
-        title: '1:1s & Feedback',
-        description: 'Shared 1:1 docs and a lightweight feedback log for moments worth remembering.',
-        iconKey: 'workflow',
+        slug: "performance-cycles",
+        title: "Performance reviews & cycles",
+        description: "Create performance review cycles, set dates and participants, and track 360 feedback from peers and managers.",
+        iconKey: "star",
+        body: PERFORMANCE_CYCLES,
+      },
+      {
+        slug: "one-on-ones",
+        title: "1:1s & Feedback",
+        description: "Shared 1:1 docs and a lightweight feedback log for moments worth remembering.",
+        iconKey: "workflow",
         body: PERFORMANCE_ONE_ONES,
       },
       {
-        slug: 'recognition',
-        title: 'Awards & Recognition',
-        description: 'Badges, credits, and bonuses — three layers of recognition with their own rules.',
-        iconKey: 'star',
+        slug: "recognition",
+        title: "Awards & Recognition",
+        description: "Badges, credits, and bonuses — three layers of recognition with their own rules.",
+        iconKey: "star",
         body: RECOGNITION,
       },
     ],
   },
   {
-    id: 'forms',
-    title: 'Forms & Requests',
-    description: 'Employee-fillable leave and overtime requests — how staff submit them, how approvals flow, and how admins set them up.',
+    id: "forms",
+    title: "Forms & Requests",
+    description: "Employee-fillable leave and overtime requests — submission, approval, payroll, and setup.",
     topics: [
       {
-        slug: 'forms-overview',
-        title: 'Forms Overview',
+        slug: "forms-overview",
+        title: "Forms Overview",
         description: "What Forms are, who does what, and how a request flows from an employee's portal into payroll and leave.",
-        iconKey: 'workflow',
+        iconKey: "workflow",
         body: FORMS_OVERVIEW,
       },
       {
-        slug: 'submitting-requests',
-        title: 'Submitting a request',
-        description: 'How employees submit leave and overtime requests from the portal, read their status, and how HR files on their behalf.',
-        iconKey: 'clock',
+        slug: "submitting-requests",
+        title: "Submitting a request",
+        description: "How employees submit leave and overtime requests from the portal, read their status, and how HR files on their behalf.",
+        iconKey: "clock",
         body: FORMS_SUBMITTING,
       },
       {
-        slug: 'approving-requests',
-        title: 'Approving requests',
-        description: 'How the two-tier approval chain works, where to approve or reject, and who can act at each step.',
-        iconKey: 'handshake',
+        slug: "approving-requests",
+        title: "Approving requests",
+        description: "How the two-tier approval chain works, where to approve or reject, and who can act at each step.",
+        iconKey: "handshake",
         body: FORMS_APPROVING,
       },
       {
-        slug: 'forms-payroll-leave',
-        title: 'How requests reach payroll & leave',
-        description: 'What Flodok records automatically once a Leave or Overtime request is approved — overtime pay under PP35/2021, leave accrual and balances, reference numbers, and frozen-period reposting.',
-        iconKey: 'wallet',
+        slug: "forms-payroll-leave",
+        title: "How requests reach payroll & leave",
+        description: "What Flodok records automatically once a Leave or Overtime request is approved — overtime pay under PP35/2021, leave accrual and balances, reference numbers, and frozen-period reposting.",
+        iconKey: "wallet",
         body: FORMS_PAYROLL_LEAVE,
       },
       {
-        slug: 'configuring-forms',
-        title: 'Configuring Forms',
-        description: 'Admin setup for Forms — what each form offers, who approves, the owner gate, and filing on behalf.',
-        iconKey: 'settings',
+        slug: "forms-leave-rules",
+        title: "Leave rules & accrual (Indonesia)",
+        description: "Understand annual leave accrual by months of service, the 12-month service gate, leave types, and work statuses.",
+        iconKey: "clock",
+        body: FORMS_LEAVE_RULES,
+      },
+      {
+        slug: "configuring-forms",
+        title: "Configuring Forms",
+        description: "Admin setup for Forms — what each form offers, who approves, the owner gate, and filing on behalf.",
+        iconKey: "settings",
         body: FORMS_CONFIG,
       },
     ],
   },
   {
-    id: 'portal',
-    title: 'Employee Portal',
-    description: 'A read-only public mirror of your content — no logins required.',
+    id: "payroll",
+    title: "Payroll",
+    description: "Run monthly payroll, configure pay components, and issue payslips.",
     topics: [
       {
-        slug: 'portal-about',
-        title: 'About the Portal',
+        slug: "payroll-overview",
+        title: "Monthly payroll & payslips",
+        description: "Preview employee payouts, freeze & run monthly payroll, download individual and bulk payslips.",
+        iconKey: "wallet",
+        body: PAYROLL_OVERVIEW,
+      },
+      {
+        slug: "pay-components",
+        title: "Configure pay components & allowances",
+        description: "Set up fixed and variable allowances, bonuses, deductions, and benefits that feed into monthly payroll.",
+        iconKey: "wallet",
+        body: PAY_COMPONENTS,
+      },
+    ],
+  },
+  {
+    id: "workspace",
+    title: "Your Workspace",
+    description: "Day-to-day surfaces: your inbox, pending SOP updates, announcements, and trash.",
+    topics: [
+      {
+        slug: "inbox",
+        title: "Inbox",
+        description: "Track what's waiting: contracts, SOPs, forms, and decisions that need your attention.",
+        iconKey: "mail",
+        body: INBOX,
+      },
+      {
+        slug: "pending",
+        title: "Pending",
+        description: "Review and approve SOP changes suggested by your meeting transcripts.",
+        iconKey: "history",
+        body: PENDING,
+      },
+      {
+        slug: "spotlight",
+        title: "Spotlight",
+        description: "Send internal announcements with priority levels, acknowledgement tracking, and scheduling.",
+        iconKey: "star",
+        body: SPOTLIGHT,
+      },
+      {
+        slug: "trash",
+        title: "Trash & recovery",
+        description: "Restore accidentally deleted items or permanently purge them within the 30-day recovery window.",
+        iconKey: "door-out",
+        body: TRASH,
+      },
+    ],
+  },
+  {
+    id: "portal",
+    title: "Employee Portal",
+    description: "The public, login-free page your team and candidates use.",
+    topics: [
+      {
+        slug: "portal-about",
+        title: "About the Portal",
         description: "What the employee portal is, who it's for, and what each employee sees.",
-        iconKey: 'globe',
+        iconKey: "globe",
         body: PORTAL_ABOUT,
       },
       {
-        slug: 'portal-candidate-onboarding',
-        title: 'Candidate onboarding',
+        slug: "portal-candidate-onboarding",
+        title: "Candidate onboarding",
         description: "The guided flow new hires walk through before their start date — contract review, sign, personal info, documents.",
-        iconKey: 'sparkles',
+        iconKey: "sparkles",
         body: PORTAL_CANDIDATE_ONBOARDING,
       },
       {
-        slug: 'portal-share',
-        title: 'Sharing the Portal',
-        description: 'Distribute employee portal links via WhatsApp, QR code, or print.',
-        iconKey: 'eye',
+        slug: "portal-share",
+        title: "Sharing the Portal",
+        description: "Distribute employee portal links via WhatsApp, QR code, or print.",
+        iconKey: "eye",
         body: PORTAL_SHARE,
       },
       {
-        slug: 'portal-customize',
-        title: 'Customizing the Portal',
-        description: 'Branding, sections, language, and pinned announcements.',
-        iconKey: 'settings',
+        slug: "portal-customize",
+        title: "Customizing the Portal",
+        description: "Branding, sections, language, and pinned announcements.",
+        iconKey: "settings",
         body: PORTAL_CUSTOMIZE,
       },
     ],
   },
   {
-    id: 'integrations',
-    title: 'Integrations',
-    description: 'Connect Fireflies, Slack, and your identity provider.',
+    id: "integrations",
+    title: "Integrations",
+    description: "Connect Flodok to the tools your team already uses.",
     topics: [
       {
-        slug: 'integrations-fireflies',
-        title: 'Fireflies',
-        description: 'Pipe meeting transcripts and action items straight into your 1:1s.',
-        iconKey: 'plug',
+        slug: "integrations-overview",
+        title: "Connect external integrations",
+        description: "Link Flodok to Fireflies and Asana to automate meeting notes and task creation.",
+        iconKey: "plug",
+        body: INTEGRATIONS_OVERVIEW,
+      },
+      {
+        slug: "integrations-fireflies",
+        title: "Fireflies",
+        description: "Pipe meeting transcripts and action items straight into your 1:1s.",
+        iconKey: "plug",
         body: INTEGRATIONS_FIREFLIES,
       },
       {
-        slug: 'integrations-slack',
-        title: 'Slack',
-        description: 'Channel notifications for SOPs, contracts, performance, and team events.',
-        iconKey: 'plug',
+        slug: "integrations-slack",
+        title: "Slack",
+        description: "Channel notifications for SOPs, contracts, performance, and team events.",
+        iconKey: "plug",
         body: INTEGRATIONS_SLACK,
       },
       {
-        slug: 'integrations-sso',
-        title: 'Google SSO & SAML',
-        description: 'Single sign-on via Google Workspace (Pro) or any SAML 2.0 IdP (custom plan).',
-        iconKey: 'lock',
+        slug: "integrations-sso",
+        title: "Google SSO & SAML",
+        description: "Single sign-on via Google Workspace (Pro) or any SAML 2.0 IdP (custom plan).",
+        iconKey: "lock",
         body: INTEGRATIONS_SSO,
       },
     ],
   },
   {
-    id: 'settings',
-    title: 'Settings',
-    description: 'Identity, locale, languages, and how Indonesia-specific bits work.',
+    id: "settings",
+    title: "Settings",
+    description: "Organization details, time zones, language, approvals, and badges.",
     topics: [
       {
-        slug: 'settings-org',
-        title: 'Organization Settings',
-        description: 'Legal name, display name, logo, address, and contact roles.',
-        iconKey: 'settings',
+        slug: "settings-org",
+        title: "Organization Settings",
+        description: "Legal name, display name, logo, address, and contact roles.",
+        iconKey: "settings",
         body: SETTINGS_ORG,
       },
       {
-        slug: 'settings-timezones',
-        title: 'Time Zones (WIB / WITA / WIT)',
+        slug: "settings-timezones",
+        title: "Time Zones (WIB / WITA / WIT)",
         description: "Indonesia's three time zones, how the org default works, and per-user overrides.",
-        iconKey: 'clock',
+        iconKey: "clock",
         body: SETTINGS_TIMEZONES,
       },
       {
-        slug: 'settings-language',
-        title: 'Languages (Bahasa & English)',
-        description: 'Per-user and org-default language. How content authoring relates to UI language.',
-        iconKey: 'language',
+        slug: "settings-language",
+        title: "Languages (Bahasa & English)",
+        description: "Per-user and org-default language. How content authoring relates to UI language.",
+        iconKey: "language",
         body: SETTINGS_LANGUAGE,
+      },
+      {
+        slug: "settings-approvals",
+        title: "Set up request approvals",
+        description: "Configure who approves leave and overtime requests, and whether owner sign-off is required.",
+        iconKey: "handshake",
+        body: SETTINGS_APPROVALS,
+      },
+      {
+        slug: "settings-achievements",
+        title: "Enable and manage badges",
+        description: "Set up achievement badges — awards for tenure, compensation milestones, leaderboard rank, and custom recognitions.",
+        iconKey: "star",
+        body: SETTINGS_ACHIEVEMENTS,
       },
     ],
   },
   {
-    id: 'billing',
-    title: 'Account & Billing',
-    description: 'Plans, payment methods, invoices, and Faktur Pajak.',
+    id: "billing",
+    title: "Account & Billing",
+    description: "Plans, payment methods, and invoices with Faktur Pajak.",
     topics: [
       {
-        slug: 'billing-manage',
-        title: 'Managing Billing',
-        description: 'Upgrade, downgrade, cancel, and what happens to your data if you leave.',
-        iconKey: 'wallet',
+        slug: "billing-manage",
+        title: "Managing Billing",
+        description: "Upgrade, downgrade, cancel, and what happens to your data if you leave.",
+        iconKey: "wallet",
         body: BILLING_MANAGE,
       },
       {
-        slug: 'billing-payment',
-        title: 'Payment Methods',
-        description: 'BCA, Mandiri, e-wallets, QRIS, credit cards, and international wires.',
-        iconKey: 'card',
+        slug: "billing-payment",
+        title: "Payment Methods",
+        description: "BCA, Mandiri, e-wallets, QRIS, credit cards, and international wires.",
+        iconKey: "card",
         body: BILLING_PAYMENT,
       },
       {
-        slug: 'billing-invoices',
-        title: 'Invoices & Faktur Pajak',
-        description: 'Standard invoices, e-Faktur for PKP organizations, and kuitansi on demand.',
-        iconKey: 'receipt',
+        slug: "billing-invoices",
+        title: "Invoices & Faktur Pajak",
+        description: "Standard invoices, e-Faktur for PKP organizations, and kuitansi on demand.",
+        iconKey: "receipt",
         body: BILLING_INVOICES,
       },
     ],
