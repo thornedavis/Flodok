@@ -1,0 +1,514 @@
+// Upload & Analyse — import an existing document into Flodok.
+//
+// The migration aid: an admin uploads a PDF they already have (an
+// employment contract, NDA, or SOP), we send it to a vision model that
+// reads it and returns a structured bilingual draft + the commercial
+// terms it found. The admin picks the document type, optionally links an
+// employee, reviews/corrects what was detected, then creates a DRAFT and
+// lands in the normal editor. Nothing is auto-activated — the existing
+// editor gates still force a human through Activate & sign.
+//
+// What we extract with AI: the document body and the commercial terms
+// printed in the file. What we deliberately DON'T: employee identity —
+// that resolves from the linked employee via merge fields, so it's never
+// re-typed or re-OCR'd here.
+
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { supabase } from '../lib/supabase'
+import { useLang } from '../contexts/LanguageContext'
+import { Modal } from './Modal'
+import { EmployeeSelect } from './EmployeeSelect'
+import { analyseDocument, type AnalyseDocType, type AnalyseDocumentResult } from '../lib/analyseDocument'
+import { docAsJson } from '../lib/documentDoc'
+import { documentEditPath, type DocumentType } from '../lib/documentTypes'
+import { type EmpDeptShape } from '../lib/employee'
+import type { Employee, User } from '../types/aliases'
+
+type EmployeeWithDepartments = Employee & EmpDeptShape
+
+const MAX_SIZE = 15 * 1024 * 1024 // 15 MB
+const ACCEPT = '.pdf,application/pdf'
+
+type Step = 'select' | 'analysing' | 'review' | 'error'
+
+type FieldKind = 'int' | 'num' | 'date' | 'contractType'
+type FieldDesc = { key: string; label: string; kind: FieldKind }
+
+export function ImportDocumentModal({
+  open,
+  onClose,
+  user,
+  employees,
+}: {
+  open: boolean
+  onClose: () => void
+  user: User
+  employees: EmployeeWithDepartments[]
+}) {
+  const { t } = useLang()
+  const navigate = useNavigate()
+
+  const [step, setStep] = useState<Step>('select')
+  const [docType, setDocType] = useState<AnalyseDocType>('contract')
+  const [file, setFile] = useState<File | null>(null)
+  const [employeeId, setEmployeeId] = useState<string | null>(null)
+  const [result, setResult] = useState<AnalyseDocumentResult | null>(null)
+  const [title, setTitle] = useState('')
+  const [fieldValues, setFieldValues] = useState<Record<string, string>>({})
+  const [error, setError] = useState('')
+  const [creating, setCreating] = useState(false)
+
+  const typeOptions: Array<{ value: AnalyseDocType; label: string }> = [
+    { value: 'contract', label: t.documentImportTypeContract },
+    { value: 'nda', label: t.documentImportTypeNda },
+    { value: 'sop', label: t.documentImportTypeSop },
+  ]
+
+  const contractFields: FieldDesc[] = [
+    { key: 'contract_type', label: t.documentImportFieldContractType, kind: 'contractType' },
+    { key: 'base_wage_idr', label: t.documentImportFieldWage, kind: 'int' },
+    { key: 'allowance_idr', label: t.documentImportFieldAllowance, kind: 'int' },
+    { key: 'annual_leave_days', label: t.documentImportFieldLeaveDays, kind: 'int' },
+    { key: 'probation_months', label: t.documentImportFieldProbation, kind: 'int' },
+    { key: 'hours_per_day', label: t.documentImportFieldHours, kind: 'num' },
+    { key: 'days_per_week', label: t.documentImportFieldDays, kind: 'int' },
+    { key: 'start_date', label: t.documentImportFieldStartDate, kind: 'date' },
+    { key: 'end_date', label: t.documentImportFieldEndDate, kind: 'date' },
+  ]
+  const ndaFields: FieldDesc[] = [
+    { key: 'effective_date', label: t.documentImportFieldEffectiveDate, kind: 'date' },
+    { key: 'survival_years', label: t.documentImportFieldSurvivalYears, kind: 'int' },
+    { key: 'penalty_idr', label: t.documentImportFieldPenalty, kind: 'int' },
+  ]
+  const fieldDescs: FieldDesc[] =
+    docType === 'contract' ? contractFields : docType === 'nda' ? ndaFields : []
+
+  function resetAll() {
+    setStep('select')
+    setDocType('contract')
+    setFile(null)
+    setEmployeeId(null)
+    setResult(null)
+    setTitle('')
+    setFieldValues({})
+    setError('')
+    setCreating(false)
+  }
+
+  function handleClose() {
+    if (creating || step === 'analysing') return
+    resetAll()
+    onClose()
+  }
+
+  function onPickFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const picked = e.target.files?.[0]
+    e.target.value = ''
+    if (!picked) return
+    if (picked.type !== 'application/pdf') {
+      setError(t.documentImportInvalidType)
+      return
+    }
+    if (picked.size > MAX_SIZE) {
+      setError(t.documentImportTooLarge)
+      return
+    }
+    setError('')
+    setFile(picked)
+  }
+
+  async function runAnalyse() {
+    if (!file) {
+      setError(t.documentImportNoFile)
+      return
+    }
+    setError('')
+    setStep('analysing')
+    try {
+      const res = await analyseDocument(file, docType)
+      setResult(res)
+      setTitle(res.title)
+      const fv: Record<string, string> = {}
+      for (const desc of (docType === 'contract' ? contractFields : docType === 'nda' ? ndaFields : [])) {
+        const v = res.fields[desc.key]
+        fv[desc.key] = v === null || v === undefined ? '' : String(v)
+      }
+      setFieldValues(fv)
+      setStep('review')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t.documentImportGenericError)
+      setStep('error')
+    }
+  }
+
+  function numFrom(key: string): number | null {
+    const s = (fieldValues[key] ?? '').trim()
+    if (!s) return null
+    const n = Number(s)
+    return Number.isFinite(n) ? n : null
+  }
+  function dateFrom(key: string): string | null {
+    const s = (fieldValues[key] ?? '').trim()
+    return s || null
+  }
+
+  async function createDraft() {
+    if (!result) return
+    setCreating(true)
+    setError('')
+    const common = {
+      org_id: user.org_id,
+      title: title.trim(),
+      status: 'draft' as const,
+      employee_id: employeeId,
+      content_doc: docAsJson(result.doc),
+    }
+
+    let id: string | null = null
+    let errMsg: string | null = null
+
+    if (docType === 'contract') {
+      const { data, error: e } = await supabase
+        .from('contracts')
+        .insert({
+          ...common,
+          contract_type: fieldValues.contract_type || 'pkwt',
+          base_wage_idr: numFrom('base_wage_idr'),
+          allowance_idr: numFrom('allowance_idr'),
+          annual_leave_days: numFrom('annual_leave_days') ?? 12,
+          probation_months: numFrom('probation_months'),
+          hours_per_day: numFrom('hours_per_day'),
+          days_per_week: numFrom('days_per_week'),
+          start_date: dateFrom('start_date'),
+          end_date: dateFrom('end_date'),
+        })
+        .select()
+        .single()
+      id = data?.id ?? null
+      errMsg = e?.message ?? null
+    } else if (docType === 'nda') {
+      const { data, error: e } = await supabase
+        .from('ndas')
+        .insert({
+          ...common,
+          effective_date: dateFrom('effective_date'),
+          survival_years: numFrom('survival_years') ?? 2,
+          penalty_idr: numFrom('penalty_idr'),
+        })
+        .select()
+        .single()
+      id = data?.id ?? null
+      errMsg = e?.message ?? null
+    } else {
+      const { data, error: e } = await supabase
+        .from('sops')
+        .insert(common)
+        .select()
+        .single()
+      id = data?.id ?? null
+      errMsg = e?.message ?? null
+    }
+
+    if (!id) {
+      setError(errMsg ?? t.documentImportCreateFailed)
+      setCreating(false)
+      return
+    }
+    resetAll()
+    onClose()
+    navigate(documentEditPath(docType as DocumentType, id))
+  }
+
+  const sectionTitles: string[] = (result?.doc.content ?? [])
+    .filter(n => n.type === 'section')
+    .map(n => {
+      const attrs = (n.attrs ?? {}) as { titleEn?: unknown; titleId?: unknown }
+      return (typeof attrs.titleEn === 'string' && attrs.titleEn)
+        || (typeof attrs.titleId === 'string' && attrs.titleId)
+        || ''
+    })
+
+  const modalTitle =
+    step === 'review' ? t.documentImportReviewTitle
+    : step === 'error' ? t.documentImportErrorTitle
+    : t.documentImportTitle
+
+  return (
+    <Modal open={open} onClose={handleClose} title={modalTitle} maxWidth="max-w-xl">
+      {/* ── Step: select type + file ───────────────────────────── */}
+      {(step === 'select' || step === 'analysing') && (
+        <div className="space-y-4">
+          <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+            {t.documentImportDescription}
+          </p>
+
+          <div>
+            <label className="mb-1.5 block text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+              {t.documentImportPickType}
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              {typeOptions.map(opt => {
+                const active = docType === opt.value
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    disabled={step === 'analysing'}
+                    onClick={() => { setDocType(opt.value); setError('') }}
+                    className="rounded-lg border px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50"
+                    style={{
+                      borderColor: active ? 'var(--color-primary)' : 'var(--color-border)',
+                      backgroundColor: active ? 'color-mix(in srgb, var(--color-primary) 10%, transparent)' : 'var(--color-bg)',
+                      color: active ? 'var(--color-primary)' : 'var(--color-text)',
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+              {t.documentImportChooseFile}
+            </label>
+            <label
+              className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-dashed px-3 py-3 text-sm transition-colors"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
+            >
+              <span className="min-w-0 truncate">
+                {file ? file.name : t.documentImportFileHint}
+              </span>
+              <span
+                className="shrink-0 rounded-md border px-2 py-1 text-xs"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+              >
+                {file ? t.change : t.documentImportBrowse}
+              </span>
+              <input
+                type="file"
+                accept={ACCEPT}
+                onChange={onPickFile}
+                disabled={step === 'analysing'}
+                className="hidden"
+              />
+            </label>
+          </div>
+
+          {error && (
+            <p className="text-xs" style={{ color: 'var(--color-danger)' }}>{error}</p>
+          )}
+
+          <div className="flex items-center justify-end gap-2 pt-1">
+            <button
+              type="button"
+              onClick={handleClose}
+              disabled={step === 'analysing'}
+              className="rounded-lg border px-3 py-2 text-sm font-medium disabled:opacity-50"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
+            >
+              {t.cancel}
+            </button>
+            <button
+              type="button"
+              onClick={runAnalyse}
+              disabled={!file || step === 'analysing'}
+              className="rounded-lg px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+              style={{ backgroundColor: 'var(--color-primary)' }}
+            >
+              {step === 'analysing' ? t.documentImportAnalysing : t.documentImportAnalyse}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Step: review + confirm ─────────────────────────────── */}
+      {step === 'review' && result && (
+        <div className="space-y-4">
+          <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+            {t.documentImportReviewHint}
+          </p>
+
+          <div>
+            <label className="mb-1.5 block text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+              {t.documentImportFieldTitle}
+            </label>
+            <input
+              type="text"
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              className="w-full rounded-lg border bg-transparent px-3 py-2 text-sm outline-none"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            />
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+              {t.documentImportLinkEmployee}
+            </label>
+            <EmployeeSelect
+              value={employeeId}
+              onChange={setEmployeeId}
+              employees={employees}
+              emptyLabel={t.noEmployeeLinked}
+            />
+          </div>
+
+          {fieldDescs.length > 0 && (
+            <div>
+              <label className="mb-1.5 block text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+                {t.documentImportDetectedFields}
+              </label>
+              <div className="grid grid-cols-2 gap-x-3 gap-y-2.5">
+                {fieldDescs.map(desc => (
+                  <FieldRow
+                    key={desc.key}
+                    desc={desc}
+                    value={fieldValues[desc.key] ?? ''}
+                    confidence={result.confidence[desc.key]}
+                    onChange={v => setFieldValues(prev => ({ ...prev, [desc.key]: v }))}
+                    t={t}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div>
+            <label className="mb-1.5 block text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+              {t.documentImportBodyPreview}
+            </label>
+            <div
+              className="rounded-lg border px-3 py-2 text-sm"
+              style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}
+            >
+              <p className="mb-1" style={{ color: 'var(--color-text)' }}>
+                {t.documentImportSectionsCount.replace('{count}', String(sectionTitles.length))}
+              </p>
+              {sectionTitles.length > 0 && (
+                <ul className="list-inside list-disc space-y-0.5">
+                  {sectionTitles.slice(0, 8).map((st, i) => (
+                    <li key={i} className="truncate">{st || t.documentImportUntitledSection}</li>
+                  ))}
+                  {sectionTitles.length > 8 && (
+                    <li style={{ color: 'var(--color-text-tertiary)' }}>
+                      {t.documentImportMoreSections.replace('{count}', String(sectionTitles.length - 8))}
+                    </li>
+                  )}
+                </ul>
+              )}
+            </div>
+          </div>
+
+          {error && (
+            <p className="text-xs" style={{ color: 'var(--color-danger)' }}>{error}</p>
+          )}
+
+          <div className="flex items-center justify-between gap-2 pt-1">
+            <button
+              type="button"
+              onClick={() => { setStep('select'); setError('') }}
+              disabled={creating}
+              className="rounded-lg border px-3 py-2 text-sm font-medium disabled:opacity-50"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
+            >
+              {t.documentImportBack}
+            </button>
+            <button
+              type="button"
+              onClick={createDraft}
+              disabled={creating}
+              className="rounded-lg px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+              style={{ backgroundColor: 'var(--color-primary)' }}
+            >
+              {creating ? t.documentImportCreating : t.documentImportCreate}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Step: error ────────────────────────────────────────── */}
+      {step === 'error' && (
+        <div className="space-y-4">
+          <p className="text-sm" style={{ color: 'var(--color-danger)' }}>{error}</p>
+          <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+            {t.documentImportErrorHint}
+          </p>
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={handleClose}
+              className="rounded-lg border px-3 py-2 text-sm font-medium"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
+            >
+              {t.cancel}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setStep('select'); setError('') }}
+              className="rounded-lg px-3 py-2 text-sm font-medium text-white"
+              style={{ backgroundColor: 'var(--color-primary)' }}
+            >
+              {t.documentImportTryAgain}
+            </button>
+          </div>
+        </div>
+      )}
+    </Modal>
+  )
+}
+
+function FieldRow({
+  desc,
+  value,
+  confidence,
+  onChange,
+  t,
+}: {
+  desc: FieldDesc
+  value: string
+  confidence: 'high' | 'low' | undefined
+  onChange: (v: string) => void
+  t: ReturnType<typeof useLang>['t']
+}) {
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>{desc.label}</span>
+        {confidence && (
+          <span
+            className="rounded-full px-1.5 py-0.5 text-[10px] font-medium"
+            style={
+              confidence === 'high'
+                ? { backgroundColor: 'color-mix(in srgb, var(--color-success) 15%, transparent)', color: 'var(--color-success)' }
+                : { backgroundColor: 'color-mix(in srgb, var(--color-warning) 18%, transparent)', color: 'var(--color-warning)' }
+            }
+          >
+            {confidence === 'high' ? t.documentImportConfHigh : t.documentImportConfLow}
+          </span>
+        )}
+      </div>
+      {desc.kind === 'contractType' ? (
+        <select
+          value={value || 'pkwt'}
+          onChange={e => onChange(e.target.value)}
+          className="w-full rounded-lg border bg-transparent px-3 py-2 text-sm outline-none"
+          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+        >
+          <option value="pkwt">{t.documentImportContractPkwt}</option>
+          <option value="pkwtt">{t.documentImportContractPkwtt}</option>
+        </select>
+      ) : (
+        <input
+          type={desc.kind === 'date' ? 'date' : 'number'}
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          className="w-full rounded-lg border bg-transparent px-3 py-2 text-sm outline-none"
+          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+        />
+      )}
+    </div>
+  )
+}

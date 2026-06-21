@@ -19,7 +19,7 @@
 // (and the legacy `/dashboard/contracts` redirect) land on the unified
 // list pre-filtered to that type.
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
@@ -36,6 +36,7 @@ import { FilterPanel, FilterSearchInput } from '../../components/FilterControls'
 import type { FilterPanelSection } from '../../components/FilterControls'
 import { EmployeeSelect } from '../../components/EmployeeSelect'
 import { Modal } from '../../components/Modal'
+import { ImportDocumentModal } from '../../components/ImportDocumentModal'
 import { Skeleton } from '../../components/Skeleton'
 import { trashDocument } from '../../lib/trash'
 import { buildPkwtStarterDoc } from '../../lib/pkwtStarterDoc'
@@ -61,27 +62,10 @@ const SHELL_PAD = 'px-6 md:px-10'
 const SHELL_INNER = 'mx-auto max-w-6xl'
 
 export function Documents({ user }: { user: User }) {
-  const { t } = useLang()
-
-  return (
-    <div className="py-8">
-      <div className={SHELL_PAD}>
-        <div className={SHELL_INNER}>
-          <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>
-                {t.documentsTitle}
-              </h1>
-              <p className="mt-1 max-w-3xl text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-                {t.documentsSubtitle}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-      <AllDocumentsView user={user} />
-    </div>
-  )
+  // The page header (title + the Import / Create actions) renders inside
+  // AllDocumentsView so the action buttons can reach the create handlers
+  // and import state that live there.
+  return <AllDocumentsView user={user} />
 }
 
 // ─── All Documents view ──────────────────────────────────────────────
@@ -140,6 +124,7 @@ function AllDocumentsView({ user }: { user: User }) {
   const [items, setItems] = useState<AllDocItem[]>([])
   const [employees, setEmployees] = useState<EmployeeWithDepartments[]>([])
   const [loading, setLoading] = useState(true)
+  const [importOpen, setImportOpen] = useState(false)
 
   const [viewMode, setViewMode] = useState<ViewMode>(loadViewMode)
   // Empty array = no type filter (show all). Multi-select so users can
@@ -576,6 +561,30 @@ function AllDocumentsView({ user }: { user: User }) {
 
   return (
     <>
+      <div className={`${SHELL_PAD} pt-8`}>
+        <div className={SHELL_INNER}>
+          <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>
+                {t.documentsTitle}
+              </h1>
+              <p className="mt-1 max-w-3xl text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+                {t.documentsSubtitle}
+              </p>
+            </div>
+            <DocumentsHeaderActions
+              canWrite={canWrite}
+              onImport={() => setImportOpen(true)}
+              onCreateSop={createBlankSop}
+              onCreateContract={createBlankContract}
+              onCreateNda={createBlankNda}
+              onCreateJobDescription={() => navigate('/dashboard/hiring/jds/new?from=documents')}
+              onCreateLetter={createBlankLetter}
+            />
+          </div>
+        </div>
+      </div>
+
       <StartNewSection
         onCreateSop={createBlankSop}
         onCreateContract={createBlankContract}
@@ -586,7 +595,14 @@ function AllDocumentsView({ user }: { user: User }) {
         canWrite={canWrite}
       />
 
-      <section className={`${SHELL_PAD} pt-8`}>
+      <ImportDocumentModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        user={user}
+        employees={employees}
+      />
+
+      <section className={`${SHELL_PAD} pb-8 pt-8`}>
         <div className={SHELL_INNER}>
         <h2 className="mb-4 text-base font-semibold" style={{ color: 'var(--color-text)' }}>
           {t.documentsRecent}
@@ -657,6 +673,122 @@ function AllDocumentsView({ user }: { user: User }) {
   )
 }
 
+// ─── Page-header actions ────────────────────────────────────────────
+
+// "Import existing" + a compact "Create" dropdown, rendered in line with
+// the Documents title. This is the primary creation affordance on mobile
+// (where the tile band's grid is hidden); on desktop it sits alongside the
+// tiles as a quick action.
+function DocumentsHeaderActions({
+  canWrite,
+  onImport,
+  onCreateSop,
+  onCreateContract,
+  onCreateNda,
+  onCreateJobDescription,
+  onCreateLetter,
+}: {
+  canWrite: boolean
+  onImport: () => void
+  onCreateSop: () => void
+  onCreateContract: () => void
+  onCreateNda: () => void
+  onCreateJobDescription: () => void
+  onCreateLetter: () => void
+}) {
+  const { t } = useLang()
+  const [createOpen, setCreateOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!createOpen) return
+    function handleClick(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setCreateOpen(false)
+    }
+    function handleKey(e: KeyboardEvent) { if (e.key === 'Escape') setCreateOpen(false) }
+    document.addEventListener('mousedown', handleClick)
+    document.addEventListener('keydown', handleKey)
+    return () => {
+      document.removeEventListener('mousedown', handleClick)
+      document.removeEventListener('keydown', handleKey)
+    }
+  }, [createOpen])
+
+  const createItems: Array<{ type: DocumentType; label: string; onClick: () => void }> = [
+    { type: 'sop', label: t.documentsNewSop, onClick: onCreateSop },
+    { type: 'contract', label: t.documentsNewContract, onClick: onCreateContract },
+    { type: 'nda', label: t.documentsNewNda, onClick: onCreateNda },
+    { type: 'job_description', label: t.documentsNewJobDescription, onClick: onCreateJobDescription },
+    { type: 'letter', label: t.documentsNewLetter, onClick: onCreateLetter },
+  ]
+
+  return (
+    <div className="flex shrink-0 items-center gap-2">
+      {/* Same sizing/style as the action buttons on other dashboard
+          headers (e.g. Employees): an outline secondary + a primary
+          dropdown, both px text-sm. */}
+      <button
+        type="button"
+        onClick={onImport}
+        disabled={!canWrite}
+        title={!canWrite ? t.dunningWriteBlocked : undefined}
+        className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', backgroundColor: 'var(--color-bg)' }}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <polyline points="17 8 12 3 7 8" />
+          <line x1="12" y1="3" x2="12" y2="15" />
+        </svg>
+        <span>{t.documentImportTile}</span>
+      </button>
+
+      <div ref={containerRef} className="relative">
+        <button
+          type="button"
+          onClick={() => canWrite && setCreateOpen(o => !o)}
+          disabled={!canWrite}
+          title={!canWrite ? t.dunningWriteBlocked : undefined}
+          aria-haspopup="menu"
+          aria-expanded={createOpen}
+          className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
+          style={{ backgroundColor: 'var(--color-primary)' }}
+        >
+          <span>{t.documentsCreate}</span>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </button>
+        {createOpen && (
+          <div
+            role="menu"
+            className="absolute right-0 top-full z-30 mt-1 min-w-[200px] overflow-hidden rounded-lg border py-1 shadow-lg"
+            style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-elevated, var(--color-bg))' }}
+          >
+            {createItems.map(it => (
+              <button
+                key={it.type}
+                type="button"
+                role="menuitem"
+                onClick={() => { setCreateOpen(false); it.onClick() }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors"
+                style={{ color: 'var(--color-text)' }}
+                onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
+                onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
+              >
+                <span className="inline-flex shrink-0" style={{ color: 'var(--color-text-secondary)' }}>
+                  <DocTypeIcon type={it.type} size={15} />
+                </span>
+                {it.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── Start a new document ───────────────────────────────────────────
 
 function StartNewSection({
@@ -704,7 +836,10 @@ function StartNewSection({
         </button>
       </div>
 
-      <div className="grid grid-cols-3 gap-5 sm:grid-cols-4 lg:grid-cols-6">
+      {/* Quick-create tiles — desktop only. On mobile the band collapses to
+          just the header actions above (the full tile grid is overkill on a
+          narrow screen). */}
+      <div className="hidden gap-5 md:grid md:grid-cols-4 lg:grid-cols-6">
         <CreateTile
           label={t.documentsNewSop}
           accent="var(--color-primary)"
@@ -747,11 +882,15 @@ function CreateTile({
   accent,
   onClick,
   disabled,
+  icon,
 }: {
   label: string
   accent: string
   onClick: () => void
   disabled?: boolean
+  // Defaults to a plus glyph (a blank "new" tile). The import tile passes
+  // an upload glyph to signal it brings in an existing file.
+  icon?: React.ReactNode
 }) {
   const { t } = useLang()
 
@@ -784,10 +923,12 @@ function CreateTile({
           className="flex h-11 w-11 items-center justify-center rounded-full transition-transform group-hover:scale-110"
           style={{ backgroundColor: `color-mix(in srgb, ${accent} 14%, transparent)`, color: accent }}
         >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19" />
-            <line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
+          {icon ?? (
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+          )}
         </div>
       </div>
       <div className="mt-2 px-0.5">
