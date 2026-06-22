@@ -21,7 +21,8 @@ import { formatIdrDigits } from '../../lib/credits'
 import { InfoTooltip } from '../../components/InfoTooltip'
 import { AllowanceComponentsEditor, cleanCompLines, compLinesSum, type CompLine } from '../../components/AllowanceComponentsEditor'
 import { templateComponents } from '../../lib/contractTemplates'
-import { docAsJson, emptyDocumentDoc, type DocumentDoc } from '../../lib/documentDoc'
+import { docAsJson, emptyDocumentDoc, type DocumentDoc, type LanguageMode } from '../../lib/documentDoc'
+import { clearOffSideForMode } from '../../lib/offSide'
 import { documentsIndexPath, type DocumentType } from '../../lib/documentTypes'
 import type { User, DocumentTemplate, Organization } from '../../types/aliases'
 import type { Json } from '../../types/database'
@@ -121,6 +122,8 @@ export function DocumentTemplateEdit({ user }: { user: User }) {
   const [daysPerWeek, setDaysPerWeek] = useState('')
   const [contentDoc, setContentDoc] = useState<DocumentDoc>(() => emptyDocumentDoc())
   const [savedContentDoc, setSavedContentDoc] = useState<DocumentDoc>(() => emptyDocumentDoc())
+  const [languageMode, setLanguageMode] = useState<LanguageMode>('bilingual')
+  const [savedLanguageMode, setSavedLanguageMode] = useState<LanguageMode>('bilingual')
   const [jobPositions, setJobPositions] = useState<string[]>([])
   const [view, setView] = useState<'stacked' | 'side_by_side'>('side_by_side')
   const [saving, setSaving] = useState(false)
@@ -160,6 +163,9 @@ export function DocumentTemplateEdit({ user }: { user: User }) {
         const doc = (tplResult.data.content_doc as DocumentDoc | null) ?? emptyDocumentDoc()
         setContentDoc(doc)
         setSavedContentDoc(doc)
+        const mode = (tplResult.data as { language_mode?: LanguageMode }).language_mode ?? 'bilingual'
+        setLanguageMode(mode)
+        setSavedLanguageMode(mode)
       }
     }
     load()
@@ -178,8 +184,10 @@ export function DocumentTemplateEdit({ user }: { user: User }) {
   })()
 
   const docChanged = JSON.stringify(contentDoc) !== JSON.stringify(savedContentDoc)
+  const modeChanged = languageMode !== savedLanguageMode
   const hasChanges = template ? (
     docChanged ||
+    modeChanged ||
     title !== template.title ||
     (position || null) !== template.template_for_position ||
     parsedBaseWage !== template.base_wage_idr ||
@@ -198,6 +206,11 @@ export function DocumentTemplateEdit({ user }: { user: User }) {
     const compsJson = cleaned.length > 0
       ? cleaned.map((c, i) => ({ name: c.name, kind: 'earning', is_fixed: c.isFixed, amount_idr: Number(c.amount) || 0, display_order: i }))
       : null
+    // Monolingual templates clear the off-side so a later instantiation (and
+    // the bilingual PDF/portal render) doesn't carry a stale or blank second
+    // column. Bilingual templates pass through untouched. We persist — and
+    // baseline the dirty-tracking against — this same cleared doc.
+    const persistedDoc = clearOffSideForMode(contentDoc, languageMode)
     const { data, error: updateError } = await supabase
       .from('document_templates')
       .update({
@@ -208,19 +221,29 @@ export function DocumentTemplateEdit({ user }: { user: User }) {
         compensation_components: compsJson as unknown as Json,
         hours_per_day: parsedHoursPerDay,
         days_per_week: parsedDaysPerWeek,
-        content_doc: docAsJson(contentDoc),
+        content_doc: docAsJson(persistedDoc),
         updated_at: new Date().toISOString(),
       })
       .eq('id', template.id)
       .select()
       .single()
+    // Persist language_mode separately — it isn't in the generated database.ts
+    // types yet, so it can't ride along in the typed update above.
+    if (!updateError && data && modeChanged) {
+      const { error: modeErr } = await supabase
+        .from('document_templates')
+        .update({ language_mode: languageMode } as never)
+        .eq('id', template.id)
+      if (modeErr) console.warn('Failed to persist template language_mode:', modeErr.message)
+    }
     setSaving(false)
     if (updateError || !data) {
       setError(updateError?.message || 'Could not save template.')
       return
     }
     setTemplate(data)
-    setSavedContentDoc(contentDoc)
+    setSavedContentDoc(persistedDoc)
+    setSavedLanguageMode(languageMode)
     bypassUnsavedWarning()
     navigate(documentsIndexPath(indexTypeFor(data.type)))
   }
@@ -395,6 +418,8 @@ export function DocumentTemplateEdit({ user }: { user: User }) {
         onChange={setContentDoc}
         view={view}
         onViewChange={setView}
+        languageMode={languageMode}
+        onLanguageModeChange={setLanguageMode}
         stickyToolbar
         stickyToolbarOffset={`${EDITOR_STICKY_TOP_PX}px`}
         mergeFields={{

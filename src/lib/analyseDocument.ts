@@ -9,7 +9,8 @@
 import { supabase } from './supabase'
 import type { DocumentDoc } from './documentDoc'
 
-export type AnalyseDocType = 'sop' | 'contract' | 'nda' | 'job_description'
+// 'letter' is DOCX-only (imported as a reusable template, no PDF/vision path).
+export type AnalyseDocType = 'sop' | 'contract' | 'nda' | 'job_description' | 'letter'
 
 export type AnalyseDocumentResult = {
   doc: DocumentDoc

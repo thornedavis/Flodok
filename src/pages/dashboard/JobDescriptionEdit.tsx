@@ -145,6 +145,11 @@ export function JobDescriptionEdit({ user }: { user: User }) {
 
         // Start from either the template's content_doc or the seed doc.
         const seeded = (tplResult.data?.content_doc as DocumentDoc | null) ?? buildJobDescriptionSeedDoc()
+        // A monolingual template instantiates monolingual — carry its flag so
+        // the off-side clears on first save (matches the eager types' applyMode).
+        if (tplResult.data) {
+          setLanguageMode((tplResult.data as { language_mode?: LanguageMode }).language_mode ?? 'bilingual')
+        }
 
         if (reqResult.data && (reqResult.data as Partial<HiringRequest>).status === 'approved') {
           const req = reqResult.data as Partial<HiringRequest>

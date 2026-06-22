@@ -152,7 +152,18 @@ function detectLanguage(text: string): DocxImportLang {
   return count(ID_WORDS) > count(EN_WORDS) ? 'id' : 'en'
 }
 
-export async function importDocx(file: File): Promise<DocxImportResult> {
+// Low-level extraction: the .docx as flat block nodes + their plain texts, the
+// whole-document detected language, and a title. `importDocx` wraps these
+// monolingually; the P4 dual-language path feeds `blockTexts` to the pairing
+// model and then calls `buildBilingualDocFromPairs`.
+export type DocxBlocks = {
+  blocks: DocNode[]
+  blockTexts: string[]
+  title: string
+  language: DocxImportLang
+}
+
+export async function extractDocxBlocks(file: File): Promise<DocxBlocks> {
   const arrayBuffer = await file.arrayBuffer()
   const { value: html } = await mammoth.convertToHtml({ arrayBuffer })
   const dom = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html')
@@ -168,6 +179,74 @@ export async function importDocx(file: File): Promise<DocxImportResult> {
   const firstHeading = body.querySelector('h1, h2')?.textContent?.trim()
   const title = (firstHeading || file.name.replace(/\.docx$/i, '')).slice(0, 200)
 
+  return { blocks, blockTexts: blocks.map(blockPlainText), title, language }
+}
+
+export async function importDocx(file: File): Promise<DocxImportResult> {
+  const { blocks, title, language } = await extractDocxBlocks(file)
   const content = blocks.map(b => bilingualBlock(b, language))
   return { doc: { type: 'document', content }, title, language }
+}
+
+// Flattened plain text of one block node — for the pairing model and previews.
+// List items keep a visible separator so the pairing model can still see item
+// boundaries (and align a list against its translation).
+function blockPlainText(node: DocNode): string {
+  if (node.type === 'text') return node.text ?? ''
+  const sep = node.type === 'paragraph' || node.type === 'heading' ? ''
+    : node.type === 'bulletList' || node.type === 'orderedList' ? ' • '
+    : ' '
+  return (node.content ?? []).map(blockPlainText).join(sep).trim()
+}
+
+// P4: assemble a bilingual doc from the pairing model's output. Each pair links
+// an EN block index to its ID translation index (either side may be null for an
+// unpaired block). Any block no pair references is appended as a monolingual
+// row, so nothing is dropped if the model misses one.
+export function buildBilingualDocFromPairs(
+  blocks: DocNode[],
+  pairs: Array<{ en: number | null; id: number | null }>,
+): DocumentDoc {
+  const used = new Set<number>()
+  const inRange = (i: number | null): number | null =>
+    typeof i === 'number' && Number.isInteger(i) && i >= 0 && i < blocks.length ? i : null
+  // Claim an index at most once — so a pair naming the same block on both sides,
+  // or two pairs naming the same index, can never duplicate a block.
+  const claim = (i: number | null): number | null => {
+    const v = inRange(i)
+    if (v == null || used.has(v)) return null
+    used.add(v)
+    return v
+  }
+  const rowFrom = (enIdx: number | null, idIdx: number | null): DocNode => {
+    const enBlock = enIdx != null ? blocks[enIdx] : null
+    const idBlock = idIdx != null ? blocks[idIdx] : null
+    return {
+      type: 'bilingualBlock',
+      attrs: { id: newId('blk'), needsReview: false, numbering: null },
+      content: [
+        { type: 'blockBody', attrs: { lang: 'en' }, content: enBlock ? [enBlock] : [{ type: 'paragraph' }] },
+        { type: 'blockBody', attrs: { lang: 'id' }, content: idBlock ? [idBlock] : [{ type: 'paragraph' }] },
+      ],
+    }
+  }
+  const content: DocNode[] = []
+  for (const p of pairs) {
+    const en = claim(p.en)
+    const id = claim(p.id)
+    if (en == null && id == null) continue
+    content.push(rowFrom(en, id))
+  }
+  // Any block the model didn't reference — omitted, beyond the server's block
+  // cap, or a total pairing failure that returned no pairs — is appended on its
+  // OWN detected language side (never assumed English), so nothing is dropped
+  // or silently mis-filed into the wrong column.
+  for (let i = 0; i < blocks.length; i++) {
+    if (used.has(i)) continue
+    used.add(i)
+    const lang = detectLanguage(blockPlainText(blocks[i]))
+    content.push(lang === 'id' ? rowFrom(null, i) : rowFrom(i, null))
+  }
+  if (!content.length) throw new Error('No readable content found in the document.')
+  return { type: 'document', content }
 }
