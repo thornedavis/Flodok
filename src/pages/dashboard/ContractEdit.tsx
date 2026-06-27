@@ -77,6 +77,10 @@ export function ContractEdit({ user }: { user: User }) {
   const [savedContentDoc, setSavedContentDoc] = useState<DocumentDoc>(() => emptyDocumentDoc())
   const [translating, setTranslating] = useState(false)
   const [status, setStatus] = useState<'active' | 'draft' | 'archived'>('draft')
+  // Set true after an activation that auto-superseded the employee's prior
+  // active contract (DB trigger trg_supersede_active_contract, migration 169),
+  // so the editor can confirm the old one stepped down.
+  const [supersededPrior, setSupersededPrior] = useState(false)
   const [baseWageIdr, setBaseWageIdr] = useState<string>('')
   // Itemised allowance components (replaces the single allowance number).
   // contracts.allowance_idr is derived from the sum of these on save (DB
@@ -547,6 +551,7 @@ export function ContractEdit({ user }: { user: User }) {
     if (!contract || !signerName.trim() || signing) return
     setSigning(true)
     setError('')
+    setSupersededPrior(false)
 
     const documentHash = await buildContractDocumentHash(contract.content_markdown ?? '', contract.current_version)
     const { data: sigRow, error: sigError } = await supabase
@@ -572,6 +577,22 @@ export function ContractEdit({ user }: { user: User }) {
     const token = await currentAuthToken()
     if (token) captureSignatureIp(sigRow.id, { type: 'jwt', token })
 
+    // Capture the employee's other active contracts BEFORE activating — the DB
+    // trigger archives them as part of this update, so query first to know
+    // whether to confirm the supersede to the user.
+    let priorActiveCount = 0
+    if (employeeId) {
+      const { data: priorActive } = await supabase
+        .from('contracts')
+        .select('id')
+        .eq('employee_id', employeeId)
+        .eq('status', 'active')
+        .eq('is_template', false)
+        .is('deleted_at', null)
+        .neq('id', contract.id)
+      priorActiveCount = priorActive?.length ?? 0
+    }
+
     const { error: statusError } = await supabase
       .from('contracts')
       .update({ status: 'active', updated_at: new Date().toISOString() })
@@ -579,6 +600,7 @@ export function ContractEdit({ user }: { user: User }) {
 
     if (statusError) { setError(statusError.message); setSigning(false); return }
 
+    setSupersededPrior(priorActiveCount > 0)
     setStatus('active')
     // Sync the loaded row's status too, otherwise `hasChanges` (which
     // compares `status` to `contract.status`) would read as dirty right
@@ -1013,6 +1035,14 @@ export function ContractEdit({ user }: { user: User }) {
                 style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}
               >
                 {t.signedSupersedeNotice.replace('{v}', String(signedAtVersion))}
+              </div>
+            )}
+            {supersededPrior && (
+              <div
+                className="mb-4 rounded-lg border px-3 py-2 text-sm"
+                style={{ borderColor: 'color-mix(in srgb, var(--color-success) 40%, transparent)', backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}
+              >
+                {t.supersededPriorContract}
               </div>
             )}
             <DocumentEditor
