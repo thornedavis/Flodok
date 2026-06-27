@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useLang } from '../contexts/LanguageContext'
-import { getAvatarGradient } from '../lib/avatar'
+import { getAvatarGradient, saltedAvatarKey, avatarKeyFromUrl } from '../lib/avatar'
 
 const MAX_AVATAR_SIZE = 2 * 1024 * 1024 // 2 MB
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp']
@@ -44,7 +44,8 @@ export function AvatarUpload({ id, storagePrefix, photoUrl, label, disabled, onC
     setUploading(true)
 
     const ext = (file.name.split('.').pop() || 'jpg').toLowerCase()
-    const path = `${storagePrefix}/${id}.${ext}`
+    // Unguessable salted key (each upload is a fresh object).
+    const path = saltedAvatarKey(`${storagePrefix}/${id}`, ext)
 
     const { error: uploadError } = await supabase.storage
       .from('avatars')
@@ -54,6 +55,13 @@ export function AvatarUpload({ id, storagePrefix, photoUrl, label, disabled, onC
       setError(uploadError.message)
       setUploading(false)
       return
+    }
+
+    // Salted keys are random, so the previous object isn't overwritten — remove
+    // it best-effort so re-uploads don't accumulate orphans.
+    const oldKey = avatarKeyFromUrl(photoUrl)
+    if (oldKey && oldKey !== path) {
+      await supabase.storage.from('avatars').remove([oldKey])
     }
 
     const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path)
@@ -67,11 +75,9 @@ export function AvatarUpload({ id, storagePrefix, photoUrl, label, disabled, onC
     setUploading(true)
     setError('')
 
-    // Extract the stored filename from the URL to delete the exact object.
-    // URL format: https://.../storage/v1/object/public/avatars/<prefix>/<id>.<ext>?t=...
-    const match = photoUrl.match(/\/avatars\/([^?]+)/)
-    if (match) {
-      await supabase.storage.from('avatars').remove([match[1]])
+    const key = avatarKeyFromUrl(photoUrl)
+    if (key) {
+      await supabase.storage.from('avatars').remove([key])
     }
 
     onChange(null)

@@ -2,12 +2,11 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
-import type { Organization, OrgInvitation } from '../../types/aliases'
 
 type InviteState =
   | { status: 'loading' }
   | { status: 'invalid' }
-  | { status: 'ready'; invite: OrgInvitation; org: Organization }
+  | { status: 'ready'; email: string; orgName: string; token: string }
 
 export function AcceptInvite({ onSignUp }: {
   onSignUp: (email: string, password: string, name: string, orgName: string, inviteToken?: string) => Promise<{ error: unknown }>
@@ -26,26 +25,18 @@ export function AcceptInvite({ onSignUp }: {
     if (!token) { setState({ status: 'invalid' }); return }
 
     async function load() {
-      const { data: invite } = await supabase
-        .from('org_invitations')
-        .select('*')
-        .eq('token', token as string)
-        .eq('status', 'pending')
-        .single()
-
-      if (!invite || new Date(invite.expires_at).getTime() < Date.now()) {
+      // Scoped lookup (migration 163): resolves only THIS token to the org
+      // name + email, never exposing other orgs' invites. Replaces the old
+      // direct table reads that the anon key could enumerate org-wide.
+      const { data, error } = await supabase.rpc('get_invite_by_token', {
+        p_token: token as string,
+      })
+      const invite = Array.isArray(data) ? data[0] : data
+      if (error || !invite) {
         setState({ status: 'invalid' })
         return
       }
-
-      const { data: org } = await supabase
-        .from('organizations')
-        .select('*')
-        .eq('id', invite.org_id)
-        .single()
-
-      if (!org) { setState({ status: 'invalid' }); return }
-      setState({ status: 'ready', invite, org })
+      setState({ status: 'ready', email: invite.email, orgName: invite.org_name, token: token as string })
     }
 
     load()
@@ -57,11 +48,11 @@ export function AcceptInvite({ onSignUp }: {
     setError('')
     setSubmitting(true)
     const { error: signErr } = await onSignUp(
-      state.invite.email,
+      state.email,
       password,
       name.trim(),
-      state.org.name,
-      state.invite.token,
+      state.orgName,
+      state.token,
     )
     setSubmitting(false)
     if (signErr) {
@@ -103,7 +94,7 @@ export function AcceptInvite({ onSignUp }: {
         {state.status === 'ready' && (
           <>
             <p className="mb-8 text-center text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-              {t.acceptInviteIntro(state.org.name)}
+              {t.acceptInviteIntro(state.orgName)}
             </p>
 
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -119,7 +110,7 @@ export function AcceptInvite({ onSignUp }: {
                 </label>
                 <input
                   type="email"
-                  value={state.invite.email}
+                  value={state.email}
                   readOnly
                   className="w-full rounded-lg border px-3 py-2 text-sm"
                   style={{ ...inputStyle, backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}

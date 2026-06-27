@@ -4279,6 +4279,10 @@ export type Database = {
         Args: { p_employee_id: string }
         Returns: number
       }
+      get_invite_by_token: {
+        Args: { p_token: string }
+        Returns: { org_id: string; org_name: string; email: string }[]
+      }
       get_user_org_id: { Args: never; Returns: string }
       get_user_role: { Args: never; Returns: string }
       global_search: {

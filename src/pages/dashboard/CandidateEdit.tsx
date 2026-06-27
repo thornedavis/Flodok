@@ -5,7 +5,7 @@ import { useLang } from '../../contexts/LanguageContext'
 import { useBreadcrumbTrailing } from '../../contexts/BreadcrumbContext'
 import { useBilling } from '../../contexts/BillingContext'
 import { normalizePhone, isValidE164 } from '../../lib/phone'
-import { getAvatarGradient } from '../../lib/avatar'
+import { getAvatarGradient, saltedAvatarKey, avatarKeyFromUrl } from '../../lib/avatar'
 import { bucketReferenceValues, referenceNames } from '../../lib/companyReference'
 import { setEmployeePrimaryDepartment, type DepartmentOption } from '../../lib/departments'
 import { primaryDept, type EmpDeptShape } from '../../lib/employee'
@@ -168,19 +168,23 @@ export function CandidateEdit({ user }: { user: User }) {
     if (file.size > MAX_PHOTO_SIZE) { setError(t.avatarTooLarge); return }
     setError('')
     setUploading(true)
+    const prevUrl = candidate?.photo_url
     const result = await uploadPhoto(candidateId, file)
     if (!result.url) { setUploading(false); setError(result.error || t.hiringPhotoUploadError); return }
     const { error: updateError } = await supabase.from('employees').update({ photo_url: result.url }).eq('id', candidateId)
     setUploading(false)
     if (updateError) { setError(updateError.message); return }
+    // Salted keys are random, so the previous object isn't overwritten — clean it up.
+    const oldKey = avatarKeyFromUrl(prevUrl)
+    if (oldKey) await supabase.storage.from('avatars').remove([oldKey])
     setCandidate(prev => prev ? { ...prev, photo_url: result.url } : prev)
   }
 
   async function handlePhotoRemove() {
     if (!candidate || !candidateId || !candidate.photo_url) return
     setUploading(true)
-    const match = candidate.photo_url.match(/\/avatars\/([^?]+)/)
-    if (match) await supabase.storage.from('avatars').remove([match[1]])
+    const key = avatarKeyFromUrl(candidate.photo_url)
+    if (key) await supabase.storage.from('avatars').remove([key])
     const { error: updateError } = await supabase.from('employees').update({ photo_url: null }).eq('id', candidateId)
     setUploading(false)
     if (updateError) { setError(updateError.message); return }
@@ -501,7 +505,7 @@ function ManageButton({ label, onClick }: { label: string; onClick: () => void }
 
 async function uploadPhoto(employeeId: string, file: File): Promise<{ url: string | null; error: string | null }> {
   const ext = (file.name.split('.').pop() || 'jpg').toLowerCase()
-  const path = `${employeeId}.${ext}`
+  const path = saltedAvatarKey(employeeId, ext)
   const { error } = await supabase.storage.from('avatars').upload(path, file, { upsert: true })
   if (error) return { url: null, error: error.message }
   const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path)

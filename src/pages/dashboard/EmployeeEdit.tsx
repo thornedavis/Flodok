@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { saltedAvatarKey, avatarKeyFromUrl } from '../../lib/avatar'
 import { useLang } from '../../contexts/LanguageContext'
 import { useBreadcrumbTrailing } from '../../contexts/BreadcrumbContext'
 import { CompensationFacts } from '../../components/employee/CompensationFacts'
@@ -199,8 +200,9 @@ export function EmployeeEdit({ user }: { user: User }) {
     setTopError('')
     setUploading(true)
 
-    const ext = file.name.split('.').pop()
-    const path = `${employeeId}.${ext}`
+    const ext = file.name.split('.').pop() || 'jpg'
+    // Unguessable salted key (migration 163 hardening); each upload is a fresh object.
+    const path = saltedAvatarKey(employeeId, ext)
 
     const { error: uploadError } = await supabase.storage
       .from('avatars')
@@ -210,6 +212,12 @@ export function EmployeeEdit({ user }: { user: User }) {
       setTopError(uploadError.message)
       setUploading(false)
       return
+    }
+
+    // Remove the previous (differently-keyed) object so re-uploads don't orphan.
+    const oldKey = avatarKeyFromUrl(employee?.photo_url)
+    if (oldKey && oldKey !== path) {
+      await supabase.storage.from('avatars').remove([oldKey])
     }
 
     const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path)
@@ -224,9 +232,9 @@ export function EmployeeEdit({ user }: { user: User }) {
     if (!employee || !employeeId) return
     setUploading(true)
 
-    const ext = employee.photo_url?.split('.').pop()?.split('?')[0]
-    if (ext) {
-      await supabase.storage.from('avatars').remove([`${employeeId}.${ext}`])
+    const key = avatarKeyFromUrl(employee.photo_url)
+    if (key) {
+      await supabase.storage.from('avatars').remove([key])
     }
 
     const result = await saveFields({ photo_url: null })

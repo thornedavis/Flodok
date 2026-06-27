@@ -38,3 +38,24 @@ export function getInitials(name: string): string {
   }
   return (parts[0]?.[0] || '?').toUpperCase()
 }
+
+// Avatar storage keys. A random salt segment makes the object key unguessable,
+// so knowing an employee/user/org id (which appears in many API responses) no
+// longer yields the public photo URL — closing the avatar enumeration leak
+// while keeping the bucket public.
+//
+// The salt is a dot-delimited segment placed AFTER the id (`<base>.<salt>.<ext>`)
+// so the scoped storage write policies (migration 019), which parse the id as
+// split_part(name, '.', 1), still match. Do NOT use a `<id>-<salt>` form — that
+// would break those policies.
+export function saltedAvatarKey(base: string, ext: string): string {
+  return `${base}.${crypto.randomUUID()}.${ext}`
+}
+
+// Extract the stored object key from a public avatar URL, for deletion.
+// URL: https://.../storage/v1/object/public/avatars/<key>?t=...
+export function avatarKeyFromUrl(url: string | null | undefined): string | null {
+  if (!url) return null
+  const m = url.match(/\/avatars\/([^?]+)/)
+  return m ? m[1] : null
+}
