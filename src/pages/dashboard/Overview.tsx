@@ -14,6 +14,7 @@ import {
 import { supabase } from '../../lib/supabase'
 import { PayrollReminder } from '../../components/PayrollReminder'
 import { useLang } from '../../contexts/LanguageContext'
+import { useRole } from '../../hooks/useRole'
 import { getEmployeeDepts, type EmployeeDepartmentRow } from '../../lib/employee'
 import { formatIdr } from '../../lib/credits'
 import { documentsIndexPath } from '../../lib/documentTypes'
@@ -104,6 +105,7 @@ const EVENT_TYPE_TO_SERIES: Record<string, keyof Pick<ActivityBucket, 'sops' | '
 
 export function Overview({ user }: { user: User }) {
   const { t, lang } = useLang()
+  const { canManagePeople } = useRole(user)
   const [data, setData] = useState<DashboardData | null>(null)
 
   useEffect(() => { loadDashboard(user.org_id).then(setData) }, [user.org_id])
@@ -122,7 +124,7 @@ export function Overview({ user }: { user: User }) {
 
       <QuickActions t={t} />
 
-      <StatCards stats={data.stats} t={t} />
+      <StatCards stats={data.stats} t={t} canManagePeople={canManagePeople} />
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
@@ -374,12 +376,16 @@ function QuickActions({ t }: { t: Translations }) {
 
 // ─── Stat cards ─────────────────────────────────────────
 
-function StatCards({ stats, t }: { stats: Stats; t: Translations }) {
+function StatCards({ stats, t, canManagePeople }: { stats: Stats; t: Translations; canManagePeople: boolean }) {
   const cards = [
     { label: t.overviewEmployees, value: stats.employeeCount, link: '/dashboard/employees' },
     { label: t.overviewCandidates, value: stats.candidateCount, link: '/dashboard/recruitment' },
     { label: t.overviewActiveSops, value: stats.activeSOPs, link: documentsIndexPath('sop') },
-    { label: t.overviewActiveContracts, value: stats.activeContracts, link: documentsIndexPath('contract') },
+    // Contracts are pay-sensitive and admin/HR-only now (RLS); a member's view
+    // of contracts is empty, so hide the tile rather than show a misleading 0.
+    ...(canManagePeople
+      ? [{ label: t.overviewActiveContracts, value: stats.activeContracts, link: documentsIndexPath('contract') }]
+      : []),
     { label: t.overviewAwaitingSignature, value: stats.pendingSignatures, link: documentsIndexPath('sop') },
     { label: t.overviewPendingUpdates, value: stats.pendingUpdates, link: '/dashboard/pending' },
   ]
