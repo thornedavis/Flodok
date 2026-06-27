@@ -20,6 +20,7 @@ export function AcceptInvite({ onSignUp }: {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [submitted, setSubmitted] = useState(false)
 
   useEffect(() => {
     if (!token) { setState({ status: 'invalid' }); return }
@@ -59,7 +60,17 @@ export function AcceptInvite({ onSignUp }: {
       setError((signErr as Error).message)
       return
     }
-    navigate('/dashboard', { replace: true })
+    // With email confirmation on, signUp returns no session — show a "check
+    // your email" state instead of bouncing to the signed-out route tree. The
+    // invite is already redeemed server-side by the signup trigger (164); the
+    // user joins the org on first login after confirming. If confirmation is
+    // off (session present), go straight to the dashboard.
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session) {
+      navigate('/dashboard', { replace: true })
+    } else {
+      setSubmitted(true)
+    }
   }
 
   const inputStyle: React.CSSProperties = {
@@ -91,7 +102,21 @@ export function AcceptInvite({ onSignUp }: {
           </div>
         )}
 
-        {state.status === 'ready' && (
+        {state.status === 'ready' && submitted && (
+          <div className="mt-8 text-center">
+            <h2 className="text-xl font-semibold tracking-tight" style={{ color: 'var(--color-text)' }}>
+              {t.checkYourEmail}
+            </h2>
+            <p className="mt-2 text-sm leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>
+              {t.confirmationSentTo} <strong style={{ color: 'var(--color-text)' }}>{state.email}</strong>. {t.clickToActivate}
+            </p>
+            <Link to="/login" className="mt-6 inline-block text-sm font-semibold" style={{ color: 'var(--color-primary)' }}>
+              {t.backToSignIn} →
+            </Link>
+          </div>
+        )}
+
+        {state.status === 'ready' && !submitted && (
           <>
             <p className="mb-8 text-center text-sm" style={{ color: 'var(--color-text-secondary)' }}>
               {t.acceptInviteIntro(state.orgName)}
