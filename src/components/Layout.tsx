@@ -612,6 +612,7 @@ function deriveBreadcrumbs(pathname: string, search: string, orgName: string, t:
     company: { label: t.navCompany, href: '/dashboard/company' },
     documents: { label: t.navDocuments, href: '/dashboard/documents' },
     performance: { label: t.navPerformance, href: '/dashboard/performance' },
+    payroll: { label: t.navPayroll, href: '/dashboard/payroll' },
     spotlight: { label: t.navSpotlight, href: '/dashboard/spotlight' },
     pending: { label: t.navPending, href: '/dashboard/pending' },
     inbox: { label: t.navInbox, href: '/dashboard/inbox' },

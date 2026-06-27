@@ -6,6 +6,7 @@
 // says so rather than implying Flodok computed them.
 
 import html2pdf from 'html2pdf.js'
+import JSZip from 'jszip'
 import { formatIdr } from './credits'
 
 export type PayslipLine = {
@@ -38,16 +39,40 @@ const L = {
     payslip: 'PAYSLIP', period: 'Period', employee: 'Employee', position: 'Position',
     nik: 'KTP / NIK', npwp: 'NPWP', earnings: 'Earnings', deductions: 'Deductions',
     gross: 'Gross earnings', totalDed: 'Total deductions', net: 'Net pay (take-home)',
-    bank: 'Bank account', generated: 'Generated',
+    bank: 'Bank account', generated: 'Generated', adjustment: 'Adjustment',
     disclaimer: 'System-generated payslip. Income tax (PPh 21) and BPJS are administered by the company’s payroll provider.',
   },
   id: {
     payslip: 'SLIP GAJI', period: 'Periode', employee: 'Karyawan', position: 'Jabatan',
     nik: 'KTP / NIK', npwp: 'NPWP', earnings: 'Penghasilan', deductions: 'Potongan',
     gross: 'Total Penghasilan', totalDed: 'Total Potongan', net: 'Gaji Bersih (Take-home)',
-    bank: 'Rekening', generated: 'Dibuat',
+    bank: 'Rekening', generated: 'Dibuat', adjustment: 'Penyesuaian',
     disclaimer: 'Slip gaji dibuat oleh sistem. Pajak penghasilan (PPh 21) dan BPJS dikelola oleh penyedia payroll perusahaan.',
   },
+}
+
+// Bilingual labels — the payslip shows English / Indonesian for each fixed
+// label by default. Component names ("Gaji Pokok", "Tunjangan") are user data
+// and stay as written; identical labels (NPWP, KTP/NIK) are not duplicated.
+function bilingualLabels() {
+  const bil = (en: string, id: string) => (en === id ? en : `${en} / ${id}`)
+  return {
+    payslip: bil(L.en.payslip, L.id.payslip),
+    period: bil(L.en.period, L.id.period),
+    employee: bil(L.en.employee, L.id.employee),
+    position: bil(L.en.position, L.id.position),
+    nik: bil(L.en.nik, L.id.nik),
+    npwp: bil(L.en.npwp, L.id.npwp),
+    earnings: bil(L.en.earnings, L.id.earnings),
+    deductions: bil(L.en.deductions, L.id.deductions),
+    gross: bil(L.en.gross, L.id.gross),
+    totalDed: bil(L.en.totalDed, L.id.totalDed),
+    net: bil(L.en.net, L.id.net),
+    bank: bil(L.en.bank, L.id.bank),
+    generated: bil(L.en.generated, L.id.generated),
+    adjustment: bil(L.en.adjustment, L.id.adjustment),
+    disclaimer: `${L.en.disclaimer}<br/>${L.id.disclaimer}`,
+  }
 }
 
 function esc(s: string | null | undefined): string {
@@ -66,10 +91,18 @@ function row(label: string, amount: number, lang: 'en' | 'id'): string {
   </tr>`
 }
 
-export async function downloadPayslipPdf(data: PayslipData, lang: 'en' | 'id'): Promise<void> {
-  const t = L[lang]
-  const earnings = data.lines.filter(l => l.amount_idr >= 0)
-  const deductions = data.lines.filter(l => l.amount_idr < 0)
+async function renderPayslip(data: PayslipData, lang: 'en' | 'id', action: 'save' | 'blob'): Promise<Blob | void> {
+  const t = bilingualLabels()
+  // Fall back to the settlement totals when a frozen period predates itemised
+  // lines, so the payslip is never empty.
+  let allLines: PayslipLine[] = data.lines ?? []
+  if (allLines.length === 0) {
+    allLines = [{ line_type: 'base', name: 'Gaji Pokok', kind: 'earning', is_fixed: true, amount_idr: data.totals.base_idr }]
+    if (data.totals.allowance_idr) allLines.push({ line_type: 'allowance', name: 'Tunjangan', kind: 'earning', is_fixed: false, amount_idr: data.totals.allowance_idr })
+    if (data.totals.adjustment_net_idr) allLines.push({ line_type: 'adjustment', name: t.adjustment, kind: data.totals.adjustment_net_idr >= 0 ? 'earning' : 'deduction', is_fixed: false, amount_idr: data.totals.adjustment_net_idr })
+  }
+  const earnings = allLines.filter(l => l.amount_idr >= 0)
+  const deductions = allLines.filter(l => l.amount_idr < 0)
   const grossEarnings = earnings.reduce((s, l) => s + l.amount_idr, 0)
   const totalDeductions = deductions.reduce((s, l) => s + Math.abs(l.amount_idr), 0)
   const net = data.totals.payout_idr
@@ -152,7 +185,7 @@ export async function downloadPayslipPdf(data: PayslipData, lang: 'en' | 'id'): 
 
   const safeName = empName.replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '')
   try {
-    await html2pdf()
+    const worker = html2pdf()
       .set({
         margin: [12, 12, 12, 12],
         filename: `Payslip-${safeName}-${data.period.slice(0, 7)}.pdf`,
@@ -160,9 +193,47 @@ export async function downloadPayslipPdf(data: PayslipData, lang: 'en' | 'id'): 
         html2canvas: { scale: 2, useCORS: true },
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
       })
-      .from(wrapper)
-      .save()
+      // Render the inner content element, NOT the position:fixed wrapper —
+      // html2canvas captures a fixed container as a blank page.
+      .from((wrapper.firstElementChild as HTMLElement) ?? wrapper)
+    if (action === 'save') {
+      await worker.save()
+      return
+    }
+    return (await worker.outputPdf('blob')) as Blob
   } finally {
     document.body.removeChild(wrapper)
   }
+}
+
+// Single payslip → triggers a browser download.
+export async function downloadPayslipPdf(data: PayslipData, lang: 'en' | 'id'): Promise<void> {
+  await renderPayslip(data, lang, 'save')
+}
+
+// Batch: generate every payslip and download them together as one ZIP. Reports
+// progress as each PDF is rendered (html2canvas is the slow step).
+export async function downloadAllPayslipsZip(
+  payslips: PayslipData[],
+  lang: 'en' | 'id',
+  period: string,
+  onProgress?: (done: number, total: number) => void,
+): Promise<void> {
+  const zip = new JSZip()
+  for (let i = 0; i < payslips.length; i++) {
+    const data = payslips[i]
+    const blob = (await renderPayslip(data, lang, 'blob')) as Blob
+    const safeName = (data.employee.name || 'employee').replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '')
+    zip.file(`Payslip-${safeName}-${data.period.slice(0, 7)}.pdf`, blob)
+    onProgress?.(i + 1, payslips.length)
+  }
+  const zipBlob = await zip.generateAsync({ type: 'blob' })
+  const url = URL.createObjectURL(zipBlob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `Payslips-${period.slice(0, 7)}.zip`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
 }

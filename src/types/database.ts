@@ -2933,6 +2933,62 @@ export type Database = {
           },
         ]
       }
+      org_pay_components: {
+        Row: {
+          active: boolean
+          category: string
+          created_at: string
+          id: string
+          is_fixed_default: boolean
+          kind: string
+          name: string
+          org_id: string
+          sort_order: number
+          talenta_confirmed: boolean
+          talenta_name: string | null
+          taxable_hint: boolean
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          category?: string
+          created_at?: string
+          id?: string
+          is_fixed_default?: boolean
+          kind: string
+          name: string
+          org_id: string
+          sort_order?: number
+          talenta_confirmed?: boolean
+          talenta_name?: string | null
+          taxable_hint?: boolean
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          category?: string
+          created_at?: string
+          id?: string
+          is_fixed_default?: boolean
+          kind?: string
+          name?: string
+          org_id?: string
+          sort_order?: number
+          talenta_confirmed?: boolean
+          talenta_name?: string | null
+          taxable_hint?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_pay_components_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organizations: {
         Row: {
           address_city: string | null
@@ -4094,6 +4150,7 @@ export type Database = {
         }
         Returns: number
       }
+      _seed_pay_components_for_org: { Args: { p_org: string }; Returns: number }
       _settle_pay_period: {
         Args: { p_employee_id: string; p_period_month: string }
         Returns: undefined
@@ -4137,6 +4194,10 @@ export type Database = {
       }
       admin_pay_settlement: {
         Args: { p_employee_id: string; p_period_month: string }
+        Returns: Json
+      }
+      admin_payroll_lines: {
+        Args: { p_employee_id: string; p_period: string }
         Returns: Json
       }
       admin_payslip: {
@@ -5140,6 +5201,7 @@ export type Database = {
         }[]
       }
       run_payroll: { Args: { p_period: string }; Returns: Json }
+      seed_default_pay_components: { Args: never; Returns: number }
       seed_v1_achievement_definitions: {
         Args: { p_org_id: string }
         Returns: undefined

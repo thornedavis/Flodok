@@ -6,6 +6,7 @@ import {
   useNavigate,
   useParams,
 } from 'react-router-dom'
+import { useAuth } from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
 import {
   allTopics,
@@ -56,6 +57,7 @@ export function HelpCenterLayout() {
 
 function HelpHeader() {
   const { theme, toggle } = useTheme()
+  const { session, loading } = useAuth()
   const crumbs = useBreadcrumbs()
 
   return (
@@ -134,20 +136,35 @@ function HelpHeader() {
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5" /><line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" /><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" /><line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" /><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" /></svg>
             )}
           </button>
-          <Link
-            to="/login"
-            className="hidden rounded-md px-3 py-1.5 text-sm font-medium sm:inline-block"
-            style={{ color: 'var(--color-text-secondary)' }}
-          >
-            Sign in
-          </Link>
-          <Link
-            to="/signup"
-            className="rounded-md px-3 py-1.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
-            style={{ backgroundColor: 'var(--color-primary)' }}
-          >
-            Get started
-          </Link>
+          {/* Auth-aware actions: signed-in users get a Dashboard link;
+              signed-out visitors get the sign in / sign up CTAs. Gate on
+              !loading so we never flash the wrong state on first paint. */}
+          {!loading && (session ? (
+            <Link
+              to="/dashboard"
+              className="rounded-md px-3 py-1.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+              style={{ backgroundColor: 'var(--color-primary)' }}
+            >
+              Dashboard
+            </Link>
+          ) : (
+            <>
+              <Link
+                to="/login"
+                className="hidden rounded-md px-3 py-1.5 text-sm font-medium sm:inline-block"
+                style={{ color: 'var(--color-text-secondary)' }}
+              >
+                Sign in
+              </Link>
+              <Link
+                to="/signup"
+                className="rounded-md px-3 py-1.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+                style={{ backgroundColor: 'var(--color-primary)' }}
+              >
+                Get started
+              </Link>
+            </>
+          ))}
         </div>
     </header>
   )
@@ -301,7 +318,7 @@ function HelpSidebar() {
           aria-label="Flodok — home"
           className="inline-flex items-center"
         >
-          <Wordmark height={22} />
+          <Wordmark height={18} />
         </Link>
       </div>
 

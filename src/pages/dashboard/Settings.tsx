@@ -13,6 +13,7 @@ import { PhoneInput } from '../../components/PhoneInput'
 import { isValidE164 } from '../../lib/phone'
 import type { Translations } from '../../lib/translations'
 import type { User, Organization, OrgInvitation } from '../../types/aliases'
+import { PayComponentsTab } from '../../components/settings/PayComponentsTab'
 import { IntegrationCard } from '../../components/integrations/IntegrationCard'
 import { ConnectFirefliesDialog } from '../../components/integrations/ConnectFirefliesDialog'
 import { ConnectAsanaDialog } from '../../components/integrations/ConnectAsanaDialog'
@@ -32,7 +33,7 @@ import { useBilling } from '../../contexts/BillingContext'
 
 ensureSignatureFontsLoaded()
 
-type Tab = 'account' | 'team' | 'integrations' | 'adjustments' | 'achievements' | 'approvals' | 'billing'
+type Tab = 'account' | 'team' | 'integrations' | 'payroll' | 'achievements' | 'approvals' | 'billing'
 
 const inputStyle: React.CSSProperties = {
   borderColor: 'var(--color-border)',
@@ -51,7 +52,7 @@ export function Settings({ user }: { user: User }) {
   else if (rawTab === 'integrations' && isAdmin) tab = 'integrations'
   else if (rawTab === 'achievements' && isAdmin) tab = 'achievements'
   else if (rawTab === 'approvals' && isAdmin) tab = 'approvals'
-  else if ((rawTab === 'adjustments' || rawTab === 'credits' || rawTab === 'bonuses') && isAdmin) tab = 'adjustments'
+  else if ((rawTab === 'payroll' || rawTab === 'components' || rawTab === 'adjustments' || rawTab === 'credits' || rawTab === 'bonuses') && isAdmin) tab = 'payroll'
 
   function setTab(next: Tab) {
     setParams({ tab: next }, { replace: true })
@@ -68,7 +69,7 @@ export function Settings({ user }: { user: User }) {
           <TabButton active={tab === 'integrations'} onClick={() => setTab('integrations')}>{t.settingsIntegrationsTab}</TabButton>
         )}
         {isAdmin && (
-          <TabButton active={tab === 'adjustments'} onClick={() => setTab('adjustments')}>{t.settingsAdjustmentsTab}</TabButton>
+          <TabButton active={tab === 'payroll'} onClick={() => setTab('payroll')}>{t.navPayroll}</TabButton>
         )}
         {isAdmin && (
           <TabButton active={tab === 'achievements'} onClick={() => setTab('achievements')}>{t.achievementDefsTitle}</TabButton>
@@ -82,7 +83,17 @@ export function Settings({ user }: { user: User }) {
       {tab === 'account' && <AccountTab user={user} t={t} />}
       {tab === 'team' && <TeamMembersSection user={user} t={t} />}
       {tab === 'integrations' && isAdmin && <IntegrationsTab user={user} t={t} />}
-      {tab === 'adjustments' && isAdmin && <AdjustmentsTab user={user} t={t} />}
+      {tab === 'payroll' && isAdmin && (
+        <div className="space-y-10">
+          <div>
+            <h2 className="mb-4 text-lg font-semibold" style={{ color: 'var(--color-text)' }}>{t.settingsAdjustmentsTab}</h2>
+            <AdjustmentsTab user={user} t={t} />
+          </div>
+          <div className="border-t pt-8" style={{ borderColor: 'var(--color-border)' }}>
+            <PayComponentsTab user={user} t={t} />
+          </div>
+        </div>
+      )}
       {tab === 'achievements' && isAdmin && <AchievementsTab user={user} t={t} />}
       {tab === 'approvals' && isAdmin && <ApprovalsTab user={user} t={t} />}
       {tab === 'billing' && <BillingTab user={user} t={t} />}

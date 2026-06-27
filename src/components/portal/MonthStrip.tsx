@@ -160,7 +160,7 @@ export function MonthStrip({ selectedMonth, earliestMonth, currentMonth, onSelec
       <div className="min-w-0 flex-1">
         <div
           ref={containerRef}
-          className="month-strip relative flex snap-x snap-proximity gap-6 overflow-x-auto px-[45%] py-3 transition-opacity"
+          className="month-strip relative flex snap-x snap-proximity gap-8 overflow-x-auto px-[45%] py-3 transition-opacity"
           style={{
             scrollbarWidth: 'none',
             msOverflowStyle: 'none',
@@ -183,15 +183,21 @@ export function MonthStrip({ selectedMonth, earliestMonth, currentMonth, onSelec
           ) : null
           const monthNodes = group.months.map(month => {
             const isSelected = month === selectedMonth
+            // Magnify only the active month; all others stay the same size. A
+            // center-origin scale keeps the item's centre fixed, so the
+            // snap/centre-scroll maths is unaffected.
+            const scale = isSelected ? 1.25 : 1
             return (
               <button
                 key={month}
                 ref={el => { itemRefs.current[month] = el }}
                 type="button"
                 onClick={() => { if (month !== selectedMonth) onSelect(month) }}
-                className="snap-center shrink-0 whitespace-nowrap text-xl font-semibold transition-colors duration-200"
+                className="snap-center shrink-0 whitespace-nowrap text-xl font-semibold transition-all duration-300 ease-out"
                 style={{
                   color: isSelected ? 'var(--color-text)' : 'var(--color-text-tertiary)',
+                  transform: `scale(${scale})`,
+                  transformOrigin: 'center',
                 }}
               >
                 {formatMonthLong(month, lang)}
