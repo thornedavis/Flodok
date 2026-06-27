@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { createBrowserRouter, RouterProvider, Routes, Route, Navigate, useParams, useLocation } from 'react-router-dom'
 import { useAuth } from './hooks/useAuth'
 import { DashboardLayout, PublicLayout } from './components/Layout'
@@ -55,7 +56,7 @@ import { HelpContact } from './pages/help/HelpContact'
 import { HelpFAQ } from './pages/help/FAQ'
 
 function AppRoutes() {
-  const { session, user, loading, signIn, signUp, signOut } = useAuth()
+  const { session, user, loading, recovering, signIn, signUp, signOut, recover } = useAuth()
 
   if (loading) {
     return (
@@ -114,9 +115,7 @@ function AppRoutes() {
         </>
       ) : !user ? (
         <Route path="*" element={
-          <div className="flex min-h-screen items-center justify-center" style={{ backgroundColor: 'var(--color-bg)' }}>
-            <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>Setting up your account...</div>
-          </div>
+          <AccountSetup recover={recover} recovering={recovering} onSignOut={signOut} />
         } />
       ) : (
         <>
@@ -180,6 +179,78 @@ function AppRoutes() {
         </>
       )}
     </Routes>
+  )
+}
+
+// Shown when a session exists but no users row does — a profile that wasn't
+// provisioned (a pre-trigger orphan, or the signup trigger's exception
+// fallback fired). Instead of an indefinite spinner, attempt a one-shot
+// idempotent recovery on mount; if it still fails, offer an explicit retry and
+// a sign-out escape. A successful recover() makes useAuth.user non-null, which
+// re-renders AppRoutes straight into the dashboard.
+function AccountSetup({
+  recover,
+  recovering,
+  onSignOut,
+}: {
+  recover: () => Promise<{ error: unknown }>
+  recovering: boolean
+  onSignOut: () => void
+}) {
+  const [attempted, setAttempted] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let active = true
+    recover().then(({ error }) => {
+      if (!active) return
+      setAttempted(true)
+      if (error) setError((error as Error).message)
+    })
+    return () => { active = false }
+  // run once on mount
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  function retry() {
+    setError('')
+    recover().then(({ error }) => {
+      if (error) setError((error as Error).message)
+    })
+  }
+
+  const settingUp = recovering || !attempted
+
+  return (
+    <div
+      className="flex min-h-screen flex-col items-center justify-center gap-4 px-4 text-center"
+      style={{ backgroundColor: 'var(--color-bg)' }}
+    >
+      <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+        {settingUp ? 'Setting up your account…' : 'We couldn’t finish setting up your account.'}
+      </div>
+      {error && !settingUp && (
+        <div className="max-w-sm text-xs" style={{ color: 'var(--color-danger)' }}>{error}</div>
+      )}
+      {!settingUp && (
+        <div className="flex items-center gap-3">
+          <button
+            onClick={retry}
+            className="rounded-lg px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+            style={{ backgroundColor: 'var(--color-primary)' }}
+          >
+            Retry setup
+          </button>
+          <button
+            onClick={onSignOut}
+            className="rounded-lg border px-4 py-2 text-sm font-medium transition-opacity hover:opacity-90"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+          >
+            Sign out
+          </button>
+        </div>
+      )}
+    </div>
   )
 }
 

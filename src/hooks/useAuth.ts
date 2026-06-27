@@ -7,6 +7,7 @@ export function useAuth() {
   const [session, setSession] = useState<Session | null>(null)
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+  const [recovering, setRecovering] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -28,11 +29,13 @@ export function useAuth() {
   }, [])
 
   async function fetchUser(authId: string) {
+    // maybeSingle(): a missing row is a normal "not provisioned yet" state, not
+    // an error. App.tsx renders the self-heal screen when session && !user.
     const { data } = await supabase
       .from('users')
       .select('*')
       .eq('id', authId)
-      .single()
+      .maybeSingle()
     setUser(data)
     setLoading(false)
   }
@@ -43,26 +46,55 @@ export function useAuth() {
   }
 
   async function signUp(email: string, password: string, name: string, orgName: string, inviteToken?: string) {
-    const { data: authData, error: authError } = await supabase.auth.signUp({ email, password })
-    if (authError || !authData.user) return { error: authError }
-
-    // Create org + user profile via security definer function (bypasses RLS).
-    // When inviteToken is supplied, handle_signup joins the existing org instead.
-    const { error: setupError } = await supabase.rpc('handle_signup', {
-      user_id: authData.user.id,
-      user_email: email,
-      user_name: name,
-      org_name: orgName,
-      invite_token: inviteToken ?? null,
+    // Provisioning is no longer a separate, droppable second await. The org +
+    // users row are created atomically with the identity by the
+    // on_auth_user_created trigger (migration 164), which reads this metadata
+    // from raw_user_meta_data. A network drop here can no longer orphan the
+    // account — the trigger runs server-side within the auth.users insert.
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          name,
+          org_name: orgName,
+          invite_token: inviteToken ?? null,
+        },
+      },
     })
-    if (setupError) return { error: setupError }
+    return { error }
+  }
 
-    return { error: null }
+  // Self-heal for any session that has no users row (a pre-trigger orphan, or
+  // the trigger's exception fallback fired). Re-runs the idempotent
+  // handle_signup recovery primitive, then refetches. Safe to call repeatedly —
+  // it returns the existing org and inserts nothing if already provisioned.
+  // Used by App.tsx's account-setup screen.
+  async function recover() {
+    const { data: { session: current } } = await supabase.auth.getSession()
+    if (!current) return { error: new Error('No active session') }
+
+    const meta = (current.user.user_metadata ?? {}) as {
+      name?: string
+      org_name?: string
+      invite_token?: string | null
+    }
+    setRecovering(true)
+    const { error } = await supabase.rpc('handle_signup', {
+      user_id: current.user.id,
+      user_email: current.user.email ?? '',
+      user_name: meta.name ?? current.user.email?.split('@')[0] ?? 'User',
+      org_name: meta.org_name ?? '',
+      invite_token: meta.invite_token ?? null,
+    })
+    if (!error) await fetchUser(current.user.id)
+    setRecovering(false)
+    return { error }
   }
 
   async function signOut() {
     await supabase.auth.signOut()
   }
 
-  return { session, user, loading, signIn, signUp, signOut }
+  return { session, user, loading, recovering, signIn, signUp, signOut, recover }
 }

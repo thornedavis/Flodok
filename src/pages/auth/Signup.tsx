@@ -11,6 +11,7 @@ export function Signup({
     password: string,
     name: string,
     orgName: string,
+    inviteToken?: string,
   ) => Promise<{ error: unknown }>
 }) {
   const { t } = useLang()
