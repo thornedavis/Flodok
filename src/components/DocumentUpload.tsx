@@ -17,9 +17,18 @@ interface DocumentUploadProps {
   /** Alt text for accessibility. */
   label?: string
   disabled?: boolean
+  /**
+   * Portal (unauthenticated) mode. When set, uploads / signed-URL reads /
+   * removes route through the token-validating portal-upload-doc edge function
+   * instead of direct storage calls (which RLS rejects for an anon caller).
+   */
+  portalAuth?: { slug: string; accessToken: string }
 }
 
-export function DocumentUpload({ employeeId, kind, photoUrl, onChange, label, disabled }: DocumentUploadProps) {
+const PORTAL_FN_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/portal-upload-doc`
+const PORTAL_FN_AUTH = { Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` }
+
+export function DocumentUpload({ employeeId, kind, photoUrl, onChange, label, disabled, portalAuth }: DocumentUploadProps) {
   const { t } = useLang()
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
@@ -38,11 +47,23 @@ export function DocumentUpload({ employeeId, kind, photoUrl, onChange, label, di
       ? (photoUrl.match(/\/employee_docs\/([^?]+)/)?.[1] ?? null)
       : photoUrl
     if (!path) { setSignedSrc(null); return }
-    supabase.storage.from('employee_docs').createSignedUrl(path, 3600).then(({ data }) => {
-      if (!cancelled) setSignedSrc(data?.signedUrl ?? null)
-    })
+    if (portalAuth) {
+      // Anon portal callers can't sign storage URLs directly — go through the edge fn.
+      fetch(PORTAL_FN_URL, {
+        method: 'POST',
+        headers: { ...PORTAL_FN_AUTH, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'sign', slug: portalAuth.slug, access_token: portalAuth.accessToken, path }),
+      })
+        .then(r => r.json())
+        .then(d => { if (!cancelled) setSignedSrc(d?.signedUrl ?? null) })
+        .catch(() => { if (!cancelled) setSignedSrc(null) })
+    } else {
+      supabase.storage.from('employee_docs').createSignedUrl(path, 3600).then(({ data }) => {
+        if (!cancelled) setSignedSrc(data?.signedUrl ?? null)
+      })
+    }
     return () => { cancelled = true }
-  }, [photoUrl])
+  }, [photoUrl, portalAuth?.slug, portalAuth?.accessToken])
 
   const displaySrc = localPreview ?? signedSrc
 
@@ -66,6 +87,31 @@ export function DocumentUpload({ employeeId, kind, photoUrl, onChange, label, di
     const ext = (file.name.split('.').pop() || 'jpg').toLowerCase()
     const path = `${employeeId}/${kind}.${ext}`
 
+    // Portal (anon) mode: upload through the token-validating edge function,
+    // which constructs the path server-side and returns a signed preview URL.
+    if (portalAuth) {
+      const form = new FormData()
+      form.append('file', file)
+      form.append('slug', portalAuth.slug)
+      form.append('access_token', portalAuth.accessToken)
+      form.append('kind', kind)
+      let data: { path?: string; signedUrl?: string; error?: string } | null = null
+      try {
+        const res = await fetch(PORTAL_FN_URL, { method: 'POST', headers: PORTAL_FN_AUTH, body: form })
+        data = await res.json()
+        if (!res.ok) throw new Error(data?.error || 'Upload failed')
+      } catch (err) {
+        setError((err as Error).message || 'Upload failed')
+        setUploading(false)
+        return
+      }
+      setLocalPreview(URL.createObjectURL(file))
+      if (data?.signedUrl) setSignedSrc(data.signedUrl)
+      onChange(data?.path ?? path)
+      setUploading(false)
+      return
+    }
+
     const { error: uploadError } = await supabase.storage
       .from('employee_docs')
       .upload(path, file, { upsert: true })
@@ -87,7 +133,17 @@ export function DocumentUpload({ employeeId, kind, photoUrl, onChange, label, di
     setUploading(true)
     setError('')
     const path = photoUrl.includes('://') ? (photoUrl.match(/\/employee_docs\/([^?]+)/)?.[1] ?? null) : photoUrl
-    if (path) await supabase.storage.from('employee_docs').remove([path])
+    if (path) {
+      if (portalAuth) {
+        await fetch(PORTAL_FN_URL, {
+          method: 'POST',
+          headers: { ...PORTAL_FN_AUTH, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'remove', slug: portalAuth.slug, access_token: portalAuth.accessToken, path }),
+        }).catch(() => {})
+      } else {
+        await supabase.storage.from('employee_docs').remove([path])
+      }
+    }
     setLocalPreview(null)
     setSignedSrc(null)
     onChange(null)

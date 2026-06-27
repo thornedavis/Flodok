@@ -1036,6 +1036,7 @@ function DocsStep({ employee, onSaved, onSkip, onBack }: {
             kind="ktp"
             photoUrl={ktpUrl}
             label={employee.name}
+            portalAuth={{ slug: employee.slug, accessToken: employee.access_token }}
             onChange={url => { setKtpUrl(url); persistField('ktp_photo_url', url) }}
           />
         </div>
@@ -1046,6 +1047,7 @@ function DocsStep({ employee, onSaved, onSkip, onBack }: {
             kind="kk"
             photoUrl={kkUrl}
             label={employee.name}
+            portalAuth={{ slug: employee.slug, accessToken: employee.access_token }}
             onChange={url => { setKkUrl(url); persistField('kk_photo_url', url) }}
           />
         </div>
