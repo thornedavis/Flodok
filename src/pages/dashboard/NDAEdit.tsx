@@ -84,16 +84,19 @@ export function NDAEdit({ user }: { user: User }) {
   const [signerTitle, setSignerTitle] = useState(user.title || '')
   const [signerFont, setSignerFont] = useState(user.signature_font || SIGNATURE_FONTS[0].name)
   const [signing, setSigning] = useState(false)
+  // Live version number that carries a signature (supersede notice — see 168).
+  const [signedAtVersion, setSignedAtVersion] = useState<number | null>(null)
   const signPanelRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     async function load() {
-      const [ndaResult, tagsResult, ndaTagsResult, empsResult, orgResult] = await Promise.all([
+      const [ndaResult, tagsResult, ndaTagsResult, empsResult, orgResult, sigsResult] = await Promise.all([
         supabase.from('ndas').select('*').eq('id', id!).single(),
         supabase.from('tags').select('*').eq('org_id', user.org_id).order('name'),
         supabase.from('nda_tags').select('tag_id').eq('nda_id', id!),
         supabase.from('employees').select(EMPLOYEE_WITH_DEPTS_SELECT).eq('org_id', user.org_id).order('name'),
         supabase.from('organizations').select('*').eq('id', user.org_id).single(),
+        supabase.from('nda_signatures').select('version_number').eq('nda_id', id!),
       ])
 
       setAllEmployees((empsResult.data || []) as EmployeeWithDepartments[])
@@ -101,6 +104,8 @@ export function NDAEdit({ user }: { user: User }) {
 
       if (ndaResult.data) {
         setNda(ndaResult.data)
+        const signedVersions = new Set((sigsResult.data || []).map(s => s.version_number))
+        setSignedAtVersion(signedVersions.has(ndaResult.data.current_version) ? ndaResult.data.current_version : null)
         setTitle(ndaResult.data.title)
         {
           const loadedMode = (ndaResult.data as { language_mode?: LanguageMode }).language_mode ?? 'bilingual'
@@ -613,6 +618,14 @@ export function NDAEdit({ user }: { user: User }) {
       sidebar={sidebar}
       outlineDoc={contentDoc}
     >
+      {signedAtVersion !== null && (
+        <div
+          className="mb-4 rounded-lg border px-3 py-2 text-sm"
+          style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}
+        >
+          {t.signedSupersedeNotice.replace('{v}', String(signedAtVersion))}
+        </div>
+      )}
       <DocumentEditor
         initialDoc={contentDoc}
         onChange={setContentDoc}

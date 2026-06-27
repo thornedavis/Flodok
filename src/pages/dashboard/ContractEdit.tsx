@@ -116,11 +116,16 @@ export function ContractEdit({ user }: { user: User }) {
   const [signerTitle, setSignerTitle] = useState(user.title || '')
   const [signerFont, setSignerFont] = useState(user.signature_font || SIGNATURE_FONTS[0].name)
   const [signing, setSigning] = useState(false)
+  // The version number that currently carries a signature, if the live version
+  // is signed. Drives the supersede notice: editing creates a new version that
+  // the existing signature no longer covers (the DB enforces this via the
+  // signed-document lock in migration 168).
+  const [signedAtVersion, setSignedAtVersion] = useState<number | null>(null)
   const signPanelRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     async function load() {
-      const [contractResult, tagsResult, contractTagsResult, empsResult, orgResult, refResult, compsResult] = await Promise.all([
+      const [contractResult, tagsResult, contractTagsResult, empsResult, orgResult, refResult, compsResult, sigsResult] = await Promise.all([
         supabase.from('contracts').select('*').eq('id', id!).single(),
         supabase.from('tags').select('*').eq('org_id', user.org_id).order('name'),
         supabase.from('contract_tags').select('tag_id').eq('contract_id', id!),
@@ -128,6 +133,7 @@ export function ContractEdit({ user }: { user: User }) {
         supabase.from('organizations').select('*').eq('id', user.org_id).single(),
         supabase.from('company_reference_values').select('*').eq('org_id', user.org_id).order('display_order').order('name'),
         supabase.from('contract_compensation_components').select('*').eq('contract_id', id!).eq('kind', 'earning').order('display_order'),
+        supabase.from('contract_signatures').select('version_number').eq('contract_id', id!),
       ])
 
       const loadedComponents: CompLine[] = (compsResult.data || []).map(c => ({
@@ -148,6 +154,8 @@ export function ContractEdit({ user }: { user: User }) {
 
       if (contractResult.data) {
         setContract(contractResult.data)
+        const signedVersions = new Set((sigsResult.data || []).map(s => s.version_number))
+        setSignedAtVersion(signedVersions.has(contractResult.data.current_version) ? contractResult.data.current_version : null)
         setTitle(contractResult.data.title)
         {
           const loadedMode = (contractResult.data as { language_mode?: LanguageMode }).language_mode ?? 'bilingual'
@@ -999,6 +1007,14 @@ export function ContractEdit({ user }: { user: User }) {
       sidebar={sidebar}
       outlineDoc={contentDoc}
     >
+            {signedAtVersion !== null && (
+              <div
+                className="mb-4 rounded-lg border px-3 py-2 text-sm"
+                style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}
+              >
+                {t.signedSupersedeNotice.replace('{v}', String(signedAtVersion))}
+              </div>
+            )}
             <DocumentEditor
               initialDoc={contentDoc}
               onChange={setContentDoc}
