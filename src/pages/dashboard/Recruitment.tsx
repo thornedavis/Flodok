@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
 import { useBilling } from '../../contexts/BillingContext'
-import { generateUniqueSlug, generateAccessToken } from '../../lib/slug'
+import { generateUniqueSlug } from '../../lib/slug'
 import { getAvatarGradient } from '../../lib/avatar'
 import { getEmployeeDepts, type EmpDeptShape } from '../../lib/employee'
 import { findTemplateForPosition, buildContractFromTemplate, seedContractComponentsFromTemplate } from '../../lib/contractTemplates'
@@ -122,7 +122,7 @@ export function Recruitment({ user }: { user: User }) {
     setAdding(true)
     const placeholderName = t.hiringNewPlaceholderName
     const slug = generateUniqueSlug(placeholderName)
-    const token = generateAccessToken()
+    // access_token is minted server-side by the DB default (migration 165).
     const { data: created, error } = await supabase
       .from('employees')
       .insert({
@@ -130,7 +130,6 @@ export function Recruitment({ user }: { user: User }) {
         name: placeholderName,
         phone: '',
         slug,
-        access_token: token,
         lifecycle_stage: 'prospective',
       })
       .select()

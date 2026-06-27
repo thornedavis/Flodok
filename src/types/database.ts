@@ -1256,7 +1256,7 @@ export type Database = {
           status: string
         }
         Insert: {
-          access_token: string
+          access_token?: string
           address?: string | null
           applied_for_jd_id?: string | null
           bank_account_holder?: string | null

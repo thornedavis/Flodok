@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { normalizePhone, isValidE164, formatPhone } from '../../lib/phone'
-import { generateUniqueSlug, generateAccessToken } from '../../lib/slug'
+import { generateUniqueSlug } from '../../lib/slug'
 import { getAvatarGradient } from '../../lib/avatar'
 import { FilterPanel, FilterSearchInput, MultiSelectDropdown } from '../../components/FilterControls'
 import type { FilterPanelSection } from '../../components/FilterControls'
@@ -276,8 +276,9 @@ export function Employees({ user }: { user: User }) {
     }
 
     const slug = generateUniqueSlug(newName)
-    const token = generateAccessToken()
 
+    // access_token is minted server-side by the DB default (migration 165) and
+    // returned by .select() below — never generated or sent by the client.
     const { data: newEmp, error } = await supabase
       .from('employees')
       .insert({
@@ -285,7 +286,6 @@ export function Employees({ user }: { user: User }) {
         name: newName,
         phone,
         slug,
-        access_token: token,
       })
       .select()
       .single()
@@ -353,7 +353,6 @@ export function Employees({ user }: { user: User }) {
 
     const placeholderName = t.empNewPlaceholderName
     const slug = generateUniqueSlug(placeholderName)
-    const token = generateAccessToken()
 
     const { data: emp, error } = await supabase
       .from('employees')
@@ -362,7 +361,6 @@ export function Employees({ user }: { user: User }) {
         name: placeholderName,
         phone: '',
         slug,
-        access_token: token,
         status: 'probation',
       })
       .select()

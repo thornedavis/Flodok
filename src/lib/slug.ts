@@ -12,29 +12,23 @@ export function generateSlug(name: string): string {
 }
 
 /**
- * Generate a slug with a random suffix to satisfy the global
- * unique constraint on employees.slug.
+ * Generate a slug with a random suffix to satisfy the global unique constraint
+ * on employees.slug. The slug is a display/URL convenience only — the portal's
+ * security credential is the server-minted employees.access_token (default set
+ * in migration 165), NOT this suffix. Uses rejection sampling to avoid the
+ * modulo bias the old implementation had.
  */
 export function generateUniqueSlug(name: string): string {
   const base = generateSlug(name) || 'employee'
-  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
-  const array = new Uint8Array(4)
-  crypto.getRandomValues(array)
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789' // 36 symbols
+  const limit = 256 - (256 % chars.length) // 252 — reject bytes above this
   let suffix = ''
-  for (const byte of array) suffix += chars[byte % chars.length]
-  return `${base}-${suffix}`
-}
-
-/**
- * Generate a random access token (6 alphanumeric chars).
- */
-export function generateAccessToken(): string {
-  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
-  let token = ''
-  const array = new Uint8Array(6)
-  crypto.getRandomValues(array)
-  for (const byte of array) {
-    token += chars[byte % chars.length]
+  while (suffix.length < 4) {
+    const array = new Uint8Array(4)
+    crypto.getRandomValues(array)
+    for (const byte of array) {
+      if (byte < limit && suffix.length < 4) suffix += chars[byte % chars.length]
+    }
   }
-  return token
+  return `${base}-${suffix}`
 }
