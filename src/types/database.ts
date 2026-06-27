@@ -1884,6 +1884,7 @@ export type Database = {
       }
       job_description_signatures: {
         Row: {
+          document_hash: string | null
           employee_id: string
           id: string
           job_description_id: string
@@ -1893,6 +1894,7 @@ export type Database = {
           version_number: number
         }
         Insert: {
+          document_hash?: string | null
           employee_id: string
           id?: string
           job_description_id: string
@@ -1902,6 +1904,7 @@ export type Database = {
           version_number: number
         }
         Update: {
+          document_hash?: string | null
           employee_id?: string
           id?: string
           job_description_id?: string
@@ -3598,6 +3601,7 @@ export type Database = {
       }
       sop_signatures: {
         Row: {
+          document_hash: string | null
           employee_id: string
           id: string
           required_via: string | null
@@ -3608,6 +3612,7 @@ export type Database = {
           version_number: number
         }
         Insert: {
+          document_hash?: string | null
           employee_id: string
           id?: string
           required_via?: string | null
@@ -3618,6 +3623,7 @@ export type Database = {
           version_number: number
         }
         Update: {
+          document_hash?: string | null
           employee_id?: string
           id?: string
           required_via?: string | null
@@ -4872,6 +4878,7 @@ export type Database = {
           p_typed_name: string
         }
         Returns: {
+          document_hash: string | null
           employee_id: string
           id: string
           job_description_id: string
@@ -4932,6 +4939,7 @@ export type Database = {
           p_typed_name: string
         }
         Returns: {
+          document_hash: string | null
           employee_id: string
           id: string
           required_via: string | null
