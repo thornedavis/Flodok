@@ -489,6 +489,7 @@ export type Database = {
           employee_id: string | null
           hours_per_day: number | null
           id: string
+          language_mode: string
           resolved_markdown_en: string | null
           resolved_markdown_id: string | null
           translation_error: string | null
@@ -510,6 +511,7 @@ export type Database = {
           employee_id?: string | null
           hours_per_day?: number | null
           id?: string
+          language_mode?: string
           resolved_markdown_en?: string | null
           resolved_markdown_id?: string | null
           translation_error?: string | null
@@ -531,6 +533,7 @@ export type Database = {
           employee_id?: string | null
           hours_per_day?: number | null
           id?: string
+          language_mode?: string
           resolved_markdown_en?: string | null
           resolved_markdown_id?: string | null
           translation_error?: string | null
@@ -575,6 +578,7 @@ export type Database = {
           hours_per_day: number | null
           id: string
           is_template: boolean
+          language_mode: string
           org_id: string
           owner_department: string | null
           probation_months: number | null
@@ -605,6 +609,7 @@ export type Database = {
           hours_per_day?: number | null
           id?: string
           is_template?: boolean
+          language_mode?: string
           org_id: string
           owner_department?: string | null
           probation_months?: number | null
@@ -635,6 +640,7 @@ export type Database = {
           hours_per_day?: number | null
           id?: string
           is_template?: boolean
+          language_mode?: string
           org_id?: string
           owner_department?: string | null
           probation_months?: number | null
@@ -676,6 +682,7 @@ export type Database = {
           days_per_week: number | null
           hours_per_day: number | null
           id: string
+          language_mode: string
           org_id: string
           probation_months: number | null
           template_for_position: string | null
@@ -696,6 +703,7 @@ export type Database = {
           days_per_week?: number | null
           hours_per_day?: number | null
           id?: string
+          language_mode?: string
           org_id: string
           probation_months?: number | null
           template_for_position?: string | null
@@ -716,6 +724,7 @@ export type Database = {
           days_per_week?: number | null
           hours_per_day?: number | null
           id?: string
+          language_mode?: string
           org_id?: string
           probation_months?: number | null
           template_for_position?: string | null
@@ -1931,6 +1940,7 @@ export type Database = {
           id: string
           job_description_id: string
           job_level: string | null
+          language_mode: string
           reporting_line: string | null
           supervised_team: string | null
           title: string
@@ -1949,6 +1959,7 @@ export type Database = {
           id?: string
           job_description_id: string
           job_level?: string | null
+          language_mode?: string
           reporting_line?: string | null
           supervised_team?: string | null
           title: string
@@ -1967,6 +1978,7 @@ export type Database = {
           id?: string
           job_description_id?: string
           job_level?: string | null
+          language_mode?: string
           reporting_line?: string | null
           supervised_team?: string | null
           title?: string
@@ -2020,6 +2032,7 @@ export type Database = {
           hiring_request_id: string | null
           id: string
           job_level: string | null
+          language_mode: string
           org_id: string
           published_at: string | null
           reporting_line: string | null
@@ -2044,6 +2057,7 @@ export type Database = {
           hiring_request_id?: string | null
           id?: string
           job_level?: string | null
+          language_mode?: string
           org_id: string
           published_at?: string | null
           reporting_line?: string | null
@@ -2068,6 +2082,7 @@ export type Database = {
           hiring_request_id?: string | null
           id?: string
           job_level?: string | null
+          language_mode?: string
           org_id?: string
           published_at?: string | null
           reporting_line?: string | null
@@ -2356,6 +2371,7 @@ export type Database = {
           content_markdown_id: string | null
           created_at: string
           id: string
+          language_mode: string
           letter_id: string
           version_number: number
         }
@@ -2367,6 +2383,7 @@ export type Database = {
           content_markdown_id?: string | null
           created_at?: string
           id?: string
+          language_mode?: string
           letter_id: string
           version_number: number
         }
@@ -2378,6 +2395,7 @@ export type Database = {
           content_markdown_id?: string | null
           created_at?: string
           id?: string
+          language_mode?: string
           letter_id?: string
           version_number?: number
         }
@@ -2405,6 +2423,7 @@ export type Database = {
           id: string
           is_template: boolean
           issued_at: string | null
+          language_mode: string
           org_id: string
           reference_number: string | null
           requires_acknowledgement: boolean
@@ -2430,6 +2449,7 @@ export type Database = {
           id?: string
           is_template?: boolean
           issued_at?: string | null
+          language_mode?: string
           org_id: string
           reference_number?: string | null
           requires_acknowledgement?: boolean
@@ -2455,6 +2475,7 @@ export type Database = {
           id?: string
           is_template?: boolean
           issued_at?: string | null
+          language_mode?: string
           org_id?: string
           reference_number?: string | null
           requires_acknowledgement?: boolean
@@ -2610,6 +2631,7 @@ export type Database = {
           created_at: string
           employee_id: string | null
           id: string
+          language_mode: string
           nda_id: string
           resolved_markdown_en: string | null
           resolved_markdown_id: string | null
@@ -2626,6 +2648,7 @@ export type Database = {
           created_at?: string
           employee_id?: string | null
           id?: string
+          language_mode?: string
           nda_id: string
           resolved_markdown_en?: string | null
           resolved_markdown_id?: string | null
@@ -2642,6 +2665,7 @@ export type Database = {
           created_at?: string
           employee_id?: string | null
           id?: string
+          language_mode?: string
           nda_id?: string
           resolved_markdown_en?: string | null
           resolved_markdown_id?: string | null
@@ -2679,6 +2703,7 @@ export type Database = {
           effective_date: string | null
           employee_id: string | null
           id: string
+          language_mode: string
           org_id: string
           penalty_idr: number | null
           status: string
@@ -2699,6 +2724,7 @@ export type Database = {
           effective_date?: string | null
           employee_id?: string | null
           id?: string
+          language_mode?: string
           org_id: string
           penalty_idr?: number | null
           status?: string
@@ -2719,6 +2745,7 @@ export type Database = {
           effective_date?: string | null
           employee_id?: string | null
           id?: string
+          language_mode?: string
           org_id?: string
           penalty_idr?: number | null
           status?: string
@@ -3656,6 +3683,7 @@ export type Database = {
           content_markdown_id: string | null
           created_at: string
           id: string
+          language_mode: string
           resolved_markdown_en: string | null
           resolved_markdown_id: string | null
           sop_id: string
@@ -3671,6 +3699,7 @@ export type Database = {
           content_markdown_id?: string | null
           created_at?: string
           id?: string
+          language_mode?: string
           resolved_markdown_en?: string | null
           resolved_markdown_id?: string | null
           sop_id: string
@@ -3686,6 +3715,7 @@ export type Database = {
           content_markdown_id?: string | null
           created_at?: string
           id?: string
+          language_mode?: string
           resolved_markdown_en?: string | null
           resolved_markdown_id?: string | null
           sop_id?: string
@@ -3716,6 +3746,7 @@ export type Database = {
           document_number: string | null
           employee_id: string | null
           id: string
+          language_mode: string
           org_id: string
           owner_department: string | null
           owner_department_id: string | null
@@ -3736,6 +3767,7 @@ export type Database = {
           document_number?: string | null
           employee_id?: string | null
           id?: string
+          language_mode?: string
           org_id: string
           owner_department?: string | null
           owner_department_id?: string | null
@@ -3756,6 +3788,7 @@ export type Database = {
           document_number?: string | null
           employee_id?: string | null
           id?: string
+          language_mode?: string
           org_id?: string
           owner_department?: string | null
           owner_department_id?: string | null
@@ -4229,6 +4262,7 @@ export type Database = {
           hiring_request_id: string | null
           id: string
           job_level: string | null
+          language_mode: string
           org_id: string
           published_at: string | null
           reporting_line: string | null
@@ -4279,9 +4313,14 @@ export type Database = {
         Args: { p_employee_id: string }
         Returns: number
       }
+      gen_portal_token: { Args: never; Returns: string }
       get_invite_by_token: {
         Args: { p_token: string }
-        Returns: { org_id: string; org_name: string; email: string }[]
+        Returns: {
+          email: string
+          org_id: string
+          org_name: string
+        }[]
       }
       get_user_org_id: { Args: never; Returns: string }
       get_user_role: { Args: never; Returns: string }
@@ -4336,6 +4375,7 @@ export type Database = {
           id: string
           is_template: boolean
           issued_at: string | null
+          language_mode: string
           org_id: string
           reference_number: string | null
           requires_acknowledgement: boolean
@@ -5139,6 +5179,7 @@ export type Database = {
           hiring_request_id: string | null
           id: string
           job_level: string | null
+          language_mode: string
           org_id: string
           published_at: string | null
           reporting_line: string | null
