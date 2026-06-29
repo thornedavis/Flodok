@@ -263,6 +263,18 @@ export function Payroll({ user }: { user: User }) {
 
       {error && <p className="mt-4 text-sm" style={{ color: 'var(--color-danger)' }}>{error}</p>}
 
+      {/* Reconciliation note — only when this period actually carries adjustments,
+          so the operator keying the payroll provider doesn't double-count them. */}
+      {data?.rows.some(r => r.adjustment_net_idr !== 0) && (
+        <div
+          className="mt-4 flex items-start gap-2 rounded-lg border px-3 py-2 text-xs"
+          style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary, var(--color-bg))', color: 'var(--color-text-secondary)' }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 shrink-0" style={{ color: 'var(--color-text-tertiary)' }}><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>
+          <span>{t.payrollReconcileNote}</span>
+        </div>
+      )}
+
       {/* Roster */}
       <div className="mt-4 overflow-hidden rounded-xl border" style={{ borderColor: 'var(--color-border)' }}>
         <table className="w-full text-sm">
