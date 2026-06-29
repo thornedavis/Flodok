@@ -13,19 +13,19 @@
 // that resolves from the linked employee via merge fields, so it's never
 // re-typed or re-OCR'd here.
 
-import { useState } from 'react'
+import { useState, type ReactElement } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useLang } from '../contexts/LanguageContext'
 import { Modal } from './Modal'
 import { EmployeeSelect } from './EmployeeSelect'
 import { analyseDocument, type AnalyseDocType, type AnalyseDocumentResult } from '../lib/analyseDocument'
-import { importDocx, extractDocxBlocks, buildBilingualDocFromPairs } from '../lib/htmlToDoc'
+import { importDocx, extractDocxBlocks, buildBilingualDocFromPairs, buildBilingualDocFromDocxTables } from '../lib/htmlToDoc'
 import { pairBilingualBlocks } from '../lib/pairBilingual'
 import { mapPlaceholders, assignPlaceholder, type MappedPlaceholder } from '../lib/placeholderMap'
 import { clearOffSideForMode } from '../lib/offSide'
 import { fieldsForScope, type MergeFieldKey } from '../lib/mergeFields'
-import { docAsJson, docPreviewLines, type LanguageMode, type DocumentDoc } from '../lib/documentDoc'
+import { docAsJson, docPreviewLines, withLetterhead, type LanguageMode, type DocumentDoc } from '../lib/documentDoc'
 import { documentEditPath, documentTemplateEditPath, tableForType, type DocumentType } from '../lib/documentTypes'
 import { type EmpDeptShape } from '../lib/employee'
 import type { Employee, User } from '../types/aliases'
@@ -66,20 +66,22 @@ export function ImportDocumentModal({
   // Set from the DOCX import (the detected source language → a monolingual
   // draft). PDF imports stay 'bilingual'. Persisted on the created row.
   const [languageMode, setLanguageMode] = useState<LanguageMode>('bilingual')
-  // P4: opt-in dual-language extraction for a .docx that holds BOTH languages
-  // (detect + pair each side into one bilingual document via a cheap text model).
-  const [bilingualHint, setBilingualHint] = useState(false)
+  // Whether a .docx holds BOTH languages → split into a bilingual document
+  // (two-column table unzip, or AI block-pairing as a fallback). Defaults ON:
+  // imported HR documents (contracts, NDAs) are almost always bilingual here.
+  // Surfaced as the "Languages" choice; the user can switch to single per file.
+  const [bilingualHint, setBilingualHint] = useState(true)
   // P3: placeholder → merge-field mapping (letter imports become templates).
   const [mappedPlaceholders, setMappedPlaceholders] = useState<MappedPlaceholder[]>([])
   const [unmappedPlaceholders, setUnmappedPlaceholders] = useState<string[]>([])
   const [placeholderAssignments, setPlaceholderAssignments] = useState<Record<string, MergeFieldKey>>({})
 
-  const typeOptions: Array<{ value: AnalyseDocType; label: string }> = [
-    { value: 'contract', label: t.documentImportTypeContract },
-    { value: 'nda', label: t.documentImportTypeNda },
-    { value: 'job_description', label: t.documentImportTypeJd },
-    { value: 'sop', label: t.documentImportTypeSop },
-    { value: 'letter', label: t.documentImportTypeLetter },
+  const typeOptions: Array<{ value: AnalyseDocType; label: string; desc: string; Icon: () => ReactElement }> = [
+    { value: 'contract', label: t.documentImportTypeContract, desc: t.documentImportTypeContractDesc, Icon: FileTextIcon },
+    { value: 'nda', label: t.documentImportTypeNda, desc: t.documentImportTypeNdaDesc, Icon: LockIcon },
+    { value: 'job_description', label: t.documentImportTypeJd, desc: t.documentImportTypeJdDesc, Icon: BriefcaseIcon },
+    { value: 'sop', label: t.documentImportTypeSop, desc: t.documentImportTypeSopDesc, Icon: ChecklistIcon },
+    { value: 'letter', label: t.documentImportTypeLetter, desc: t.documentImportTypeLetterDesc, Icon: MailIcon },
   ]
 
   const contractFields: FieldDesc[] = [
@@ -112,7 +114,7 @@ export function ImportDocumentModal({
     setError('')
     setCreating(false)
     setLanguageMode('bilingual')
-    setBilingualHint(false)
+    setBilingualHint(true)
     setMappedPlaceholders([])
     setUnmappedPlaceholders([])
     setPlaceholderAssignments({})
@@ -164,10 +166,18 @@ export function ImportDocumentModal({
         let docTitle: string
         let mode: LanguageMode
         if (bilingualHint) {
-          // P4: the file holds both languages — pair them into one bilingual doc.
+          // The file holds both languages. The common Indonesian layout puts
+          // them in two columns of a table (Bahasa | English) — unzip that
+          // deterministically (no model call). Only fall back to the AI
+          // block-pairing path when the languages aren't laid out as columns.
           const { blocks, blockTexts, title: extractedTitle } = await extractDocxBlocks(file)
-          const pairs = await pairBilingualBlocks(blockTexts)
-          doc = buildBilingualDocFromPairs(blocks, pairs)
+          const tableDoc = buildBilingualDocFromDocxTables(blocks)
+          if (tableDoc) {
+            doc = tableDoc
+          } else {
+            const pairs = await pairBilingualBlocks(blockTexts)
+            doc = buildBilingualDocFromPairs(blocks, pairs)
+          }
           docTitle = extractedTitle
           mode = 'bilingual'
         } else {
@@ -238,6 +248,14 @@ export function ImportDocumentModal({
       finalDoc = assignPlaceholder(finalDoc, bracket, key)
     }
     finalDoc = clearOffSideForMode(finalDoc, languageMode)
+
+    // Auto-add a letterhead (org logo + company identity) to imported
+    // contracts/NDAs — matches new-document behavior and restores the
+    // letterhead mammoth drops from the source file. Added last so the
+    // off-side clear above never touches it (it's not a bilingualBlock).
+    if (docType === 'contract' || docType === 'nda') {
+      finalDoc = withLetterhead(finalDoc)
+    }
 
     // A letter import is a reusable TEMPLATE, not a live document — it lands in
     // document_templates (which carries no employee_id/status) and opens in the
@@ -395,14 +413,28 @@ export function ImportDocumentModal({
                     type="button"
                     disabled={step === 'analysing'}
                     onClick={() => { setDocType(opt.value); setError('') }}
-                    className="rounded-lg border px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50"
+                    className="flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors disabled:opacity-50"
                     style={{
+                      gridColumn: opt.value === 'letter' ? '1 / -1' : undefined,
                       borderColor: active ? 'var(--color-primary)' : 'var(--color-border)',
                       backgroundColor: active ? 'color-mix(in srgb, var(--color-primary) 10%, transparent)' : 'var(--color-bg)',
-                      color: active ? 'var(--color-primary)' : 'var(--color-text)',
                     }}
                   >
-                    {opt.label}
+                    <span
+                      className="shrink-0"
+                      style={{ color: active ? 'var(--color-primary)' : 'var(--color-text-tertiary)' }}
+                      aria-hidden
+                    >
+                      <opt.Icon />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium" style={{ color: active ? 'var(--color-primary)' : 'var(--color-text)' }}>
+                        {opt.label}
+                      </span>
+                      <span className="block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                        {opt.desc}
+                      </span>
+                    </span>
                   </button>
                 )
               })}
@@ -413,47 +445,98 @@ export function ImportDocumentModal({
             <label className="mb-1.5 block text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
               {t.documentImportChooseFile}
             </label>
-            <label
-              className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-dashed px-3 py-3 text-sm transition-colors"
-              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
-            >
-              <span className="min-w-0 truncate">
-                {file ? file.name : t.documentImportFileHint}
-              </span>
-              <span
-                className="shrink-0 rounded-md border px-2 py-1 text-xs"
-                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            {file ? (
+              <div
+                className="flex items-center gap-3 rounded-lg border px-3 py-2.5"
+                style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)' }}
               >
-                {file ? t.change : t.documentImportBrowse}
-              </span>
-              <input
-                type="file"
-                accept={ACCEPT}
-                onChange={onPickFile}
-                disabled={step === 'analysing'}
-                className="hidden"
-              />
-            </label>
+                <span
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md"
+                  style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-primary)' }}
+                  aria-hidden
+                >
+                  <FileTextIcon />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>{file.name}</div>
+                  <div className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>{fileMeta(file)}</div>
+                </div>
+                <label
+                  className="shrink-0 cursor-pointer rounded-md border px-2.5 py-1 text-xs font-medium transition-colors"
+                  style={{ borderColor: 'var(--color-border-strong)', color: 'var(--color-text-secondary)' }}
+                >
+                  {t.change}
+                  <input type="file" accept={ACCEPT} onChange={onPickFile} disabled={step === 'analysing'} className="hidden" />
+                </label>
+              </div>
+            ) : (
+              <label
+                className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-dashed px-3 py-3 text-sm transition-colors"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
+              >
+                <span className="min-w-0 truncate">{t.documentImportFileHint}</span>
+                <span
+                  className="shrink-0 rounded-md border px-2 py-1 text-xs"
+                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                >
+                  {t.documentImportBrowse}
+                </span>
+                <input
+                  type="file"
+                  accept={ACCEPT}
+                  onChange={onPickFile}
+                  disabled={step === 'analysing'}
+                  className="hidden"
+                />
+              </label>
+            )}
           </div>
 
-          {/* P4: dual-language opt-in (DOCX only — PDFs are read bilingually by
-              the vision model already). */}
+          {/* Languages — DOCX only (PDFs are read bilingually by the vision
+              model already). An explicit two-card choice rather than an
+              easy-to-miss checkbox: 'Single language' (default) drives the
+              monolingual extract; 'English + Indonesian' runs the pairing path. */}
           {file?.name.toLowerCase().endsWith('.docx') && (
-            <label className="flex items-start gap-2 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-              <input
-                type="checkbox"
-                checked={bilingualHint}
-                onChange={e => setBilingualHint(e.target.checked)}
-                disabled={step === 'analysing'}
-                className="mt-0.5 shrink-0"
-              />
-              <span>
-                {t.documentImportBilingualToggle}
-                <span className="mt-0.5 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                  {t.documentImportBilingualHint}
-                </span>
-              </span>
-            </label>
+            <div>
+              <label className="mb-1.5 block text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+                {t.documentImportLanguagesLabel}
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {([
+                  { val: false, title: t.documentImportLangSingle, desc: t.documentImportLangSingleDesc },
+                  { val: true, title: t.documentImportLangBilingual, desc: t.documentImportLangBilingualDesc },
+                ] as const).map(opt => {
+                  const active = bilingualHint === opt.val
+                  return (
+                    <button
+                      key={String(opt.val)}
+                      type="button"
+                      disabled={step === 'analysing'}
+                      onClick={() => setBilingualHint(opt.val)}
+                      className="rounded-lg border px-3 py-2.5 text-left transition-colors disabled:opacity-50"
+                      style={{
+                        borderColor: active ? 'var(--color-primary)' : 'var(--color-border)',
+                        backgroundColor: active ? 'color-mix(in srgb, var(--color-primary) 10%, transparent)' : 'var(--color-bg)',
+                      }}
+                    >
+                      <span className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-medium" style={{ color: active ? 'var(--color-primary)' : 'var(--color-text)' }}>
+                          {opt.title}
+                        </span>
+                        {active && (
+                          <span className="shrink-0" style={{ color: 'var(--color-primary)' }} aria-hidden>
+                            <CheckIcon />
+                          </span>
+                        )}
+                      </span>
+                      <span className="mt-0.5 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                        {opt.desc}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
           )}
 
           {error && (
@@ -729,3 +812,25 @@ function FieldRow({
     </div>
   )
 }
+
+// Compact "EXT · size" line for the attached-file chip.
+function fileMeta(file: File): string {
+  const ext = (file.name.split('.').pop() || '').toUpperCase()
+  const kb = file.size / 1024
+  const size = kb >= 1024 ? `${(kb / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(kb))} KB`
+  return ext ? `${ext} · ${size}` : size
+}
+
+// Inline outline icons — same style as the editor toolbar (stroke,
+// currentColor) so the type cards inherit their active/inactive color.
+const iconBase = {
+  width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none',
+  stroke: 'currentColor', strokeWidth: 1.75,
+  strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const,
+}
+function FileTextIcon() { return <svg {...iconBase}><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><polyline points="14 3 14 8 19 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg> }
+function LockIcon() { return <svg {...iconBase}><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg> }
+function BriefcaseIcon() { return <svg {...iconBase}><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="3" y1="13" x2="21" y2="13"/></svg> }
+function ChecklistIcon() { return <svg {...iconBase}><path d="M11 6h9"/><path d="M11 12h9"/><path d="M11 18h9"/><path d="M3.5 6l1.1 1.1L6 4.8"/><path d="M3.5 12l1.1 1.1L6 10.8"/><path d="M3.5 18l1.1 1.1L6 16.8"/></svg> }
+function MailIcon() { return <svg {...iconBase}><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg> }
+function CheckIcon() { return <svg {...iconBase} width={16} height={16}><polyline points="20 6 9 17 4 12"/></svg> }

@@ -30,7 +30,62 @@ export const DocumentNode = Node.create({
   topNode: true,
   // Flat block stream — sections retired (see normalizeDoc). Clause
   // headers are now ordinary bilingualBlocks whose bodies hold an h2.
-  content: 'bilingualBlock+',
+  // An optional full-width `letterhead` may lead the document (the org
+  // letterhead header); everything below it is the bilingual body.
+  content: 'letterhead? bilingualBlock+',
+})
+
+// ─── Letterhead ─────────────────────────────────────────────────────
+//
+// A full-width, language-neutral header region pinned to the top of a
+// document (schema: `letterhead? bilingualBlock+`). Unlike a bilingualBlock
+// it is NOT split into EN/ID columns — it spans the full width in both
+// stacked and side-by-side modes. It holds the org logo (resolved live from
+// the merge context by the node-view / renderers, never stored) plus aligned
+// paragraphs/headings (company name + address, seeded as merge-field pills).
+//
+// It is deliberately invisible to the snapshot/translation pipeline and to
+// docToMarkdown: both iterate ONLY `bilingualBlock` top-level nodes, so the
+// letterhead renders as presentation chrome and never enters the signed text
+// or the translation cache.
+
+export type LetterheadAttrs = {
+  showLogo: boolean
+}
+
+export const LetterheadNode = Node.create({
+  name: 'letterhead',
+  content: '(paragraph | heading)+',
+  defining: true,
+  isolating: true,
+  selectable: true,
+  draggable: false,
+
+  addOptions() {
+    return {
+      // Supplied by DocumentEditor (from mergeFields.getContext) so the
+      // node-view can resolve the current org logo. Undefined → no logo.
+      getContext: undefined as undefined | (() => { organization?: { logo_url?: string | null } | null }),
+    }
+  },
+
+  addAttributes() {
+    return {
+      showLogo: {
+        default: true,
+        parseHTML: el => el.getAttribute('data-show-logo') !== 'false',
+        renderHTML: attrs => (attrs.showLogo ? {} : { 'data-show-logo': 'false' }),
+      },
+    }
+  },
+
+  parseHTML() {
+    return [{ tag: 'div[data-letterhead]' }]
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return ['div', mergeAttributes(HTMLAttributes, { 'data-letterhead': 'true', class: 'letterhead' }), 0]
+  },
 })
 
 // ─── Bilingual block ────────────────────────────────────────────────

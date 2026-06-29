@@ -56,7 +56,19 @@ export function DocumentRenderer({ doc, lang, mergeContext, className }: Documen
   )
 }
 
+function LetterheadRender({ block, ctx }: { block: DocNode; ctx: MergeContext }) {
+  const showLogo = block.attrs?.showLogo !== false
+  const logoUrl = showLogo ? (ctx.organization?.logo_url ?? null) : null
+  return (
+    <div className="letterhead">
+      {logoUrl && <div className="letterhead-logo"><img src={logoUrl} alt="" /></div>}
+      {(block.content || []).map((node, i) => <BlockNodeRender key={i} node={node} ctx={ctx} />)}
+    </div>
+  )
+}
+
 function BlockRender({ block, lang, ctx }: { block: DocNode; lang: Lang; ctx: MergeContext }) {
+  if (block.type === 'letterhead') return <LetterheadRender block={block} ctx={ctx} />
   if (block.type !== 'bilingualBlock') return null
   const body = (block.content || []).find(b => b.type === 'blockBody' && b.attrs?.lang === lang)
   if (!body || !Array.isArray(body.content)) return null
@@ -68,14 +80,19 @@ function BlockRender({ block, lang, ctx }: { block: DocNode; lang: Lang; ctx: Me
   )
 }
 
+function alignStyle(node: DocNode): { textAlign: 'center' | 'right' | 'justify' } | undefined {
+  const a = node.attrs?.textAlign
+  return a === 'center' || a === 'right' || a === 'justify' ? { textAlign: a } : undefined
+}
+
 function BlockNodeRender({ node, ctx }: { node: DocNode; ctx: MergeContext }) {
   switch (node.type) {
     case 'paragraph':
-      return <p><InlineRender content={node.content} ctx={ctx} /></p>
+      return <p style={alignStyle(node)}><InlineRender content={node.content} ctx={ctx} /></p>
     case 'heading': {
       const level = (node.attrs?.level as number) || 3
       const Tag = (level === 2 ? 'h2' : level === 4 ? 'h4' : 'h3') as 'h2' | 'h3' | 'h4'
-      return <Tag><InlineRender content={node.content} ctx={ctx} /></Tag>
+      return <Tag style={alignStyle(node)}><InlineRender content={node.content} ctx={ctx} /></Tag>
     }
     case 'bulletList':
       return (
@@ -230,6 +247,15 @@ export const DOCUMENT_RENDERER_STYLES = `
   padding-left: 1.4rem;
   margin: 0.4rem 0;
 }
+.doc-block ul { list-style-type: disc; }
+.doc-block ol { list-style-type: lower-alpha; }
+.letterhead { margin: 0 0 1.25rem; padding-bottom: 1rem; border-bottom: 1px solid var(--color-border); }
+.letterhead-logo { text-align: center; margin-bottom: 0.6rem; }
+.letterhead-logo img { display: inline-block; max-height: 64px; max-width: 60%; object-fit: contain; }
+.letterhead h1 { font-size: 1.5rem; font-weight: 700; line-height: 1.25; margin: 0.15rem 0; }
+.letterhead h2 { font-size: 1.2rem; font-weight: 700; line-height: 1.3; margin: 0.15rem 0; }
+.letterhead h3 { font-size: 1.05rem; font-weight: 600; line-height: 1.35; margin: 0.15rem 0; }
+.letterhead h4 { font-size: 0.95rem; font-weight: 600; line-height: 1.35; margin: 0.15rem 0; }
 
 .doc-block li {
   margin: 0.2rem 0;

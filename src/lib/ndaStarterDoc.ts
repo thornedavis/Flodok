@@ -13,6 +13,7 @@ import {
   newSectionId,
   newBlockId,
   normalizeDoc,
+  withLetterhead,
   type DocNode,
   type DocumentDoc,
 } from './documentDoc'
@@ -199,7 +200,7 @@ export function buildNdaStarterDoc(): DocumentDoc {
     ),
   ])
 
-  return normalizeDoc({
+  return withLetterhead(normalizeDoc({
     type: 'document',
     content: [
       parties,
@@ -213,5 +214,5 @@ export function buildNdaStarterDoc(): DocumentDoc {
       governingLaw,
       signatures,
     ],
-  })
+  }))
 }

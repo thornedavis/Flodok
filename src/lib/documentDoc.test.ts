@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { normalizeDoc, type DocNode, type DocumentDoc, type SectionAttrs } from './documentDoc'
+import { normalizeDoc, stripDefaultTextAlign, letterheadBlock, withLetterhead, type DocNode, type DocumentDoc, type SectionAttrs } from './documentDoc'
 import { buildPkwtStarterDoc } from './pkwtStarterDoc'
 
 // Inline legacy (section-nested) fixture. The real starters now emit
@@ -104,7 +104,102 @@ describe('normalizeDoc', () => {
   it('the PKWTT starter is already flat (no section nodes) and has numbered clause headings', () => {
     const starter = buildPkwtStarterDoc('pkwtt')
     expect(countType(starter, 'section')).toBe(0)
-    expect((starter.content || []).every(n => n.type === 'bilingualBlock')).toBe(true)
+    // The starter now leads with a full-width letterhead; everything below it
+    // is the flat bilingual body.
+    expect(starter.content?.[0]?.type).toBe('letterhead')
+    expect((starter.content || []).slice(1).every(n => n.type === 'bilingualBlock')).toBe(true)
     expect(clauseHeadingTexts(starter, 'en').length).toBeGreaterThan(0)
+  })
+})
+
+describe('letterhead', () => {
+  it('letterheadBlock seeds a logo header with plain centered text (no merge-field pills / language tags)', () => {
+    const lh = letterheadBlock()
+    expect(lh.type).toBe('letterhead')
+    expect(lh.attrs?.showLogo).toBe(true)
+    // A heading line + a subtext line, both centered, both empty for the user
+    // to write — and crucially NO merge fields (those resolve org fields and
+    // carried the confusing country-code value).
+    expect((lh.content || []).map(n => n.type)).toEqual(['heading', 'paragraph'])
+    expect((lh.content || []).every(n => (n.attrs as { textAlign?: string })?.textAlign === 'center')).toBe(true)
+    const hasMergeField = (lh.content || []).some(n => (n.content || []).some(c => c.type === 'mergeField'))
+    expect(hasMergeField).toBe(false)
+  })
+
+  it('withLetterhead prepends a letterhead and is idempotent', () => {
+    const doc: DocumentDoc = {
+      type: 'document',
+      content: [{
+        type: 'bilingualBlock',
+        attrs: { id: 'b', needsReview: false, numbering: null },
+        content: [
+          { type: 'blockBody', attrs: { lang: 'en' }, content: [{ type: 'paragraph' }] },
+          { type: 'blockBody', attrs: { lang: 'id' }, content: [{ type: 'paragraph' }] },
+        ],
+      }],
+    }
+    const once = withLetterhead(doc)
+    expect(once.content?.[0]?.type).toBe('letterhead')
+    expect(once.content).toHaveLength(2)
+    // Idempotent: a doc that already leads with a letterhead is returned as-is.
+    expect(withLetterhead(once)).toBe(once)
+  })
+})
+
+describe('stripDefaultTextAlign', () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  type Any = any
+
+  it('drops default/left/null textAlign and removes the emptied attrs object', () => {
+    const input = {
+      type: 'document',
+      content: [
+        { type: 'paragraph', attrs: { textAlign: 'left' }, content: [{ type: 'text', text: 'a' }] },
+        { type: 'paragraph', attrs: { textAlign: null }, content: [{ type: 'text', text: 'b' }] },
+        { type: 'heading', attrs: { level: 2, textAlign: 'left' }, content: [{ type: 'text', text: 'c' }] },
+      ],
+    }
+    const out = stripDefaultTextAlign(input) as Any
+    expect(out.content[0].attrs).toBeUndefined()
+    expect(out.content[1].attrs).toBeUndefined()
+    expect(out.content[2].attrs).toEqual({ level: 2 })
+  })
+
+  it('keeps an explicit center/right/justify alignment', () => {
+    const input = { type: 'paragraph', attrs: { textAlign: 'center' }, content: [{ type: 'text', text: 'x' }] }
+    expect((stripDefaultTextAlign(input) as Any).attrs).toEqual({ textAlign: 'center' })
+  })
+
+  it('recurses through bilingual block bodies and leaves marks intact', () => {
+    const input = {
+      type: 'bilingualBlock',
+      attrs: { id: 'b1', needsReview: false },
+      content: [
+        { type: 'blockBody', attrs: { lang: 'en' }, content: [
+          { type: 'paragraph', attrs: { textAlign: 'left' }, content: [{ type: 'text', text: 'hi', marks: [{ type: 'bold' }] }] },
+          { type: 'paragraph', attrs: { textAlign: 'right' }, content: [{ type: 'text', text: 'yo' }] },
+        ] },
+      ],
+    }
+    const out = stripDefaultTextAlign(input) as Any
+    expect(out.content[0].attrs).toEqual({ lang: 'en' })
+    expect(out.content[0].content[0].attrs).toBeUndefined()
+    expect(out.content[0].content[0].content[0].marks).toEqual([{ type: 'bold' }])
+    expect(out.content[0].content[1].attrs).toEqual({ textAlign: 'right' })
+  })
+
+  it('leaves a doc with no textAlign byte-for-byte identical (existing docs untouched)', () => {
+    const input = {
+      type: 'document',
+      content: [{
+        type: 'bilingualBlock',
+        attrs: { id: 'b', needsReview: false, numbering: null },
+        content: [
+          { type: 'blockBody', attrs: { lang: 'en' }, content: [{ type: 'paragraph', content: [{ type: 'text', text: 'p' }] }] },
+          { type: 'blockBody', attrs: { lang: 'id' }, content: [{ type: 'paragraph' }] },
+        ],
+      }],
+    }
+    expect(stripDefaultTextAlign(input)).toEqual(input)
   })
 })

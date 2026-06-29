@@ -178,6 +178,35 @@ export function emptyDocumentDoc(): DocumentDoc {
   return { type: 'document', content: [emptyBlock()] }
 }
 
+// ─── Letterhead ─────────────────────────────────────────────────────
+//
+// A seeded full-width header: the org logo (resolved live from the merge
+// context by the node-view/renderers — never stored) above a couple of
+// centered, freely-written lines (a heading + subtext) the user fills in.
+// Deliberately PLAIN TEXT, not merge-field pills — the letterhead is written
+// by hand, so it carries no resolved org fields and no language tag. Prepended
+// to new and imported contracts/NDAs. The snapshot/translation pipeline and
+// docToMarkdown both skip non-bilingualBlock top-level nodes, so the letterhead
+// is presentation only — never translated, never in the signed markdown.
+
+export function letterheadBlock(): DocNode {
+  return {
+    type: 'letterhead',
+    attrs: { showLogo: true },
+    content: [
+      { type: 'heading', attrs: { level: 3, textAlign: 'center' } },
+      { type: 'paragraph', attrs: { textAlign: 'center' } },
+    ],
+  }
+}
+
+// Prepend a letterhead unless the document already leads with one (idempotent).
+export function withLetterhead(doc: DocumentDoc): DocumentDoc {
+  const content = doc.content || []
+  if (content[0]?.type === 'letterhead') return doc
+  return { type: 'document', content: [letterheadBlock(), ...content] }
+}
+
 // ─── normalizeDoc ───────────────────────────────────────────────────
 //
 // Migrates a legacy section-nested document into the flat block stream
@@ -250,6 +279,38 @@ export function normalizeDoc(doc: DocNode | unknown): DocumentDoc {
     }
   }
   return { type: 'document', content: flat }
+}
+
+// ─── stripDefaultTextAlign ──────────────────────────────────────────
+//
+// TipTap's TextAlign extension stamps a `textAlign` attr (default 'left')
+// onto every paragraph/heading once enabled. Persisting that default is
+// doubly harmful: (1) the snapshot helper's deep-equal freshness check
+// compares full attrs, so every block would look "changed" → spurious
+// needsReview + mass re-translation; (2) it bloats stored docs and breaks
+// the dirty baseline (existing docs have no textAlign). So we keep
+// `textAlign` ONLY when it's a real, non-default alignment
+// (center/right/justify); `null`/`left` are dropped so the stored shape
+// matches the pre-alignment doc byte-for-byte. Applied to the editor's JSON
+// output and to its dirty-compare baseline (see DocumentEditor).
+export function stripDefaultTextAlign<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map(v => stripDefaultTextAlign(v)) as unknown as T
+  }
+  if (!value || typeof value !== 'object') return value
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    if (k === 'attrs' && v && typeof v === 'object' && !Array.isArray(v)) {
+      const attrs = { ...(v as Record<string, unknown>) }
+      if (attrs.textAlign == null || attrs.textAlign === 'left') delete attrs.textAlign
+      if (Object.keys(attrs).length > 0) out.attrs = attrs
+    } else if (k === 'content') {
+      out.content = stripDefaultTextAlign(v)
+    } else {
+      out[k] = v
+    }
+  }
+  return out as unknown as T
 }
 
 // Supabase-typed insert/update helper. The auto-generated database

@@ -400,9 +400,41 @@ export const DOCUMENT_EDITOR_STYLES = `
   margin: 0.4rem 0;
 }
 
+/* Tailwind's preflight resets lists to list-style:none, so the editor must
+ * re-declare a marker or ordered/bulleted lists render blank — the read-only
+ * renderer already does this via .sop-content (index.css). Keep them in sync. */
+.block-body ul { list-style-type: disc; }
+.block-body ol { list-style-type: lower-alpha; }
+
 .block-body li {
   margin: 0.2rem 0;
 }
+
+/* Letterhead — a full-width header above the bilingual body. It's a
+ * top-level block (not one of the EN/ID columns) so it spans full width
+ * naturally; the org logo sits centered above the editable content. */
+.letterhead-wrap {
+  margin: 0 0 1.25rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--color-border);
+}
+.letterhead-logo {
+  text-align: center;
+  margin-bottom: 0.6rem;
+}
+.letterhead-logo img {
+  display: inline-block;
+  max-height: 64px;
+  max-width: 60%;
+  object-fit: contain;
+}
+/* The letterhead lives outside .block-body, so without these its headings
+ * would inherit paragraph sizing (Tailwind resets h* to inherit) and switching
+ * Heading 1–4 would look like a no-op. h1/h2 are letterhead-only. */
+.letterhead-content h1 { font-size: 1.5rem; font-weight: 700; line-height: 1.25; margin: 0.15rem 0; }
+.letterhead-content h2 { font-size: 1.2rem; font-weight: 700; line-height: 1.3; margin: 0.15rem 0; }
+.letterhead-content h3 { font-size: 1.05rem; font-weight: 600; line-height: 1.35; margin: 0.15rem 0; }
+.letterhead-content h4 { font-size: 0.95rem; font-weight: 600; line-height: 1.35; margin: 0.15rem 0; }
 
 .block-body code {
   background: var(--color-bg-tertiary);

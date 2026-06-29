@@ -20,6 +20,7 @@ import {
   newSectionId,
   newBlockId,
   normalizeDoc,
+  withLetterhead,
   type DocNode,
   type DocumentDoc,
 } from './documentDoc'
@@ -336,7 +337,7 @@ export function buildPkwtStarterDoc(type: PkwtType): DocumentDoc {
 
   // Authored as sections for readability, then flattened to the live
   // schema so the starter matches what the editor produces.
-  return normalizeDoc({
+  return withLetterhead(normalizeDoc({
     type: 'document',
     content: [
       preamble,
@@ -351,5 +352,5 @@ export function buildPkwtStarterDoc(type: PkwtType): DocumentDoc {
       confidentiality,
       general,
     ],
-  })
+  }))
 }

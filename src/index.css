@@ -380,7 +380,7 @@ input[data-no-focus-ring]:focus-visible {
 }
 
 .sop-content ol {
-  list-style-type: decimal;
+  list-style-type: lower-alpha;
 }
 
 .sop-content li {

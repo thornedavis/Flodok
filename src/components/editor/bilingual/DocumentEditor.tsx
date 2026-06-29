@@ -22,6 +22,7 @@ import { Placeholder } from '@tiptap/extension-placeholder'
 import { Link } from '@tiptap/extension-link'
 import { Underline } from '@tiptap/extension-underline'
 import { Table, TableRow, TableCell, TableHeader } from '@tiptap/extension-table'
+import { TextAlign } from '@tiptap/extension-text-align'
 import { useCallback, useEffect, useState } from 'react'
 import type { Editor } from '@tiptap/core'
 import {
@@ -29,9 +30,11 @@ import {
   BilingualBlockNode,
   BlockBodyNode,
   CalloutNode,
+  LetterheadNode,
   emptyBlock,
 } from './nodes'
 import { BilingualBlockView } from './BilingualBlockView'
+import { LetterheadView } from './LetterheadView'
 import { BlockGutter } from './BlockGutter'
 import { SelectionBubble } from './SelectionBubble'
 import { BilingualMergeFieldExtension } from './BilingualMergeField'
@@ -40,7 +43,7 @@ import { MERGE_FIELD_STYLES } from '../MergeField'
 import { DOCUMENT_EDITOR_STYLES } from './styles'
 import { supabase } from '../../../lib/supabase'
 import { generateDocument } from '../../../lib/aiGenerate'
-import { normalizeDoc, type DocumentDoc, type LanguageMode } from '../../../lib/documentDoc'
+import { normalizeDoc, stripDefaultTextAlign, letterheadBlock, type DocumentDoc, type LanguageMode } from '../../../lib/documentDoc'
 import type { MergeContext } from '../../../lib/mergeFields'
 
 export type DocumentEditorView = 'side_by_side' | 'stacked'
@@ -116,6 +119,12 @@ export function DocumentEditor({
     },
   })
 
+  const LetterheadWithView = LetterheadNode.extend({
+    addNodeView() {
+      return ReactNodeViewRenderer(LetterheadView)
+    },
+  })
+
   // Normalize once at mount so legacy section-nested docs render in the
   // flat schema. The effect below re-normalizes on every initialDoc
   // change for the async-load case.
@@ -137,11 +146,14 @@ export function DocumentEditor({
       StarterKit.configure({
         // Replace StarterKit's default top node with our `document`.
         document: false,
-        // Block content schema constraints. h2 is the clause-heading
-        // level (formerly section titles); h3/h4 are sub-headings. h1,
-        // blockquote, and horizontal rule stay disabled so paste/parse
-        // can't sneak them in.
-        heading: { levels: [2, 3, 4] },
+        // Block content schema constraints. In the bilingual body, h2 is the
+        // clause-heading level (auto-numbered, formerly section titles) and
+        // h3/h4 are sub-headings — so the block-type dropdown offers only h3/h4
+        // there. h1/h2 are enabled for the full-width letterhead header (a
+        // free-form, non-numbered region) and the dropdown surfaces them only
+        // when the caret is inside a letterhead. blockquote and horizontal rule
+        // stay disabled so paste/parse can't sneak them in.
+        heading: { levels: [1, 2, 3, 4] },
         blockquote: false,
         horizontalRule: false,
         // Link and Underline are configured explicitly below (custom
@@ -152,6 +164,7 @@ export function DocumentEditor({
       }),
       DocumentNode,
       BilingualBlockWithView,
+      LetterheadWithView.configure({ getContext: mergeFields?.getContext }),
       BlockBodyNode,
       CalloutNode,
       Placeholder.configure({
@@ -168,6 +181,10 @@ export function DocumentEditor({
         HTMLAttributes: { class: 'editor-link' },
       }),
       Underline,
+      // Alignment for paragraphs + headings. The default 'left' it stamps on
+      // every node is dropped from stored output by stripDefaultTextAlign so it
+      // can't trip the snapshot freshness check.
+      TextAlign.configure({ types: ['heading', 'paragraph'] }),
       Table.configure({ resizable: false }),
       TableRow,
       TableCell,
@@ -179,7 +196,9 @@ export function DocumentEditor({
     content: normalizedInitial as Record<string, unknown>,
     onUpdate: ({ editor }) => {
       if (!onChange) return
-      onChange(editor.getJSON() as unknown as DocumentDoc)
+      // Drop default/left textAlign so unaligned blocks keep their pre-alignment
+      // shape (else the snapshot freshness check flags every block as changed).
+      onChange(stripDefaultTextAlign(editor.getJSON()) as unknown as DocumentDoc)
     },
   })
 
@@ -194,7 +213,10 @@ export function DocumentEditor({
   useEffect(() => {
     if (!editor) return
     const next = normalizeDoc(initialDoc)
-    const current = editor.getJSON()
+    // Strip default textAlign from the live doc before comparing — TextAlign
+    // stamps it on load, so a raw compare against the (clean) incoming doc would
+    // always differ and needlessly reset content on every re-render.
+    const current = stripDefaultTextAlign(editor.getJSON())
     if (JSON.stringify(current) === JSON.stringify(next)) return
     editor.commands.setContent(next as Record<string, unknown>, { emitUpdate: false })
   }, [editor, initialDoc])
@@ -402,6 +424,13 @@ function Toolbar({ editor, onSetLink, mergeFields, view, onViewChange, languageM
   onLanguageModeChange?: (next: LanguageMode) => void
   onGenerate?: () => void
 }) {
+  // The schema pins at most one letterhead, at the very top — so the insert
+  // button is disabled once a document already has one.
+  const hasLetterhead = editor.state.doc.firstChild?.type.name === 'letterhead'
+  const insertLetterhead = () => {
+    if (hasLetterhead) return
+    editor.chain().focus().insertContentAt(0, letterheadBlock()).run()
+  }
   return (
     <div
       className={`flex flex-wrap items-center gap-0.5 border px-2 py-1.5 ${sticky ? 'z-30' : 'rounded-t-xl'}`}
@@ -436,6 +465,19 @@ function Toolbar({ editor, onSetLink, mergeFields, view, onViewChange, languageM
         <OrderedListIcon />
       </ToolbarButton>
       <Divider />
+      <ToolbarButton active={editor.isActive({ textAlign: 'left' })} onClick={() => editor.chain().focus().setTextAlign('left').run()} title="Align left">
+        <AlignLeftIcon />
+      </ToolbarButton>
+      <ToolbarButton active={editor.isActive({ textAlign: 'center' })} onClick={() => editor.chain().focus().setTextAlign('center').run()} title="Align center">
+        <AlignCenterIcon />
+      </ToolbarButton>
+      <ToolbarButton active={editor.isActive({ textAlign: 'right' })} onClick={() => editor.chain().focus().setTextAlign('right').run()} title="Align right">
+        <AlignRightIcon />
+      </ToolbarButton>
+      <ToolbarButton active={editor.isActive({ textAlign: 'justify' })} onClick={() => editor.chain().focus().setTextAlign('justify').run()} title="Justify">
+        <AlignJustifyIcon />
+      </ToolbarButton>
+      <Divider />
       <ToolbarButton active={editor.isActive('link')} onClick={onSetLink} title="Link">
         <LinkIcon />
       </ToolbarButton>
@@ -445,6 +487,20 @@ function Toolbar({ editor, onSetLink, mergeFields, view, onViewChange, languageM
       <ToolbarButton active={editor.isActive('codeBlock')} onClick={() => editor.chain().focus().toggleCodeBlock().run()} title="Code block">
         <CodeBlockIcon />
       </ToolbarButton>
+      <Divider />
+      <button
+        type="button"
+        onClick={insertLetterhead}
+        disabled={hasLetterhead}
+        title={hasLetterhead ? 'This document already has a letterhead' : 'Insert a letterhead (logo + header) at the top'}
+        className="flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+        style={{ color: 'var(--color-text-secondary)' }}
+        onMouseOver={e => { if (!hasLetterhead) e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
+        onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
+      >
+        <LetterheadIcon />
+        <span>Letterhead</span>
+      </button>
       {mergeFields && (
         <>
           <Divider />
@@ -526,7 +582,19 @@ function Toolbar({ editor, onSetLink, mergeFields, view, onViewChange, languageM
 }
 
 function BlockTypeSelect({ editor }: { editor: Editor }) {
-  const value = editor.isActive('heading', { level: 3 }) ? 'h3'
+  // The letterhead is a free-form header (not a clause-numbered region), so it
+  // offers the full heading range incl. h1/h2 and hides Callout/Code (which its
+  // schema doesn't allow). The body keeps h3/h4 + Callout/Code — h2 stays
+  // reserved for auto-numbered clause headings and h1 for the document title.
+  const $from = editor.state.selection.$from
+  let inLetterhead = false
+  for (let d = $from.depth; d > 0; d--) {
+    if ($from.node(d).type.name === 'letterhead') { inLetterhead = true; break }
+  }
+
+  const value = editor.isActive('heading', { level: 1 }) ? 'h1'
+    : editor.isActive('heading', { level: 2 }) ? 'h2'
+    : editor.isActive('heading', { level: 3 }) ? 'h3'
     : editor.isActive('heading', { level: 4 }) ? 'h4'
     : editor.isActive('callout') ? 'callout'
     : editor.isActive('codeBlock') ? 'code'
@@ -535,6 +603,8 @@ function BlockTypeSelect({ editor }: { editor: Editor }) {
   function onChange(val: string) {
     const chain = editor.chain().focus()
     if (val === 'p') chain.setParagraph().run()
+    else if (val === 'h1') chain.toggleHeading({ level: 1 }).run()
+    else if (val === 'h2') chain.toggleHeading({ level: 2 }).run()
     else if (val === 'h3') chain.toggleHeading({ level: 3 }).run()
     else if (val === 'h4') chain.toggleHeading({ level: 4 }).run()
     else if (val === 'code') chain.toggleCodeBlock().run()
@@ -549,10 +619,12 @@ function BlockTypeSelect({ editor }: { editor: Editor }) {
       style={{ backgroundColor: 'transparent', color: 'var(--color-text-secondary)' }}
     >
       <option value="p">Paragraph</option>
+      {inLetterhead && <option value="h1">Heading 1</option>}
+      {inLetterhead && <option value="h2">Heading 2</option>}
       <option value="h3">Heading 3</option>
       <option value="h4">Heading 4</option>
-      <option value="callout">Callout</option>
-      <option value="code">Code block</option>
+      {!inLetterhead && <option value="callout">Callout</option>}
+      {!inLetterhead && <option value="code">Code block</option>}
     </select>
   )
 }
@@ -587,6 +659,11 @@ function ItalicIcon() { return <svg {...s}><line x1="19" y1="4" x2="10" y2="4"/>
 function UnderlineIcon() { return <svg {...s}><path d="M6 3v7a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3"/><line x1="4" y1="21" x2="20" y2="21"/></svg> }
 function StrikeIcon() { return <svg {...s}><path d="M16 4H9a3 3 0 0 0-2.83 4"/><path d="M14 12a4 4 0 0 1 0 8H6"/><line x1="4" y1="12" x2="20" y2="12"/></svg> }
 function CodeIcon() { return <svg {...s}><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg> }
+function AlignLeftIcon() { return <svg {...s}><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="18" y2="18"/></svg> }
+function AlignCenterIcon() { return <svg {...s}><line x1="3" y1="6" x2="21" y2="6"/><line x1="7" y1="12" x2="17" y2="12"/><line x1="5" y1="18" x2="19" y2="18"/></svg> }
+function AlignRightIcon() { return <svg {...s}><line x1="3" y1="6" x2="21" y2="6"/><line x1="9" y1="12" x2="21" y2="12"/><line x1="6" y1="18" x2="21" y2="18"/></svg> }
+function AlignJustifyIcon() { return <svg {...s}><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg> }
+function LetterheadIcon() { return <svg {...s}><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="9" y1="7" x2="15" y2="7"/><line x1="7" y1="14" x2="17" y2="14"/><line x1="7" y1="17" x2="13" y2="17"/></svg> }
 function BulletListIcon() { return <svg {...s}><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3" cy="6" r="1" fill="currentColor" stroke="none"/><circle cx="3" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="3" cy="18" r="1" fill="currentColor" stroke="none"/></svg> }
 function OrderedListIcon() { return <svg {...s}><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><text x="1" y="8" fontSize="7" fill="currentColor" stroke="none" fontFamily="system-ui">1</text><text x="1" y="14" fontSize="7" fill="currentColor" stroke="none" fontFamily="system-ui">2</text><text x="1" y="20" fontSize="7" fill="currentColor" stroke="none" fontFamily="system-ui">3</text></svg> }
 function LinkIcon() { return <svg {...s}><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> }
