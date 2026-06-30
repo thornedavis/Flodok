@@ -79,7 +79,11 @@ Deno.serve(async (req: Request) => {
   }
 
   // ── Model call ──
-  const result = await translateSOP(text, direction)
+  const result = await translateSOP(text, direction, {
+    functionName: 'translate-text',
+    orgId,
+    calledBy: user.user.id,
+  })
   if (!result.text) {
     return jsonResponse({ error: result.error || 'Translation failed' }, 502)
   }

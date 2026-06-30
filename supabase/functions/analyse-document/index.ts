@@ -27,13 +27,14 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders, jsonResponse } from '../_shared/auth.ts'
+import { extractUsage, logAiUsage } from '../_shared/logUsage.ts'
 import { intermediateToDocumentDoc, type IntermediateDoc } from '../_shared/intermediateDoc.ts'
 
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions'
 
 type DocType = 'sop' | 'contract' | 'nda' | 'job_description'
 
-const SYSTEM_PROMPT_BASE = `You analyse an existing workplace document (provided as a PDF) for an Indonesian HR platform and re-express it as a structured BILINGUAL record. The platform stores every document in BOTH English and Bahasa Indonesia, each block as a translated pair.
+const SYSTEM_PROMPT_BASE = `You analyse an existing workplace document (provided as a PDF) for an Indonesian HR platform and re-express it as a structured record. Each block carries an English (\`en\`) and a Bahasa Indonesia (\`id\`) side; the LANGUAGE section at the end tells you exactly how to fill them.
 
 You MUST return ONLY a JSON object that matches this schema exactly:
 
@@ -58,7 +59,7 @@ You MUST return ONLY a JSON object that matches this schema exactly:
 Rules for the BODY (title + sections):
 - Output VALID JSON only. No markdown fences, no commentary, no leading prose.
 - Reproduce the document's actual content faithfully — do NOT invent clauses that aren't in the file. Preserve the meaning and structure of what you read.
-- Every block MUST have parallel \`en\` and \`id\` arrays of equal length — each EN paragraph corresponds to one ID paragraph at the same index. If the source is only in one language, translate to fill the other side accurately.
+- Each block has an \`en\` array and an \`id\` array of plain-text paragraphs. How to populate them (one language only, both from the source, or translate to fill a side) is governed by the LANGUAGE section at the end — follow it exactly.
 - Each paragraph is a single plain-text string. NO markdown syntax (no #, no **, no -), NO line breaks within a string.
 - Group related content into the same block; split into separate blocks when the topic shifts. Keep section titles short in both languages.
 
@@ -86,6 +87,64 @@ const JD_TAIL = `
 Document type: Job description.
 - \`fields\` is an empty object {} for job descriptions — there are no commercial terms to extract.
 - Capture the role overview, key responsibilities, required and preferred qualifications, and reporting relationships as sections. Describe the ROLE, not a specific person.`
+
+// Extraction language mode (the import modal's three-button picker, PDF only):
+//   'auto'      — faithful: reproduce the language(s) actually in the document;
+//                 a monolingual source stays monolingual (no fabricated side).
+//   'en' / 'id' — produce a single-language draft in that language (translate
+//                 a passage only if the source lacks the chosen language).
+//   'bilingual' — always produce both, translating the missing side (default,
+//                 so callers that don't pass language_mode keep old behaviour).
+type LangMode = 'auto' | 'en' | 'id' | 'bilingual'
+
+function languageRule(mode: LangMode): string {
+  switch (mode) {
+    case 'en':
+      return `
+
+LANGUAGE — English only:
+- Produce the document in ENGLISH. Put every paragraph in each block's \`en\` array and set every \`id\` array to empty [].
+- If a passage in the source is written in Bahasa Indonesia, translate it to natural English. Do not output any Indonesian.`
+    case 'id':
+      return `
+
+LANGUAGE — Bahasa Indonesia only:
+- Produce the document in BAHASA INDONESIA. Put every paragraph in each block's \`id\` array and set every \`en\` array to empty [].
+- If a passage in the source is written in English, translate it to natural Bahasa Indonesia. Do not output any English.`
+    case 'auto':
+      return `
+
+LANGUAGE — as written (NEVER invent a translation):
+- First decide which language(s) the document is ACTUALLY written in.
+- If it contains BOTH English and Bahasa Indonesia, reproduce BOTH from the SOURCE text as parallel \`en\` and \`id\` arrays of equal length — do not translate, use the real text on each side.
+- If it is written in ONLY ONE language, put that language's text in its array (\`en\` for English, \`id\` for Bahasa Indonesia) and set the OTHER array to empty []. Do NOT translate or invent the missing language.`
+    case 'bilingual':
+    default:
+      return `
+
+LANGUAGE — bilingual:
+- Produce parallel \`en\` and \`id\` arrays of EQUAL LENGTH for every block.
+- If the source is written in only one language, TRANSLATE to fill the other side accurately.`
+  }
+}
+
+// The language mode actually produced. Explicit modes echo the request; 'auto'
+// is detected from which sides the model populated, so the client can persist
+// the right language_mode and clear the empty side.
+function producedMode(intermediate: IntermediateDoc, requested: LangMode): 'bilingual' | 'en' | 'id' {
+  if (requested !== 'auto') return requested
+  let hasEn = false
+  let hasId = false
+  for (const s of (intermediate.sections ?? [])) {
+    for (const b of (s.blocks ?? [])) {
+      if (Array.isArray(b.en) && b.en.some(p => typeof p === 'string' && p.trim())) hasEn = true
+      if (Array.isArray(b.id) && b.id.some(p => typeof p === 'string' && p.trim())) hasId = true
+    }
+  }
+  if (hasEn && hasId) return 'bilingual'
+  if (hasId && !hasEn) return 'id'
+  return 'en'
+}
 
 // Per-type whitelist + coercion. We never trust the model's field object
 // blindly — we keep only known keys and coerce to the column's type, so a
@@ -159,7 +218,7 @@ Deno.serve(async (req: Request) => {
   const { data: user } = await supabase.auth.getUser()
   if (!user.user) return jsonResponse({ error: 'Not authenticated' }, 401)
 
-  let body: { doc_type?: unknown; file_data?: unknown; file_name?: unknown }
+  let body: { doc_type?: unknown; file_data?: unknown; file_name?: unknown; language_mode?: unknown }
   try {
     body = await req.json()
   } catch {
@@ -171,6 +230,12 @@ Deno.serve(async (req: Request) => {
     : body.doc_type === 'nda' ? 'nda'
     : body.doc_type === 'job_description' ? 'job_description'
     : 'sop'
+
+  const langMode: LangMode =
+    body.language_mode === 'auto' ? 'auto'
+    : body.language_mode === 'en' ? 'en'
+    : body.language_mode === 'id' ? 'id'
+    : 'bilingual'
 
   const fileData = typeof body.file_data === 'string' ? body.file_data : ''
   if (!fileData.startsWith('data:application/pdf')) {
@@ -194,7 +259,7 @@ Deno.serve(async (req: Request) => {
     : docType === 'nda' ? NDA_TAIL
     : docType === 'job_description' ? JD_TAIL
     : SOP_TAIL
-  const systemPrompt = SYSTEM_PROMPT_BASE + tail
+  const systemPrompt = SYSTEM_PROMPT_BASE + languageRule(langMode) + tail
 
   let modelResponse: Response
   try {
@@ -226,6 +291,7 @@ Deno.serve(async (req: Request) => {
         ],
         temperature: 0.2,
         response_format: { type: 'json_object' },
+        usage: { include: true },
       }),
     })
   } catch (err) {
@@ -240,11 +306,14 @@ Deno.serve(async (req: Request) => {
 
   const completion = await modelResponse.json().catch(() => null) as {
     choices?: Array<{ message?: { content?: string } }>
+    usage?: unknown
   } | null
   const content = completion?.choices?.[0]?.message?.content
   if (typeof content !== 'string') {
     return jsonResponse({ error: 'Empty model response' }, 502)
   }
+
+  await logAiUsage({ functionName: 'analyse-document', model, calledBy: user.user.id, usage: extractUsage(completion) })
 
   let parsed: IntermediateDoc & { title?: unknown; fields?: unknown; confidence?: unknown }
   try {
@@ -269,5 +338,6 @@ Deno.serve(async (req: Request) => {
     confidence[key] = rawConf[key] === 'high' ? 'high' : 'low'
   }
 
-  return jsonResponse({ doc, title, fields, confidence })
+  const languageMode = producedMode(parsed, langMode)
+  return jsonResponse({ doc, title, fields, confidence, languageMode })
 })

@@ -6,6 +6,7 @@ import { DocumentEditShell, EDITOR_STICKY_TOP_PX } from '../../components/editor
 import { SaveAsTemplateModal } from '../../components/SaveAsTemplateButton'
 import { ToolbarButton } from '../../components/editor/ToolbarButton'
 import { ToolbarMoreMenu, type ToolbarMenuItem } from '../../components/editor/ToolbarMoreMenu'
+import { buildExportMenuItem } from '../../components/editor/exportMenuItem'
 import { AudiencePicker, type AudienceTarget, type AudienceEmployee, type NamedRef } from '../../components/AudiencePicker'
 import { SopSignatureProgress, type SignatureProgressData } from '../../components/SopSignatureProgress'
 import { useLang } from '../../contexts/LanguageContext'
@@ -15,7 +16,7 @@ import { useDocumentViewPref } from '../../hooks/useDocumentViewPref'
 import { useSaveFlash } from '../../hooks/useSaveFlash'
 import { writeSnapshot } from '../../lib/snapshotApi'
 import { emptyDocumentDoc, type DocumentDoc, type LanguageMode } from '../../lib/documentDoc'
-import { exportDocumentPdf } from '../../lib/pdfExport'
+import { exportDocumentPdf, type ExportDocumentPdfOptions } from '../../lib/pdfExport'
 import { useBilling } from '../../contexts/BillingContext'
 import { documentHistoryPath } from '../../lib/documentTypes'
 import { trashDocument } from '../../lib/trash'
@@ -57,6 +58,7 @@ export function SOPEdit({ user }: { user: User }) {
   // and "Translating…" label rather than both buttons mirroring it.
   const [savingMode, setSavingMode] = useState<'draft' | 'active' | null>(null)
   const [downloading, setDownloading] = useState(false)
+  const [exportingDocx, setExportingDocx] = useState(false)
   const [error, setError] = useState('')
 
   // Tags
@@ -415,30 +417,46 @@ export function SOPEdit({ user }: { user: User }) {
     finally { setSavingMode(null) }
   }
 
+  function buildExportArgs(): ExportDocumentPdfOptions {
+    // Same context object for both languages — merge fields that resolve
+    // differently per language (signatures, dates) get the lang override from
+    // the renderer side.
+    const baseCtx = {
+      employee: compatEmployeeId ? (allEmployees.find(e => e.id === compatEmployeeId) ?? null) : null,
+      organization,
+      today: new Date(),
+    }
+    return {
+      doc: contentDoc,
+      title: title || 'SOP',
+      view,
+      languageMode,
+      contextEn: { ...baseCtx, lang: 'en' },
+      contextId: { ...baseCtx, lang: 'id' },
+    }
+  }
+
   async function handleDownloadPdf() {
-    if (downloading) return
+    if (downloading || exportingDocx) return
     setDownloading(true)
     try {
-      // Same context object for both languages — merge fields that
-      // resolve differently per language (signatures, dates) get the
-      // lang override from the renderer side.
-      const baseCtx = {
-        employee: compatEmployeeId ? (allEmployees.find(e => e.id === compatEmployeeId) ?? null) : null,
-        organization,
-        today: new Date(),
-      }
-      await exportDocumentPdf({
-        doc: contentDoc,
-        title: title || 'SOP',
-        view,
-        languageMode,
-        contextEn: { ...baseCtx, lang: 'en' },
-        contextId: { ...baseCtx, lang: 'id' },
-      })
+      await exportDocumentPdf(buildExportArgs())
     } catch (err) {
       setError(err instanceof Error ? err.message : 'PDF export failed')
     }
     setDownloading(false)
+  }
+
+  async function handleDownloadDocx() {
+    if (downloading || exportingDocx) return
+    setExportingDocx(true)
+    try {
+      const { exportDocumentDocx } = await import('../../lib/docxExport')
+      await exportDocumentDocx(buildExportArgs())
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Word export failed')
+    }
+    setExportingDocx(false)
   }
 
   if (!sop) return <div style={{ color: 'var(--color-text-secondary)' }}>{t.loading}</div>
@@ -480,7 +498,7 @@ export function SOPEdit({ user }: { user: User }) {
   }
 
   const menuItems: ToolbarMenuItem[] = [
-    { key: 'download', icon: 'download', label: downloading ? t.generatingPdf : t.downloadPdf, onClick: handleDownloadPdf, disabled: downloading },
+    buildExportMenuItem({ onPdf: handleDownloadPdf, onDocx: handleDownloadDocx, exporting: downloading ? 'pdf' : exportingDocx ? 'docx' : null, t }),
     { key: 'template', icon: 'template', label: t.contractSaveAsTemplate, onClick: () => setTplOpen(true), disabled: !canWrite, title: !canWrite ? t.dunningWriteBlocked : undefined },
     { key: 'history', icon: 'history', label: t.historyLinkLabel, to: documentHistoryPath('sop', sop.id) },
     { key: 'delete', icon: 'trash', label: t.delete, onClick: handleDelete, danger: true, disabled: saving || !canWrite, title: !canWrite ? t.dunningWriteBlocked : undefined },

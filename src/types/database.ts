@@ -3056,6 +3056,7 @@ export type Database = {
           nitku: string | null
           npwp_15: string | null
           npwp_16: string | null
+          onboarding_completed_at: string | null
           past_due_since: string | null
           pay_day_of_month: number
           phone: string | null
@@ -3108,6 +3109,7 @@ export type Database = {
           nitku?: string | null
           npwp_15?: string | null
           npwp_16?: string | null
+          onboarding_completed_at?: string | null
           past_due_since?: string | null
           pay_day_of_month?: number
           phone?: string | null
@@ -3160,6 +3162,7 @@ export type Database = {
           nitku?: string | null
           npwp_15?: string | null
           npwp_16?: string | null
+          onboarding_completed_at?: string | null
           past_due_since?: string | null
           pay_day_of_month?: number
           phone?: string | null
@@ -3182,6 +3185,73 @@ export type Database = {
             columns: ["forms_approver_user_id"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      owner_claims: {
+        Row: {
+          claimed_at: string | null
+          claimed_by: string | null
+          created_at: string
+          created_by: string | null
+          expires_at: string
+          id: string
+          invited_user_id: string | null
+          org_id: string
+          owner_email: string
+          owner_name: string | null
+          status: string
+          token: string
+        }
+        Insert: {
+          claimed_at?: string | null
+          claimed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string
+          id?: string
+          invited_user_id?: string | null
+          org_id: string
+          owner_email: string
+          owner_name?: string | null
+          status?: string
+          token: string
+        }
+        Update: {
+          claimed_at?: string | null
+          claimed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string
+          id?: string
+          invited_user_id?: string | null
+          org_id?: string
+          owner_email?: string
+          owner_name?: string | null
+          status?: string
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "owner_claims_claimed_by_fkey"
+            columns: ["claimed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "owner_claims_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "owner_claims_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -4168,6 +4238,7 @@ export type Database = {
       }
     }
     Functions: {
+      _fmt_qty: { Args: { p: number }; Returns: string }
       _leave_balance: {
         Args: { p_employee_id: string; p_org_id: string; p_year: number }
         Returns: Json
@@ -4227,9 +4298,44 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      admin_ai_usage: {
+        Args: { p_since?: string; p_until?: string }
+        Returns: Json
+      }
       admin_leave_balance: {
         Args: { p_employee_id: string; p_year?: number }
         Returns: Json
+      }
+      admin_org_detail: {
+        Args: { p_org_id: string }
+        Returns: Json
+      }
+      admin_org_rows: {
+        Args: never
+        Returns: {
+          org_id: string
+          name: string
+          display_name: string | null
+          owner_name: string | null
+          owner_email: string | null
+          plan_tier: string
+          subscription_status: string | null
+          subscription_quantity: number | null
+          past_due_since: string | null
+          current_period_end: string | null
+          cancel_at_period_end: boolean
+          stripe_customer_id: string | null
+          created_at: string
+          onboarding_completed_at: string | null
+          user_count: number
+          employee_count: number
+          contract_count: number
+          sop_count: number
+          form_count: number
+          nda_count: number
+          last_login: string | null
+          last_activity: string | null
+        }[]
       }
       admin_pay_settlement: {
         Args: { p_employee_id: string; p_period_month: string }
@@ -4326,6 +4432,14 @@ export type Database = {
           email: string
           org_id: string
           org_name: string
+        }[]
+      }
+      get_owner_claim_by_token: {
+        Args: { p_token: string }
+        Returns: {
+          org_id: string
+          org_name: string
+          owner_email: string
         }[]
       }
       get_user_org_id: { Args: never; Returns: string }
@@ -4644,6 +4758,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      payroll_trend: {
+        Args: { p_months?: number; p_period: string }
+        Returns: Json
       }
       portal_advance_to_signed: {
         Args: { emp_slug: string; emp_token: string }
@@ -5226,6 +5344,7 @@ export type Database = {
           unlocked_at: string
         }[]
       }
+      redeem_owner_claim: { Args: { p_token: string }; Returns: string }
       repost_form_to_payroll: {
         Args: { p_submission_id: string }
         Returns: undefined

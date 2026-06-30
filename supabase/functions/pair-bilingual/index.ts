@@ -12,6 +12,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders, jsonResponse } from '../_shared/auth.ts'
+import { extractUsage, logAiUsage } from '../_shared/logUsage.ts'
 
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions'
 
@@ -97,6 +98,7 @@ Deno.serve(async (req: Request) => {
         ],
         temperature: 0,
         response_format: { type: 'json_object' },
+        usage: { include: true },
       }),
     })
   } catch (err) {
@@ -111,11 +113,14 @@ Deno.serve(async (req: Request) => {
 
   const completion = await modelResponse.json().catch(() => null) as {
     choices?: Array<{ message?: { content?: string } }>
+    usage?: unknown
   } | null
   const content = completion?.choices?.[0]?.message?.content
   if (typeof content !== 'string') {
     return jsonResponse({ error: 'Empty model response' }, 502)
   }
+
+  await logAiUsage({ functionName: 'pair-bilingual', model, calledBy: user.user.id, usage: extractUsage(completion) })
 
   let parsed: { pairs?: unknown }
   try {

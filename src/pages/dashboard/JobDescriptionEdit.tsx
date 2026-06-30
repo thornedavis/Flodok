@@ -25,6 +25,7 @@ import { DocumentEditShell, EDITOR_STICKY_TOP_PX } from '../../components/editor
 import { SaveAsTemplateModal } from '../../components/SaveAsTemplateButton'
 import { ToolbarButton } from '../../components/editor/ToolbarButton'
 import { ToolbarMoreMenu, type ToolbarMenuItem } from '../../components/editor/ToolbarMoreMenu'
+import { buildExportMenuItem } from '../../components/editor/exportMenuItem'
 import { DateTimePicker } from '../../components/DateTimePicker'
 import { EmployeeSelect } from '../../components/EmployeeSelect'
 import { type EmpDeptShape } from '../../lib/employee'
@@ -36,7 +37,7 @@ import {
   type JobDescriptionStatus,
 } from '../../lib/jobDescriptions'
 import { trashDocument } from '../../lib/trash'
-import { exportDocumentPdf } from '../../lib/pdfExport'
+import { exportDocumentPdf, type ExportDocumentPdfOptions } from '../../lib/pdfExport'
 import type { User, JobDescription, CompanyDepartment, HiringRequest, Employee } from '../../types/aliases'
 
 type DepartmentOption = Pick<CompanyDepartment, 'id' | 'name'>
@@ -96,6 +97,7 @@ export function JobDescriptionEdit({ user }: { user: User }) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [downloading, setDownloading] = useState(false)
+  const [exportingDocx, setExportingDocx] = useState(false)
   const [error, setError] = useState('')
   // Whether the user has typed/clicked something in the doc_version field
   // since the form opened. If they have, we leave it alone; otherwise we
@@ -415,24 +417,40 @@ export function JobDescriptionEdit({ user }: { user: User }) {
     }
   }
 
+  function buildExportArgs(): ExportDocumentPdfOptions {
+    // JDs carry no merge-field pills (the editor doesn't expose the picker),
+    // so a minimal context is enough to render the bilingual body.
+    return {
+      doc: content,
+      title: form.title || t.documentTypeJobDescription,
+      view,
+      languageMode,
+      contextEn: { today: new Date(), lang: 'en' },
+      contextId: { today: new Date(), lang: 'id' },
+    }
+  }
+
   async function handleDownloadPdf() {
-    if (downloading) return
+    if (downloading || exportingDocx) return
     setDownloading(true)
     try {
-      // JDs carry no merge-field pills (the editor doesn't expose the
-      // picker), so a minimal context is enough to render the bilingual body.
-      await exportDocumentPdf({
-        doc: content,
-        title: form.title || t.documentTypeJobDescription,
-        view,
-        languageMode,
-        contextEn: { today: new Date(), lang: 'en' },
-        contextId: { today: new Date(), lang: 'id' },
-      })
+      await exportDocumentPdf(buildExportArgs())
     } catch (err) {
       setError(err instanceof Error ? err.message : 'PDF export failed')
     }
     setDownloading(false)
+  }
+
+  async function handleDownloadDocx() {
+    if (downloading || exportingDocx) return
+    setExportingDocx(true)
+    try {
+      const { exportDocumentDocx } = await import('../../lib/docxExport')
+      await exportDocumentDocx(buildExportArgs())
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Word export failed')
+    }
+    setExportingDocx(false)
   }
 
   const writeDisabledTitle = !canWrite ? t.dunningWriteBlocked : undefined
@@ -467,7 +485,7 @@ export function JobDescriptionEdit({ user }: { user: User }) {
   )
 
   const menuItems: ToolbarMenuItem[] = [
-    { key: 'download', icon: 'download', label: downloading ? t.generatingPdf : t.downloadPdf, onClick: handleDownloadPdf, disabled: downloading },
+    buildExportMenuItem({ onPdf: handleDownloadPdf, onDocx: handleDownloadDocx, exporting: downloading ? 'pdf' : exportingDocx ? 'docx' : null, t }),
   ]
   if (!isNew && (status === 'draft' || status === 'published')) {
     menuItems.push({ key: 'template', icon: 'template', label: t.contractSaveAsTemplate, onClick: () => setTplOpen(true), disabled: !canWrite, title: writeDisabledTitle })

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ReferenceLine, ResponsiveContainer } from 'recharts'
 import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
 import { useRole } from '../../hooks/useRole'
@@ -9,6 +10,7 @@ import { formatIdr, formatIdrDigits, currentPeriodMonth } from '../../lib/credit
 import { BadgeGlyph } from '../../components/BadgeGlyph'
 import { Skeleton } from '../../components/Skeleton'
 import { FilterPill, FilterPanel, FilterSearchInput, MultiSelectDropdown, type FilterPanelSection } from '../../components/FilterControls'
+import { StatCard, TrendCard, ChartCard, LegendDot, CHART_TOOLTIP, compactIdr, monthShort, CHART_GREEN, CHART_RED, type TrendPoint } from '../../components/Metrics'
 import { MonthStrip } from '../../components/portal/MonthStrip'
 import { ActionsMenuButton } from '../../components/ActionsMenuButton'
 import { useFullWidthLayout } from '../../components/Layout'
@@ -138,6 +140,12 @@ export function Performance({ user }: { user: User }) {
   const [sort, setSort] = useState<SortKey>('name')
   const [lenses, setLenses] = useState<Set<Lens>>(new Set())
 
+  // Analytics: recent monthly recognition totals (rewards/penalties) for the
+  // "vs last month" tile + charts. Reuses the payroll_trend RPC — its bonus
+  // (positive) / deduction (negative) splits are exactly rewards / penalties.
+  const [trend, setTrend] = useState<TrendPoint[] | null>(null)
+  const [analyticsOpen, setAnalyticsOpen] = useState(false)
+
   // Period-scoped recognition signal (org-wide), for the dashboard cards.
 
   // Action modals.
@@ -214,6 +222,18 @@ export function Performance({ user }: { user: User }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user.org_id, selectedMonth, periodKind])
 
+  // Recent recognition trend. In all-time mode there's no single period to
+  // compare, so the tile/charts anchor to the current month either way.
+  const trendPeriod = periodKind === 'all' ? baseCurrent : selectedMonth
+  useEffect(() => {
+    let cancelled = false
+    setTrend(null)
+    supabase.rpc('payroll_trend', { p_period: trendPeriod, p_months: 6 }).then(({ data, error }) => {
+      if (!cancelled) setTrend(error ? [] : ((data as unknown as TrendPoint[]) ?? []))
+    })
+    return () => { cancelled = true }
+  }, [trendPeriod])
+
   function refreshAfterAction() {
     setPayAction(null)
     setBadgeAction(null)
@@ -237,6 +257,21 @@ export function Performance({ user }: { user: User }) {
     const c = { active: 0, separated: 0 }
     for (const r of roster?.rows ?? []) if (r.lifecycle_stage) c[r.lifecycle_stage]++
     return c
+  }, [roster])
+
+  // Org-wide recognition summary for the info-box cards (current roster scope:
+  // the selected month, or all-time). Coverage is over active employees only.
+  const summary = useMemo(() => {
+    const rows = roster?.rows ?? []
+    let rewards = 0
+    let penalties = 0
+    for (const r of rows) {
+      if (r.adjustment_idr > 0) rewards += r.adjustment_idr
+      else if (r.adjustment_idr < 0) penalties += r.adjustment_idr
+    }
+    const active = rows.filter(r => r.lifecycle_stage === 'active')
+    const recognized = active.filter(r => r.adjustment_idr > 0).length
+    return { rewards, penalties, recognized, activeCount: active.length }
   }, [roster])
 
   const filtered = useMemo(() => {
@@ -350,6 +385,30 @@ export function Performance({ user }: { user: User }) {
       {/* Toolbar + roster — re-constrained. */}
       <div className={`${SHELL_PAD} pt-5`}>
         <div className={SHELL_INNER}>
+          {/* Recognition summary — rewards/penalties/coverage + a vs-last-month
+              tile that expands to the trend charts. */}
+          {roster && (
+            <div className="mb-5">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <StatCard label={t.performanceTotalRewards} value={formatIdr(summary.rewards, lang)} tone="success" />
+                <StatCard label={t.performanceTotalPenalties} value={formatIdr(summary.penalties, lang)} tone="danger" />
+                <StatCard
+                  label={t.performanceStatCoverage}
+                  value={t.performanceCoverageValue(summary.recognized, summary.activeCount)}
+                  hint={t.performanceCoverageHint}
+                />
+                <TrendCard
+                  values={trend ? trend.map(p => p.total_bonus_idr) : null}
+                  label={t.performanceVsLastMonth}
+                  newLabel={t.payrollTrendNew}
+                  open={analyticsOpen}
+                  onToggle={() => setAnalyticsOpen(o => !o)}
+                />
+              </div>
+              {analyticsOpen && <PerformanceAnalyticsPanel trend={trend} t={t} lang={lang} />}
+            </div>
+          )}
+
           {/* Filter toolbar */}
           <div className="sticky top-0 z-10 -mx-4 mb-3 bg-opacity-90 px-4 pb-2 pt-2 backdrop-blur" style={{ backgroundColor: 'var(--color-bg)' }}>
             <div className="flex w-full flex-wrap items-center gap-2">
@@ -460,6 +519,58 @@ export function Performance({ user }: { user: User }) {
           t={t}
         />
       )}
+    </div>
+  )
+}
+
+// ─── Recognition analytics panel (expands under the summary cards) ───────────
+
+function PerformanceAnalyticsPanel({ trend, t, lang }: {
+  trend: TrendPoint[] | null
+  t: ReturnType<typeof useLang>['t']
+  lang: 'en' | 'id'
+}) {
+  if (trend === null) {
+    return (
+      <div className="mt-4 flex h-32 items-center justify-center rounded-xl border text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-tertiary)' }}>
+        {t.loading}
+      </div>
+    )
+  }
+  if (trend.length < 2) {
+    return (
+      <div className="mt-4 flex h-24 items-center justify-center rounded-xl border text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-tertiary)' }}>
+        {t.payrollTrendUnavailable}
+      </div>
+    )
+  }
+  const data = trend.map(p => ({
+    label: monthShort(p.period, lang),
+    rewards: p.total_bonus_idr,
+    penalties: p.total_deduction_idr,
+  }))
+  return (
+    <div className="mt-4">
+      <ChartCard
+        title={t.performanceChartTitle}
+        legend={
+          <div className="flex items-center gap-3 text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>
+            <LegendDot color={CHART_GREEN} label={t.performanceChartRewards} />
+            <LegendDot color={CHART_RED} label={t.performanceChartPenalties} />
+          </div>
+        }
+      >
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={data} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
+            <XAxis dataKey="label" tick={{ fill: 'var(--color-text-tertiary)', fontSize: 10 }} axisLine={{ stroke: 'var(--color-border)' }} tickLine={false} />
+            <YAxis tick={{ fill: 'var(--color-text-tertiary)', fontSize: 10 }} axisLine={false} tickLine={false} width={44} tickFormatter={v => compactIdr(v as number, lang)} />
+            <ReferenceLine y={0} stroke="var(--color-border)" />
+            <Tooltip cursor={{ fill: 'var(--color-bg-tertiary)', opacity: 0.4 }} contentStyle={CHART_TOOLTIP} labelStyle={{ color: 'var(--color-text)' }} formatter={(value, name) => [formatIdr(value as number, lang), name === 'rewards' ? t.performanceChartRewards : t.performanceChartPenalties]} />
+            <Bar dataKey="rewards" fill={CHART_GREEN} radius={[4, 4, 0, 0]} />
+            <Bar dataKey="penalties" fill={CHART_RED} radius={[0, 0, 4, 4]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </ChartCard>
     </div>
   )
 }

@@ -1,3 +1,5 @@
+import { extractUsage, logAiUsage } from "./logUsage.ts";
+
 const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 const SYSTEM_PROMPTS = {
@@ -37,6 +39,9 @@ export type TranslationDirection = 'en-to-id' | 'id-to-en';
 export async function translateSOP(
   content: string,
   direction: TranslationDirection = 'en-to-id',
+  // When provided, token + cost usage is logged to ai_usage under this context
+  // (function_name + org attribution). Omit it and the call is unlogged.
+  logCtx?: { functionName: string; orgId?: string | null; calledBy?: string | null },
 ): Promise<{ text: string | null; error: string | null }> {
   const apiKey = Deno.env.get("OPENROUTER_API_KEY");
   const model = Deno.env.get("OPENROUTER_TRANSLATION_MODEL") || "openai/gpt-5.4-nano";
@@ -61,6 +66,7 @@ export async function translateSOP(
           { role: "user", content },
         ],
         temperature: 0.1,
+        usage: { include: true },
       }),
     });
 
@@ -72,11 +78,16 @@ export async function translateSOP(
 
     const json = await response.json() as {
       choices: { message: { content: string } }[];
+      usage?: unknown;
     };
 
     const result = json.choices?.[0]?.message?.content;
     if (!result) {
       return { text: null, error: "No content in OpenRouter response" };
+    }
+
+    if (logCtx) {
+      await logAiUsage({ ...logCtx, model, usage: extractUsage(json) });
     }
 
     return { text: result, error: null };

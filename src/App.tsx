@@ -6,6 +6,8 @@ import { Login } from './pages/auth/Login'
 import { Signup } from './pages/auth/Signup'
 import { AcceptInvite } from './pages/auth/AcceptInvite'
 import { ResetPassword } from './pages/auth/ResetPassword'
+import { ClaimOwner } from './pages/auth/ClaimOwner'
+import { Onboarding } from './pages/onboarding/Onboarding'
 import { Overview } from './pages/dashboard/Overview'
 import { Employees } from './pages/dashboard/Employees'
 import { EmployeeEdit } from './pages/dashboard/EmployeeEdit'
@@ -40,6 +42,7 @@ import { Pending } from './pages/dashboard/Pending'
 import { Inbox } from './pages/dashboard/Inbox'
 import { Settings } from './pages/dashboard/Settings'
 import { Trash } from './pages/dashboard/Trash'
+import { Admin } from './pages/dashboard/Admin'
 import { Portal } from './pages/public/Portal'
 import { Landing } from './pages/public/Landing'
 import { PublicSiteLayout } from './components/PublicSiteLayout'
@@ -56,7 +59,7 @@ import { HelpContact } from './pages/help/HelpContact'
 import { HelpFAQ } from './pages/help/FAQ'
 
 function AppRoutes() {
-  const { session, user, loading, recovering, signIn, signUp, signOut, recover } = useAuth()
+  const { session, user, org, loading, recovering, signIn, signUp, signOut, recover } = useAuth()
 
   if (loading) {
     return (
@@ -71,6 +74,9 @@ function AppRoutes() {
       {/* Password recovery — matches before session check so the recovery
           session doesn't get bounced to /dashboard. */}
       <Route path="/reset-password" element={<ResetPassword />} />
+
+      {/* Owner-claim acceptance — always accessible (arrives with an invite session) */}
+      <Route path="/claim/:token" element={<ClaimOwner />} />
 
       {/* Public SOP view */}
       <Route element={<PublicLayout />}>
@@ -117,6 +123,14 @@ function AppRoutes() {
         <Route path="*" element={
           <AccountSetup recover={recover} recovering={recovering} onSignOut={signOut} />
         } />
+      ) : org && !org.onboarding_completed_at ? (
+        <>
+          {/* First-run setup wizard — gated on organizations.onboarding_completed_at.
+              The always-accessible routes above (claim/invite/reset) still win by
+              specificity, so an invited owner can still reach /claim mid-setup. */}
+          <Route path="/onboarding" element={<Onboarding user={user} org={org} />} />
+          <Route path="*" element={<Navigate to="/onboarding" replace />} />
+        </>
       ) : (
         <>
           {/* Dashboard routes */}
@@ -169,6 +183,10 @@ function AppRoutes() {
             <Route path="/dashboard/inbox" element={<Inbox user={user} />} />
             <Route path="/dashboard/trash" element={<Trash user={user} />} />
             <Route path="/dashboard/settings" element={<Settings user={user} />} />
+            {/* Founder console — platform-wide admin. The component itself gates
+                on user.is_platform_admin (redirects others); the admin_* RPCs
+                re-check the bit server-side. */}
+            <Route path="/dashboard/admin" element={<Admin user={user} />} />
           </Route>
 
           {/* Redirects */}

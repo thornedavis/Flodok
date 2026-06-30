@@ -11,10 +11,12 @@ import type { Translations } from '../lib/translations'
 import type { Organization, User } from '../types/aliases'
 import { Wordmark, Imagemark } from './Brand'
 import { DunningBanner } from './DunningBanner'
+import { OwnerClaimBanner } from './OwnerClaimBanner'
 import { NotificationBell } from './NotificationBell'
 import { GlobalSearchButton } from './GlobalSearch'
+import { WhatsAppIcon, whatsappHref } from './BetaFeedback'
 
-type NavKey = 'navOverview' | 'navInbox' | 'navEmployees' | 'navHiring' | 'navForms' | 'navRecruitment' | 'navCompany' | 'navDocuments' | 'navPerformance' | 'navPayroll' | 'navSpotlight' | 'navPending' | 'navTrash' | 'navSettings'
+type NavKey = 'navAdmin' | 'navOverview' | 'navInbox' | 'navEmployees' | 'navHiring' | 'navForms' | 'navRecruitment' | 'navCompany' | 'navDocuments' | 'navPerformance' | 'navPayroll' | 'navSpotlight' | 'navPending' | 'navTrash' | 'navSettings'
 
 interface NavItemDef {
   path: string
@@ -93,6 +95,17 @@ const navItems: NavItemDef[] = [
     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 21h18" /><path d="M5 21V7l8-4v18" /><path d="M19 21V11l-6-4" /><path d="M9 9h1" /><path d="M9 13h1" /><path d="M9 17h1" /><path d="M15 13h1" /><path d="M15 17h1" /></svg>,
   },
 ]
+
+// Platform founder console. Pinned above the org nav and rendered only when
+// user.is_platform_admin (a server-trusted bit — migration 170 revoked client
+// writes to it). Cross-tenant by design; the admin_* RPCs it calls re-check the
+// bit, so this nav entry is a convenience, not the security boundary.
+const adminNavItem: NavItemDef = {
+  path: '/dashboard/admin',
+  labelKey: 'navAdmin',
+  // Shield — founder/ops surface.
+  icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>,
+}
 
 const footerNavItems: NavItemDef[] = [
   {
@@ -227,6 +240,7 @@ export function DashboardLayout({ user, onSignOut }: { user: User; onSignOut: ()
               <main className={`flex-1 ${fullWidth ? '' : 'px-6 py-8 md:px-10'}`}>
                 <div className={fullWidth ? '' : 'mx-auto max-w-6xl'}>
                   <DunningBanner user={user} />
+                  <OwnerClaimBanner user={user} />
                   <Outlet context={{ org } satisfies DashboardOutletContext} />
                 </div>
               </main>
@@ -253,28 +267,12 @@ function Sidebar({ user, mobileOpen, onCloseMobile }: {
   const { t } = useLang()
   const { isAdmin } = useRole(user)
   const location = useLocation()
-  const navigate = useNavigate()
-  const [userCount, setUserCount] = useState<number | null>(null)
   const { collapsed, setCollapsed } = useSidebar()
-
-  useEffect(() => {
-    if (!isAdmin) return
-    let cancelled = false
-    supabase
-      .from('users')
-      .select('id', { count: 'exact', head: true })
-      .eq('org_id', user.org_id)
-      .then(({ count }) => {
-        if (!cancelled) setUserCount(count ?? 0)
-      })
-    return () => { cancelled = true }
-  }, [isAdmin, user.org_id])
 
   // Mobile drawer always shows the full expanded layout, regardless of the
   // desktop collapsed preference — the narrow icon-only mode would be hard
   // to tap on touch.
   const isCollapsed = collapsed && !mobileOpen
-  const showInviteCard = isAdmin && userCount !== null && userCount <= 2 && !isCollapsed
 
   return (
     <>
@@ -323,6 +321,16 @@ function Sidebar({ user, mobileOpen, onCloseMobile }: {
                 className="inline-flex items-center"
               >
                 <Wordmark height={18} />
+                {/* "beta" superscript, raised to the wordmark's top-right like
+                    the ² in m². align-self:flex-start lifts it to the top of the
+                    lockup; the small marginTop tucks it down to the cap line. */}
+                <span
+                  aria-hidden="true"
+                  className="ml-1 select-none text-[9px] font-bold leading-none"
+                  style={{ color: 'var(--color-primary)', alignSelf: 'flex-start', marginTop: '5px' }}
+                >
+                  Beta
+                </span>
               </Link>
               <button
                 type="button"
@@ -351,7 +359,7 @@ function Sidebar({ user, mobileOpen, onCloseMobile }: {
             (overflow-y-auto would compute overflow-x to auto and clip them). */}
         <nav className={`flex-1 px-3 py-4 ${isCollapsed ? 'overflow-visible' : 'overflow-y-auto'}`}>
           <ul className="space-y-0.5">
-            {navItems.filter(item => !item.adminOnly || isAdmin).map(item => {
+            {(user.is_platform_admin ? [adminNavItem, ...navItems] : navItems).filter(item => !item.adminOnly || isAdmin).map(item => {
               const isActive = item.exact
                 ? location.pathname === item.path
                 : location.pathname.startsWith(item.path)
@@ -434,14 +442,12 @@ function Sidebar({ user, mobileOpen, onCloseMobile }: {
               {isCollapsed && <NavFlyout label={t.helpCenter} />}
             </li>
           </ul>
-        </div>
 
-        {/* Invite card — admins only, hidden once the team has 3+ members */}
-        {showInviteCard && (
-          <div className="px-4 pt-3">
-            <InviteCard t={t} onInvite={() => navigate('/dashboard/settings?tab=organization')} />
-          </div>
-        )}
+          {/* Public-beta feedback — a direct WhatsApp line to the team.
+              Expanded: a quiet card. Collapsed: an icon button with the
+              same hover-flyout label as the nav items above. */}
+          <BetaSidebarCard isCollapsed={isCollapsed} />
+        </div>
 
         {/* Version footer */}
         {!isCollapsed && (
@@ -451,6 +457,66 @@ function Sidebar({ user, mobileOpen, onCloseMobile }: {
         )}
       </aside>
     </>
+  )
+}
+
+// ─── Public-beta feedback card ──────────────────────────
+//
+// Sits in the sidebar footer as the permanent home for "something broke /
+// I have feedback". Opens a WhatsApp chat to the team, pre-filled with the
+// app version for context. Collapsed, it mirrors the nav items: an icon
+// button with a hover flyout.
+
+function BetaSidebarCard({ isCollapsed }: { isCollapsed: boolean }) {
+  const { t } = useLang()
+  const href = whatsappHref(t.betaWhatsappPrefill(__APP_VERSION__))
+
+  if (isCollapsed) {
+    return (
+      <ul className="mt-1 space-y-0.5">
+        <li className="group relative">
+          <a
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center rounded-lg px-2 py-2 transition-colors"
+            style={{ color: '#25D366' }}
+            onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
+            onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
+          >
+            <WhatsAppIcon />
+          </a>
+          <NavFlyout label={t.betaCardCta} />
+        </li>
+      </ul>
+    )
+  }
+
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      // gap-3 + pl-[11px] align the icon/text with the footer links above:
+      // the links sit at px-3 (12px); the card's 1px border eats 1px, so 11px
+      // of padding lands its content on the same vertical lines.
+      className="mt-2 flex items-start gap-3 rounded-lg border py-2.5 pr-2.5 pl-[11px] transition-colors"
+      style={{ borderColor: 'rgba(37, 211, 102, 0.35)', backgroundColor: 'rgba(37, 211, 102, 0.07)' }}
+      onMouseOver={e => { e.currentTarget.style.backgroundColor = 'rgba(37, 211, 102, 0.12)' }}
+      onMouseOut={e => { e.currentTarget.style.backgroundColor = 'rgba(37, 211, 102, 0.07)' }}
+    >
+      <span className="mt-0.5 shrink-0" style={{ color: '#25D366' }}>
+        <WhatsAppIcon size={18} />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+          {t.betaCardTitle}
+        </span>
+        <span className="mt-0.5 block text-sm leading-snug" style={{ color: 'var(--color-text-tertiary)' }}>
+          {t.betaCardBody}
+        </span>
+      </span>
+    </a>
   )
 }
 
@@ -519,45 +585,6 @@ function NavFlyout({ label }: { label: string }) {
           style={{ bottom: '-13px', background: FLYOUT_COVE.replace('CORNER', 'bottom right') }}
         />
       </div>
-    </div>
-  )
-}
-
-// ─── Invite card ────────────────────────────────────────
-
-function InviteCard({ t, onInvite }: { t: Translations; onInvite: () => void }) {
-  return (
-    <div
-      className="relative overflow-hidden rounded-xl border p-4"
-      style={{
-        borderColor: 'var(--color-border)',
-        backgroundColor: 'var(--color-bg)',
-      }}
-    >
-      <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-lg" style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-          <circle cx="9" cy="7" r="4" />
-          <line x1="19" y1="8" x2="19" y2="14" />
-          <line x1="22" y1="11" x2="16" y2="11" />
-        </svg>
-      </div>
-      <p className="mb-0.5 text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{t.sidebarInviteTitle}</p>
-      <p className="mb-3 text-xs leading-relaxed" style={{ color: 'var(--color-text-tertiary)' }}>{t.sidebarInviteDesc}</p>
-      <button
-        type="button"
-        onClick={onInvite}
-        className="w-full rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors"
-        style={{
-          borderColor: 'var(--color-border)',
-          backgroundColor: 'var(--color-bg-tertiary)',
-          color: 'var(--color-text)',
-        }}
-        onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-border)' }}
-        onMouseOut={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
-      >
-        {t.sidebarInviteCta}
-      </button>
     </div>
   )
 }

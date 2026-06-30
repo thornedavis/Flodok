@@ -27,6 +27,8 @@ export interface ToolbarMenuItem {
   disabled?: boolean
   /** Tooltip — e.g. to explain why the item is disabled. */
   title?: string
+  /** Nested items — renders as an inline-expandable submenu (e.g. Export ▸). */
+  children?: ToolbarMenuItem[]
 }
 
 function MenuIcon({ name, muted }: { name: ToolbarMenuIcon; muted: boolean }) {
@@ -49,6 +51,7 @@ export function ToolbarMoreMenu({ items, disabled }: { items: ToolbarMenuItem[];
   const { t } = useLang()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
+  const [expandedKey, setExpandedKey] = useState<string | null>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -80,7 +83,7 @@ export function ToolbarMoreMenu({ items, disabled }: { items: ToolbarMenuItem[];
     <div className="relative" ref={wrapRef}>
       <button
         type="button"
-        onClick={() => setOpen(o => !o)}
+        onClick={() => { setExpandedKey(null); setOpen(o => !o) }}
         disabled={disabled}
         aria-haspopup="menu"
         aria-expanded={open}
@@ -102,13 +105,16 @@ export function ToolbarMoreMenu({ items, disabled }: { items: ToolbarMenuItem[];
           {items.map((item, i) => {
             const prev = items[i - 1]
             const showSep = !!item.danger && !!prev && !prev.danger
+            const hasChildren = !!item.children?.length
+            const expanded = expandedKey === item.key
             return (
               <Fragment key={item.key}>
                 {showSep && <div className="my-1 h-px" style={{ backgroundColor: 'var(--color-border)' }} />}
                 <button
                   type="button"
                   role="menuitem"
-                  onClick={() => activate(item)}
+                  aria-expanded={hasChildren ? expanded : undefined}
+                  onClick={() => hasChildren ? setExpandedKey(expanded ? null : item.key) : activate(item)}
                   disabled={item.disabled}
                   title={item.title}
                   className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-[13px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
@@ -117,8 +123,26 @@ export function ToolbarMoreMenu({ items, disabled }: { items: ToolbarMenuItem[];
                   onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
                 >
                   {item.icon && <MenuIcon name={item.icon} muted={!item.danger} />}
-                  <span>{item.label}</span>
+                  <span className="flex-1">{item.label}</span>
+                  {hasChildren && <Chevron expanded={expanded} />}
                 </button>
+                {hasChildren && expanded && item.children!.map(child => (
+                  <button
+                    key={child.key}
+                    type="button"
+                    role="menuitem"
+                    onClick={() => activate(child)}
+                    disabled={child.disabled}
+                    title={child.title}
+                    className="flex w-full items-center gap-2.5 py-2 pl-10 pr-3.5 text-left text-[13px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                    style={{ color: 'var(--color-text-secondary)' }}
+                    onMouseOver={e => { if (!child.disabled) e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
+                    onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
+                  >
+                    {child.icon && <MenuIcon name={child.icon} muted />}
+                    <span>{child.label}</span>
+                  </button>
+                ))}
               </Fragment>
             )
           })}
@@ -127,3 +151,16 @@ export function ToolbarMoreMenu({ items, disabled }: { items: ToolbarMenuItem[];
     </div>
   )
 }
+
+function Chevron({ expanded }: { expanded: boolean }) {
+  return (
+    <svg
+      width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
+      style={{ color: 'var(--color-text-tertiary)', flexShrink: 0, transition: 'transform 0.15s', transform: expanded ? 'rotate(90deg)' : 'none' }}
+    >
+      <polyline points="9 18 15 12 9 6" />
+    </svg>
+  )
+}
+

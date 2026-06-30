@@ -6,13 +6,14 @@ import { DocumentEditShell, EDITOR_STICKY_TOP_PX } from '../../components/editor
 import { SaveAsTemplateModal } from '../../components/SaveAsTemplateButton'
 import { ToolbarButton } from '../../components/editor/ToolbarButton'
 import { ToolbarMoreMenu, type ToolbarMenuItem } from '../../components/editor/ToolbarMoreMenu'
+import { buildExportMenuItem } from '../../components/editor/exportMenuItem'
 import { useLang } from '../../contexts/LanguageContext'
 import { type EmpDeptShape } from '../../lib/employee'
 import { bucketReferenceValues, referenceNames } from '../../lib/companyReference'
 import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning'
 import { useDocumentViewPref } from '../../hooks/useDocumentViewPref'
 import { useSaveFlash } from '../../hooks/useSaveFlash'
-import { exportDocumentPdf } from '../../lib/pdfExport'
+import { exportDocumentPdf, type ExportDocumentPdfOptions } from '../../lib/pdfExport'
 import { formatIdrDigits } from '../../lib/credits'
 import { InfoTooltip } from '../../components/InfoTooltip'
 import { AllowanceComponentsEditor, type CompLine } from '../../components/AllowanceComponentsEditor'
@@ -105,6 +106,7 @@ export function ContractEdit({ user }: { user: User }) {
   // and "Translating…" label rather than both buttons mirroring it.
   const [savingMode, setSavingMode] = useState<'draft' | 'activate' | null>(null)
   const [downloading, setDownloading] = useState(false)
+  const [exportingDocx, setExportingDocx] = useState(false)
   const [error, setError] = useState('')
 
   const [allTags, setAllTags] = useState<Tag[]>([])
@@ -493,40 +495,56 @@ export function ContractEdit({ user }: { user: User }) {
     }
   }
 
+  function buildExportArgs(): ExportDocumentPdfOptions {
+    const baseCtx = {
+      employee: allEmployees.find(e => e.id === employeeId) ?? null,
+      organization,
+      contract: contract ? {
+        ...contract,
+        base_wage_idr: parsedBaseWage,
+        allowance_idr: parsedAllowance,
+        hours_per_day: parsedHoursPerDay,
+        days_per_week: parsedDaysPerWeek,
+        employee_id: employeeId,
+        contract_type: contractType,
+        annual_leave_days: parsedAnnualLeave,
+        probation_months: parsedProbationMonths,
+        compensation_components: nonBlankComponents.map(c => ({ name: c.name.trim(), amount_idr: Number(c.amount) || 0, is_fixed: c.isFixed })),
+      } : null,
+      today: new Date(),
+      signer: { name: user.name, title: user.title },
+    }
+    return {
+      doc: contentDoc,
+      title: title || 'Contract',
+      view,
+      languageMode,
+      contextEn: { ...baseCtx, lang: 'en' },
+      contextId: { ...baseCtx, lang: 'id' },
+    }
+  }
+
   async function handleDownloadPdf() {
-    if (downloading) return
+    if (downloading || exportingDocx) return
     setDownloading(true)
     try {
-      const baseCtx = {
-        employee: allEmployees.find(e => e.id === employeeId) ?? null,
-        organization,
-        contract: contract ? {
-          ...contract,
-          base_wage_idr: parsedBaseWage,
-          allowance_idr: parsedAllowance,
-          hours_per_day: parsedHoursPerDay,
-          days_per_week: parsedDaysPerWeek,
-          employee_id: employeeId,
-          contract_type: contractType,
-          annual_leave_days: parsedAnnualLeave,
-          probation_months: parsedProbationMonths,
-          compensation_components: nonBlankComponents.map(c => ({ name: c.name.trim(), amount_idr: Number(c.amount) || 0, is_fixed: c.isFixed })),
-        } : null,
-        today: new Date(),
-        signer: { name: user.name, title: user.title },
-      }
-      await exportDocumentPdf({
-        doc: contentDoc,
-        title: title || 'Contract',
-        view,
-        languageMode,
-        contextEn: { ...baseCtx, lang: 'en' },
-        contextId: { ...baseCtx, lang: 'id' },
-      })
+      await exportDocumentPdf(buildExportArgs())
     } catch (err) {
       setError(err instanceof Error ? err.message : 'PDF export failed')
     }
     setDownloading(false)
+  }
+
+  async function handleDownloadDocx() {
+    if (downloading || exportingDocx) return
+    setExportingDocx(true)
+    try {
+      const { exportDocumentDocx } = await import('../../lib/docxExport')
+      await exportDocumentDocx(buildExportArgs())
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Word export failed')
+    }
+    setExportingDocx(false)
   }
 
   async function handleActivateAndSign() {
@@ -688,7 +706,7 @@ export function ContractEdit({ user }: { user: User }) {
   }
 
   const menuItems: ToolbarMenuItem[] = [
-    { key: 'download', icon: 'download', label: downloading ? t.generatingPdf : t.downloadPdf, onClick: handleDownloadPdf, disabled: downloading },
+    buildExportMenuItem({ onPdf: handleDownloadPdf, onDocx: handleDownloadDocx, exporting: downloading ? 'pdf' : exportingDocx ? 'docx' : null, t }),
   ]
   if (!contract.is_template) {
     menuItems.push({ key: 'template', icon: 'template', label: t.contractSaveAsTemplate, onClick: () => setTplOpen(true), disabled: !canWrite, title: !canWrite ? t.dunningWriteBlocked : undefined })

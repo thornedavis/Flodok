@@ -9,6 +9,8 @@
 // explain returns commentary that the UI shows separately — it must
 // never replace the source text.
 
+import { extractUsage, logAiUsage } from './logUsage.ts'
+
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions'
 
 export type RewriteAction = 'improve' | 'proofread' | 'explain'
@@ -52,6 +54,8 @@ export function isRewriteAction(value: unknown): value is RewriteAction {
 export async function rewriteText(
   text: string,
   action: RewriteAction,
+  // When provided, token + cost usage is logged to ai_usage under this context.
+  logCtx?: { functionName: string; orgId?: string | null; calledBy?: string | null },
 ): Promise<{ text: string | null; error: string | null }> {
   const apiKey = Deno.env.get('OPENROUTER_API_KEY')
   const model = Deno.env.get('OPENROUTER_REWRITE_MODEL')
@@ -77,6 +81,7 @@ export async function rewriteText(
         ],
         // Proofread/improve want low creativity; explain a touch more.
         temperature: action === 'explain' ? 0.4 : 0.2,
+        usage: { include: true },
       }),
     })
 
@@ -86,9 +91,12 @@ export async function rewriteText(
       return { text: null, error: `OpenRouter returned ${response.status}` }
     }
 
-    const json = await response.json() as { choices: { message: { content: string } }[] }
+    const json = await response.json() as { choices: { message: { content: string } }[]; usage?: unknown }
     const result = json.choices?.[0]?.message?.content
     if (!result) return { text: null, error: 'No content in OpenRouter response' }
+    if (logCtx) {
+      await logAiUsage({ ...logCtx, model, usage: extractUsage(json) })
+    }
     return { text: result, error: null }
   } catch (err) {
     console.error('Rewrite error:', err)

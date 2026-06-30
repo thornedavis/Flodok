@@ -401,10 +401,16 @@ export const DOCUMENT_EDITOR_STYLES = `
 }
 
 /* Tailwind's preflight resets lists to list-style:none, so the editor must
- * re-declare a marker or ordered/bulleted lists render blank — the read-only
- * renderer already does this via .sop-content (index.css). Keep them in sync. */
+ * re-declare a marker or ordered/bulleted lists render blank. Ordered lists use
+ * a CONTINUOUS lower-alpha counter scoped to the clause (via ::marker), so a
+ * bullet sub-list — or anything that splits one logical list into two <ol>s —
+ * doesn't reset a/b/c; the lettering resumes at the next letter. list-style-type
+ * is the fallback for engines without ::marker content (per-<ol> numbering). */
 .block-body ul { list-style-type: disc; }
 .block-body ol { list-style-type: lower-alpha; }
+.block-body { counter-reset: doc-ol; }
+.block-body ol > li { counter-increment: doc-ol; }
+.block-body ol > li::marker { content: counter(doc-ol, lower-alpha) ". "; }
 
 .block-body li {
   margin: 0.2rem 0;

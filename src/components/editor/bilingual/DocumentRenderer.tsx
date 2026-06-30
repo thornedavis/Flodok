@@ -249,6 +249,9 @@ export const DOCUMENT_RENDERER_STYLES = `
 }
 .doc-block ul { list-style-type: disc; }
 .doc-block ol { list-style-type: lower-alpha; }
+.doc-block { counter-reset: doc-ol; }
+.doc-block ol > li { counter-increment: doc-ol; }
+.doc-block ol > li::marker { content: counter(doc-ol, lower-alpha) ". "; }
 .letterhead { margin: 0 0 1.25rem; padding-bottom: 1rem; border-bottom: 1px solid var(--color-border); }
 .letterhead-logo { text-align: center; margin-bottom: 0.6rem; }
 .letterhead-logo img { display: inline-block; max-height: 64px; max-width: 60%; object-fit: contain; }

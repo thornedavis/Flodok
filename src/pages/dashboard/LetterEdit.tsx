@@ -6,6 +6,7 @@ import { DocumentEditShell, EDITOR_STICKY_TOP_PX } from '../../components/editor
 import { SaveAsTemplateModal } from '../../components/SaveAsTemplateButton'
 import { ToolbarButton } from '../../components/editor/ToolbarButton'
 import { ToolbarMoreMenu, type ToolbarMenuItem } from '../../components/editor/ToolbarMoreMenu'
+import { buildExportMenuItem } from '../../components/editor/exportMenuItem'
 import { EmployeeSelect } from '../../components/EmployeeSelect'
 import { DateTimePicker } from '../../components/DateTimePicker'
 import { useLang } from '../../contexts/LanguageContext'
@@ -17,7 +18,7 @@ import { emptyDocumentDoc, type DocumentDoc, type LanguageMode } from '../../lib
 import { useBilling } from '../../contexts/BillingContext'
 import { documentHistoryPath } from '../../lib/documentTypes'
 import { trashDocument } from '../../lib/trash'
-import { exportDocumentPdf } from '../../lib/pdfExport'
+import { exportDocumentPdf, type ExportDocumentPdfOptions } from '../../lib/pdfExport'
 import type { User, Tag, Employee, Organization } from '../../types/aliases'
 import type { Database } from '../../types/database'
 
@@ -49,6 +50,7 @@ export function LetterEdit({ user }: { user: User }) {
   const [languageMode, setLanguageMode] = useState<LanguageMode>('bilingual')
   const [savedLanguageMode, setSavedLanguageMode] = useState<LanguageMode>('bilingual')
   const [downloading, setDownloading] = useState(false)
+  const [exportingDocx, setExportingDocx] = useState(false)
 
   const [letter, setLetter] = useState<Letter | null>(null)
   const [organization, setOrganization] = useState<Organization | null>(null)
@@ -328,34 +330,50 @@ export function LetterEdit({ user }: { user: User }) {
     }
   }
 
+  function buildExportArgs(): ExportDocumentPdfOptions {
+    // Same merge context the editor uses (recipient + sender + org), so the
+    // PDF/Word resolves the letter's pills exactly as shown on screen.
+    const baseCtx = {
+      employee: employeeId ? (allEmployees.find(e => e.id === employeeId) ?? null) : null,
+      organization,
+      today: new Date(),
+      signer: senderRow ? { name: senderRow.name, title: senderRow.title } : null,
+    }
+    return {
+      doc: contentDoc,
+      title: title || t.letterTypeLabel,
+      view,
+      languageMode,
+      contextEn: { ...baseCtx, lang: 'en' },
+      contextId: { ...baseCtx, lang: 'id' },
+    }
+  }
+
   async function handleDownloadPdf() {
-    if (downloading) return
+    if (downloading || exportingDocx) return
     setDownloading(true)
     try {
-      // Same merge context the editor uses (recipient + sender + org), so
-      // the PDF resolves the letter's pills exactly as shown on screen.
-      const baseCtx = {
-        employee: employeeId ? (allEmployees.find(e => e.id === employeeId) ?? null) : null,
-        organization,
-        today: new Date(),
-        signer: senderRow ? { name: senderRow.name, title: senderRow.title } : null,
-      }
-      await exportDocumentPdf({
-        doc: contentDoc,
-        title: title || t.letterTypeLabel,
-        view,
-        languageMode,
-        contextEn: { ...baseCtx, lang: 'en' },
-        contextId: { ...baseCtx, lang: 'id' },
-      })
+      await exportDocumentPdf(buildExportArgs())
     } catch (err) {
       setError(err instanceof Error ? err.message : 'PDF export failed')
     }
     setDownloading(false)
   }
 
+  async function handleDownloadDocx() {
+    if (downloading || exportingDocx) return
+    setExportingDocx(true)
+    try {
+      const { exportDocumentDocx } = await import('../../lib/docxExport')
+      await exportDocumentDocx(buildExportArgs())
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Word export failed')
+    }
+    setExportingDocx(false)
+  }
+
   const menuItems: ToolbarMenuItem[] = [
-    { key: 'download', icon: 'download', label: downloading ? t.generatingPdf : t.downloadPdf, onClick: handleDownloadPdf, disabled: downloading },
+    buildExportMenuItem({ onPdf: handleDownloadPdf, onDocx: handleDownloadDocx, exporting: downloading ? 'pdf' : exportingDocx ? 'docx' : null, t }),
     { key: 'template', icon: 'template', label: t.contractSaveAsTemplate, onClick: () => setTplOpen(true), disabled: !canWrite, title: !canWrite ? t.dunningWriteBlocked : undefined },
     { key: 'history', icon: 'history', label: t.historyLinkLabel, to: documentHistoryPath('letter', letter.id) },
     { key: 'delete', icon: 'trash', label: t.delete, onClick: handleDelete, danger: true, disabled: saving || !canWrite, title: !canWrite ? t.dunningWriteBlocked : undefined },

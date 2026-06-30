@@ -6,12 +6,13 @@ import { DocumentEditShell } from '../../components/editor/DocumentEditShell'
 import { SaveAsTemplateModal } from '../../components/SaveAsTemplateButton'
 import { ToolbarButton } from '../../components/editor/ToolbarButton'
 import { ToolbarMoreMenu, type ToolbarMenuItem } from '../../components/editor/ToolbarMoreMenu'
+import { buildExportMenuItem } from '../../components/editor/exportMenuItem'
 import { useLang } from '../../contexts/LanguageContext'
 import { type EmpDeptShape } from '../../lib/employee'
 import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning'
 import { useDocumentViewPref } from '../../hooks/useDocumentViewPref'
 import { useSaveFlash } from '../../hooks/useSaveFlash'
-import { exportDocumentPdf } from '../../lib/pdfExport'
+import { exportDocumentPdf, type ExportDocumentPdfOptions } from '../../lib/pdfExport'
 import { formatIdrDigits } from '../../lib/credits'
 import { writeSnapshot } from '../../lib/snapshotApi'
 import { emptyDocumentDoc, type DocumentDoc, type LanguageMode } from '../../lib/documentDoc'
@@ -71,6 +72,7 @@ export function NDAEdit({ user }: { user: User }) {
   const [saving, setSaving] = useState(false)
   const [savingMode, setSavingMode] = useState<'draft' | 'activate' | null>(null)
   const [downloading, setDownloading] = useState(false)
+  const [exportingDocx, setExportingDocx] = useState(false)
   const [error, setError] = useState('')
 
   const [allTags, setAllTags] = useState<Tag[]>([])
@@ -292,29 +294,45 @@ export function NDAEdit({ user }: { user: User }) {
     }
   }
 
+  function buildExportArgs(): ExportDocumentPdfOptions {
+    const baseCtx = {
+      employee: allEmployees.find(e => e.id === employeeId) ?? null,
+      organization,
+      nda: { effective_date: effectiveDate || null, survival_years: parsedSurvival, penalty_idr: parsedPenalty },
+      today: new Date(),
+      signer: { name: user.name, title: user.title },
+    }
+    return {
+      doc: contentDoc,
+      title: title || 'NDA',
+      view,
+      languageMode,
+      contextEn: { ...baseCtx, lang: 'en' },
+      contextId: { ...baseCtx, lang: 'id' },
+    }
+  }
+
   async function handleDownloadPdf() {
-    if (downloading) return
+    if (downloading || exportingDocx) return
     setDownloading(true)
     try {
-      const baseCtx = {
-        employee: allEmployees.find(e => e.id === employeeId) ?? null,
-        organization,
-        nda: { effective_date: effectiveDate || null, survival_years: parsedSurvival, penalty_idr: parsedPenalty },
-        today: new Date(),
-        signer: { name: user.name, title: user.title },
-      }
-      await exportDocumentPdf({
-        doc: contentDoc,
-        title: title || 'NDA',
-        view,
-        languageMode,
-        contextEn: { ...baseCtx, lang: 'en' },
-        contextId: { ...baseCtx, lang: 'id' },
-      })
+      await exportDocumentPdf(buildExportArgs())
     } catch (err) {
       setError(err instanceof Error ? err.message : 'PDF export failed')
     }
     setDownloading(false)
+  }
+
+  async function handleDownloadDocx() {
+    if (downloading || exportingDocx) return
+    setExportingDocx(true)
+    try {
+      const { exportDocumentDocx } = await import('../../lib/docxExport')
+      await exportDocumentDocx(buildExportArgs())
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Word export failed')
+    }
+    setExportingDocx(false)
   }
 
   async function handleActivateAndSign() {
@@ -440,7 +458,7 @@ export function NDAEdit({ user }: { user: User }) {
   ) : undefined
 
   const menuItems: ToolbarMenuItem[] = [
-    { key: 'download', icon: 'download', label: downloading ? t.generatingPdf : t.downloadPdf, onClick: handleDownloadPdf, disabled: downloading },
+    buildExportMenuItem({ onPdf: handleDownloadPdf, onDocx: handleDownloadDocx, exporting: downloading ? 'pdf' : exportingDocx ? 'docx' : null, t }),
     { key: 'template', icon: 'template', label: t.contractSaveAsTemplate, onClick: () => setTplOpen(true), disabled: !canWrite, title: !canWrite ? t.dunningWriteBlocked : undefined },
     { key: 'history', icon: 'history', label: t.historyLinkLabel, to: documentHistoryPath('nda', nda.id) },
     { key: 'delete', icon: 'trash', label: t.delete, onClick: handleDelete, danger: true, disabled: saving || !canWrite, title: !canWrite ? t.dunningWriteBlocked : undefined },

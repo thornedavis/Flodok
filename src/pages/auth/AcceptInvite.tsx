@@ -9,12 +9,18 @@ type InviteState =
   | { status: 'ready'; email: string; orgName: string; token: string }
 
 export function AcceptInvite({ onSignUp }: {
-  onSignUp: (email: string, password: string, name: string, orgName: string, inviteToken?: string) => Promise<{ error: unknown }>
+  onSignUp: (
+    email: string,
+    password: string,
+    name: string,
+    orgName: string,
+    opts?: { inviteToken?: string; setupMode?: 'owner' | 'on_behalf' },
+  ) => Promise<{ error: unknown }>
 }) {
   const { token } = useParams<{ token: string }>()
   const { t } = useLang()
   const navigate = useNavigate()
-  const [state, setState] = useState<InviteState>({ status: 'loading' })
+  const [state, setState] = useState<InviteState>(token ? { status: 'loading' } : { status: 'invalid' })
 
   const [name, setName] = useState('')
   const [password, setPassword] = useState('')
@@ -23,7 +29,7 @@ export function AcceptInvite({ onSignUp }: {
   const [submitted, setSubmitted] = useState(false)
 
   useEffect(() => {
-    if (!token) { setState({ status: 'invalid' }); return }
+    if (!token) return
 
     async function load() {
       // Scoped lookup (migration 163): resolves only THIS token to the org
@@ -53,7 +59,7 @@ export function AcceptInvite({ onSignUp }: {
       password,
       name.trim(),
       state.orgName,
-      state.token,
+      { inviteToken: state.token },
     )
     setSubmitting(false)
     if (signErr) {

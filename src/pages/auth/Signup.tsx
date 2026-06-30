@@ -11,7 +11,7 @@ export function Signup({
     password: string,
     name: string,
     orgName: string,
-    inviteToken?: string,
+    opts?: { inviteToken?: string; setupMode?: 'owner' | 'on_behalf' },
   ) => Promise<{ error: unknown }>
 }) {
   const { t } = useLang()
@@ -19,6 +19,7 @@ export function Signup({
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
   const [orgName, setOrgName] = useState('')
+  const [setupMode, setSetupMode] = useState<'owner' | 'on_behalf'>('owner')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
@@ -27,7 +28,7 @@ export function Signup({
     e.preventDefault()
     setError('')
     setLoading(true)
-    const { error } = await onSignUp(email, password, name, orgName)
+    const { error } = await onSignUp(email, password, name, orgName, { setupMode })
     if (error) {
       setError((error as Error).message)
     } else {
@@ -127,6 +128,42 @@ export function Signup({
                 {error}
               </div>
             )}
+
+            <div>
+              <label
+                className="mb-1.5 block text-sm font-medium"
+                style={{ color: 'var(--color-text-secondary)' }}
+              >
+                {t.setupRoleQuestion}
+              </label>
+              <div className="space-y-2">
+                {([
+                  { mode: 'owner' as const, title: t.setupRoleOwnerTitle, desc: t.setupRoleOwnerDesc },
+                  { mode: 'on_behalf' as const, title: t.setupRoleOnBehalfTitle, desc: t.setupRoleOnBehalfDesc },
+                ]).map((opt) => {
+                  const selected = setupMode === opt.mode
+                  return (
+                    <button
+                      key={opt.mode}
+                      type="button"
+                      onClick={() => setSetupMode(opt.mode)}
+                      aria-pressed={selected}
+                      className="w-full rounded-lg border px-3 py-2.5 text-left transition-colors"
+                      style={{
+                        borderColor: selected ? 'var(--color-primary)' : 'var(--color-border)',
+                        backgroundColor: selected ? 'var(--color-diff-add)' : 'var(--color-bg)',
+                      }}
+                    >
+                      <div className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{opt.title}</div>
+                      <div className="mt-0.5 text-xs" style={{ color: 'var(--color-text-secondary)' }}>{opt.desc}</div>
+                    </button>
+                  )
+                })}
+              </div>
+              {setupMode === 'on_behalf' && (
+                <p className="mt-2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.setupRoleOnBehalfHint}</p>
+              )}
+            </div>
 
             <div>
               <label

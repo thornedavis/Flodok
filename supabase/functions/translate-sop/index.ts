@@ -40,7 +40,7 @@ Deno.serve(async (req: Request) => {
     // Fetch the current document
     const { data: doc, error: docError } = await supabase
       .from(targetTable)
-      .select('id, content_markdown, content_markdown_id')
+      .select('id, org_id, content_markdown, content_markdown_id')
       .eq('id', sop_id)
       .single()
 
@@ -54,7 +54,10 @@ Deno.serve(async (req: Request) => {
     }
 
     // Translate
-    const { text: translated, error: translateError } = await translateSOP(sourceContent, direction)
+    const { text: translated, error: translateError } = await translateSOP(sourceContent, direction, {
+      functionName: 'translate-sop',
+      orgId: (doc as { org_id?: string }).org_id ?? null,
+    })
 
     if (!translated) {
       return jsonResponse({ error: translateError || 'Translation failed' }, 502)

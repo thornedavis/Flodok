@@ -1,13 +1,40 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import type { Session } from '@supabase/supabase-js'
-import type { User } from '../types/aliases'
+import type { User, Organization } from '../types/aliases'
 
 export function useAuth() {
   const [session, setSession] = useState<Session | null>(null)
   const [user, setUser] = useState<User | null>(null)
+  const [org, setOrg] = useState<Organization | null>(null)
   const [loading, setLoading] = useState(true)
   const [recovering, setRecovering] = useState(false)
+
+  // Declared before the effect that calls it (function declarations hoist, so
+  // this is a pure source-order move) to satisfy react-hooks/immutability.
+  async function fetchUser(authId: string) {
+    // maybeSingle(): a missing row is a normal "not provisioned yet" state, not
+    // an error. App.tsx renders the self-heal screen when session && !user.
+    const { data } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', authId)
+      .maybeSingle()
+    setUser(data)
+    // Load the org too, so App.tsx can gate the first-run onboarding wizard on
+    // organizations.onboarding_completed_at and seed the wizard's fields.
+    if (data?.org_id) {
+      const { data: orgData } = await supabase
+        .from('organizations')
+        .select('*')
+        .eq('id', data.org_id)
+        .maybeSingle()
+      setOrg(orgData)
+    } else {
+      setOrg(null)
+    }
+    setLoading(false)
+  }
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -28,29 +55,27 @@ export function useAuth() {
     return () => subscription.unsubscribe()
   }, [])
 
-  async function fetchUser(authId: string) {
-    // maybeSingle(): a missing row is a normal "not provisioned yet" state, not
-    // an error. App.tsx renders the self-heal screen when session && !user.
-    const { data } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', authId)
-      .maybeSingle()
-    setUser(data)
-    setLoading(false)
-  }
-
   async function signIn(email: string, password: string) {
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     return { error }
   }
 
-  async function signUp(email: string, password: string, name: string, orgName: string, inviteToken?: string) {
+  async function signUp(
+    email: string,
+    password: string,
+    name: string,
+    orgName: string,
+    opts?: { inviteToken?: string; setupMode?: 'owner' | 'on_behalf' },
+  ) {
     // Provisioning is no longer a separate, droppable second await. The org +
     // users row are created atomically with the identity by the
-    // on_auth_user_created trigger (migration 164), which reads this metadata
-    // from raw_user_meta_data. A network drop here can no longer orphan the
-    // account — the trigger runs server-side within the auth.users insert.
+    // on_auth_user_created trigger (migrations 164/179), which reads this
+    // metadata from raw_user_meta_data. A network drop here can no longer orphan
+    // the account — the trigger runs server-side within the auth.users insert.
+    // setup_mode='on_behalf' provisions the signer as admin of an ownerless org
+    // (the real owner claims via email); default 'owner' is unchanged. Note:
+    // setup_mode only applies to NEW-org signups — the invite path (invite_token)
+    // takes precedence in the trigger (179) and uses the invite's role instead.
     const { error } = await supabase.auth.signUp({
       email,
       password,
@@ -58,7 +83,8 @@ export function useAuth() {
         data: {
           name,
           org_name: orgName,
-          invite_token: inviteToken ?? null,
+          invite_token: opts?.inviteToken ?? null,
+          setup_mode: opts?.setupMode ?? 'owner',
         },
       },
     })
@@ -96,5 +122,5 @@ export function useAuth() {
     await supabase.auth.signOut()
   }
 
-  return { session, user, loading, recovering, signIn, signUp, signOut, recover }
+  return { session, user, org, loading, recovering, signIn, signUp, signOut, recover }
 }

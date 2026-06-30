@@ -19,7 +19,7 @@ import { supabase } from '../lib/supabase'
 import { useLang } from '../contexts/LanguageContext'
 import { Modal } from './Modal'
 import { EmployeeSelect } from './EmployeeSelect'
-import { analyseDocument, type AnalyseDocType, type AnalyseDocumentResult } from '../lib/analyseDocument'
+import { analyseDocument, type AnalyseDocType, type AnalyseDocumentResult, type PdfExtractMode } from '../lib/analyseDocument'
 import { importDocx, extractDocxBlocks, buildBilingualDocFromPairs, buildBilingualDocFromDocxTables } from '../lib/htmlToDoc'
 import { pairBilingualBlocks } from '../lib/pairBilingual'
 import { mapPlaceholders, assignPlaceholder, type MappedPlaceholder } from '../lib/placeholderMap'
@@ -71,6 +71,10 @@ export function ImportDocumentModal({
   // imported HR documents (contracts, NDAs) are almost always bilingual here.
   // Surfaced as the "Languages" choice; the user can switch to single per file.
   const [bilingualHint, setBilingualHint] = useState(true)
+  // PDF (vision) extraction mode — the three-button picker. 'auto' (as written)
+  // is the faithful default: a monolingual PDF stays monolingual (no fabricated
+  // translation). 'en'/'id' = single language; 'bilingual' = translate both.
+  const [pdfMode, setPdfMode] = useState<PdfExtractMode>('auto')
   // P3: placeholder → merge-field mapping (letter imports become templates).
   const [mappedPlaceholders, setMappedPlaceholders] = useState<MappedPlaceholder[]>([])
   const [unmappedPlaceholders, setUnmappedPlaceholders] = useState<string[]>([])
@@ -115,6 +119,7 @@ export function ImportDocumentModal({
     setCreating(false)
     setLanguageMode('bilingual')
     setBilingualHint(true)
+    setPdfMode('auto')
     setMappedPlaceholders([])
     setUnmappedPlaceholders([])
     setPlaceholderAssignments({})
@@ -197,7 +202,7 @@ export function ImportDocumentModal({
           mapped = res.mapped
           unmapped = res.unmapped
         }
-        setResult({ doc, title: docTitle, fields: {}, confidence: {} })
+        setResult({ doc, title: docTitle, fields: {}, confidence: {}, languageMode: mode })
         setTitle(docTitle)
         setLanguageMode(mode)
         setMappedPlaceholders(mapped)
@@ -207,11 +212,14 @@ export function ImportDocumentModal({
         setStep('review')
         return
       }
-      // PDF: the vision model reads the visual document.
-      const res = await analyseDocument(file, docType)
+      // PDF: the vision model reads the visual document, honouring the chosen
+      // extraction mode (as-written / single language / bilingual). The server
+      // reports the mode it actually produced so a monolingual import isn't
+      // padded with a blank side.
+      const res = await analyseDocument(file, docType, pdfMode)
       setResult(res)
       setTitle(res.title)
-      setLanguageMode('bilingual')
+      setLanguageMode(res.languageMode)
       const fv: Record<string, string> = {}
       for (const desc of (docType === 'contract' ? contractFields : docType === 'nda' ? ndaFields : [])) {
         const v = res.fields[desc.key]
@@ -533,6 +541,81 @@ export function ImportDocumentModal({
                         {opt.desc}
                       </span>
                     </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* PDF — the vision model can keep the source faithfully or translate.
+              'As written' (default) never invents a translation: a monolingual
+              PDF stays monolingual. 'One language' extracts one side; 'Bilingual'
+              fills both. The server reports the mode it produced. */}
+          {file?.name.toLowerCase().endsWith('.pdf') && (
+            <div>
+              <label className="mb-1.5 block text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+                {t.documentImportLanguagesLabel}
+              </label>
+              <div className="space-y-2">
+                {([
+                  { val: 'auto', title: t.documentImportPdfModeAuto, desc: t.documentImportPdfModeAutoDesc },
+                  { val: 'single', title: t.documentImportPdfModeSingle, desc: t.documentImportPdfModeSingleDesc },
+                  { val: 'bilingual', title: t.documentImportPdfModeBilingual, desc: t.documentImportPdfModeBilingualDesc },
+                ] as const).map(opt => {
+                  const active = opt.val === 'single' ? (pdfMode === 'en' || pdfMode === 'id') : pdfMode === opt.val
+                  return (
+                    <div key={opt.val}>
+                      <button
+                        type="button"
+                        disabled={step === 'analysing'}
+                        onClick={() => setPdfMode(opt.val === 'single' ? 'en' : opt.val)}
+                        className="w-full rounded-lg border px-3 py-2.5 text-left transition-colors disabled:opacity-50"
+                        style={{
+                          borderColor: active ? 'var(--color-primary)' : 'var(--color-border)',
+                          backgroundColor: active ? 'color-mix(in srgb, var(--color-primary) 10%, transparent)' : 'var(--color-bg)',
+                        }}
+                      >
+                        <span className="flex items-center justify-between gap-2">
+                          <span className="text-sm font-medium" style={{ color: active ? 'var(--color-primary)' : 'var(--color-text)' }}>
+                            {opt.title}
+                          </span>
+                          {active && (
+                            <span className="shrink-0" style={{ color: 'var(--color-primary)' }} aria-hidden>
+                              <CheckIcon />
+                            </span>
+                          )}
+                        </span>
+                        <span className="mt-0.5 block text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                          {opt.desc}
+                        </span>
+                      </button>
+                      {opt.val === 'single' && active && (
+                        <div className="mt-1.5 flex gap-2 pl-3">
+                          {([
+                            { lang: 'en', label: t.documentImportPdfLangEn },
+                            { lang: 'id', label: t.documentImportPdfLangId },
+                          ] as const).map(l => {
+                            const lActive = pdfMode === l.lang
+                            return (
+                              <button
+                                key={l.lang}
+                                type="button"
+                                disabled={step === 'analysing'}
+                                onClick={() => setPdfMode(l.lang)}
+                                className="rounded-md border px-3 py-1 text-xs font-medium transition-colors disabled:opacity-50"
+                                style={{
+                                  borderColor: lActive ? 'var(--color-primary)' : 'var(--color-border)',
+                                  color: lActive ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+                                  backgroundColor: lActive ? 'color-mix(in srgb, var(--color-primary) 10%, transparent)' : 'transparent',
+                                }}
+                              >
+                                {l.label}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
                   )
                 })}
               </div>

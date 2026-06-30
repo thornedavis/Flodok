@@ -44,7 +44,10 @@ Deno.serve(async (req: Request) => {
   const text = body.text.trim()
   if (!text) return jsonResponse({ result: '' })
 
-  const { text: result, error } = await rewriteText(text, body.action)
+  const { text: result, error } = await rewriteText(text, body.action, {
+    functionName: 'rewrite-text',
+    calledBy: user.user.id,
+  })
   if (!result) return jsonResponse({ error: error || 'Rewrite failed' }, 502)
 
   return jsonResponse({ result: result.trim() })

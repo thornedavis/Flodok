@@ -309,6 +309,9 @@ export const BILINGUAL_DOCUMENT_RENDERER_STYLES = `
 .bidoc-cell ul, .bidoc-cell ol { padding-left: 1.4rem; margin: 0.3rem 0; }
 .bidoc-cell ul { list-style-type: disc; }
 .bidoc-cell ol { list-style-type: lower-alpha; }
+.bidoc-cell { counter-reset: doc-ol; }
+.bidoc-cell ol > li { counter-increment: doc-ol; }
+.bidoc-cell ol > li::marker { content: counter(doc-ol, lower-alpha) ". "; }
 .letterhead { margin: 0 0 1.1rem; padding-bottom: 0.9rem; border-bottom: 1px solid var(--color-border); }
 .letterhead-logo { text-align: center; margin-bottom: 0.5rem; }
 .letterhead-logo img { display: inline-block; max-height: 60px; max-width: 55%; object-fit: contain; }

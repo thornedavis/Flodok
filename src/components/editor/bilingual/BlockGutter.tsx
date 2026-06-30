@@ -11,9 +11,11 @@
 // Clicking the grip selects the whole pair (a ProseMirror NodeSelection,
 // styled via .ProseMirror-selectednode on the NodeView wrapper) and opens
 // a block-actions menu — Duplicate / Move up / Move down / Delete. Delete
-// is the only way to remove a block; the last remaining block is replaced
-// with a fresh empty one rather than left as an invalid empty document
-// (the schema is `bilingualBlock+`).
+// is the only way to remove a block; the last remaining bilingualBlock is
+// replaced with a fresh empty one rather than left as an invalid empty
+// document (the schema is `letterhead? bilingualBlock+`). The optional leading
+// `letterhead` gets a trimmed menu (Remove only) — it can't be duplicated or
+// moved off the top, and nothing else may move above it.
 
 import { useCallback, useRef, useState } from 'react'
 import { DragHandle } from '@tiptap/extension-drag-handle-react'
@@ -58,12 +60,15 @@ function langBodyPos(blockNode: PMNode, blockStart: number, lang: 'en' | 'id'): 
 export function BlockGutter({ editor }: { editor: Editor }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [actionsOpen, setActionsOpen] = useState(false)
+  // The full-width letterhead gets a trimmed actions menu (Remove only) — it
+  // can't be duplicated or moved off the top of the document.
+  const [actionsLetterhead, setActionsLetterhead] = useState(false)
   const blockPosRef = useRef<number | null>(null)
   const blockSizeRef = useRef<number>(0)
 
   const onNodeChange = useCallback(
     ({ node, pos }: { node: PMNode | null; pos: number }) => {
-      if (node && node.type.name === 'bilingualBlock') {
+      if (node && (node.type.name === 'bilingualBlock' || node.type.name === 'letterhead')) {
         blockPosRef.current = pos
         blockSizeRef.current = node.nodeSize
       }
@@ -103,7 +108,7 @@ export function BlockGutter({ editor }: { editor: Editor }) {
     const pos = blockPosRef.current
     if (pos == null) return null
     const node = editor.state.doc.nodeAt(pos)
-    if (!node || node.type.name !== 'bilingualBlock') return null
+    if (!node || (node.type.name !== 'bilingualBlock' && node.type.name !== 'letterhead')) return null
     return { pos, node }
   }, [editor])
 
@@ -114,6 +119,7 @@ export function BlockGutter({ editor }: { editor: Editor }) {
   const openActions = useCallback(() => {
     const pos = blockPosRef.current
     if (pos == null) return
+    setActionsLetterhead(editor.state.doc.nodeAt(pos)?.type.name === 'letterhead')
     editor.chain().setNodeSelection(pos).run()
     setMenuOpen(false)
     setActionsOpen(o => !o)
@@ -121,7 +127,7 @@ export function BlockGutter({ editor }: { editor: Editor }) {
 
   const duplicate = useCallback(() => {
     const found = blockAt()
-    if (!found) return
+    if (!found || found.node.type.name === 'letterhead') return // only one letterhead
     const { pos, node } = found
     // Clone the pair but regenerate the id — it's load-bearing for
     // per-block dirty tracking / translation caching, so duplicates must
@@ -140,6 +146,8 @@ export function BlockGutter({ editor }: { editor: Editor }) {
     const node = $pos.nodeAfter
     const prev = $pos.nodeBefore
     if (!node || !prev) return // already first
+    // The letterhead can't move, and nothing may move above it.
+    if (node.type.name === 'letterhead' || prev.type.name === 'letterhead') return
     const prevStart = pos - prev.nodeSize
     // Delete self, re-insert above the previous sibling. The insert point
     // (prevStart) sits before the deleted range, so it isn't remapped.
@@ -156,7 +164,7 @@ export function BlockGutter({ editor }: { editor: Editor }) {
     if (pos == null) return
     const $pos = editor.state.doc.resolve(pos)
     const node = $pos.nodeAfter
-    if (!node) return
+    if (!node || node.type.name === 'letterhead') return // the letterhead stays at the top
     const nextStart = pos + node.nodeSize
     const next = editor.state.doc.nodeAt(nextStart)
     if (!next) return // already last
@@ -175,9 +183,10 @@ export function BlockGutter({ editor }: { editor: Editor }) {
     if (!found) return
     const { pos, node } = found
     const range = { from: pos, to: pos + node.nodeSize }
-    if (editor.state.doc.childCount <= 1) {
-      // Don't leave an empty (schema-invalid) document — swap the last
-      // block for a fresh empty one.
+    // The letterhead is optional, so it's just removed. A bilingualBlock can't
+    // be deleted into an empty (schema-invalid) doc, so the last one is swapped
+    // for a fresh empty block instead.
+    if (node.type.name === 'bilingualBlock' && editor.state.doc.childCount <= 1) {
       editor.chain().insertContentAt(range, emptyBlock()).run()
     } else {
       editor.chain().deleteRange(range).run()
@@ -229,35 +238,39 @@ export function BlockGutter({ editor }: { editor: Editor }) {
       )}
       {actionsOpen && (
         <div className="block-gutter-menu" role="menu">
-          <div className="block-gutter-menu-label">Block</div>
-          <button
-            type="button"
-            role="menuitem"
-            className="block-gutter-menu-action"
-            onMouseDown={e => e.preventDefault()}
-            onClick={duplicate}
-          >
-            <DuplicateIcon /><span>Duplicate</span>
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            className="block-gutter-menu-action"
-            onMouseDown={e => e.preventDefault()}
-            onClick={moveUp}
-          >
-            <MoveUpIcon /><span>Move up</span>
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            className="block-gutter-menu-action"
-            onMouseDown={e => e.preventDefault()}
-            onClick={moveDown}
-          >
-            <MoveDownIcon /><span>Move down</span>
-          </button>
-          <div className="block-gutter-menu-sep" />
+          <div className="block-gutter-menu-label">{actionsLetterhead ? 'Letterhead' : 'Block'}</div>
+          {!actionsLetterhead && (
+            <>
+              <button
+                type="button"
+                role="menuitem"
+                className="block-gutter-menu-action"
+                onMouseDown={e => e.preventDefault()}
+                onClick={duplicate}
+              >
+                <DuplicateIcon /><span>Duplicate</span>
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className="block-gutter-menu-action"
+                onMouseDown={e => e.preventDefault()}
+                onClick={moveUp}
+              >
+                <MoveUpIcon /><span>Move up</span>
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className="block-gutter-menu-action"
+                onMouseDown={e => e.preventDefault()}
+                onClick={moveDown}
+              >
+                <MoveDownIcon /><span>Move down</span>
+              </button>
+              <div className="block-gutter-menu-sep" />
+            </>
+          )}
           <button
             type="button"
             role="menuitem"
@@ -265,7 +278,7 @@ export function BlockGutter({ editor }: { editor: Editor }) {
             onMouseDown={e => e.preventDefault()}
             onClick={remove}
           >
-            <TrashIcon /><span>Delete</span>
+            <TrashIcon /><span>{actionsLetterhead ? 'Remove letterhead' : 'Delete'}</span>
           </button>
         </div>
       )}

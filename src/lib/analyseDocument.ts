@@ -12,6 +12,12 @@ import type { DocumentDoc } from './documentDoc'
 // 'letter' is DOCX-only (imported as a reusable template, no PDF/vision path).
 export type AnalyseDocType = 'sop' | 'contract' | 'nda' | 'job_description' | 'letter'
 
+// Extraction language mode for the PDF/vision path (the import modal's picker):
+// 'auto' = faithful (a monolingual source stays monolingual, no fabricated
+// translation), 'en'/'id' = single-language draft, 'bilingual' = both sides
+// (translate the missing one).
+export type PdfExtractMode = 'auto' | 'en' | 'id' | 'bilingual'
+
 export type AnalyseDocumentResult = {
   doc: DocumentDoc
   title: string
@@ -20,6 +26,10 @@ export type AnalyseDocumentResult = {
   fields: Record<string, string | number | null>
   // Per-field reviewer hint: "high" = clearly stated, "low" = check it.
   confidence: Record<string, 'high' | 'low'>
+  // The language mode the server actually produced (echoes the request for
+  // explicit modes; detected for 'auto'). Drives the created draft's
+  // language_mode so a monolingual import isn't padded with a blank side.
+  languageMode: 'bilingual' | 'en' | 'id'
 }
 
 function readAsDataUrl(file: File): Promise<string> {
@@ -34,6 +44,7 @@ function readAsDataUrl(file: File): Promise<string> {
 export async function analyseDocument(
   file: File,
   docType: AnalyseDocType,
+  mode: PdfExtractMode = 'auto',
 ): Promise<AnalyseDocumentResult> {
   const { data: { session } } = await supabase.auth.getSession()
   if (!session) throw new Error('Not authenticated')
@@ -51,6 +62,7 @@ export async function analyseDocument(
       doc_type: docType,
       file_name: file.name,
       file_data: fileData,
+      language_mode: mode,
     }),
   })
   if (!response.ok) {
@@ -68,5 +80,6 @@ export async function analyseDocument(
     title: result.title ?? '',
     fields: result.fields ?? {},
     confidence: result.confidence ?? {},
+    languageMode: result.languageMode === 'en' || result.languageMode === 'id' ? result.languageMode : 'bilingual',
   }
 }

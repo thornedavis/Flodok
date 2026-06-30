@@ -22,6 +22,7 @@ import type { FilterPanelSection } from '../../components/FilterControls'
 import { ActionsMenuButton } from '../../components/ActionsMenuButton'
 import { Skeleton } from '../../components/Skeleton'
 import { DeleteEmployeeModal } from '../../components/DeleteEmployeeModal'
+import { WhatsAppIcon } from '../../components/BetaFeedback'
 import type { Employee, Organization, User } from '../../types/aliases'
 import type { Translations } from '../../lib/translations'
 
@@ -614,10 +615,10 @@ function CandidateRow({ candidate, visibleColumns, stageLabel, lang, canWrite, o
               rel="noopener noreferrer"
               title={t.hiringActionShareViaWhatsApp}
               aria-label={t.hiringActionShareViaWhatsApp}
-              className="rounded-md p-1.5 transition-colors hover:bg-[var(--color-bg-tertiary)]"
+              className="mr-1 rounded-md p-1.5 transition-colors hover:bg-[var(--color-bg-tertiary)]"
               style={{ color: 'var(--color-text-tertiary)' }}
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17.5 14.4c-.3-.1-1.7-.8-2-.9-.3-.1-.5-.1-.7.1-.2.3-.7.9-.9 1.1-.2.2-.3.2-.6.1s-1.2-.5-2.3-1.4c-.9-.8-1.4-1.7-1.6-2-.2-.3 0-.5.1-.6.1-.1.3-.3.4-.5.1-.2.2-.3.3-.5.1-.2 0-.4 0-.5 0-.1-.7-1.6-.9-2.2-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.5.1-.7.3-.2.3-.9.9-.9 2.2 0 1.3.9 2.6 1.1 2.7.1.2 1.8 2.7 4.3 3.8 1.6.7 2.2.7 3 .6.5-.1 1.7-.7 1.9-1.3.2-.6.2-1.2.2-1.3-.1-.2-.3-.2-.6-.3z M12 2C6.5 2 2 6.5 2 12c0 1.8.5 3.5 1.3 5L2 22l5-1.3c1.5.8 3.2 1.3 5 1.3 5.5 0 10-4.5 10-10S17.5 2 12 2z"/></svg>
+              <WhatsAppIcon size={14} />
             </a>
           )}
           <RowActionsMenu
