@@ -3029,6 +3029,7 @@ export type Database = {
           badges_enabled: boolean
           bonuses_enabled: boolean
           bpjs_ketenagakerjaan_number: string | null
+          billing_override: string | null
           business_license_number: string | null
           cancel_at_period_end: boolean
           company_email: string | null
@@ -3082,6 +3083,7 @@ export type Database = {
           badges_enabled?: boolean
           bonuses_enabled?: boolean
           bpjs_ketenagakerjaan_number?: string | null
+          billing_override?: string | null
           business_license_number?: string | null
           cancel_at_period_end?: boolean
           company_email?: string | null
@@ -3135,6 +3137,7 @@ export type Database = {
           badges_enabled?: boolean
           bonuses_enabled?: boolean
           bpjs_ketenagakerjaan_number?: string | null
+          billing_override?: string | null
           business_license_number?: string | null
           cancel_at_period_end?: boolean
           company_email?: string | null
@@ -4320,6 +4323,7 @@ export type Database = {
           owner_email: string | null
           plan_tier: string
           subscription_status: string | null
+          billing_override: string | null
           subscription_quantity: number | null
           past_due_since: string | null
           current_period_end: string | null
@@ -4352,6 +4356,10 @@ export type Database = {
       admin_rewards_roster: {
         Args: { all_time?: boolean; target_period_month?: string }
         Returns: Json
+      }
+      admin_set_org_comp: {
+        Args: { p_org_id: string; p_on: boolean }
+        Returns: undefined
       }
       admin_update_user_role: {
         Args: { new_role: string; target_user_id: string }

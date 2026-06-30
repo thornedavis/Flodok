@@ -34,6 +34,17 @@ export interface OrgBilling {
   current_period_end: string | null
   cancel_at_period_end: boolean
   past_due_since: string | null
+  // Founder-granted complimentary access ('comp') — full Pro access with no
+  // Stripe subscription. Stripe-independent, so the webhook never touches it.
+  // See migration 184 / docs/founder-console.md.
+  billing_override: string | null
+}
+
+// True when an org has founder-granted complimentary access. Kept as its own
+// helper so every gate (isPro, dunningState) and the Settings/console UI test
+// the same thing.
+export function isComped(org: { billing_override?: string | null }): boolean {
+  return org.billing_override === 'comp'
 }
 
 // ─── Dunning state machine ─────────────────────────────────────────────────
@@ -61,6 +72,10 @@ const READONLY_DAYS = 14
 
 export function dunningState(billing: OrgBilling | null): DunningState {
   if (!billing) return 'free_legitimate'
+
+  // Comped orgs always get full Pro access, regardless of plan_tier / Stripe
+  // status. No dunning, no item caps.
+  if (isComped(billing)) return 'pro_active'
 
   if (billing.plan_tier === 'pro') {
     if (billing.subscription_status === 'past_due' && billing.past_due_since) {
@@ -116,7 +131,9 @@ export function daysUntilCancel(billing: OrgBilling | null): number | null {
 
 // Accepts the wider Supabase-generated row type too (plan_tier is `string`
 // at the type layer because the CHECK constraint isn't propagated to TS).
-export function isPro(org: { plan_tier: string; subscription_status: string | null }): boolean {
+export function isPro(org: { plan_tier: string; subscription_status: string | null; billing_override?: string | null }): boolean {
+  // Complimentary access grants full Pro regardless of plan_tier / Stripe state.
+  if (isComped(org)) return true
   if (org.plan_tier !== 'pro') return false
   if (!org.subscription_status) return false
   return ACTIVE_STATUSES.has(org.subscription_status as SubscriptionStatus)
@@ -193,7 +210,7 @@ export async function getPaymentMethod(): Promise<PaymentMethod | null> {
 export async function loadOrgBilling(orgId: string): Promise<OrgBilling | null> {
   const { data, error } = await supabase
     .from('organizations')
-    .select('plan_tier, subscription_status, subscription_quantity, current_period_end, cancel_at_period_end, past_due_since')
+    .select('plan_tier, subscription_status, subscription_quantity, current_period_end, cancel_at_period_end, past_due_since, billing_override')
     .eq('id', orgId)
     .single()
   if (error) throw error

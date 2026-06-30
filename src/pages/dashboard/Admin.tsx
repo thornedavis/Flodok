@@ -6,7 +6,7 @@
 // re-checks the bit and bypasses RLS via SECURITY DEFINER). See
 // docs/founder-console.md. AI cost panel arrives in Phase 2.
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { ResponsiveContainer, BarChart, Bar, AreaChart, Area, XAxis, YAxis, Tooltip } from 'recharts'
 import { supabase } from '../../lib/supabase'
@@ -36,7 +36,8 @@ type AccountMetrics = { available: boolean; total_credits?: number | null; total
 type OrgDetail = {
   org: {
     id: string; name: string; display_name: string | null; plan_tier: string
-    subscription_status: string | null; subscription_quantity: number | null
+    subscription_status: string | null; billing_override: string | null
+    subscription_quantity: number | null
     current_period_end: string | null; cancel_at_period_end: boolean
     past_due_since: string | null; created_at: string; onboarding_completed_at: string | null
     stripe_customer_id: string | null; company_email: string | null
@@ -54,6 +55,8 @@ const PAYING_STATUSES = new Set(['active', 'trialing', 'past_due'])
 const DAY_MS = 24 * 60 * 60 * 1000
 
 function orgMrrIdr(row: OrgRow): number {
+  // Comped orgs have full access but pay nothing — never count them as revenue.
+  if (row.billing_override === 'comp') return 0
   if (row.plan_tier !== 'pro') return 0
   if (!row.subscription_status || !PAYING_STATUSES.has(row.subscription_status)) return 0
   return calculateProMonthlyIdr(row.subscription_quantity ?? 0)
@@ -94,6 +97,7 @@ function fmtDate(iso: string | null): string {
 // status → display label + badge colour. plan_tier 'free' (null status) reads
 // as "Free"; the Stripe statuses get their own hues.
 function statusBadge(row: OrgRow): { label: string; color: string; bg: string } {
+  if (row.billing_override === 'comp') return { label: 'Comp', color: '#7c3aed', bg: 'rgba(124,58,237,0.14)' }
   const s = row.plan_tier === 'free' ? 'free' : (row.subscription_status ?? 'free')
   switch (s) {
     case 'active': return { label: 'Active', color: '#15803d', bg: 'rgba(34,197,94,0.14)' }
@@ -124,12 +128,16 @@ export function Admin({ user }: { user: User }) {
   const [sortKey, setSortKey] = useState<SortKey>('created')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
-  useEffect(() => {
-    if (!user.is_platform_admin) return
-    supabase.rpc('admin_org_rows').then(({ data, error }) => {
+  const loadRows = useCallback(() => {
+    return supabase.rpc('admin_org_rows').then(({ data, error }) => {
       if (error) { setError(error.message); return }
       setRows((data ?? []) as OrgRow[])
     })
+  }, [])
+
+  useEffect(() => {
+    if (!user.is_platform_admin) return
+    loadRows()
     // AI usage (last 30 days) — per-org/function/model breakdowns from ai_usage.
     supabase.rpc('admin_ai_usage', {}).then(({ data }) => {
       if (data) setAiUsage(data as unknown as AiUsage)
@@ -147,7 +155,7 @@ export function Admin({ user }: { user: User }) {
         .then(m => setAccountMetrics(m as AccountMetrics))
         .catch(() => { /* account totals are best-effort */ })
     })
-  }, [user.is_platform_admin])
+  }, [user.is_platform_admin, loadRows])
 
   const kpis = useMemo(() => {
     if (!rows) return null
@@ -235,6 +243,14 @@ export function Admin({ user }: { user: User }) {
     supabase.rpc('admin_org_detail', { p_org_id: orgId }).then(({ data }) => {
       if (data) setDetail(data as unknown as OrgDetail)
     })
+  }
+
+  // Grant or revoke complimentary (comp) access, then refresh the drawer + table.
+  async function toggleComp(orgId: string, on: boolean) {
+    const { error } = await supabase.rpc('admin_set_org_comp', { p_org_id: orgId, p_on: on })
+    if (error) { setError(error.message); return }
+    openOrg(orgId)
+    loadRows()
   }
 
   // Defense in depth — the nav entry is already hidden and the RPC re-checks the
@@ -453,7 +469,7 @@ export function Admin({ user }: { user: User }) {
       )}
 
       {selectedOrgId && (
-        <OrgDetailDrawer detail={detail} onClose={() => { setSelectedOrgId(null); setDetail(null) }} />
+        <OrgDetailDrawer detail={detail} onClose={() => { setSelectedOrgId(null); setDetail(null) }} onToggleComp={toggleComp} />
       )}
     </div>
   )
@@ -503,7 +519,7 @@ function DrawerRow({ k, v }: { k: string; v: React.ReactNode }) {
   )
 }
 
-function OrgDetailDrawer({ detail, onClose }: { detail: OrgDetail | null; onClose: () => void }) {
+function OrgDetailDrawer({ detail, onClose, onToggleComp }: { detail: OrgDetail | null; onClose: () => void; onToggleComp: (orgId: string, on: boolean) => void }) {
   useEffect(() => {
     function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
     document.addEventListener('keydown', onKey)
@@ -511,6 +527,7 @@ function OrgDetailDrawer({ detail, onClose }: { detail: OrgDetail | null; onClos
   }, [onClose])
 
   const org = detail?.org
+  const isComp = org?.billing_override === 'comp'
   const mrr = org && org.plan_tier === 'pro' && org.subscription_status && PAYING_STATUSES.has(org.subscription_status)
     ? formatIdr(calculateProMonthlyIdr(org.subscription_quantity ?? 0))
     : '—'
@@ -530,6 +547,31 @@ function OrgDetailDrawer({ detail, onClose }: { detail: OrgDetail | null; onClos
             <h2 className="pr-8 text-xl font-semibold" style={{ color: 'var(--color-text)' }}>{org?.display_name || org?.name}</h2>
             <div className="mt-1 text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{org?.company_email || '—'}</div>
 
+            {/* Complimentary access control */}
+            {org && (
+              <div className="mt-4 rounded-lg border p-3" style={{ borderColor: isComp ? '#7c3aed' : 'var(--color-border)', backgroundColor: isComp ? 'rgba(124,58,237,0.06)' : 'transparent' }}>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+                      {isComp ? 'Complimentary access — active' : 'Complimentary access'}
+                    </div>
+                    <div className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                      {isComp ? 'Full Pro features, no payment.' : 'Grant full Pro features with no payment or sign-up.'}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => onToggleComp(org.id, !isComp)}
+                    className="shrink-0 rounded-lg border px-3 py-1.5 text-sm font-semibold transition-colors"
+                    style={isComp
+                      ? { borderColor: 'var(--color-border)', color: 'var(--color-text)', backgroundColor: 'var(--color-bg)' }
+                      : { borderColor: 'transparent', color: 'white', backgroundColor: '#7c3aed' }}
+                  >
+                    {isComp ? 'Revoke' : 'Grant comp'}
+                  </button>
+                </div>
+              </div>
+            )}
+
             {detail.pending_claim && (
               <div className="mt-4 rounded-lg border px-3 py-2 text-xs" style={{ borderColor: '#b45309', color: '#b45309', backgroundColor: 'rgba(245,158,11,0.08)' }}>
                 Owner-claim pending → {detail.pending_claim.owner_email} (expires {fmtDate(detail.pending_claim.expires_at)})
@@ -537,7 +579,7 @@ function OrgDetailDrawer({ detail, onClose }: { detail: OrgDetail | null; onClos
             )}
 
             <DrawerSection title="Billing">
-              <DrawerRow k="Plan" v={org?.plan_tier === 'pro' ? 'Pro' : 'Free'} />
+              <DrawerRow k="Plan" v={isComp ? 'Complimentary' : (org?.plan_tier === 'pro' ? 'Pro' : 'Free')} />
               <DrawerRow k="Status" v={org?.subscription_status || '—'} />
               <DrawerRow k="MRR" v={mrr} />
               <DrawerRow k="Employees billed" v={org?.subscription_quantity != null ? String(org.subscription_quantity) : '—'} />

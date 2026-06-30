@@ -96,17 +96,6 @@ const navItems: NavItemDef[] = [
   },
 ]
 
-// Platform founder console. Pinned above the org nav and rendered only when
-// user.is_platform_admin (a server-trusted bit — migration 170 revoked client
-// writes to it). Cross-tenant by design; the admin_* RPCs it calls re-check the
-// bit, so this nav entry is a convenience, not the security boundary.
-const adminNavItem: NavItemDef = {
-  path: '/dashboard/admin',
-  labelKey: 'navAdmin',
-  // Shield — founder/ops surface.
-  icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>,
-}
-
 const footerNavItems: NavItemDef[] = [
   {
     path: '/dashboard/settings',
@@ -359,7 +348,7 @@ function Sidebar({ user, mobileOpen, onCloseMobile }: {
             (overflow-y-auto would compute overflow-x to auto and clip them). */}
         <nav className={`flex-1 px-3 py-4 ${isCollapsed ? 'overflow-visible' : 'overflow-y-auto'}`}>
           <ul className="space-y-0.5">
-            {(user.is_platform_admin ? [adminNavItem, ...navItems] : navItems).filter(item => !item.adminOnly || isAdmin).map(item => {
+            {navItems.filter(item => !item.adminOnly || isAdmin).map(item => {
               const isActive = item.exact
                 ? location.pathname === item.path
                 : location.pathname.startsWith(item.path)
@@ -742,8 +731,23 @@ function Header({ user, org, onSignOut, onOpenMenu }: {
         </nav>
       </div>
 
-      {/* Right: search · language · theme · bell · avatar */}
+      {/* Right: admin · search · language · theme · bell · avatar */}
       <div className="flex shrink-0 items-center gap-2">
+        {/* Founder Console — platform-admins only. Lives in the header (not the
+            sidebar) as a cross-tenant surface distinct from the org nav. The
+            /dashboard/admin route + admin_* RPCs re-check is_platform_admin, so
+            this is a convenience entry, not the security boundary. */}
+        {user.is_platform_admin && (
+          <Link
+            to="/dashboard/admin"
+            className="rounded-md p-1.5 transition-colors hover:opacity-70"
+            style={{ color: location.pathname.startsWith('/dashboard/admin') ? 'var(--color-primary)' : 'var(--color-text-secondary)' }}
+            title={t.navAdmin}
+            aria-label={t.navAdmin}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
+          </Link>
+        )}
         <GlobalSearchButton />
         <button
           type="button"

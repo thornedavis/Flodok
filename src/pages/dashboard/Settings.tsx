@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { inviteMember } from '../../lib/inviteMember'
 import { useLang } from '../../contexts/LanguageContext'
 import { useRole } from '../../hooks/useRole'
 import { getAvatarGradient } from '../../lib/avatar'
@@ -24,6 +25,7 @@ import {
   openPortal,
   getPaymentMethod,
   isPro as isProOrg,
+  isComped,
   type OrgBilling,
   type PaymentMethod,
 } from '../../lib/billing'
@@ -381,12 +383,6 @@ function PasswordResetRow({ email, t }: { email: string; t: Translations }) {
 
 // ─── Team members + invites ─────────────────────────────
 
-function generateInviteToken() {
-  const array = new Uint8Array(24)
-  crypto.getRandomValues(array)
-  return Array.from(array).map(b => b.toString(16).padStart(2, '0')).join('')
-}
-
 type EmployeeOption = { id: string; name: string }
 
 function TeamMembersSection({ user, t }: { user: User; t: Translations }) {
@@ -605,7 +601,6 @@ function TeamMembersSection({ user, t }: { user: User; t: Translations }) {
 
       {showInvite && (
         <InviteMemberModal
-          user={user}
           t={t}
           existingInvites={invites}
           onClose={() => setShowInvite(false)}
@@ -675,8 +670,7 @@ function CopyInviteLink({ inv, t }: { inv: OrgInvitation; t: Translations }) {
   )
 }
 
-function InviteMemberModal({ user, t, existingInvites, onClose, onCreated }: {
-  user: User
+function InviteMemberModal({ t, existingInvites, onClose, onCreated }: {
   t: Translations
   existingInvites: OrgInvitation[]
   onClose: () => void
@@ -712,28 +706,16 @@ function InviteMemberModal({ user, t, existingInvites, onClose, onCreated }: {
     }
 
     setCreating(true)
-    const token = generateInviteToken()
-    const { data, error: insertError } = await supabase
-      .from('org_invitations')
-      .insert({
-        org_id: user.org_id,
-        email: trimmed,
-        token,
-        role,
-        invited_by: user.id,
-      })
-      .select()
-      .single()
-
-    if (insertError) {
-      setError(insertError.message)
-      setCreating(false)
-      return
+    try {
+      // Creates the invite AND emails it (Supabase "Invite user" template);
+      // returns the invite row so the copy-link fallback still shows.
+      const { invite } = await inviteMember({ email: trimmed, role })
+      setCreatedInvite(invite)
+      onCreated()
+    } catch (err) {
+      setError((err as Error).message)
     }
-
-    setCreatedInvite(data)
     setCreating(false)
-    onCreated()
   }
 
   const inviteUrl = createdInvite ? `${window.location.origin}/invite/${createdInvite.token}` : ''
@@ -1815,6 +1797,10 @@ function BillingTab({ user, t }: { user: User; t: Translations }) {
   }
 
   const onPro = isProOrg(billing)
+  // Complimentary (founder-comped) orgs get full Pro access but have no Stripe
+  // subscription — so we show a "Complimentary" plan and hide every Stripe
+  // button (portal/adjust/cancel) which would otherwise 400 (no customer).
+  const isComp = isComped(billing)
   // For Pro: use the actual Stripe subscription quantity (what they're being
   // billed). For Free: compute the floor (employees or PRO_MIN_SEATS) so the
   // "what Pro would cost" estimate is meaningful.
@@ -1834,7 +1820,9 @@ function BillingTab({ user, t }: { user: User; t: Translations }) {
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>
-                {onPro
+                {isComp
+                  ? 'Complimentary'
+                  : onPro
                   ? `${t.billingPlanPro} · ${formatIdr(monthlyEstimate)} / month`
                   : t.billingPlanFreeHeading}
               </span>
@@ -1848,7 +1836,9 @@ function BillingTab({ user, t }: { user: User; t: Translations }) {
               )}
             </div>
             <p className="mt-1 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-              {onPro
+              {isComp
+                ? 'Full Pro access, granted by Flodok. No payment required.'
+                : onPro
                 ? t.billingProDesc.replace('{count}', String(employeeCount)).replace('{billable}', String(billableSeats))
                 : t.billingFreeDescShort.replace('{limit}', String(FREE_EMPLOYEE_LIMIT))}
             </p>
@@ -1862,8 +1852,9 @@ function BillingTab({ user, t }: { user: User; t: Translations }) {
                 or the paid Stripe quantity for Pro orgs. On Free, hitting the
                 cap turns the bar red (hard limit). On Pro, the cap is soft —
                 adding more auto-bumps the subscription quantity — so we just
-                show the bar at full without the red warning. */}
-            <div className="mt-4 max-w-md">
+                show the bar at full without the red warning. Comped orgs have
+                no seat cap, so we skip the bar entirely. */}
+            <div className={`mt-4 max-w-md ${isComp ? 'hidden' : ''}`}>
               <div className="mb-1 flex justify-between text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
                 <span>{t.billingEmployees}</span>
                 <span>{employeeCount} / {onPro ? billableSeats : FREE_EMPLOYEE_LIMIT}</span>
@@ -1880,7 +1871,7 @@ function BillingTab({ user, t }: { user: User; t: Translations }) {
               </div>
             </div>
           </div>
-          {isAdmin && (
+          {isAdmin && !isComp && (
             <button
               type="button"
               onClick={() => (onPro ? setShowAdjust(true) : setShowUpgrade(true))}
@@ -1919,7 +1910,7 @@ function BillingTab({ user, t }: { user: User; t: Translations }) {
               </p>
             )}
           </div>
-          {onPro && isAdmin && (
+          {onPro && isAdmin && !isComp && (
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
@@ -1958,7 +1949,11 @@ function BillingTab({ user, t }: { user: User; t: Translations }) {
               </svg>
             </div>
             <div>
-              {onPro ? (
+              {isComp ? (
+                <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+                  Complimentary access — no payment method on file.
+                </div>
+              ) : onPro ? (
                 paymentMethod ? (
                   <>
                     <div className="text-sm" style={{ color: 'var(--color-text)' }}>
@@ -1988,7 +1983,7 @@ function BillingTab({ user, t }: { user: User; t: Translations }) {
               )}
             </div>
           </div>
-          {onPro && isAdmin && (
+          {onPro && isAdmin && !isComp && (
             <button
               type="button"
               onClick={() => handlePortal('payment_method_update')}
@@ -2002,8 +1997,8 @@ function BillingTab({ user, t }: { user: User; t: Translations }) {
         </div>
       </BillingSection>
 
-      {/* DANGER ZONE (Pro only, admin only, not already cancelled) */}
-      {onPro && isAdmin && !billing.cancel_at_period_end && (
+      {/* DANGER ZONE (Pro only, admin only, not already cancelled, not comped) */}
+      {onPro && isAdmin && !isComp && !billing.cancel_at_period_end && (
         <details
           className="group rounded-xl border p-4 transition-colors"
           style={{ borderColor: 'rgba(239, 68, 68, 0.4)', backgroundColor: 'rgba(239, 68, 68, 0.04)' }}

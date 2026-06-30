@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
 import { AvatarUpload } from '../../components/AvatarUpload'
 import { ownerClaim } from '../../lib/ownerClaim'
+import { inviteMember } from '../../lib/inviteMember'
 import type { User, Organization } from '../../types/aliases'
 
 // First-run setup wizard. Runs full-screen between signup and the dashboard,
@@ -16,12 +17,6 @@ import type { User, Organization } from '../../types/aliases'
 
 type StepKey = 'welcome' | 'company' | 'operate' | 'invite'
 const STEPS: StepKey[] = ['welcome', 'company', 'operate', 'invite']
-
-function generateInviteToken() {
-  const array = new Uint8Array(24)
-  crypto.getRandomValues(array)
-  return Array.from(array).map(b => b.toString(16).padStart(2, '0')).join('')
-}
 
 export function Onboarding({ user, org }: {
   user: User
@@ -120,14 +115,15 @@ export function Onboarding({ user, org }: {
     const email = inviteEmail.trim().toLowerCase()
     if (!email.includes('@')) { setError(t.onbInviteEmailInvalid); return }
     setInviteBusy(true); setError('')
-    const token = generateInviteToken()
-    const { error: e } = await supabase.from('org_invitations').insert({
-      org_id: org.id, email, token, role: inviteRole, invited_by: user.id,
-    })
+    try {
+      // Creates + emails the invite (Supabase "Invite user"); returns the link too.
+      const { link } = await inviteMember({ email, role: inviteRole })
+      setInviteLink(link)
+      setInviteEmail('')
+    } catch (err) {
+      setError((err as Error).message)
+    }
     setInviteBusy(false)
-    if (e) { setError(e.message); return }
-    setInviteLink(`${window.location.origin}/invite/${token}`)
-    setInviteEmail('')
   }
 
   async function copyInviteLink() {

@@ -107,7 +107,7 @@ function AppRoutes() {
       </Route>
 
       {/* Invite acceptance — always accessible */}
-      <Route path="/invite/:token" element={<AcceptInvite onSignUp={signUp} />} />
+      <Route path="/invite/:token" element={<AcceptInvite />} />
 
       {/* Auth routes */}
       {!session ? (

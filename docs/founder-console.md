@@ -202,6 +202,33 @@ account-level OpenRouter total; only per-org attribution is missing. Fast-follow
 
 ---
 
+## Complimentary access ("comp") ✅ built
+
+Founder-granted full Pro access with **no Stripe subscription or payment** — for
+test-case / partner orgs. Migration `184_billing_override_comp.sql`.
+
+- **`organizations.billing_override`** (text, nullable, `'comp'`) — a dedicated,
+  Stripe-independent flag. Client writes revoked (like `is_platform_admin`); only
+  the founder RPC sets it.
+- **`admin_set_org_comp(org_id, on)`** — `SECURITY DEFINER`, `is_platform_admin`
+  gated, grants/revokes the flag.
+- **`src/lib/billing.ts`** — `isComped()` helper; `isPro()` and `dunningState()`
+  short-circuit to full Pro/`pro_active` when comped. Because every gate (2-emp
+  cap, item caps, read-only, feature locks) flows through these, comp unlocks
+  everything at once. The Stripe webhook never touches `billing_override`, so it's
+  clobber-proof; `plan_tier` stays honest (`free`, no real sub).
+- **Founder Console** — comped orgs show a purple **"Comp"** badge, are excluded
+  from MRR, and the per-org drawer has a **Grant / Revoke complimentary access**
+  button (`admin_set_org_comp`).
+- **Settings → Billing** — a comped org sees "Complimentary" with all Stripe
+  buttons (adjust / portal / cancel / payment) hidden, so nothing tries to open a
+  customer portal that doesn't exist.
+
+To onboard a no-pay client: let them sign up (or set up on-behalf), then open
+their org in the console and click **Grant comp**. Done — full features, no card.
+
+---
+
 ## Open items / inputs
 
 - Login *trend* charts (DAU/WAU/MAU over time) need a `last_seen` touch we don't
