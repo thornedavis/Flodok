@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useLang } from '../../contexts/LanguageContext'
 import { AuthLayout, AuthSteps, PasswordField } from '../../components/AuthLayout'
+import { InfoTooltip } from '../../components/InfoTooltip'
 
 export function Signup({
   onSignUp,
@@ -134,42 +135,6 @@ export function Signup({
                 className="mb-1.5 block text-sm font-medium"
                 style={{ color: 'var(--color-text-secondary)' }}
               >
-                {t.setupRoleQuestion}
-              </label>
-              <div className="space-y-2">
-                {([
-                  { mode: 'owner' as const, title: t.setupRoleOwnerTitle, desc: t.setupRoleOwnerDesc },
-                  { mode: 'on_behalf' as const, title: t.setupRoleOnBehalfTitle, desc: t.setupRoleOnBehalfDesc },
-                ]).map((opt) => {
-                  const selected = setupMode === opt.mode
-                  return (
-                    <button
-                      key={opt.mode}
-                      type="button"
-                      onClick={() => setSetupMode(opt.mode)}
-                      aria-pressed={selected}
-                      className="w-full rounded-lg border px-3 py-2.5 text-left transition-colors"
-                      style={{
-                        borderColor: selected ? 'var(--color-primary)' : 'var(--color-border)',
-                        backgroundColor: selected ? 'var(--color-diff-add)' : 'var(--color-bg)',
-                      }}
-                    >
-                      <div className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{opt.title}</div>
-                      <div className="mt-0.5 text-xs" style={{ color: 'var(--color-text-secondary)' }}>{opt.desc}</div>
-                    </button>
-                  )
-                })}
-              </div>
-              {setupMode === 'on_behalf' && (
-                <p className="mt-2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.setupRoleOnBehalfHint}</p>
-              )}
-            </div>
-
-            <div>
-              <label
-                className="mb-1.5 block text-sm font-medium"
-                style={{ color: 'var(--color-text-secondary)' }}
-              >
                 {t.yourNameLabel}
               </label>
               <input
@@ -199,6 +164,47 @@ export function Signup({
                 className="w-full rounded-lg border px-3 py-2 text-sm"
                 style={inputStyle}
               />
+            </div>
+
+            <div>
+              <label
+                className="mb-1.5 block text-sm font-medium"
+                style={{ color: 'var(--color-text-secondary)' }}
+              >
+                {t.setupRoleQuestion}
+              </label>
+              <div className="space-y-2">
+                {([
+                  { mode: 'owner' as const, title: t.setupRoleOwnerTitle, desc: t.setupRoleOwnerDesc },
+                  { mode: 'on_behalf' as const, title: t.setupRoleOnBehalfTitle, desc: t.setupRoleOnBehalfDesc },
+                ]).map((opt) => {
+                  const selected = setupMode === opt.mode
+                  return (
+                    <div key={opt.mode} className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setSetupMode(opt.mode)}
+                        aria-pressed={selected}
+                        className="w-full rounded-lg border px-3 py-2.5 text-left transition-colors"
+                        style={{
+                          borderColor: selected ? 'var(--color-primary)' : 'var(--color-border)',
+                          backgroundColor: selected ? 'color-mix(in srgb, var(--color-primary) 10%, transparent)' : 'var(--color-bg)',
+                        }}
+                      >
+                        <div className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{opt.title}</div>
+                        <div className="mt-0.5 text-xs" style={{ color: 'var(--color-text-secondary)' }}>{opt.desc}</div>
+                      </button>
+                      {/* On-behalf detail moved into a hover tooltip (sibling of the
+                          card button — InfoTooltip renders a <button>, so it can't nest). */}
+                      {opt.mode === 'on_behalf' && (
+                        <span className="absolute right-2.5 top-2.5">
+                          <InfoTooltip text={t.setupRoleOnBehalfHint} />
+                        </span>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
             </div>
 
             <div>

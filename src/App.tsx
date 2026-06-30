@@ -128,7 +128,7 @@ function AppRoutes() {
           {/* First-run setup wizard — gated on organizations.onboarding_completed_at.
               The always-accessible routes above (claim/invite/reset) still win by
               specificity, so an invited owner can still reach /claim mid-setup. */}
-          <Route path="/onboarding" element={<Onboarding user={user} org={org} />} />
+          <Route path="/onboarding" element={<Onboarding user={user} org={org} onSignOut={signOut} />} />
           <Route path="*" element={<Navigate to="/onboarding" replace />} />
         </>
       ) : (
