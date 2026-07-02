@@ -20,7 +20,7 @@
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { translateSOP } from './translate.ts';
 import { renderMergeFields } from './mergeFields.ts';
-import { docToMarkdown, isDocumentDoc, normalizeDoc, type DocNode, type DocumentDoc } from './documentDoc.ts';
+import { docToMarkdown, isDocumentDoc, normalizeDoc, stripDefaultTextAlign, type DocNode, type DocumentDoc } from './documentDoc.ts';
 
 export type SnapshotTable = 'sops' | 'contracts' | 'ndas';
 export type TranslationStatus = 'complete' | 'failed';
@@ -113,8 +113,15 @@ async function translateMissingSides(
   // the flat docs the editor now produces. Block ids are stable across
   // normalization (a former section's id becomes its clause-heading
   // block id), so the diff-by-id below still matches.
-  const out = normalizeDoc(newDoc);
-  const flatExisting = existingDoc ? normalizeDoc(existingDoc) : null;
+  // Strip TipTap's default textAlign from BOTH sides before diffing. The
+  // browser drops it on edit-emit, but the AI-generate push and the save
+  // round-trip do not, so a stored doc can carry textAlign='left' that a
+  // freshly-emitted doc lacks — which made sameBodyContent see a phantom
+  // change and re-flag/re-translate blocks whose text never changed.
+  // Symmetric stripping here makes a no-op re-save byte-identical on both
+  // sides so unchanged blocks reliably reach the clear-flag path below.
+  const out = stripDefaultTextAlign(normalizeDoc(newDoc));
+  const flatExisting = existingDoc ? stripDefaultTextAlign(normalizeDoc(existingDoc)) : null;
   let firstError: string | null = null;
 
   // Map existing blocks by id so we can detect changes per block. The
@@ -143,15 +150,27 @@ async function translateMissingSides(
     const enChangedBlock = !sameBodyContent(enBody, prevEnBody);
     const idChangedBlock = !sameBodyContent(idBody, prevIdBody);
 
+    // Was this block an ALREADY-TRANSLATED pair before this save? Only then
+    // can "both sides changed" mean a genuine translation *drift* the user
+    // should reconcile. A brand-new block (AI Generate / import / first
+    // draft — fresh id, so prevBlock is undefined) or one whose prior side
+    // was empty is being *authored*, not drifted, and must never flag.
+    const prevEnEmpty = !prevEnBody || isBodyEmpty(prevEnBody.content || []);
+    const prevIdEmpty = !prevIdBody || isBodyEmpty(prevIdBody.content || []);
+    const wasBilingualPair = prevBlock !== undefined && !prevEnEmpty && !prevIdEmpty;
+
     const blockAttrs: Record<string, unknown> = (block.attrs && typeof block.attrs === 'object'
       ? (block.attrs as Record<string, unknown>)
       : {});
 
-    // Both sides edited in the same save — user is intentionally
-    // authoring both languages; leave both as written and flag for
-    // review so they can confirm consistency in the editor.
+    // Both sides carry content and both changed this save — the user
+    // authored both languages, so never machine-clobber one with the other:
+    // keep both exactly as written (and don't waste a re-translation). Flag
+    // for review ONLY when the block was already a translated pair — a real
+    // drift the user should confirm. A freshly-authored pair (AI Generate,
+    // import, first draft) is kept clean with no banner.
     if (enChangedBlock && idChangedBlock && !enEmpty && !idEmpty) {
-      blockAttrs.needsReview = true;
+      blockAttrs.needsReview = wasBilingualPair;
       continue;
     }
 

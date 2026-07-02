@@ -346,9 +346,12 @@ export function DocumentEditor({
     try {
       const doc = await generateDocument({ prompt, docType: aiGenerate.docType, title: aiGenerate.title })
       editor.commands.setContent(normalizeDoc(doc) as unknown as Record<string, unknown>)
-      // setContent doesn't fire onUpdate, so push the change explicitly
-      // so the parent's saved-state tracker sees the new doc.
-      if (onChange) onChange(editor.getJSON() as unknown as DocumentDoc)
+      // setContent doesn't fire onUpdate, so push the change explicitly so
+      // the parent's saved-state tracker sees the new doc. Strip default
+      // textAlign to match onUpdate — otherwise the generated doc reaches the
+      // snapshot writer carrying textAlign the editor would have dropped,
+      // seeding a stored-vs-emitted mismatch in the per-block diff.
+      if (onChange) onChange(stripDefaultTextAlign(editor.getJSON()) as unknown as DocumentDoc)
       setGenerateOpen(false)
     } catch (err) {
       setGenerateError(err instanceof Error ? err.message : 'Generation failed')

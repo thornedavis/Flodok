@@ -99,6 +99,38 @@ export function normalizeDoc(doc: DocNode | unknown): DocumentDoc {
   return { type: 'document', content: flat }
 }
 
+// ─── stripDefaultTextAlign ──────────────────────────────────────────
+//
+// Deno twin of src/lib/documentDoc.ts:stripDefaultTextAlign — keep the two
+// byte-for-byte identical. TipTap's TextAlign extension stamps a `textAlign`
+// attr (default 'left') onto every paragraph/heading on load. The browser
+// drops that default before emitting edits, but the AI-generate push and the
+// save round-trip do not, so a stored doc can carry `textAlign` that a
+// freshly-emitted doc lacks. The snapshot writer applies this to BOTH the
+// incoming and the existing doc before diffing so a no-op re-save is
+// byte-identical and unchanged blocks don't look "changed". Only real,
+// non-default alignments (center/right/justify) are kept; `null`/`left` are
+// dropped so the shape matches a pre-alignment doc.
+export function stripDefaultTextAlign<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map(v => stripDefaultTextAlign(v)) as unknown as T
+  }
+  if (!value || typeof value !== 'object') return value
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    if (k === 'attrs' && v && typeof v === 'object' && !Array.isArray(v)) {
+      const attrs = { ...(v as Record<string, unknown>) }
+      if (attrs.textAlign == null || attrs.textAlign === 'left') delete attrs.textAlign
+      if (Object.keys(attrs).length > 0) out.attrs = attrs
+    } else if (k === 'content') {
+      out.content = stripDefaultTextAlign(v)
+    } else {
+      out[k] = v
+    }
+  }
+  return out as unknown as T
+}
+
 export function docToMarkdown(doc: DocNode | unknown, lang: 'en' | 'id'): string {
   if (!isDocumentDoc(doc)) return ''
   // Normalize first so legacy section-nested and flat docs project
