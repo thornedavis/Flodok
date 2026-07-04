@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useLang } from '../../contexts/LanguageContext'
 import { useRole } from '../../hooks/useRole'
+import { FilterPanel, FilterSearchInput, type FilterPanelSection } from '../../components/FilterControls'
 import {
   daysRemaining,
   emptyTrash,
@@ -25,6 +26,7 @@ type DisplayType =
   | 'job_description'
   | 'hiring_request'
   | 'spotlight_post'
+  | 'task'
 
 interface DisplayItem extends TrashItem {
   displayType: DisplayType
@@ -40,6 +42,7 @@ const FILTERS: Array<{ key: 'all' | DisplayType; labelKey: keyof Translations }>
   { key: 'job_description', labelKey: 'trashFilterJobDescriptions' },
   { key: 'hiring_request', labelKey: 'trashFilterHiringRequests' },
   { key: 'spotlight_post', labelKey: 'trashFilterSpotlight' },
+  { key: 'task', labelKey: 'trashFilterTasks' },
 ]
 
 function classifyItem(item: TrashItem): DisplayType {
@@ -57,7 +60,8 @@ export function Trash({ user }: { user: User }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
-  const [filter, setFilter] = useState<'all' | DisplayType>('all')
+  // Selected type filters (empty = all types), driven by the shared FilterPanel.
+  const [typeFilter, setTypeFilter] = useState<DisplayType[]>([])
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set())
   const [emptying, setEmptying] = useState(false)
 
@@ -79,11 +83,11 @@ export function Trash({ user }: { user: User }) {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     return items.filter(it => {
-      if (filter !== 'all' && it.displayType !== filter) return false
+      if (typeFilter.length && !typeFilter.includes(it.displayType)) return false
       if (q && !it.title.toLowerCase().includes(q)) return false
       return true
     })
-  }, [items, search, filter])
+  }, [items, search, typeFilter])
 
   const counts = useMemo(() => {
     const m: Record<'all' | DisplayType, number> = {
@@ -97,6 +101,7 @@ export function Trash({ user }: { user: User }) {
       job_description: 0,
       hiring_request: 0,
       spotlight_post: 0,
+      task: 0,
     }
     for (const it of items) m[it.displayType] += 1
     return m
@@ -149,6 +154,22 @@ export function Trash({ user }: { user: User }) {
     }
   }
 
+  const filterSections: FilterPanelSection[] = [
+    {
+      type: 'multiselect',
+      key: 'type',
+      label: t.trashFilterType,
+      value: typeFilter,
+      onChange: next => setTypeFilter(next as DisplayType[]),
+      options: FILTERS.filter(f => f.key !== 'all').map(f => ({
+        id: f.key,
+        label: t[f.labelKey] as string,
+        count: counts[f.key as DisplayType],
+      })),
+    },
+  ]
+  const resetFilters = () => { setTypeFilter([]); setSearch('') }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -169,36 +190,11 @@ export function Trash({ user }: { user: User }) {
         )}
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap gap-2">
-          {FILTERS.map(f => {
-            const active = filter === f.key
-            const count = counts[f.key]
-            return (
-              <button
-                key={f.key}
-                type="button"
-                onClick={() => setFilter(f.key)}
-                className="rounded-full border px-3 py-1 text-xs font-medium transition-colors"
-                style={{
-                  borderColor: active ? 'var(--color-primary)' : 'var(--color-border)',
-                  color: active ? 'var(--color-primary)' : 'var(--color-text-secondary)',
-                  backgroundColor: active ? 'var(--color-primary-subtle, transparent)' : 'transparent',
-                }}
-              >
-                {t[f.labelKey] as string} <span className="ml-1 opacity-60">{count}</span>
-              </button>
-            )
-          })}
+      <div className="flex flex-wrap items-center gap-2">
+        <FilterPanel triggerLabel={t.filterButtonLabel} sections={filterSections} onReset={resetFilters} />
+        <div className="ml-auto w-full sm:w-72">
+          <FilterSearchInput value={search} onChange={setSearch} placeholder={t.trashSearchPlaceholder} />
         </div>
-        <input
-          type="search"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder={t.trashSearchPlaceholder}
-          className="w-full rounded-lg border px-3 py-1.5 text-sm sm:w-72"
-          style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
-        />
       </div>
 
       {error && (
@@ -209,7 +205,7 @@ export function Trash({ user }: { user: User }) {
 
       <div className="overflow-hidden rounded-xl border" style={{ borderColor: 'var(--color-border)' }}>
         <div
-          className="grid grid-cols-[80px_1fr_180px_120px_140px] gap-4 border-b px-4 py-2.5 text-xs font-semibold uppercase tracking-wide"
+          className="grid grid-cols-[80px_1fr_180px_120px_200px] gap-4 border-b px-4 py-2.5 text-xs font-semibold uppercase tracking-wide"
           style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-tertiary)' }}
         >
           <div>{t.trashColType}</div>
@@ -229,7 +225,7 @@ export function Trash({ user }: { user: User }) {
             return (
               <div
                 key={item.item_id}
-                className="grid grid-cols-[80px_1fr_180px_120px_140px] items-center gap-4 border-b px-4 py-3 last:border-b-0 text-sm"
+                className="grid grid-cols-[80px_1fr_180px_120px_200px] items-center gap-4 border-b px-4 py-3 last:border-b-0 text-sm"
                 style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
               >
                 <TypeBadge type={item.displayType} t={t} />
@@ -245,7 +241,7 @@ export function Trash({ user }: { user: User }) {
                     type="button"
                     onClick={() => handleRestore(item)}
                     disabled={busy}
-                    className="rounded-md border px-2 py-1 text-xs disabled:opacity-50"
+                    className="whitespace-nowrap rounded-md border px-2.5 py-1 text-xs disabled:opacity-50"
                     style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
                   >
                     {t.trashRestore}
@@ -254,7 +250,7 @@ export function Trash({ user }: { user: User }) {
                     type="button"
                     onClick={() => handlePurge(item)}
                     disabled={busy}
-                    className="rounded-md px-2 py-1 text-xs font-medium text-white disabled:opacity-50"
+                    className="whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-medium text-white disabled:opacity-50"
                     style={{ backgroundColor: 'var(--color-danger, #b91c1c)' }}
                   >
                     {t.trashDeleteForever}
@@ -279,6 +275,7 @@ function TypeBadge({ type, t }: { type: DisplayType; t: Translations }) {
     type === 'letter' ? t.trashTypeLetter :
     type === 'job_description' ? t.trashTypeJobDescription :
     type === 'hiring_request' ? t.trashTypeHiringRequest :
+    type === 'task' ? t.trashTypeTask :
     t.trashTypeSpotlightPost
   return (
     <span

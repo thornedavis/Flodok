@@ -8,6 +8,7 @@ export type TrashItemType =
   | 'job_description'
   | 'hiring_request'
   | 'spotlight_post'
+  | 'task'
 
 export type TrashDocumentType = 'sop' | 'contract' | 'job_description' | 'letter' | 'nda'
 
@@ -31,6 +32,7 @@ export interface EmployeeAttachmentCounts {
   // SOPs always stay alive; the employee is silently detached.
   sharedAudienceSops: number
   contracts: number
+  ndas: number
   attachments: number
 }
 
@@ -48,6 +50,19 @@ export async function trashEmployee(
 ): Promise<void> {
   const { error } = await supabase.rpc('trash_employee', {
     p_employee_id: employeeId,
+    p_cascade_docs: opts.cascadeDocs ?? false,
+  })
+  if (error) throw new Error(error.message)
+}
+
+// Atomic bulk trash — the whole selection succeeds or rolls back together
+// (single-transaction RPC), so a mid-batch failure can't half-delete.
+export async function trashEmployees(
+  employeeIds: string[],
+  opts: { cascadeDocs?: boolean } = {},
+): Promise<void> {
+  const { error } = await supabase.rpc('trash_employees', {
+    p_employee_ids: employeeIds,
     p_cascade_docs: opts.cascadeDocs ?? false,
   })
   if (error) throw new Error(error.message)
@@ -75,6 +90,15 @@ export async function trashSpotlightPost(postId: string): Promise<void> {
   const { error } = await supabase.rpc('trash_spotlight_post', {
     p_post_id: postId,
   })
+  if (error) throw new Error(error.message)
+}
+
+// trash_task isn't in the generated Database types yet, so cast the rpc call
+// (same approach Portal.tsx uses for portal_* RPCs).
+type TrashTaskRpc = (fn: 'trash_task', args: { p_task_id: string }) => Promise<{ error: { message: string } | null }>
+
+export async function trashTask(taskId: string): Promise<void> {
+  const { error } = await (supabase.rpc as unknown as TrashTaskRpc)('trash_task', { p_task_id: taskId })
   if (error) throw new Error(error.message)
 }
 
@@ -114,12 +138,18 @@ export async function emptyTrash(): Promise<void> {
 export async function countEmployeeAttachments(
   employeeId: string,
 ): Promise<EmployeeAttachmentCounts> {
-  const [impactRes, contractsRes, attachmentsRes] = await Promise.all([
+  const [impactRes, contractsRes, ndasRes, attachmentsRes] = await Promise.all([
     supabase.rpc('employee_audience_impact', { p_employee_id: employeeId }),
     supabase
       .from('contracts')
       .select('id', { count: 'exact', head: true })
-      .eq('employee_id', employeeId),
+      .eq('employee_id', employeeId)
+      .is('deleted_at', null),
+    supabase
+      .from('ndas')
+      .select('id', { count: 'exact', head: true })
+      .eq('employee_id', employeeId)
+      .is('deleted_at', null),
     supabase
       .from('employee_attachments')
       .select('id', { count: 'exact', head: true })
@@ -130,6 +160,7 @@ export async function countEmployeeAttachments(
     soleAudienceSops: impact.sole_audience_sops ?? 0,
     sharedAudienceSops: impact.shared_audience_sops ?? 0,
     contracts: contractsRes.count ?? 0,
+    ndas: ndasRes.count ?? 0,
     attachments: attachmentsRes.count ?? 0,
   }
 }

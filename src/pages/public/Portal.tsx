@@ -9,6 +9,8 @@ import { supabase } from '../../lib/supabase'
 import { useTheme } from '../../hooks/useTheme'
 import { useLang } from '../../contexts/LanguageContext'
 import { RequestsTab } from '../../components/portal/RequestsTab'
+import { TasksTab } from '../../components/portal/TasksTab'
+import { AttendanceTab } from '../../components/portal/AttendanceTab'
 import { formatIdr } from '../../lib/credits'
 import { formatRelativeTime } from '../../lib/relativeTime'
 import { BadgeGlyph } from '../../components/BadgeGlyph'
@@ -118,7 +120,7 @@ function monthFromIsoDate(iso: string): string {
   return iso.slice(0, 7) + '-01'
 }
 
-type Tab = 'home' | 'documents' | 'requests' | 'spotlight' | 'leaderboard' | 'badges'
+type Tab = 'home' | 'documents' | 'requests' | 'tasks' | 'attendance' | 'spotlight' | 'leaderboard' | 'badges'
 type DocFilter = 'all' | 'sops' | 'contracts' | 'letters'
 type OpenDocType = 'sop' | 'contract' | 'letter' | null
 
@@ -253,6 +255,11 @@ function MoreIcon() {
 
 function CheckCircle() {
   return <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-success)' }}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+}
+
+function ClockIcon() {
+  // Clock face (circle + hands) — reads as "attendance / time".
+  return <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
 }
 
 // ─── Main Component ──────────────────────────────────────
@@ -1587,6 +1594,14 @@ export function Portal() {
             <RequestsTab slug={slug} token={token} />
           )}
 
+          {tab === 'tasks' && (
+            <TasksTab slug={slug} token={token} />
+          )}
+
+          {tab === 'attendance' && org?.attendance_enabled === true && (
+            <AttendanceTab slug={slug} token={token} />
+          )}
+
         </div>
       </div>
 
@@ -1596,10 +1611,16 @@ export function Portal() {
           {([
             { key: 'home' as Tab, label: s.home, icon: <HomeIcon /> },
             { key: 'documents' as Tab, label: s.documents, icon: <DocIcon />, badge: pendingActionCount },
+            { key: 'tasks' as Tab, label: s.tasksPortalTab, icon: (
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><line x1="13" y1="6" x2="21" y2="6"/><line x1="13" y1="12" x2="21" y2="12"/><line x1="13" y1="18" x2="21" y2="18"/></svg>
+            ) },
             ...(org?.forms_enabled !== false
               ? [{ key: 'requests' as Tab, label: s.portalRequestsTab, icon: (
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg>
                 ) }]
+              : []),
+            ...(org?.attendance_enabled === true
+              ? [{ key: 'attendance' as Tab, label: s.portalAttendanceTab, icon: <ClockIcon /> }]
               : []),
             { key: 'spotlight' as Tab, label: s.spotlightTabLabel, icon: <SpotlightIcon /> },
             ...(org?.badges_enabled !== false

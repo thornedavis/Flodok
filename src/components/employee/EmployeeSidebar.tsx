@@ -11,6 +11,7 @@ export type EmployeeSectionKey =
   | 'experience'
   | 'additional'
   | 'documents'
+  | 'linked_documents'
   | 'compensation'
 
 interface EmployeeSidebarProps {
@@ -146,6 +147,7 @@ export function EmployeeSidebar({
         { key: 'experience', label: t.empNavExperience },
         { key: 'additional', label: t.empNavAdditional },
         { key: 'documents', label: t.empNavDocuments },
+        { key: 'linked_documents', label: t.empNavLinkedDocs },
       ],
     },
     {

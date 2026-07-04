@@ -24,6 +24,7 @@ export function EmployeeSelect({
   disabled,
   emptyLabel,
   invalid,
+  extraOption,
 }: {
   value: string | null
   onChange: (next: string | null) => void
@@ -37,6 +38,10 @@ export function EmployeeSelect({
   // When true, the trigger shows a red border — used by document editors to
   // flag a required-but-empty field (mirrors the missing-field dot).
   invalid?: boolean
+  // Opt-in synthetic option below the clear row, always visible (not filtered
+  // by search) — used by the Documents filter for "Unassigned". Its value is a
+  // sentinel that never matches an employee id.
+  extraOption?: { value: string; label: string }
 }) {
   const { t } = useLang()
   const noneLabel = emptyLabel ?? t.noEmployeeLinked
@@ -82,10 +87,13 @@ export function EmployeeSelect({
     )
   }, [employees, query])
 
-  const selected = value ? employees.find(e => e.id === value) ?? null : null
-  const triggerLabel = selected
-    ? `${selected.name}${primaryDept(selected) ? ` (${primaryDept(selected)})` : ''}`
-    : noneLabel
+  const isExtra = extraOption != null && value === extraOption.value
+  const selected = !isExtra && value ? employees.find(e => e.id === value) ?? null : null
+  const triggerLabel = isExtra
+    ? extraOption!.label
+    : selected
+      ? `${selected.name}${primaryDept(selected) ? ` (${primaryDept(selected)})` : ''}`
+      : noneLabel
 
   function pick(id: string | null) {
     onChange(id)
@@ -104,7 +112,7 @@ export function EmployeeSelect({
         style={{
           borderColor: invalid ? 'color-mix(in srgb, var(--color-danger) 50%, transparent)' : 'var(--color-border)',
           backgroundColor: 'var(--color-bg)',
-          color: selected ? 'var(--color-text)' : 'var(--color-text-tertiary)',
+          color: selected || isExtra ? 'var(--color-text)' : 'var(--color-text-tertiary)',
         }}
       >
         <span className="min-w-0 truncate">{triggerLabel}</span>
@@ -160,6 +168,16 @@ export function EmployeeSelect({
             >
               {noneLabel}
             </OptionRow>
+
+            {extraOption && (
+              <OptionRow
+                selected={value === extraOption.value}
+                onClick={() => pick(extraOption.value)}
+                muted
+              >
+                {extraOption.label}
+              </OptionRow>
+            )}
 
             {filtered.length === 0 ? (
               <p className="px-3 py-2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>

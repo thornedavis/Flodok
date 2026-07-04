@@ -16,7 +16,7 @@ import { NotificationBell } from './NotificationBell'
 import { GlobalSearchButton } from './GlobalSearch'
 import { WhatsAppIcon, whatsappHref } from './BetaFeedback'
 
-type NavKey = 'navAdmin' | 'navOverview' | 'navInbox' | 'navEmployees' | 'navHiring' | 'navForms' | 'navRecruitment' | 'navCompany' | 'navDocuments' | 'navPerformance' | 'navPayroll' | 'navSpotlight' | 'navPending' | 'navTrash' | 'navSettings'
+type NavKey = 'navAdmin' | 'navOverview' | 'navInbox' | 'navEmployees' | 'navHiring' | 'navForms' | 'navAttendance' | 'navTasks' | 'navRecruitment' | 'navCompany' | 'navDocuments' | 'navPerformance' | 'navPayroll' | 'navSpotlight' | 'navPending' | 'navTrash' | 'navSettings'
 
 interface NavItemDef {
   path: string
@@ -41,6 +41,12 @@ const navItems: NavItemDef[] = [
     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12" /><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" /></svg>,
   },
   {
+    path: '/dashboard/tasks',
+    labelKey: 'navTasks',
+    // List-checks icon: the tasks surface.
+    icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><line x1="13" y1="6" x2="21" y2="6"/><line x1="13" y1="12" x2="21" y2="12"/><line x1="13" y1="18" x2="21" y2="18"/></svg>,
+  },
+  {
     path: '/dashboard/hiring',
     labelKey: 'navHiring',
     // Clipboard-with-checkmark icon: hiring requests are approval items.
@@ -51,6 +57,12 @@ const navItems: NavItemDef[] = [
     labelKey: 'navForms',
     // File-with-lines icon: forms are structured records employees fill in.
     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg>,
+  },
+  {
+    path: '/dashboard/attendance',
+    labelKey: 'navAttendance',
+    // Clock icon: attendance is a time-stamped clock-in/out log.
+    icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/></svg>,
   },
   {
     path: '/dashboard/recruitment',
@@ -234,6 +246,8 @@ export function DashboardLayout({ user, onSignOut }: { user: User; onSignOut: ()
                 </div>
               </main>
             </div>
+
+            <BetaFloatingButton />
           </div>
         </LayoutContext.Provider>
       </BillingProvider>
@@ -431,11 +445,6 @@ function Sidebar({ user, mobileOpen, onCloseMobile }: {
               {isCollapsed && <NavFlyout label={t.helpCenter} />}
             </li>
           </ul>
-
-          {/* Public-beta feedback — a direct WhatsApp line to the team.
-              Expanded: a quiet card. Collapsed: an icon button with the
-              same hover-flyout label as the nav items above. */}
-          <BetaSidebarCard isCollapsed={isCollapsed} />
         </div>
 
         {/* Version footer */}
@@ -449,61 +458,36 @@ function Sidebar({ user, mobileOpen, onCloseMobile }: {
   )
 }
 
-// ─── Public-beta feedback card ──────────────────────────
+// ─── Public-beta feedback button ────────────────────────
 //
-// Sits in the sidebar footer as the permanent home for "something broke /
-// I have feedback". Opens a WhatsApp chat to the team, pre-filled with the
-// app version for context. Collapsed, it mirrors the nav items: an icon
-// button with a hover flyout.
+// A fixed bottom-right floating button — the permanent home for "something
+// broke / I have feedback". Opens a WhatsApp chat pre-filled with the app
+// version. Collapsed it's an outlined circle with the WhatsApp glyph; on hover
+// it expands into a pill revealing the label. The icon uses the theme text
+// colour (white in dark mode) so it stays visible in both themes.
 
-function BetaSidebarCard({ isCollapsed }: { isCollapsed: boolean }) {
+function BetaFloatingButton() {
   const { t } = useLang()
   const href = whatsappHref(t.betaWhatsappPrefill(__APP_VERSION__))
-
-  if (isCollapsed) {
-    return (
-      <ul className="mt-1 space-y-0.5">
-        <li className="group relative">
-          <a
-            href={href}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center justify-center rounded-lg px-2 py-2 transition-colors"
-            style={{ color: '#25D366' }}
-            onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
-            onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
-          >
-            <WhatsAppIcon />
-          </a>
-          <NavFlyout label={t.betaCardCta} />
-        </li>
-      </ul>
-    )
-  }
-
   return (
     <a
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      // gap-3 + pl-[11px] align the icon/text with the footer links above:
-      // the links sit at px-3 (12px); the card's 1px border eats 1px, so 11px
-      // of padding lands its content on the same vertical lines.
-      className="mt-2 flex items-start gap-3 rounded-lg border py-2.5 pr-2.5 pl-[11px] transition-colors"
-      style={{ borderColor: 'rgba(37, 211, 102, 0.35)', backgroundColor: 'rgba(37, 211, 102, 0.07)' }}
-      onMouseOver={e => { e.currentTarget.style.backgroundColor = 'rgba(37, 211, 102, 0.12)' }}
-      onMouseOut={e => { e.currentTarget.style.backgroundColor = 'rgba(37, 211, 102, 0.07)' }}
+      aria-label={t.betaCardCta}
+      className="group fixed bottom-5 right-5 z-30 inline-flex h-[52px] items-center rounded-full border px-[14px] transition-colors"
+      style={{
+        borderColor: 'var(--color-border-strong, var(--color-border))',
+        backgroundColor: 'var(--color-bg-elevated, var(--color-bg-secondary, var(--color-bg)))',
+        color: 'var(--color-text)',
+        boxShadow: '0 6px 20px rgba(0, 0, 0, 0.22)',
+      }}
+      onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
+      onMouseOut={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-elevated, var(--color-bg-secondary, var(--color-bg)))' }}
     >
-      <span className="mt-0.5 shrink-0" style={{ color: '#25D366' }}>
-        <WhatsAppIcon size={18} />
-      </span>
-      <span className="min-w-0">
-        <span className="block text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
-          {t.betaCardTitle}
-        </span>
-        <span className="mt-0.5 block text-sm leading-snug" style={{ color: 'var(--color-text-tertiary)' }}>
-          {t.betaCardBody}
-        </span>
+      <span className="shrink-0"><WhatsAppIcon size={24} /></span>
+      <span className="max-w-0 overflow-hidden whitespace-nowrap text-sm font-medium opacity-0 transition-all duration-300 group-hover:ml-2.5 group-hover:max-w-[160px] group-hover:opacity-100">
+        {t.betaFabLabel}
       </span>
     </a>
   )

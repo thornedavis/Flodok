@@ -127,10 +127,19 @@ async function ensureCustomer(
 }
 
 async function countEmployees(admin: SupabaseClient, orgId: string): Promise<number> {
+  // Billable headcount = real employees only. Recruitment-pipeline rows
+  // (prospective / shortlisted / offered / signed / talent_pool / no_show) live
+  // in the same `employees` table but are NOT seats, and soft-deleted rows are
+  // gone. Counting them inflated the Stripe subscription quantity, overcharging
+  // Pro orgs for their hiring pipeline. This matches the "real employee" split
+  // used by the Employees page, Performance, and the payroll RPCs (migration 182)
+  // — and the Free-cap trigger (migration 187).
   const { count, error } = await admin
     .from('employees')
     .select('*', { count: 'exact', head: true })
     .eq('org_id', orgId)
+    .in('lifecycle_stage', ['active', 'separated'])
+    .is('deleted_at', null)
   if (error) throw new Error(`Failed to count employees: ${error.message}`)
   return count ?? 0
 }

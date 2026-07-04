@@ -110,6 +110,56 @@ export type Database = {
           },
         ]
       }
+      ai_usage: {
+        Row: {
+          called_by: string | null
+          completion_tokens: number
+          cost_usd: number | null
+          created_at: string
+          function_name: string
+          id: string
+          model: string
+          org_id: string | null
+          prompt_tokens: number
+          provider: string
+          total_tokens: number
+        }
+        Insert: {
+          called_by?: string | null
+          completion_tokens?: number
+          cost_usd?: number | null
+          created_at?: string
+          function_name: string
+          id?: string
+          model: string
+          org_id?: string | null
+          prompt_tokens?: number
+          provider?: string
+          total_tokens?: number
+        }
+        Update: {
+          called_by?: string | null
+          completion_tokens?: number
+          cost_usd?: number | null
+          created_at?: string
+          function_name?: string
+          id?: string
+          model?: string
+          org_id?: string | null
+          prompt_tokens?: number
+          provider?: string
+          total_tokens?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_usage_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       api_keys: {
         Row: {
           created_at: string
@@ -141,6 +191,173 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "api_keys_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      attendance_events: {
+        Row: {
+          accuracy_meters: number | null
+          client_timestamp: string | null
+          clock_skew_seconds: number | null
+          created_at: string
+          deleted_at: string | null
+          deleted_by: string | null
+          distance_meters: number | null
+          employee_id: string
+          event_type: string
+          id: string
+          identity: Json
+          ip_address: unknown
+          latitude: number
+          location_id: string | null
+          longitude: number
+          on_office_network: boolean | null
+          org_id: string
+          selfie_path: string
+          server_timestamp: string
+          status: string
+          updated_at: string
+          user_agent: string | null
+          within_geofence: boolean | null
+        }
+        Insert: {
+          accuracy_meters?: number | null
+          client_timestamp?: string | null
+          clock_skew_seconds?: number | null
+          created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
+          distance_meters?: number | null
+          employee_id: string
+          event_type: string
+          id?: string
+          identity?: Json
+          ip_address?: unknown
+          latitude: number
+          location_id?: string | null
+          longitude: number
+          on_office_network?: boolean | null
+          org_id: string
+          selfie_path: string
+          server_timestamp?: string
+          status?: string
+          updated_at?: string
+          user_agent?: string | null
+          within_geofence?: boolean | null
+        }
+        Update: {
+          accuracy_meters?: number | null
+          client_timestamp?: string | null
+          clock_skew_seconds?: number | null
+          created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
+          distance_meters?: number | null
+          employee_id?: string
+          event_type?: string
+          id?: string
+          identity?: Json
+          ip_address?: unknown
+          latitude?: number
+          location_id?: string | null
+          longitude?: number
+          on_office_network?: boolean | null
+          org_id?: string
+          selfie_path?: string
+          server_timestamp?: string
+          status?: string
+          updated_at?: string
+          user_agent?: string | null
+          within_geofence?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attendance_events_deleted_by_fkey"
+            columns: ["deleted_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attendance_events_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attendance_events_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "attendance_locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attendance_events_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      attendance_locations: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          deleted_by: string | null
+          id: string
+          is_active: boolean
+          latitude: number
+          longitude: number
+          name: string
+          office_cidrs: unknown[]
+          org_id: string
+          radius_meters: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
+          id?: string
+          is_active?: boolean
+          latitude: number
+          longitude: number
+          name: string
+          office_cidrs?: unknown[]
+          org_id: string
+          radius_meters?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
+          id?: string
+          is_active?: boolean
+          latitude?: number
+          longitude?: number
+          name?: string
+          office_cidrs?: unknown[]
+          org_id?: string
+          radius_meters?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attendance_locations_deleted_by_fkey"
+            columns: ["deleted_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attendance_locations_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
@@ -3026,10 +3243,11 @@ export type Database = {
           address_postal_code: string | null
           address_province: string | null
           address_street: string | null
+          attendance_enabled: boolean
           badges_enabled: boolean
+          billing_override: string | null
           bonuses_enabled: boolean
           bpjs_ketenagakerjaan_number: string | null
-          billing_override: string | null
           business_license_number: string | null
           cancel_at_period_end: boolean
           company_email: string | null
@@ -3080,10 +3298,11 @@ export type Database = {
           address_postal_code?: string | null
           address_province?: string | null
           address_street?: string | null
+          attendance_enabled?: boolean
           badges_enabled?: boolean
+          billing_override?: string | null
           bonuses_enabled?: boolean
           bpjs_ketenagakerjaan_number?: string | null
-          billing_override?: string | null
           business_license_number?: string | null
           cancel_at_period_end?: boolean
           company_email?: string | null
@@ -3134,10 +3353,11 @@ export type Database = {
           address_postal_code?: string | null
           address_province?: string | null
           address_street?: string | null
+          attendance_enabled?: boolean
           badges_enabled?: boolean
+          billing_override?: string | null
           bonuses_enabled?: boolean
           bpjs_ketenagakerjaan_number?: string | null
-          billing_override?: string | null
           business_license_number?: string | null
           cancel_at_period_end?: boolean
           company_email?: string | null
@@ -3643,6 +3863,48 @@ export type Database = {
           },
         ]
       }
+      sop_audience_trashed: {
+        Row: {
+          added_at: string
+          added_by: string | null
+          employee_id: string
+          id: string
+          sop_id: string
+          trashed_at: string
+        }
+        Insert: {
+          added_at: string
+          added_by?: string | null
+          employee_id: string
+          id?: string
+          sop_id: string
+          trashed_at?: string
+        }
+        Update: {
+          added_at?: string
+          added_by?: string | null
+          employee_id?: string
+          id?: string
+          sop_id?: string
+          trashed_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sop_audience_trashed_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sop_audience_trashed_sop_id_fkey"
+            columns: ["sop_id"]
+            isOneToOne: false
+            referencedRelation: "sops"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sop_categories: {
         Row: {
           id: string
@@ -4079,6 +4341,175 @@ export type Database = {
           },
         ]
       }
+      task_projects: {
+        Row: {
+          color: string
+          created_at: string
+          deleted_at: string | null
+          deleted_by: string | null
+          id: string
+          name: string
+          org_id: string
+          position: number
+          updated_at: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
+          id?: string
+          name: string
+          org_id: string
+          position?: number
+          updated_at?: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
+          id?: string
+          name?: string
+          org_id?: string
+          position?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_projects_deleted_by_fkey"
+            columns: ["deleted_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_projects_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tasks: {
+        Row: {
+          assignee_employee_id: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          deleted_by: string | null
+          due_date: string | null
+          due_time: string | null
+          id: string
+          notes: string | null
+          org_id: string
+          parent_task_id: string | null
+          position: number
+          priority: number
+          project_id: string | null
+          related_doc_id: string | null
+          related_doc_type: string | null
+          status: string
+          title: string
+          updated_at: string
+          url: string | null
+          visible_in_portal: boolean
+        }
+        Insert: {
+          assignee_employee_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
+          due_date?: string | null
+          due_time?: string | null
+          id?: string
+          notes?: string | null
+          org_id: string
+          parent_task_id?: string | null
+          position?: number
+          priority?: number
+          project_id?: string | null
+          related_doc_id?: string | null
+          related_doc_type?: string | null
+          status?: string
+          title: string
+          updated_at?: string
+          url?: string | null
+          visible_in_portal?: boolean
+        }
+        Update: {
+          assignee_employee_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
+          due_date?: string | null
+          due_time?: string | null
+          id?: string
+          notes?: string | null
+          org_id?: string
+          parent_task_id?: string | null
+          position?: number
+          priority?: number
+          project_id?: string | null
+          related_doc_id?: string | null
+          related_doc_type?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+          url?: string | null
+          visible_in_portal?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tasks_assignee_employee_id_fkey"
+            columns: ["assignee_employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_deleted_by_fkey"
+            columns: ["deleted_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "task_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       translation_cache: {
         Row: {
           created_at: string
@@ -4309,36 +4740,33 @@ export type Database = {
         Args: { p_employee_id: string; p_year?: number }
         Returns: Json
       }
-      admin_org_detail: {
-        Args: { p_org_id: string }
-        Returns: Json
-      }
+      admin_org_detail: { Args: { p_org_id: string }; Returns: Json }
       admin_org_rows: {
         Args: never
         Returns: {
-          org_id: string
-          name: string
-          display_name: string | null
-          owner_name: string | null
-          owner_email: string | null
-          plan_tier: string
-          subscription_status: string | null
-          billing_override: string | null
-          subscription_quantity: number | null
-          past_due_since: string | null
-          current_period_end: string | null
+          billing_override: string
           cancel_at_period_end: boolean
-          stripe_customer_id: string | null
-          created_at: string
-          onboarding_completed_at: string | null
-          user_count: number
-          employee_count: number
           contract_count: number
-          sop_count: number
+          created_at: string
+          current_period_end: string
+          display_name: string
+          employee_count: number
           form_count: number
+          last_activity: string
+          last_login: string
+          name: string
           nda_count: number
-          last_login: string | null
-          last_activity: string | null
+          onboarding_completed_at: string
+          org_id: string
+          owner_email: string
+          owner_name: string
+          past_due_since: string
+          plan_tier: string
+          sop_count: number
+          stripe_customer_id: string
+          subscription_quantity: number
+          subscription_status: string
+          user_count: number
         }[]
       }
       admin_pay_settlement: {
@@ -4358,7 +4786,7 @@ export type Database = {
         Returns: Json
       }
       admin_set_org_comp: {
-        Args: { p_org_id: string; p_on: boolean }
+        Args: { p_on: boolean; p_org_id: string }
         Returns: undefined
       }
       admin_update_user_role: {
@@ -4399,6 +4827,21 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      attendance_dashboard_list: { Args: never; Returns: Json }
+      attendance_location_delete: { Args: { p_id: string }; Returns: undefined }
+      attendance_location_upsert: {
+        Args: {
+          p_id: string
+          p_is_active: boolean
+          p_latitude: number
+          p_longitude: number
+          p_name: string
+          p_office_cidrs: string[]
+          p_radius_meters: number
+        }
+        Returns: Json
+      }
+      attendance_locations_list: { Args: never; Returns: Json }
       auto_close_periods: { Args: never; Returns: Json }
       cleanup_processed_meetings: {
         Args: { retention_days?: number }
@@ -4484,6 +4927,10 @@ export type Database = {
             }
             Returns: string
           }
+      haversine_meters: {
+        Args: { lat1: number; lat2: number; lon1: number; lon2: number }
+        Returns: number
+      }
       is_department_manager: {
         Args: { p_department_id: string }
         Returns: boolean
@@ -4955,9 +5402,58 @@ export type Database = {
         Args: { emp_slug: string; emp_token: string }
         Returns: Json
       }
+      portal_list_attendance: {
+        Args: { emp_slug: string; emp_token: string }
+        Returns: Json
+      }
       portal_mark_notifications_seen: {
         Args: { emp_slug: string; emp_token: string }
         Returns: undefined
+      }
+      portal_record_attendance: {
+        Args: {
+          emp_slug: string
+          emp_token: string
+          p_accuracy_meters: number
+          p_client_timestamp: string
+          p_event_type: string
+          p_ip_address?: string
+          p_latitude: number
+          p_longitude: number
+          p_selfie_path: string
+          p_user_agent?: string
+        }
+        Returns: {
+          accuracy_meters: number | null
+          client_timestamp: string | null
+          clock_skew_seconds: number | null
+          created_at: string
+          deleted_at: string | null
+          deleted_by: string | null
+          distance_meters: number | null
+          employee_id: string
+          event_type: string
+          id: string
+          identity: Json
+          ip_address: unknown
+          latitude: number
+          location_id: string | null
+          longitude: number
+          on_office_network: boolean | null
+          org_id: string
+          selfie_path: string
+          server_timestamp: string
+          status: string
+          updated_at: string
+          user_agent: string | null
+          within_geofence: boolean | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "attendance_events"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       portal_sign_contract: {
         Args: {
@@ -5382,6 +5878,10 @@ export type Database = {
       }
       run_payroll: { Args: { p_period: string }; Returns: Json }
       seed_default_pay_components: { Args: never; Returns: number }
+      seed_default_task_projects: {
+        Args: { p_org_id: string }
+        Returns: undefined
+      }
       seed_v1_achievement_definitions: {
         Args: { p_org_id: string }
         Returns: undefined
@@ -5460,6 +5960,10 @@ export type Database = {
       trash_employee: {
         Args: { p_cascade_docs?: boolean; p_employee_id: string }
         Returns: undefined
+      }
+      trash_employees: {
+        Args: { p_cascade_docs?: boolean; p_employee_ids: string[] }
+        Returns: number
       }
       trash_hiring_request: {
         Args: { p_request_id: string }

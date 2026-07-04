@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+/* Buttons should read as interactive — Tailwind's preflight leaves the default
+   arrow cursor, which makes buttons feel inert. */
+button:not(:disabled) { cursor: pointer; }
+
 /* Theme custom properties */
 :root {
   color-scheme: light;

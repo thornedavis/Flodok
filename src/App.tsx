@@ -17,6 +17,9 @@ import { HiringRequestDetail } from './pages/dashboard/HiringRequestDetail'
 import { Forms } from './pages/dashboard/Forms'
 import { FormDetail } from './pages/dashboard/FormDetail'
 import { FormConfig } from './pages/dashboard/FormConfig'
+import { Attendance } from './pages/dashboard/Attendance'
+import { AttendanceLocations } from './pages/dashboard/AttendanceLocations'
+import { Tasks } from './pages/dashboard/Tasks'
 import { JobDescriptionEdit } from './pages/dashboard/JobDescriptionEdit'
 import { Recruitment } from './pages/dashboard/Recruitment'
 import { CandidateEdit } from './pages/dashboard/CandidateEdit'
@@ -147,6 +150,9 @@ function AppRoutes() {
             <Route path="/dashboard/forms" element={<Forms user={user} />} />
             <Route path="/dashboard/forms/config/:formType" element={<FormConfig user={user} />} />
             <Route path="/dashboard/forms/:id" element={<FormDetail user={user} />} />
+            <Route path="/dashboard/attendance" element={<Attendance user={user} />} />
+            <Route path="/dashboard/attendance/locations" element={<AttendanceLocations user={user} />} />
+            <Route path="/dashboard/tasks" element={<Tasks user={user} />} />
             <Route path="/dashboard/recruitment" element={<Recruitment user={user} />} />
             <Route path="/dashboard/recruitment/:id/edit" element={<CandidateEdit user={user} />} />
             <Route path="/dashboard/company" element={<Company user={user} />} />

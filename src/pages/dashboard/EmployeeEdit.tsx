@@ -4,7 +4,8 @@ import { supabase } from '../../lib/supabase'
 import { saltedAvatarKey, avatarKeyFromUrl } from '../../lib/avatar'
 import { useLang } from '../../contexts/LanguageContext'
 import { useBreadcrumbTrailing } from '../../contexts/BreadcrumbContext'
-import { CompensationFacts } from '../../components/employee/CompensationFacts'
+import { CompensationSummary } from '../../components/employee/CompensationSummary'
+import { EmployeeDocuments } from '../../components/employee/EmployeeDocuments'
 import { EmployeeSidebar, type EmployeeSectionKey } from '../../components/employee/EmployeeSidebar'
 import { SeparationModal } from '../../components/employee/SeparationModal'
 import { deriveEmployeeStatus, type SeparationType } from '../../lib/employeeStatus'
@@ -35,7 +36,7 @@ const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 
 // Sections that may be deep-linked via ?section=… .
 const SECTION_KEYS: EmployeeSectionKey[] = [
-  'personal', 'employment', 'education', 'experience', 'additional', 'documents', 'compensation',
+  'personal', 'employment', 'education', 'experience', 'additional', 'documents', 'linked_documents', 'compensation',
 ]
 
 export function EmployeeEdit({ user }: { user: User }) {
@@ -343,11 +344,18 @@ export function EmployeeEdit({ user }: { user: User }) {
             <EmployeeAttachments employeeId={employeeId} disabled={!canWrite} />
           </div>
         )
+      case 'linked_documents':
+        return (
+          <div>
+            <SectionHeader title={t.empNavLinkedDocs} />
+            <EmployeeDocuments employeeId={employeeId} />
+          </div>
+        )
       case 'compensation':
         return (
           <div>
             <SectionHeader title={t.empNavCompensation} />
-            <CompensationFacts contract={activeContract} employeeId={employeeId} />
+            <CompensationSummary user={user} contract={activeContract} employeeId={employeeId} />
           </div>
         )
     }

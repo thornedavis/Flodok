@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Modal } from './Modal'
-import { countEmployeeAttachments, trashEmployee, type EmployeeAttachmentCounts } from '../lib/trash'
+import { countEmployeeAttachments, trashEmployee, trashEmployees, type EmployeeAttachmentCounts } from '../lib/trash'
 import { useLang } from '../contexts/LanguageContext'
 
 type Target =
@@ -45,13 +45,14 @@ export function DeleteEmployeeModal({
     counts.soleAudienceSops > 0 ||
     counts.sharedAudienceSops > 0 ||
     counts.contracts > 0 ||
+    counts.ndas > 0 ||
     counts.attachments > 0
   )
   // Cascade is meaningful only when there's something it would take with it:
   // either sole-audience SOPs (will be trashed) or contracts (also cascade).
   // If the employee only appears in shared audiences and has no contracts/
   // attachments, deletion just detaches them — no extra choice needed.
-  const cascadeEligible = counts !== null && (counts.soleAudienceSops > 0 || counts.contracts > 0)
+  const cascadeEligible = counts !== null && (counts.soleAudienceSops > 0 || counts.contracts > 0 || counts.ndas > 0)
   const isBulk = target.kind === 'bulk'
   const title = isBulk
     ? t.trashDeleteBulkTitle(target.ids.length)
@@ -65,9 +66,7 @@ export function DeleteEmployeeModal({
       if (target.kind === 'single') {
         await trashEmployee(target.id, { cascadeDocs: cascade })
       } else {
-        for (const id of target.ids) {
-          await trashEmployee(id, { cascadeDocs: cascade })
-        }
+        await trashEmployees(target.ids, { cascadeDocs: cascade })
       }
       onDeleted()
       onClose()
@@ -96,7 +95,7 @@ export function DeleteEmployeeModal({
               {t.trashDangerZone}
             </div>
             <p className="mb-2 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-              {t.trashDangerExplain(target.name, counts.soleAudienceSops, counts.contracts, counts.attachments)}
+              {t.trashDangerExplain(target.name, counts.soleAudienceSops, counts.contracts, counts.ndas, counts.attachments)}
             </p>
             {counts.sharedAudienceSops > 0 && (
               <p className="mb-3 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
@@ -113,7 +112,7 @@ export function DeleteEmployeeModal({
                   className="mt-0.5"
                 />
                 <span className="text-xs" style={{ color: 'var(--color-text)' }}>
-                  {t.trashAlsoDeleteDocs(counts.soleAudienceSops, counts.contracts)}
+                  {t.trashAlsoDeleteDocs(counts.soleAudienceSops, counts.contracts, counts.ndas)}
                 </span>
               </label>
             )}
