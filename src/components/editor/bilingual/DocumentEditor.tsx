@@ -38,6 +38,8 @@ import { BilingualBlockView } from './BilingualBlockView'
 import { LetterheadView } from './LetterheadView'
 import { SignatureBlockView } from './SignatureBlockView'
 import { SIGNATURE_BLOCK_STYLES } from './SignatureBlockContent'
+import { BilingualDocumentRenderer, BILINGUAL_DOCUMENT_RENDERER_STYLES } from './BilingualDocumentRenderer'
+import { PAGE_VIEW_STYLES } from './pageView'
 import { BlockGutter } from './BlockGutter'
 import { SelectionBubble } from './SelectionBubble'
 import { BilingualMergeFieldExtension } from './BilingualMergeField'
@@ -150,6 +152,13 @@ export function DocumentEditor({
   const [generating, setGenerating] = useState(false)
   const [generateError, setGenerateError] = useState('')
 
+  // Print-faithful "Page view" — a read-only A4 preview of the current doc
+  // (the same BilingualDocumentRenderer the PDF uses, in a `.doc-paper` sheet).
+  // We snapshot the editor's JSON when toggling in so the preview reflects the
+  // latest edits; the editable canvas is hidden (not unmounted) meanwhile.
+  const [pageView, setPageView] = useState(false)
+  const [previewDoc, setPreviewDoc] = useState<DocumentDoc | null>(null)
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -237,6 +246,16 @@ export function DocumentEditor({
     if (!editor) return
     const end = editor.state.doc.content.size
     editor.chain().focus().insertContentAt(end, emptyBlock()).run()
+  }, [editor])
+
+  const togglePageView = useCallback(() => {
+    setPageView(on => {
+      const next = !on
+      // Snapshot the live doc on entering preview (strip default textAlign to
+      // match the stored shape). Leaving preview just re-shows the canvas.
+      if (next && editor) setPreviewDoc(stripDefaultTextAlign(editor.getJSON()) as unknown as DocumentDoc)
+      return next
+    })
   }, [editor])
 
   const setLink = useCallback(() => {
@@ -387,6 +406,8 @@ export function DocumentEditor({
         languageMode={languageMode}
         onLanguageModeChange={onLanguageModeChange}
         onGenerate={aiGenerate ? () => setGenerateOpen(true) : undefined}
+        pageView={pageView}
+        onTogglePageView={togglePageView}
         sticky={stickyToolbar}
         stickyOffset={stickyToolbarOffset}
       />
@@ -408,24 +429,41 @@ export function DocumentEditor({
           languageMode={languageMode}
         />
       </BubbleMenu>
-      <BlockGutter editor={editor} />
-      <EditorContent editor={editor} />
-      <button
-        type="button"
-        className="doc-editor-add-trailing"
-        onClick={addBlockAtEnd}
-        title="Add a block at the end of the document"
-      >
-        <span>+</span> Add block
-      </button>
-      <style>{DOCUMENT_EDITOR_STYLES}{MERGE_FIELD_STYLES}{SIGNATURE_BLOCK_STYLES}</style>
+      {/* Editable canvas — hidden (not unmounted) while previewing so the
+          TipTap view state survives the round-trip. */}
+      <div style={{ display: pageView ? 'none' : undefined }}>
+        <BlockGutter editor={editor} />
+        <EditorContent editor={editor} />
+        <button
+          type="button"
+          className="doc-editor-add-trailing"
+          onClick={addBlockAtEnd}
+          title="Add a block at the end of the document"
+        >
+          <span>+</span> Add block
+        </button>
+      </div>
+      {pageView && (
+        <div className="doc-paper-scroll">
+          <div className="doc-paper">
+            <BilingualDocumentRenderer
+              doc={previewDoc ?? (editor.getJSON() as unknown as DocumentDoc)}
+              view={view}
+              languageMode={languageMode}
+              contextEn={mergeFields?.getContext()}
+              contextId={mergeFields?.getContext()}
+            />
+          </div>
+        </div>
+      )}
+      <style>{DOCUMENT_EDITOR_STYLES}{MERGE_FIELD_STYLES}{SIGNATURE_BLOCK_STYLES}{BILINGUAL_DOCUMENT_RENDERER_STYLES}{PAGE_VIEW_STYLES}</style>
     </div>
   )
 }
 
 // ─── Toolbar ──────────────────────────────────────────────────────
 
-function Toolbar({ editor, onSetLink, mergeFields, view, onViewChange, languageMode = 'bilingual', onLanguageModeChange, onGenerate, sticky = false, stickyOffset = '0px' }: {
+function Toolbar({ editor, onSetLink, mergeFields, view, onViewChange, languageMode = 'bilingual', onLanguageModeChange, onGenerate, pageView = false, onTogglePageView, sticky = false, stickyOffset = '0px' }: {
   editor: Editor
   onSetLink: () => void
   mergeFields?: DocumentEditorMergeFields
@@ -436,6 +474,8 @@ function Toolbar({ editor, onSetLink, mergeFields, view, onViewChange, languageM
   languageMode?: LanguageMode
   onLanguageModeChange?: (next: LanguageMode) => void
   onGenerate?: () => void
+  pageView?: boolean
+  onTogglePageView?: () => void
 }) {
   // The schema pins at most one letterhead, at the very top — so the insert
   // button is disabled once a document already has one.
@@ -541,9 +581,30 @@ function Toolbar({ editor, onSetLink, mergeFields, view, onViewChange, languageM
           </button>
         </>
       )}
-      {onViewChange && (
+      {onTogglePageView && (
         <>
           <div className="ml-auto" />
+          <Divider />
+          <button
+            type="button"
+            onClick={onTogglePageView}
+            title={pageView ? 'Back to editing' : 'Preview as a printed A4 page'}
+            className="flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors"
+            style={{
+              color: pageView ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+              backgroundColor: pageView ? 'color-mix(in srgb, var(--color-primary) 10%, transparent)' : 'transparent',
+            }}
+            onMouseOver={e => { if (!pageView) e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
+            onMouseOut={e => { if (!pageView) e.currentTarget.style.backgroundColor = 'transparent' }}
+          >
+            <PageViewIcon />
+            <span>{pageView ? 'Edit' : 'Page view'}</span>
+          </button>
+        </>
+      )}
+      {onViewChange && (
+        <>
+          {!onTogglePageView && <div className="ml-auto" />}
           <Divider />
           <button
             type="button"
@@ -561,7 +622,7 @@ function Toolbar({ editor, onSetLink, mergeFields, view, onViewChange, languageM
       )}
       {onLanguageModeChange && (
         <>
-          {!onViewChange && <div className="ml-auto" />}
+          {!onTogglePageView && !onViewChange && <div className="ml-auto" />}
           <Divider />
           <button
             type="button"
@@ -758,6 +819,7 @@ function AlignRightIcon() { return <svg {...s}><line x1="3" y1="6" x2="21" y2="6
 function AlignJustifyIcon() { return <svg {...s}><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg> }
 function LetterheadIcon() { return <svg {...s}><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="9" y1="7" x2="15" y2="7"/><line x1="7" y1="14" x2="17" y2="14"/><line x1="7" y1="17" x2="13" y2="17"/></svg> }
 function SignatureIcon() { return <svg {...s}><path d="M3 19c3 0 4-6 6-6s1 4 3 4 2.5-7 4.5-7"/><path d="M17 10l3 3"/><line x1="3" y1="21" x2="21" y2="21"/></svg> }
+function PageViewIcon() { return <svg {...s}><rect x="5" y="3" width="14" height="18" rx="1"/><line x1="8" y1="7" x2="16" y2="7"/><line x1="8" y1="11" x2="16" y2="11"/><line x1="8" y1="15" x2="13" y2="15"/></svg> }
 function BulletListIcon() { return <svg {...s}><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3" cy="6" r="1" fill="currentColor" stroke="none"/><circle cx="3" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="3" cy="18" r="1" fill="currentColor" stroke="none"/></svg> }
 function OrderedListIcon() { return <svg {...s}><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><text x="1" y="8" fontSize="7" fill="currentColor" stroke="none" fontFamily="system-ui">1</text><text x="1" y="14" fontSize="7" fill="currentColor" stroke="none" fontFamily="system-ui">2</text><text x="1" y="20" fontSize="7" fill="currentColor" stroke="none" fontFamily="system-ui">3</text></svg> }
 function LinkIcon() { return <svg {...s}><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> }

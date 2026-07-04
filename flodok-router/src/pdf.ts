@@ -7,13 +7,18 @@
 // the page content, and captures a PDF. No document/business-logic
 // knowledge lives here.
 //
-// Auth: requires a Supabase JWT on the Authorization header. We
-// verify it by calling Supabase's auth/v1/user endpoint with the
-// token — that returns 200 only for valid, non-expired user tokens
-// regardless of signing algorithm (HS256 legacy or ECC newer
-// signing keys). One extra HTTP hop, but Browser Rendering takes
-// seconds so the cost is in the noise. This is what prevents the
-// Browser Rendering quota from being burned by abuse.
+// Auth: two accepted credentials, so the dashboard AND the employee
+// portal can render through the same service.
+//   1. A Supabase JWT on the Authorization header (dashboard users) —
+//      verified by calling auth/v1/user, which returns 200 only for
+//      valid, non-expired tokens regardless of signing algorithm.
+//   2. An employee-portal (slug, access_token) pair in the body —
+//      validated via the portal_validate_token RPC (migration 206).
+//      The portal visitor has no JWT, only the credential from their
+//      link; this is the same gate every portal_* RPC uses, so it
+//      doesn't widen access beyond a live token.
+// Either way, an unauthenticated request never reaches Browser
+// Rendering, so the quota can't be burned by abuse.
 
 import puppeteer from "@cloudflare/puppeteer";
 import type { Env } from "./types";
@@ -32,6 +37,11 @@ type PdfRequest = {
   // section backgrounds make it into the PDF.
   format?: "A4" | "Letter";
   orientation?: "portrait" | "landscape";
+  // Employee-portal credential — an alternative to a Supabase JWT, validated
+  // via the portal_validate_token RPC. Present only on portal-originated
+  // requests (the dashboard sends a JWT header instead).
+  emp_slug?: string;
+  emp_token?: string;
 };
 
 export async function handlePdf(request: Request, env: Env): Promise<Response> {
@@ -42,18 +52,7 @@ export async function handlePdf(request: Request, env: Env): Promise<Response> {
     return jsonError("Method not allowed", 405);
   }
 
-  // ── Auth ──
-  const auth = request.headers.get("Authorization");
-  if (!auth?.startsWith("Bearer ")) {
-    return jsonError("Unauthorized", 401);
-  }
-  const token = auth.slice("Bearer ".length).trim();
-  const jwtOk = await verifySupabaseJwt(token, env);
-  if (!jwtOk) {
-    return jsonError("Unauthorized", 401);
-  }
-
-  // ── Body ──
+  // ── Body ── (parsed first: portal auth reads the credential from it)
   let body: PdfRequest;
   try {
     body = (await request.json()) as PdfRequest;
@@ -62,6 +61,19 @@ export async function handlePdf(request: Request, env: Env): Promise<Response> {
   }
   if (!body.html || typeof body.html !== "string") {
     return jsonError("Missing required field: html", 400);
+  }
+
+  // ── Auth ── (Supabase JWT header OR employee-portal slug+token in body)
+  let authed = false;
+  const auth = request.headers.get("Authorization");
+  if (auth?.startsWith("Bearer ")) {
+    authed = await verifySupabaseJwt(auth.slice("Bearer ".length).trim(), env);
+  }
+  if (!authed && body.emp_slug && body.emp_token) {
+    authed = await verifyPortalToken(body.emp_slug, body.emp_token, env);
+  }
+  if (!authed) {
+    return jsonError("Unauthorized", 401);
   }
 
   const filename = sanitizeFilename(body.filename || "document") + ".pdf";
@@ -141,6 +153,37 @@ async function verifySupabaseJwt(token: string, env: Env): Promise<boolean> {
     return r.status === 200;
   } catch (err) {
     console.error("supabase auth verify failed:", err);
+    return false;
+  }
+}
+
+// ─── Employee-portal (slug, token) validation ───────────────────────
+//
+// Calls the portal_validate_token SECURITY DEFINER RPC (migration 206) with
+// the anon key. Returns true only when the credential matches a live employee
+// — the same gate every portal_* RPC uses. The RPC returns a bare boolean, so
+// this leaks nothing beyond "valid / not valid".
+
+async function verifyPortalToken(slug: string, token: string, env: Env): Promise<boolean> {
+  const anonKey = (env as unknown as { SUPABASE_ANON_KEY?: string }).SUPABASE_ANON_KEY;
+  if (!anonKey || !env.SUPABASE_URL) {
+    console.error("SUPABASE_ANON_KEY / SUPABASE_URL not configured on worker");
+    return false;
+  }
+  try {
+    const r = await fetch(`${env.SUPABASE_URL.replace(/\/+$/, "")}/rest/v1/rpc/portal_validate_token`, {
+      method: "POST",
+      headers: {
+        apikey: anonKey,
+        Authorization: `Bearer ${anonKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ emp_slug: slug, emp_token: token }),
+    });
+    if (r.status !== 200) return false;
+    return (await r.json()) === true;
+  } catch (err) {
+    console.error("portal token verify failed:", err);
     return false;
   }
 }
