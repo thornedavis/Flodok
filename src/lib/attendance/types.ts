@@ -15,6 +15,7 @@ export interface AttendanceLocation {
   radius_meters: number
   is_active: boolean
   office_cidrs: string[]
+  is_primary: boolean
 }
 
 export interface PortalAttendanceItem {

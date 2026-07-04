@@ -315,6 +315,7 @@ export type Database = {
           deleted_by: string | null
           id: string
           is_active: boolean
+          is_primary: boolean
           latitude: number
           longitude: number
           name: string
@@ -329,6 +330,7 @@ export type Database = {
           deleted_by?: string | null
           id?: string
           is_active?: boolean
+          is_primary?: boolean
           latitude: number
           longitude: number
           name: string
@@ -343,6 +345,7 @@ export type Database = {
           deleted_by?: string | null
           id?: string
           is_active?: boolean
+          is_primary?: boolean
           latitude?: number
           longitude?: number
           name?: string
@@ -4836,6 +4839,10 @@ export type Database = {
       attendance_auto_close: { Args: never; Returns: Json }
       attendance_dashboard_list: { Args: never; Returns: Json }
       attendance_location_delete: { Args: { p_id: string }; Returns: undefined }
+      attendance_location_set_primary: {
+        Args: { p_id: string }
+        Returns: undefined
+      }
       attendance_location_upsert: {
         Args: {
           p_id: string

@@ -1,21 +1,24 @@
-// Attendance locations setup — owner/admin only. Each location is a place a
-// clock-in can be judged against: a geofenced point (Leaflet map + draggable
-// pin + radius) plus optional office IP ranges (a GPS-independent presence
-// signal). CRUD flows through the SECURITY DEFINER RPCs in
-// ../../lib/attendance/api (RLS/RPC re-check role too).
+// Attendance locations manager — owner/admin CRUD for the places a clock-in is
+// judged against. Rendered inside the Settings → Attendance tab (the standalone
+// page was folded in here). Each location is a geofenced point (Leaflet map +
+// draggable pin + radius) plus optional office IP ranges (a GPS-independent
+// presence signal), and exactly one location per org can be flagged "primary"
+// (a V1 marker: badge + set action + overview-map centering; geofence logic
+// still picks the nearest). CRUD flows through the SECURITY DEFINER RPCs in
+// ../../lib/attendance/api (RLS/RPC re-check role too). Admin gating is handled
+// by the Settings tab that hosts this, so there's no redirect here.
 
 import { useEffect, useState } from 'react'
-import { Navigate, useNavigate } from 'react-router-dom'
 import { useLang } from '../../contexts/LanguageContext'
-import { useBreadcrumbTrailing } from '../../contexts/BreadcrumbContext'
-import { useRole } from '../../hooks/useRole'
-import { Skeleton } from '../../components/Skeleton'
-import { Modal } from '../../components/Modal'
-import { LocationPicker } from '../../components/attendance/LocationPicker'
+import { Skeleton } from '../Skeleton'
+import { Modal } from '../Modal'
+import { LocationPicker } from './LocationPicker'
+import { AttendanceLocationsMap } from './AttendanceLocationsMap'
 import {
   listAttendanceLocations,
   upsertAttendanceLocation,
   deleteAttendanceLocation,
+  setPrimaryAttendanceLocation,
   fetchClientIp,
 } from '../../lib/attendance/api'
 import type { AttendanceLocation } from '../../lib/attendance/types'
@@ -32,6 +35,7 @@ type Draft = {
   longitude: number
   radius_meters: number
   is_active: boolean
+  is_primary: boolean
   office_cidrs: string[]
 }
 
@@ -43,6 +47,7 @@ function emptyDraft(): Draft {
     longitude: JAKARTA.lng,
     radius_meters: 150,
     is_active: true,
+    is_primary: false,
     office_cidrs: [],
   }
 }
@@ -55,6 +60,7 @@ function draftFrom(loc: AttendanceLocation): Draft {
     longitude: loc.longitude,
     radius_meters: loc.radius_meters,
     is_active: loc.is_active,
+    is_primary: loc.is_primary,
     office_cidrs: [...loc.office_cidrs],
   }
 }
@@ -80,11 +86,8 @@ function isValidCidr(raw: string): boolean {
   return true
 }
 
-export function AttendanceLocations({ user }: { user: User }) {
+export function AttendanceLocationsManager({ user }: { user: User }) {
   const { t } = useLang()
-  const navigate = useNavigate()
-  const { isAdmin } = useRole(user)
-  useBreadcrumbTrailing(t.attendanceLocationsCrumb)
 
   const [locations, setLocations] = useState<AttendanceLocation[]>([])
   const [loading, setLoading] = useState(true)
@@ -92,9 +95,9 @@ export function AttendanceLocations({ user }: { user: User }) {
   const [saved, setSaved] = useState(false)
 
   useEffect(() => {
-    if (!isAdmin) return
     load()
-  }, [user.id, user.org_id, isAdmin])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user.id, user.org_id])
 
   async function load() {
     setLoading(true)
@@ -117,27 +120,8 @@ export function AttendanceLocations({ user }: { user: User }) {
     flashSaved()
   }
 
-  // Owner/admin only — the RPCs re-check role too, but keep non-privileged
-  // roles off the page entirely rather than showing an empty, erroring shell.
-  if (!isAdmin) return <Navigate to="/dashboard/attendance" replace />
-
   return (
-    <div className="max-w-3xl">
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.attendanceLocationsTitle}</h1>
-          <p className="mt-1 max-w-2xl text-sm" style={{ color: 'var(--color-text-secondary)' }}>{t.attendanceLocationsSubtitle}</p>
-        </div>
-        <button
-          type="button"
-          onClick={() => navigate('/dashboard/attendance')}
-          className="rounded-lg border px-3 py-1.5 text-sm font-medium"
-          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-        >
-          {t.attendanceLocationBack}
-        </button>
-      </div>
-
+    <div>
       {saved && (
         <div
           className="mb-4 rounded-md px-3 py-2 text-sm"
@@ -145,6 +129,12 @@ export function AttendanceLocations({ user }: { user: User }) {
           role="status"
         >
           {t.attendanceLocationSaved}
+        </div>
+      )}
+
+      {!loading && locations.length > 0 && (
+        <div className="mb-4 overflow-hidden rounded-xl border" style={{ borderColor: 'var(--color-border)' }}>
+          <AttendanceLocationsMap key={locations.map(l => l.id).join(',')} locations={locations} />
         </div>
       )}
 
@@ -202,6 +192,9 @@ function LocationCard({ loc, t, onEdit }: { loc: AttendanceLocation; t: Translat
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
+        {loc.is_primary && (
+          <Pill tone="success">{t.attendanceLocationPrimary}</Pill>
+        )}
         {loc.office_cidrs.length > 0 && (
           <Pill tone="neutral">{t.attendanceOnOfficeNetwork}</Pill>
         )}
@@ -259,6 +252,9 @@ function LocationEditor({ draft, t, onClose, onSaved }: {
 
   const isEdit = draft.id != null
   const canSave = name.trim().length > 0 && !saving
+  // "Set as primary" only makes sense for a saved location that isn't already
+  // the primary one; hide it for new drafts and the current primary.
+  const canSetPrimary = isEdit && !draft.is_primary
 
   async function runSearch() {
     const q = query.trim()
@@ -366,6 +362,19 @@ function LocationEditor({ draft, t, onClose, onSaved }: {
         is_active: active,
         office_cidrs: cidrs,
       })
+      onSaved()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+      setSaving(false)
+    }
+  }
+
+  async function makePrimary() {
+    if (!draft.id) return
+    setSaving(true)
+    setError('')
+    try {
+      await setPrimaryAttendanceLocation(draft.id)
       onSaved()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -562,6 +571,19 @@ function LocationEditor({ draft, t, onClose, onSaved }: {
 
         {error && (
           <p className="text-sm" style={{ color: 'var(--color-danger)' }}>{error}</p>
+        )}
+
+        {/* Set as primary — existing, non-primary locations only */}
+        {canSetPrimary && (
+          <button
+            type="button"
+            onClick={makePrimary}
+            disabled={saving}
+            className="w-full rounded-lg border px-3 py-1.5 text-sm font-medium disabled:opacity-50"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+          >
+            {t.attendanceLocationSetPrimary}
+          </button>
         )}
 
         {/* Actions */}

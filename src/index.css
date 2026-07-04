@@ -58,6 +58,17 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Hide the scrollbar while keeping the element scrollable — used by the
+   horizontally-scrolling Settings tab bar on mobile so the row of tabs can
+   overflow gracefully instead of clipping. */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* Landing page logo marquee */
 @keyframes marquee {
   from { transform: translateX(0); }

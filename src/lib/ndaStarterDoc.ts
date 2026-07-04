@@ -14,6 +14,7 @@ import {
   newBlockId,
   normalizeDoc,
   withLetterhead,
+  signatureBlock,
   type DocNode,
   type DocumentDoc,
 } from './documentDoc'
@@ -173,34 +174,7 @@ export function buildNdaStarterDoc(): DocumentDoc {
     ),
   ])
 
-  const signatures = section('Signatures', 'Tanda Tangan', [
-    block(
-      [
-        para(bold('Disclosing Party')),
-        para(mergeField('employer_signature')),
-        para(mergeField('employer_name'), text(', '), mergeField('employer_title')),
-        para(text('Date: '), mergeField('employer_sign_date')),
-        para(text(' ')),
-        para(bold('Receiving Party')),
-        para(mergeField('employee_signature')),
-        para(mergeField('employee_name')),
-        para(text('Date: '), mergeField('employee_sign_date')),
-      ],
-      [
-        para(bold('Pihak yang Mengungkapkan')),
-        para(mergeField('employer_signature')),
-        para(mergeField('employer_name'), text(', '), mergeField('employer_title')),
-        para(text('Tanggal: '), mergeField('employer_sign_date')),
-        para(text(' ')),
-        para(bold('Pihak Penerima')),
-        para(mergeField('employee_signature')),
-        para(mergeField('employee_name')),
-        para(text('Tanggal: '), mergeField('employee_sign_date')),
-      ],
-    ),
-  ])
-
-  return withLetterhead(normalizeDoc({
+  const base = withLetterhead(normalizeDoc({
     type: 'document',
     content: [
       parties,
@@ -212,7 +186,20 @@ export function buildNdaStarterDoc(): DocumentDoc {
       penalty,
       remedies,
       governingLaw,
-      signatures,
     ],
   }))
+
+  // Signatures are placed as top-level, language-neutral signatureBlock nodes
+  // (authored once) rather than the old bilingual token section that duplicated
+  // {{…_signature}} across both language sides. The org signs as the Disclosing
+  // Party, the employee as the Receiving Party — the block resolves the actual
+  // signature/name/title/date live from the merge context.
+  return {
+    ...base,
+    content: [
+      ...(base.content || []),
+      signatureBlock('employer', { label: 'Disclosing Party / Pihak yang Mengungkapkan' }),
+      signatureBlock('employee', { label: 'Receiving Party / Pihak Penerima' }),
+    ],
+  }
 }

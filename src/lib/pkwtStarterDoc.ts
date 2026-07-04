@@ -21,6 +21,7 @@ import {
   newBlockId,
   normalizeDoc,
   withLetterhead,
+  signatureBlock,
   type DocNode,
   type DocumentDoc,
 } from './documentDoc'
@@ -337,7 +338,7 @@ export function buildPkwtStarterDoc(type: PkwtType): DocumentDoc {
 
   // Authored as sections for readability, then flattened to the live
   // schema so the starter matches what the editor produces.
-  return withLetterhead(normalizeDoc({
+  const base = withLetterhead(normalizeDoc({
     type: 'document',
     content: [
       preamble,
@@ -353,4 +354,16 @@ export function buildPkwtStarterDoc(type: PkwtType): DocumentDoc {
       general,
     ],
   }))
+
+  // Signature blocks — top-level, language-neutral nodes the editor and every
+  // export resolve live from the merge context. The employer signs first, then
+  // the employee. Captions match the contract's party terminology.
+  return {
+    ...base,
+    content: [
+      ...(base.content || []),
+      signatureBlock('employer', { label: 'Employer / Pemberi Kerja' }),
+      signatureBlock('employee', { label: 'Employee / Pekerja' }),
+    ],
+  }
 }

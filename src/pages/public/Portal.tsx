@@ -18,7 +18,7 @@ import { BadgeGlyph } from '../../components/BadgeGlyph'
 import { renderMergeFields, type MergeContext } from '../../lib/mergeFields'
 import { DocumentRenderer, DOCUMENT_RENDERER_STYLES } from '../../components/editor/bilingual/DocumentRenderer'
 import { isDocumentDoc, docPreviewLines, type LanguageMode } from '../../lib/documentDoc'
-import { CompensationRing, ShieldPath, WalletPath, CoinPath } from '../../components/portal/CompensationRing'
+import { CompositionBar } from '../../components/portal/CompositionBar'
 import { StatRow } from '../../components/portal/StatRow'
 import { InfoTooltip } from '../../components/InfoTooltip'
 import { AvatarWithBadge } from '../../components/portal/AvatarWithBadge'
@@ -971,7 +971,8 @@ export function Portal() {
       <div className="sticky top-0 z-30 border-b px-4 py-2 no-print" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }}>
         <div className="relative mx-auto flex max-w-lg items-center justify-between">
           {/* Left: employee identity */}
-          <div className="flex min-w-0 items-center">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <AvatarWithBadge employeeId={employee.id} photoUrl={employee.photo_url} name={employee.name} size={28} />
             <span className="truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>
               {employee.name}
             </span>
@@ -1132,7 +1133,6 @@ export function Portal() {
               isCurrentMonth={isCurrentMonth}
               onSelectMonth={setSelectedMonth}
               onOpenSop={sop => openSopDoc(sop)}
-              onSelectAchievement={setSelectedAchievement}
               onOpenBadges={() => setTab('badges')}
               onOpenLeaderboard={() => setTab('leaderboard')}
             />
@@ -2007,6 +2007,78 @@ function PortalLinkRow({
   )
 }
 
+// One line in the compensation ledger — a coloured dot matching its slice in the
+// CompositionBar, a label with optional info tooltip, the amount, and an optional
+// expandable body (Adjustments uses it to list each entry). Rows are divided by a
+// hairline; the first row omits it so it sits flush under the bar.
+function LedgerRow({
+  dotColor,
+  label,
+  info,
+  value,
+  children,
+  first = false,
+}: {
+  dotColor: string
+  label: string
+  info?: string
+  value: React.ReactNode
+  children?: React.ReactNode
+  first?: boolean
+}) {
+  const [open, setOpen] = useState(false)
+  const expandable = !!children
+  return (
+    <div style={{ borderTop: first ? undefined : '1px solid var(--color-border)' }}>
+      <div
+        role={expandable ? 'button' : undefined}
+        tabIndex={expandable ? 0 : undefined}
+        onClick={() => expandable && setOpen(o => !o)}
+        onKeyDown={e => {
+          if (expandable && (e.key === 'Enter' || e.key === ' ')) {
+            e.preventDefault()
+            setOpen(o => !o)
+          }
+        }}
+        className={`flex items-center gap-3 py-3 ${expandable ? 'cursor-pointer' : ''}`}
+      >
+        <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: dotColor }} />
+        <span className="flex items-center text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+          {label}
+          {info && (
+            <span onClick={e => e.stopPropagation()}>
+              <InfoTooltip text={info} />
+            </span>
+          )}
+        </span>
+        <span className="ml-auto text-sm font-medium tabular-nums" style={{ color: 'var(--color-text)' }}>
+          {value}
+        </span>
+        {expandable && (
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{
+              color: 'var(--color-text-tertiary)',
+              transform: open ? 'rotate(180deg)' : 'none',
+              transition: 'transform 0.15s',
+            }}
+          >
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        )}
+      </div>
+      {open && children && <div className="pb-3 pl-5">{children}</div>}
+    </div>
+  )
+}
+
 function HomeTab({
   employee,
   portal,
@@ -2021,7 +2093,6 @@ function HomeTab({
   isCurrentMonth,
   onSelectMonth,
   onOpenSop,
-  onSelectAchievement,
   onOpenBadges,
   onOpenLeaderboard,
 }: {
@@ -2038,7 +2109,6 @@ function HomeTab({
   isCurrentMonth: boolean
   onSelectMonth: (month: string) => void
   onOpenSop: (sop: Sop) => void
-  onSelectAchievement: (achievement: AchievementSummary) => void
   onOpenBadges: () => void
   onOpenLeaderboard: () => void
 }) {
@@ -2058,10 +2128,10 @@ function HomeTab({
     : adjustmentNet < 0
       ? 'var(--color-danger)'
       : 'var(--color-text-tertiary)'
-  const ringSegments = [
-    { key: 'base', valueIdr: baseWage ?? 0, color: 'var(--color-text-secondary)', icon: <ShieldPath /> },
-    { key: 'allowance', valueIdr: allowance, color: '#16a34a', icon: <WalletPath /> },
-    { key: 'adjustment', valueIdr: Math.max(0, adjustmentNet), color: '#3b82f6', icon: <CoinPath /> },
+  const barSegments = [
+    { key: 'base', valueIdr: baseWage ?? 0, color: 'var(--color-text-secondary)' },
+    { key: 'allowance', valueIdr: allowance, color: '#16a34a' },
+    { key: 'adjustment', valueIdr: Math.max(0, adjustmentNet), color: '#3b82f6' },
   ]
 
   return (
@@ -2077,17 +2147,7 @@ function HomeTab({
         lang={lang}
       />
 
-      {/* Hero: ring */}
-      <div className="mb-6 flex flex-col items-center">
-        <CompensationRing
-          segments={ringSegments}
-          photoUrl={employee.photo_url}
-          employeeId={employee.id}
-          size={300}
-        />
-      </div>
-
-      {/* Wallet balance */}
+      {/* Payout total + trend */}
       <WalletBalance
         hasContract={hasContract}
         baseWage={baseWage ?? 0}
@@ -2097,86 +2157,66 @@ function HomeTab({
         lang={lang}
       />
 
-      {/* Stat rows */}
+      {/* Compensation: a straight parts-of-a-whole bar over a quiet ledger,
+          replacing the segmented ring. Dot colours match the bar slices. */}
+      <div className="mb-6 rounded-xl border p-4" style={{ borderColor: 'var(--color-border)' }}>
+        <CompositionBar
+          segments={barSegments}
+          ariaLabel={`${s.portalBaseWage}, ${s.portalAllowance}, ${s.portalAdjustments}`}
+        />
+        <div className="mt-3">
+          <LedgerRow
+            first
+            dotColor="var(--color-text-secondary)"
+            label={s.portalBaseWage}
+            info={s.portalBaseWageInfo}
+            value={hasContract ? formatIdr(baseWage ?? 0, lang) : '—'}
+          />
+          <LedgerRow
+            dotColor="#16a34a"
+            label={s.portalAllowance}
+            info={s.portalAllowanceInfo}
+            value={hasContract ? formatIdr(allowance, lang) : '—'}
+          />
+          {adjustmentsEnabled && (
+            <LedgerRow
+              dotColor="#3b82f6"
+              label={s.portalAdjustments}
+              info={s.portalAdjustmentsInfo}
+              value={<span style={{ color: adjustmentColor }}>{`${adjustmentNet > 0 ? '+' : adjustmentNet < 0 ? '−' : ''}${formatIdr(Math.abs(adjustmentNet), lang)}`}</span>}
+            >
+              {portal && portal.adjustments.length > 0 ? (
+                <ul className="space-y-2">
+                  {portal.adjustments.map(adj => (
+                    <li key={adj.id} className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm" style={{ color: 'var(--color-text)' }}>{adj.reason}</p>
+                        <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                          {new Date(adj.created_at).toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-US', { day: 'numeric', month: 'short' })}
+                        </p>
+                      </div>
+                      <span
+                        className="shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold"
+                        style={{
+                          backgroundColor: adj.amount_idr > 0 ? 'var(--color-success-bg, #dcfce7)' : 'var(--color-diff-remove)',
+                          color: adj.amount_idr > 0 ? 'var(--color-success, #16a34a)' : 'var(--color-danger)',
+                        }}
+                      >
+                        {`${adj.amount_idr > 0 ? '+' : '−'}${formatIdr(Math.abs(adj.amount_idr), lang)}`}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{s.portalNoCreditsActivity}</p>
+              )}
+            </LedgerRow>
+          )}
+        </div>
+      </div>
+
+      {/* Experience / tenure */}
       <div className="mb-6 space-y-2">
-        <StatRow
-          icon={<ShieldIcon />}
-          label={s.portalBaseWage}
-          info={s.portalBaseWageInfo}
-          value={hasContract ? formatIdr(baseWage ?? 0, lang) : '—'}
-          accent="var(--color-text-secondary)"
-        />
-        <StatRow
-          icon={<WalletIcon />}
-          label={s.portalAllowance}
-          info={s.portalAllowanceInfo}
-          value={hasContract ? formatIdr(allowance, lang) : '—'}
-          accent="var(--color-text-secondary)"
-        />
-        {adjustmentsEnabled && (
-          <StatRow
-            icon={<CreditsIcon />}
-            label={s.portalAdjustments}
-            info={s.portalAdjustmentsInfo}
-            value={<span style={{ color: adjustmentColor }}>{`${adjustmentNet > 0 ? '+' : adjustmentNet < 0 ? '−' : ''}${formatIdr(Math.abs(adjustmentNet), lang)}`}</span>}
-            accent="#3b82f6"
-          >
-            {portal && portal.adjustments.length > 0 ? (
-              <ul className="space-y-2">
-                {portal.adjustments.map(adj => (
-                  <li key={adj.id} className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm" style={{ color: 'var(--color-text)' }}>{adj.reason}</p>
-                      <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                        {new Date(adj.created_at).toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-US', { day: 'numeric', month: 'short' })}
-                      </p>
-                    </div>
-                    <span
-                      className="shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold"
-                      style={{
-                        backgroundColor: adj.amount_idr > 0 ? 'var(--color-success-bg, #dcfce7)' : 'var(--color-diff-remove)',
-                        color: adj.amount_idr > 0 ? 'var(--color-success, #16a34a)' : 'var(--color-danger)',
-                      }}
-                    >
-                      {`${adj.amount_idr > 0 ? '+' : '−'}${formatIdr(Math.abs(adj.amount_idr), lang)}`}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{s.portalNoCreditsActivity}</p>
-            )}
-          </StatRow>
-        )}
-        {badgesEnabled && (
-          <StatRow
-            icon={<TrophyIcon />}
-            label={s.portalAchievements}
-            info={s.portalAchievementsInfo}
-            value={portal?.achievements.length ?? 0}
-            accent="var(--color-warning)"
-          >
-            {portal && portal.achievements.length > 0 ? (
-              <div className="flex flex-wrap gap-2">
-                {portal.achievements.map(a => (
-                  <button
-                    key={a.unlock_id}
-                    type="button"
-                    onClick={() => onSelectAchievement(a)}
-                    className="flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-transform hover:scale-105"
-                    style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary, var(--color-bg))' }}
-                    title={a.description || a.reason || undefined}
-                  >
-                    <BadgeGlyph icon={a.icon} size={20} />
-                    <span style={{ color: 'var(--color-text)' }}>{a.name}</span>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{s.portalNoAchievements}</p>
-            )}
-          </StatRow>
-        )}
         <StatRow
           icon={<SparkIcon />}
           label={s.portalExperience}
@@ -2434,18 +2474,6 @@ function TrendIcon({ direction }: { direction: 'up' | 'down' | 'flat' }) {
       <line x1="5" y1="12" x2="19" y2="12" />
     </svg>
   )
-}
-
-function ShieldIcon() {
-  return <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-}
-
-function WalletIcon() {
-  return <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>
-}
-
-function CreditsIcon() {
-  return <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M9 9h6M9 15h6"/></svg>
 }
 
 function SparkIcon() {

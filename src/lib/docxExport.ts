@@ -251,6 +251,50 @@ export async function assembleDocxDocument({ doc, title, view, contextEn, contex
     return out
   }
 
+  // A top-level signatureBlock → plain-text signature area (caption, a blank
+  // signature underline, then printed name / title / date). Signature IMAGES
+  // are deferred (see plan): DOCX is the editable draft, the signed PDF is the
+  // rendered artifact. Rendered once, full-width, in document order.
+  const SIG_ROLE_LABEL: Record<string, { en: string; id: string }> = {
+    employee: { en: 'Employee', id: 'Karyawan' },
+    employer: { en: 'Employer', id: 'Pemberi Kerja' },
+    blank: { en: 'Signature', id: 'Tanda tangan' },
+  }
+  const SIG_UNDERLINE = '________________________'
+  function signatureBlockToDocx(node: DocNode, lang: 'en' | 'id' | 'both', ctx?: MergeContext): Paragraph[] {
+    currentOrderedRef = null
+    const rawRole = node.attrs?.role
+    const role = rawRole === 'employer' || rawRole === 'blank' ? rawRole : 'employee'
+    const showDate = node.attrs?.showDate !== false
+    const showTitle = node.attrs?.showTitle !== false
+    const override = typeof node.attrs?.label === 'string' ? (node.attrs.label as string).trim() : ''
+    const rl = SIG_ROLE_LABEL[role]
+    const caption = override || (lang === 'both' ? `${rl.en} / ${rl.id}` : rl[lang])
+    const dateLabel = lang === 'id' ? 'Tanggal' : 'Date'
+    const resolve = (key: 'employee_name' | 'employer_name' | 'employer_title' | 'employee_sign_date' | 'employer_sign_date') =>
+      ctx ? stripHtml(resolveMergeField(key, ctx) ?? '').trim() : ''
+
+    const out: Paragraph[] = [
+      new Paragraph({ spacing: { before: 280 }, children: [new TextRun({ text: caption, bold: true })] }),
+      new Paragraph({ spacing: { before: 240 }, children: [new TextRun({ text: SIG_UNDERLINE })] }),
+    ]
+    if (role !== 'blank') {
+      const name = resolve(role === 'employer' ? 'employer_name' : 'employee_name')
+      if (name) out.push(new Paragraph({ children: [new TextRun({ text: name, bold: true })] }))
+      if (showTitle && role === 'employer') {
+        const title = resolve('employer_title')
+        if (title) out.push(new Paragraph({ children: [new TextRun({ text: title })] }))
+      }
+      if (showDate) {
+        const date = resolve(role === 'employer' ? 'employer_sign_date' : 'employee_sign_date')
+        out.push(new Paragraph({ children: [new TextRun({ text: `${dateLabel}: ${date || SIG_UNDERLINE}` })] }))
+      }
+    } else if (showDate) {
+      out.push(new Paragraph({ children: [new TextRun({ text: `${dateLabel}: ${SIG_UNDERLINE}` })] }))
+    }
+    return out
+  }
+
   // ── Assemble ──────────────────────────────────────────────────────
   const flat = normalizeDoc(doc)
   const blocks = flat.content ?? []
@@ -268,14 +312,28 @@ export async function assembleDocxDocument({ doc, title, view, contextEn, contex
 
   if (languageMode === 'en' || languageMode === 'id') {
     const ctx = languageMode === 'id' ? (contextId ?? contextEn) : contextEn
-    for (const b of body) if (b.type === 'bilingualBlock') children.push(...bodyToDocx(b, languageMode, ctx))
+    for (const b of body) {
+      if (b.type === 'bilingualBlock') children.push(...bodyToDocx(b, languageMode, ctx))
+      else if (b.type === 'signatureBlock') children.push(...signatureBlockToDocx(b, languageMode, ctx))
+    }
   } else if (view === 'side_by_side') {
-    children.push(bilingualTable(body, contextEn, contextId ?? contextEn))
+    // Bilingual bodies group into a two-column table; signature blocks are
+    // full-width, so flush the pending table before each one to keep order.
+    let group: DocNode[] = []
+    const flush = () => { if (group.length) { children.push(bilingualTable(group, contextEn, contextId ?? contextEn)); group = [] } }
+    for (const b of body) {
+      if (b.type === 'bilingualBlock') { group.push(b); continue }
+      if (b.type === 'signatureBlock') { flush(); children.push(...signatureBlockToDocx(b, 'both', contextEn)) }
+    }
+    flush()
   } else {
     for (const b of body) {
-      if (b.type !== 'bilingualBlock') continue
-      children.push(...bodyToDocx(b, 'en', contextEn))
-      children.push(...bodyToDocx(b, 'id', contextId ?? contextEn))
+      if (b.type === 'bilingualBlock') {
+        children.push(...bodyToDocx(b, 'en', contextEn))
+        children.push(...bodyToDocx(b, 'id', contextId ?? contextEn))
+      } else if (b.type === 'signatureBlock') {
+        children.push(...signatureBlockToDocx(b, 'both', contextEn))
+      }
     }
   }
 

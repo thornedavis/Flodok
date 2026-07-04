@@ -128,12 +128,12 @@ export function TasksTab({ slug, token }: { slug: string | null; token: string |
           <button
             type="button"
             onClick={() => setSheet({ kind: 'filter' })}
-            className="relative rounded-lg p-1.5"
+            className="relative -mr-1 rounded-lg p-2"
             style={{ color: isFiltered ? 'var(--color-primary)' : 'var(--color-text-secondary)' }}
             aria-label={t.tasksPortalFilter}
           >
             <FilterIcon />
-            {isFiltered && <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full" style={{ backgroundColor: 'var(--color-primary)' }} />}
+            {isFiltered && <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full" style={{ backgroundColor: 'var(--color-primary)' }} />}
           </button>
         )}
       </div>
@@ -302,7 +302,7 @@ function TaskRow({ task, t, onCircle, onDetails, onActions }: {
   const midStatus = task.status === 'in_progress' || task.status === 'blocked'
   return (
     <div className="flex items-start gap-2 rounded-xl border p-3" style={{ borderColor: 'var(--color-border)' }}>
-      <button type="button" onClick={onCircle} className="mt-0.5 shrink-0" style={{ color: statusColor(task.status) }} aria-label={task.title}>
+      <button type="button" onClick={onCircle} className="-m-2 shrink-0 p-2" style={{ color: statusColor(task.status) }} aria-label={done ? t.tasksPortalMarkNotDone : t.tasksPortalMarkDone} aria-pressed={done}>
         <StatusIcon status={task.status} size={22} />
       </button>
       <button type="button" onClick={onDetails} className="min-w-0 flex-1 text-left">
@@ -328,7 +328,7 @@ function TaskRow({ task, t, onCircle, onDetails, onActions }: {
           </div>
         )}
       </button>
-      <button type="button" onClick={onActions} className="-mr-1 mt-0.5 shrink-0 rounded-lg p-1" style={{ color: 'var(--color-text-tertiary)' }} aria-label={t.tasksPortalTaskOptions}>
+      <button type="button" onClick={onActions} className="-m-2 shrink-0 rounded-lg p-2" style={{ color: 'var(--color-text-tertiary)' }} aria-label={t.tasksPortalTaskOptions}>
         <DotsIcon />
       </button>
     </div>

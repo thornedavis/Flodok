@@ -91,6 +91,11 @@ export async function deleteAttendanceLocation(id: string): Promise<void> {
   if (error) throw new Error(error.message)
 }
 
+export async function setPrimaryAttendanceLocation(id: string): Promise<void> {
+  const { error } = await rpc('attendance_location_set_primary', { p_id: id })
+  if (error) throw new Error(error.message)
+}
+
 // Best-effort public IP of the current connection, via the client-ip edge fn.
 // Returns '' on any failure so callers can degrade gracefully.
 export async function fetchClientIp(): Promise<string> {

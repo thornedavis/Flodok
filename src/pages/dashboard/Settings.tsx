@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useSearchParams, useNavigate } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { activeWorkforceEmployees, withLinkedEmployees, WORKFORCE_STAGES } from '../../lib/lifecycle'
 import { inviteMember } from '../../lib/inviteMember'
@@ -22,9 +22,7 @@ import { ConnectFirefliesDialog } from '../../components/integrations/ConnectFir
 import { ConnectAsanaDialog } from '../../components/integrations/ConnectAsanaDialog'
 import { listIntegrations, deleteIntegration, type IntegrationRow } from '../../lib/integrations'
 import { SIGNATURE_FONTS, ensureSignatureFontsLoaded } from '../../lib/signatureFonts'
-import { listAttendanceLocations } from '../../lib/attendance/api'
-import type { AttendanceLocation } from '../../lib/attendance/types'
-import { AttendanceLocationsMap } from '../../components/attendance/AttendanceLocationsMap'
+import { AttendanceLocationsManager } from '../../components/attendance/AttendanceLocationsManager'
 import {
   loadOrgBilling,
   openPortal,
@@ -70,7 +68,7 @@ export function Settings({ user }: { user: User }) {
     <div className="max-w-3xl">
       <h1 className="mb-6 text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.settingsTitle}</h1>
 
-      <div className="mb-6 flex gap-1 border-b" style={{ borderColor: 'var(--color-border)' }}>
+      <div className="no-scrollbar mb-6 flex gap-1 overflow-x-auto border-b" style={{ borderColor: 'var(--color-border)' }}>
         <TabButton active={tab === 'account'} onClick={() => setTab('account')}>{t.settingsAccountTab}</TabButton>
         <TabButton active={tab === 'team'} onClick={() => setTab('team')}>{t.settingsTeamTab}</TabButton>
         {isAdmin && (
@@ -117,7 +115,7 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
   return (
     <button
       onClick={onClick}
-      className="relative px-4 py-2 text-sm font-medium transition-colors"
+      className="relative shrink-0 whitespace-nowrap px-4 py-2 text-sm font-medium transition-colors"
       style={{ color: active ? 'var(--color-text)' : 'var(--color-text-tertiary)' }}
     >
       {children}
@@ -1095,30 +1093,28 @@ function ApprovalsTab({ user, t }: { user: User; t: Translations }) {
 
 // ─── Attendance tab ─────────────────────────────────────
 // The enable toggle and the auto-clock-out hours cap (1–24). When disabled,
-// the hours row is dimmed and inert. A shortcut jumps to the locations page,
-// where geofences / office networks are configured.
+// the hours row is dimmed and inert. Below, the full location manager handles
+// geofences / office networks / the primary-location marker.
 function AttendanceSettingsTab({ user, t }: { user: User; t: Translations }) {
-  const navigate = useNavigate()
   const [enabled, setEnabled] = useState(false)
   const [hours, setHours] = useState<string>('16')
   const [savedHours, setSavedHours] = useState<number>(16)
   const [loading, setLoading] = useState(true)
   const [savingHours, setSavingHours] = useState(false)
-  const [locations, setLocations] = useState<AttendanceLocation[]>([])
 
   useEffect(() => { load() }, [user.org_id])
 
   async function load() {
-    const [orgRes, locs] = await Promise.all([
-      supabase.from('organizations').select('attendance_enabled, attendance_auto_close_hours').eq('id', user.org_id).single(),
-      listAttendanceLocations().catch(() => [] as AttendanceLocation[]),
-    ])
-    if (orgRes.data) {
-      setEnabled(orgRes.data.attendance_enabled ?? false)
-      setSavedHours(orgRes.data.attendance_auto_close_hours ?? 16)
-      setHours(String(orgRes.data.attendance_auto_close_hours ?? 16))
+    const { data } = await supabase
+      .from('organizations')
+      .select('attendance_enabled, attendance_auto_close_hours')
+      .eq('id', user.org_id)
+      .single()
+    if (data) {
+      setEnabled(data.attendance_enabled ?? false)
+      setSavedHours(data.attendance_auto_close_hours ?? 16)
+      setHours(String(data.attendance_auto_close_hours ?? 16))
     }
-    setLocations(locs)
     setLoading(false)
   }
 
@@ -1180,24 +1176,7 @@ function AttendanceSettingsTab({ user, t }: { user: User; t: Translations }) {
       </div>
 
       <div className="border-t pt-5" style={{ borderColor: 'var(--color-border)' }}>
-        <label className="mb-2 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.attendanceLocationsTitle}</label>
-        {locations.length === 0 ? (
-          <p className="mb-3 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.attendanceLocationsEmpty}</p>
-        ) : (
-          <div className="mb-3 overflow-hidden rounded-xl border" style={{ borderColor: 'var(--color-border)' }}>
-            <AttendanceLocationsMap key={locations.map(l => l.id).join(',')} locations={locations} />
-          </div>
-        )}
-        <button
-          type="button"
-          onClick={() => navigate('/dashboard/attendance/locations')}
-          className="rounded-lg border px-3 py-2 text-sm font-medium transition-colors"
-          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', backgroundColor: 'var(--color-bg)' }}
-          onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
-          onMouseOut={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg)' }}
-        >
-          {t.attendanceManageLocationsLink}
-        </button>
+        <AttendanceLocationsManager user={user} />
       </div>
     </div>
   )
