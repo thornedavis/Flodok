@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { activeWorkforceEmployees, withLinkedEmployee } from '../../lib/lifecycle'
 import { useLang } from '../../contexts/LanguageContext'
 import { useBilling } from '../../contexts/BillingContext'
 import { useBreadcrumbTrailing } from '../../contexts/BreadcrumbContext'
@@ -44,8 +45,6 @@ type DepartmentOption = Pick<CompanyDepartment, 'id' | 'name'>
 
 type EmployeeWithDepartments = Employee & EmpDeptShape
 
-const EMPLOYEE_WITH_DEPTS_SELECT =
-  '*, employee_departments(is_primary, department:company_departments(id, name))'
 
 type FormState = {
   title: string
@@ -115,10 +114,7 @@ export function JobDescriptionEdit({ user }: { user: User }) {
         .eq('org_id', user.org_id)
         .order('display_order')
         .order('name')
-      const empsPromise = supabase.from('employees')
-        .select(EMPLOYEE_WITH_DEPTS_SELECT)
-        .eq('org_id', user.org_id)
-        .order('name')
+      const empsPromise = activeWorkforceEmployees(user.org_id)
 
       if (isNew) {
         // For new JDs, optionally seed from an approved hiring request and/or
@@ -143,7 +139,7 @@ export function JobDescriptionEdit({ user }: { user: User }) {
         if (cancelled) return
 
         setDepartments(deptsResult.data ?? [])
-        setEmployees((empsResult.data ?? []) as EmployeeWithDepartments[])
+        setEmployees((empsResult.data ?? []) as unknown as EmployeeWithDepartments[])
 
         // Start from either the template's content_doc or the seed doc.
         const seeded = (tplResult.data?.content_doc as DocumentDoc | null) ?? buildJobDescriptionSeedDoc()
@@ -198,7 +194,12 @@ export function JobDescriptionEdit({ user }: { user: User }) {
       if (cancelled) return
 
       setDepartments(deptsResult.data ?? [])
-      setEmployees((empsResult.data ?? []) as EmployeeWithDepartments[])
+      // Scope to the real workforce; union the JD's current assignee back in so
+      // an assignment to a now-separated/recruit employee still displays.
+      setEmployees(await withLinkedEmployee(
+        (empsResult.data ?? []) as unknown as EmployeeWithDepartments[],
+        jdResult.data?.assignee_employee_id,
+      ))
 
       if (jdResult.error || !jdResult.data) {
         setError(jdResult.error?.message ?? t.jdNotFound)

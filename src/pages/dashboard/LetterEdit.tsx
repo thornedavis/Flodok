@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { activeWorkforceEmployees, withLinkedEmployee } from '../../lib/lifecycle'
 import { DocumentEditor } from '../../components/editor/bilingual/DocumentEditor'
 import { DocumentEditShell, EDITOR_STICKY_TOP_PX } from '../../components/editor/DocumentEditShell'
 import { SaveAsTemplateModal } from '../../components/SaveAsTemplateButton'
@@ -26,8 +27,6 @@ type Letter = Database['public']['Tables']['letters']['Row']
 type LetterUpdate = Database['public']['Tables']['letters']['Update']
 type EmployeeWithDepartments = Employee & EmpDeptShape
 
-const EMPLOYEE_WITH_DEPTS_SELECT =
-  '*, employee_departments(is_primary, department:company_departments(id, name))'
 
 // Slim user shape for the Sender dropdown — just what we need to render the option label.
 interface SenderUser {
@@ -111,12 +110,18 @@ export function LetterEdit({ user }: { user: User }) {
         supabase.from('letters').select('*').eq('id', id!).single(),
         supabase.from('tags').select('*').eq('org_id', user.org_id).order('name'),
         supabase.from('letter_tags').select('tag_id').eq('letter_id', id!),
-        supabase.from('employees').select(EMPLOYEE_WITH_DEPTS_SELECT).eq('org_id', user.org_id).order('name'),
+        activeWorkforceEmployees(user.org_id),
         supabase.from('organizations').select('*').eq('id', user.org_id).single(),
         supabase.from('users').select('id, name, title').eq('org_id', user.org_id).order('name'),
       ])
 
-      setAllEmployees((empsResult.data || []) as EmployeeWithDepartments[])
+      // Scope to the real workforce; union any already-linked employee (incl.
+      // a recruit or separated staffer) so the letter still shows its addressee.
+      const loadedEmployees = await withLinkedEmployee(
+        (empsResult.data || []) as unknown as EmployeeWithDepartments[],
+        letterResult.data?.employee_id,
+      )
+      setAllEmployees(loadedEmployees)
       setOrganization(orgResult.data)
       setSenderCandidates((usersResult.data || []) as SenderUser[])
 

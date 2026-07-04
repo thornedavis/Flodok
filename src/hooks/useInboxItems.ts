@@ -4,6 +4,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { WORKFORCE_STAGES } from '../lib/lifecycle'
 import { deriveInboxItems } from '../lib/inbox'
 import type { InboxItem } from '../lib/inbox'
 
@@ -18,7 +19,7 @@ export function useInboxItems(orgId: string, userId: string, refreshKey = 0) {
       const [c, s, e, pu, cs, ss, d, f, ur] = await Promise.all([
         supabase.from('contracts').select('*').eq('org_id', orgId),
         supabase.from('sops').select('*').eq('org_id', orgId),
-        supabase.from('employees').select('*').eq('org_id', orgId),
+        supabase.from('employees').select('*').eq('org_id', orgId).in('lifecycle_stage', [...WORKFORCE_STAGES]),
         supabase.from('pending_updates').select('*').eq('org_id', orgId).eq('status', 'pending'),
         supabase.from('contract_signatures').select('*'),
         supabase.from('sop_signatures').select('*'),

@@ -6,6 +6,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { activeWorkforceEmployees } from '../../lib/lifecycle'
 import { useLang } from '../../contexts/LanguageContext'
 import { useRole } from '../../hooks/useRole'
 import { FilterSearchInput, FilterPanel, type FilterPanelSection } from '../../components/FilterControls'
@@ -21,8 +22,6 @@ import type { User, FormSubmission, FormStatus, FormType, Employee } from '../..
 const FORM_COLUMNS =
   '*, employee:employees!form_submissions_employee_id_fkey(id, name), manager:users!form_submissions_manager_user_id_fkey(id, name)'
 
-const EMPLOYEE_WITH_DEPTS_SELECT =
-  '*, employee_departments(is_primary, department:company_departments(id, name))'
 
 type EmployeeWithDepartments = Employee & EmpDeptShape
 type ViewMode = 'grid' | 'list'
@@ -58,7 +57,7 @@ export function Forms({ user }: { user: User }) {
   useEffect(() => { loadAll() }, [user.id, user.org_id])
 
   useEffect(() => {
-    supabase.from('employees').select(EMPLOYEE_WITH_DEPTS_SELECT).eq('org_id', user.org_id).is('deleted_at', null).order('name')
+    activeWorkforceEmployees(user.org_id)
       .then(({ data }) => setEmployees((data ?? []) as unknown as EmployeeWithDepartments[]))
   }, [user.org_id])
 

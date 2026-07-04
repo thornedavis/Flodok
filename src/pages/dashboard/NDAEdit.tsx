@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { activeWorkforceEmployees, withLinkedEmployee } from '../../lib/lifecycle'
 import { DocumentEditor } from '../../components/editor/bilingual/DocumentEditor'
 import { DocumentEditShell } from '../../components/editor/DocumentEditShell'
 import { SaveAsTemplateModal } from '../../components/SaveAsTemplateButton'
@@ -27,8 +28,6 @@ import type { User, Nda, Tag, Employee, Organization } from '../../types/aliases
 
 type EmployeeWithDepartments = Employee & EmpDeptShape
 
-const EMPLOYEE_WITH_DEPTS_SELECT =
-  '*, employee_departments(is_primary, department:company_departments(id, name))'
 
 ensureSignatureFontsLoaded()
 
@@ -96,12 +95,18 @@ export function NDAEdit({ user }: { user: User }) {
         supabase.from('ndas').select('*').eq('id', id!).single(),
         supabase.from('tags').select('*').eq('org_id', user.org_id).order('name'),
         supabase.from('nda_tags').select('tag_id').eq('nda_id', id!),
-        supabase.from('employees').select(EMPLOYEE_WITH_DEPTS_SELECT).eq('org_id', user.org_id).order('name'),
+        activeWorkforceEmployees(user.org_id),
         supabase.from('organizations').select('*').eq('id', user.org_id).single(),
         supabase.from('nda_signatures').select('version_number').eq('nda_id', id!),
       ])
 
-      setAllEmployees((empsResult.data || []) as EmployeeWithDepartments[])
+      // Scope to the real workforce; union any linked recruit (NDAs can be
+      // sent pre-signing) so an already-linked NDA still shows its employee.
+      const loadedEmployees = await withLinkedEmployee(
+        (empsResult.data || []) as unknown as EmployeeWithDepartments[],
+        ndaResult.data?.employee_id,
+      )
+      setAllEmployees(loadedEmployees)
       setOrganization(orgResult.data)
 
       if (ndaResult.data) {
@@ -421,12 +426,18 @@ export function NDAEdit({ user }: { user: User }) {
     archived: 'var(--color-text-tertiary)',
   }
 
+  // Already-active NDAs with nothing pending have nothing to
+  // re-activate — only re-enable once the user makes an edit (which bumps
+  // a new version on the next sign).
   const activateDisabled = saving || signing || !canWrite || missingRequiredFields.length > 0
+    || (status === 'active' && !hasChanges)
   const activateTitle = !canWrite
     ? t.dunningWriteBlocked
     : missingRequiredFields.length > 0
       ? t.activateMissingFieldsTooltip(missingRequiredFields.map(f => f.label).join(', '))
-      : undefined
+      : status === 'active' && !hasChanges
+        ? t.activateAlreadyActiveTooltip
+        : undefined
 
   function missingDot(key: string) {
     if (!missingKeys.has(key)) return null

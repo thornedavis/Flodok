@@ -22,6 +22,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { activeWorkforceEmployees } from '../../lib/lifecycle'
 import { useLang } from '../../contexts/LanguageContext'
 import { useBilling } from '../../contexts/BillingContext'
 import {
@@ -47,8 +48,6 @@ import type { Employee, User } from '../../types/aliases'
 
 type EmployeeWithDepartments = Employee & EmpDeptShape
 
-const EMPLOYEE_WITH_DEPTS_SELECT =
-  '*, employee_departments(is_primary, department:company_departments(id, name))'
 
 // The All view runs in full-bleed layout (so the "Start a new document"
 // band can span the whole content area), which drops the dashboard's own
@@ -104,6 +103,10 @@ type AllDocItem = {
 type ViewMode = 'grid' | 'list'
 
 const VIEW_MODE_KEY = 'flodok-documents-view-mode'
+
+// Sentinel employee-filter value: docs with no live employee owner (all JDs, or
+// a contract/NDA kept when its employee was deleted). Never a real employee id.
+const UNASSIGNED_FILTER = '__unassigned__'
 
 function loadViewMode(): ViewMode {
   if (typeof window === 'undefined') return 'grid'
@@ -188,11 +191,7 @@ function AllDocumentsView({ user }: { user: User }) {
           .select('id, title, status, current_version, updated_at, created_at, content_doc, employee_id')
           .eq('org_id', user.org_id)
           .eq('is_template', false),
-        supabase
-          .from('employees')
-          .select(EMPLOYEE_WITH_DEPTS_SELECT)
-          .eq('org_id', user.org_id)
-          .order('name'),
+        activeWorkforceEmployees(user.org_id),
       ])
 
       setEmployees((employeeResult.data || []) as unknown as EmployeeWithDepartments[])
@@ -282,18 +281,24 @@ function AllDocumentsView({ user }: { user: User }) {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     const typeSet = new Set(typeFilter)
+    const liveEmployeeIds = new Set(employees.map(e => e.id))
     return items.filter(item => {
       if (typeSet.size > 0 && !typeSet.has(item.type)) return false
-      // Documents with no assigned employee (including all JDs) never match
-      // an active employee filter.
-      if (employeeFilter && item.employee_id !== employeeFilter) return false
+      // Employee filter. UNASSIGNED matches docs with no *live* owner: no
+      // employee_id, or one pointing at a trashed/purged employee (e.g. a
+      // contract kept when its employee was deleted). All JDs are unassigned.
+      if (employeeFilter === UNASSIGNED_FILTER) {
+        if (item.employee_id !== null && liveEmployeeIds.has(item.employee_id)) return false
+      } else if (employeeFilter && item.employee_id !== employeeFilter) {
+        return false
+      }
       const updated = item.updated_at || item.created_at
       if (dateFrom && updated && updated.slice(0, 10) < dateFrom) return false
       if (dateTo && updated && updated.slice(0, 10) > dateTo) return false
       if (q && !item.title.toLowerCase().includes(q)) return false
       return true
     })
-  }, [items, typeFilter, employeeFilter, dateFrom, dateTo, search])
+  }, [items, typeFilter, employeeFilter, dateFrom, dateTo, search, employees])
 
   // Free-frozen orgs see a capped list; the limit applies AFTER filtering
   // so the cap reflects what the user actually wants to see, not raw row
@@ -1075,6 +1080,7 @@ function RecentFilters({
             onChange={onEmployeeChange}
             employees={employees}
             emptyLabel={t.documentsFilterAllEmployees}
+            extraOption={{ value: UNASSIGNED_FILTER, label: t.documentsFilterUnassigned }}
           />
         </div>
       )}

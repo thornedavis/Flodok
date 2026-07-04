@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { activeWorkforceEmployees, withLinkedEmployees, WORKFORCE_STAGES } from '../../lib/lifecycle'
 import { inviteMember } from '../../lib/inviteMember'
 import { useLang } from '../../contexts/LanguageContext'
 import { useRole } from '../../hooks/useRole'
@@ -400,11 +401,18 @@ function TeamMembersSection({ user, t }: { user: User; t: Translations }) {
     const [usersResult, invitesResult, employeesResult] = await Promise.all([
       supabase.from('users').select('*').eq('org_id', user.org_id).order('created_at'),
       supabase.from('org_invitations').select('*').eq('org_id', user.org_id).eq('status', 'pending').order('created_at', { ascending: false }),
-      supabase.from('employees').select('id, name').eq('org_id', user.org_id).order('name'),
+      activeWorkforceEmployees(user.org_id, 'id, name'),
     ])
-    setMembers(usersResult.data || [])
+    const memberRows = usersResult.data || []
+    setMembers(memberRows)
     setInvites(invitesResult.data || [])
-    setEmployees(employeesResult.data || [])
+    // Scope the link dropdown to the real workforce, but union any employee a
+    // member is already linked to so the current selection still renders.
+    setEmployees(await withLinkedEmployees(
+      (employeesResult.data || []) as unknown as EmployeeOption[],
+      memberRows.map(m => m.employee_id),
+      'id, name',
+    ))
     setLoading(false)
   }
 
@@ -1744,10 +1752,13 @@ function BillingTab({ user, t }: { user: User; t: Translations }) {
         const [b, orgRow, { count }] = await Promise.all([
           loadOrgBilling(user.org_id),
           supabase.from('organizations').select('name').eq('id', user.org_id).single(),
+          // Match the billable definition the DB enforces (trigger 187 /
+          // billing edge fn): count only the real workforce, not recruits.
           supabase
             .from('employees')
             .select('*', { count: 'exact', head: true })
-            .eq('org_id', user.org_id),
+            .eq('org_id', user.org_id)
+            .in('lifecycle_stage', [...WORKFORCE_STAGES]),
         ])
         if (cancelled) return
         setBilling(b)

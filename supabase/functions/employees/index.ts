@@ -20,11 +20,15 @@ Deno.serve(async (req: Request) => {
     const url = new URL(req.url)
     const includeSop = url.searchParams.get('include_sop') !== 'false' // default true
 
-    // Get employees
+    // Get employees. This uses the service-role client (RLS bypassed), so we
+    // must self-filter both axes: exclude soft-deleted rows and recruitment-
+    // stage candidates so only the real workforce is returned to the API.
     const { data: employees } = await supabase
       .from('employees')
       .select('id, name, phone, email')
       .eq('org_id', authed.org_id)
+      .is('deleted_at', null)
+      .in('lifecycle_stage', ['active', 'separated'])
       .order('name')
 
     if (!includeSop) {

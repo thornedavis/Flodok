@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { activeWorkforceEmployees, withLinkedEmployee } from '../../lib/lifecycle'
 import { DocumentEditor } from '../../components/editor/bilingual/DocumentEditor'
 import { DocumentEditShell, EDITOR_STICKY_TOP_PX } from '../../components/editor/DocumentEditShell'
 import { SaveAsTemplateModal } from '../../components/SaveAsTemplateButton'
@@ -31,8 +32,6 @@ import type { User, Contract, Tag, Employee, Organization } from '../../types/al
 
 type EmployeeWithDepartments = Employee & EmpDeptShape
 
-const EMPLOYEE_WITH_DEPTS_SELECT =
-  '*, employee_departments(is_primary, department:company_departments(id, name))'
 
 ensureSignatureFontsLoaded()
 
@@ -135,7 +134,7 @@ export function ContractEdit({ user }: { user: User }) {
         supabase.from('contracts').select('*').eq('id', id!).single(),
         supabase.from('tags').select('*').eq('org_id', user.org_id).order('name'),
         supabase.from('contract_tags').select('tag_id').eq('contract_id', id!),
-        supabase.from('employees').select(EMPLOYEE_WITH_DEPTS_SELECT).eq('org_id', user.org_id).order('name'),
+        activeWorkforceEmployees(user.org_id),
         supabase.from('organizations').select('*').eq('id', user.org_id).single(),
         supabase.from('company_reference_values').select('*').eq('org_id', user.org_id).order('display_order').order('name'),
         supabase.from('contract_compensation_components').select('*').eq('contract_id', id!).eq('kind', 'earning').order('display_order'),
@@ -151,7 +150,14 @@ export function ContractEdit({ user }: { user: User }) {
       setComponents(loadedComponents)
       setSavedComponents(loadedComponents)
 
-      setAllEmployees((empsResult.data || []) as EmployeeWithDepartments[])
+      // Picker is scoped to the real workforce, but this contract may be a
+      // Make-Offer draft still linked to a recruit ('offered'/'signed') — union
+      // that linked employee back in so the field displays the link.
+      const loadedEmployees = await withLinkedEmployee(
+        (empsResult.data || []) as unknown as EmployeeWithDepartments[],
+        contractResult.data?.employee_id,
+      )
+      setAllEmployees(loadedEmployees)
       setOrganization(orgResult.data)
       if (refResult.data) {
         const buckets = bucketReferenceValues(refResult.data)
@@ -184,7 +190,7 @@ export function ContractEdit({ user }: { user: User }) {
         setTemplateForPosition(contractResult.data.template_for_position ?? '')
 
         if (contractResult.data.employee_id) {
-          const emp = ((empsResult.data || []) as EmployeeWithDepartments[]).find(e => e.id === contractResult.data.employee_id)
+          const emp = loadedEmployees.find(e => e.id === contractResult.data.employee_id)
           if (emp) setEmployee(emp)
         }
       }
@@ -651,7 +657,9 @@ export function ContractEdit({ user }: { user: User }) {
     ? t.dunningWriteBlocked
     : missingRequiredFields.length > 0
       ? t.activateMissingFieldsTooltip(missingRequiredFields.map(f => f.label).join(', '))
-      : undefined
+      : status === 'active' && !hasChanges
+        ? t.activateAlreadyActiveTooltip
+        : undefined
 
   function missingDot(key: string) {
     if (!missingKeys.has(key)) return null

@@ -11,6 +11,7 @@ import { findTemplateForPosition, buildContractFromTemplate, seedContractCompone
 import { documentEditPath } from '../../lib/documentTypes'
 import { docAsJson, emptyDocumentDoc } from '../../lib/documentDoc'
 import { advanceSignedToActiveForOrg } from '../../lib/lifecycleAdvance'
+import { RECRUITMENT_STAGES, type RecruitmentStage } from '../../lib/lifecycle'
 import {
   CANDIDATE_SOURCE_OPTIONS,
   candidateSourceLabel,
@@ -26,13 +27,11 @@ import { WhatsAppIcon } from '../../components/BetaFeedback'
 import type { Employee, Organization, User } from '../../types/aliases'
 import type { Translations } from '../../lib/translations'
 
-type RecruitmentStage = 'prospective' | 'shortlisted' | 'offered' | 'signed' | 'talent_pool' | 'no_show'
 type Candidate = Employee & EmpDeptShape
 
 type ColumnKey = 'position' | 'phone' | 'department' | 'source' | 'stage' | 'added'
 type SortValue = 'created_at|desc' | 'created_at|asc' | 'name|asc' | 'name|desc'
 
-const RECRUITMENT_STAGES: RecruitmentStage[] = ['prospective', 'shortlisted', 'offered', 'signed', 'talent_pool', 'no_show']
 // Display order in the row + the order options appear in the Columns picker.
 // Name (identity) and the actions cell are always present and live outside this list.
 const COLUMN_ORDER: ColumnKey[] = ['position', 'phone', 'department', 'source', 'stage', 'added']
@@ -109,7 +108,7 @@ export function Recruitment({ user }: { user: User }) {
       supabase.from('employees')
         .select(CANDIDATE_WITH_DEPTS_SELECT)
         .eq('org_id', user.org_id)
-        .in('lifecycle_stage', RECRUITMENT_STAGES)
+        .in('lifecycle_stage', [...RECRUITMENT_STAGES])
         .order('created_at', { ascending: false }),
       supabase.from('organizations').select('*').eq('id', user.org_id).single(),
     ])

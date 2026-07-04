@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { activeWorkforceEmployees, withLinkedEmployees } from '../../lib/lifecycle'
 import { DepartmentsMultiSelect } from '../../components/DepartmentsMultiSelect'
 import { DateTimePicker } from '../../components/DateTimePicker'
 import { useLang } from '../../contexts/LanguageContext'
@@ -71,11 +72,14 @@ export function SpotlightEdit({ user }: { user: User }) {
   useEffect(() => {
     let cancelled = false
     async function load() {
-      const empPromise = supabase.from('employees').select('*, employee_departments(is_primary, department:company_departments(id, name))').eq('org_id', user.org_id).eq('status', 'active').order('name')
+      // Scope to the real workforce via lifecycle_stage. The legacy `status`
+      // column defaults to 'active' for recruits too, so it leaked recruits
+      // into the audience picker.
+      const empPromise = activeWorkforceEmployees(user.org_id)
       if (isNew) {
         const { data: emps } = await empPromise
         if (cancelled) return
-        setEmployees((emps || []) as (Employee & EmpDeptShape)[])
+        setEmployees((emps || []) as unknown as (Employee & EmpDeptShape)[])
         return
       }
       const [{ data: post }, { data: emps }] = await Promise.all([
@@ -83,7 +87,12 @@ export function SpotlightEdit({ user }: { user: User }) {
         empPromise,
       ])
       if (cancelled) return
-      setEmployees((emps || []) as (Employee & EmpDeptShape)[])
+      // Union any already-targeted employees who now fall outside the workforce
+      // set so existing spotlight audiences aren't silently dropped.
+      setEmployees(await withLinkedEmployees(
+        (emps || []) as unknown as (Employee & EmpDeptShape)[],
+        (post?.target_employee_ids ?? []) as string[],
+      ))
       if (post) setForm(rowToForm(post))
       setLoading(false)
     }

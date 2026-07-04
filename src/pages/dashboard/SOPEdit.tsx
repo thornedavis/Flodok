@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { activeWorkforceEmployees, withLinkedEmployees } from '../../lib/lifecycle'
 import { DocumentEditor } from '../../components/editor/bilingual/DocumentEditor'
 import { DocumentEditShell, EDITOR_STICKY_TOP_PX } from '../../components/editor/DocumentEditShell'
 import { SaveAsTemplateModal } from '../../components/SaveAsTemplateButton'
@@ -24,8 +25,6 @@ import type { User, Sop, Tag, Employee, Organization } from '../../types/aliases
 
 type EmployeeWithDepartments = Employee & EmpDeptShape
 
-const EMPLOYEE_WITH_DEPTS_SELECT =
-  '*, employee_departments(is_primary, department:company_departments(id, name))'
 
 export function SOPEdit({ user }: { user: User }) {
   const { t } = useLang()
@@ -103,7 +102,7 @@ export function SOPEdit({ user }: { user: User }) {
         supabase.from('sops').select('*').eq('id', id!).single(),
         supabase.from('tags').select('*').eq('org_id', user.org_id).order('name'),
         supabase.from('sop_tags').select('tag_id').eq('sop_id', id!),
-        supabase.from('employees').select(EMPLOYEE_WITH_DEPTS_SELECT).eq('org_id', user.org_id).order('name'),
+        activeWorkforceEmployees(user.org_id),
         supabase.from('organizations').select('*').eq('id', user.org_id).single(),
         supabase.from('company_departments').select('id, name').eq('org_id', user.org_id).order('name'),
         supabase.from('company_branches').select('id, name').eq('org_id', user.org_id).eq('is_active', true).order('name'),
@@ -115,7 +114,17 @@ export function SOPEdit({ user }: { user: User }) {
       // returned counts consistent with what we're about to render.
       loadSignatureProgress()
 
-      const loadedEmps = (empsResult.data || []) as EmployeeWithDepartments[]
+      // Picker options are scoped to the real workforce, but a saved SOP
+      // audience may already target an employee who's now outside that set —
+      // union those back in so the audience mapper below doesn't silently drop
+      // them (it discards employee targets not present in this list).
+      const audienceEmpIds = ((audienceResult.data || []) as { target_type: string; employee_id: string | null }[])
+        .filter(r => r.target_type === 'employee')
+        .map(r => r.employee_id)
+      const loadedEmps = await withLinkedEmployees(
+        (empsResult.data || []) as unknown as EmployeeWithDepartments[],
+        audienceEmpIds,
+      )
       setAllEmployees(loadedEmps)
       setOrganization(orgResult.data)
       setDepartments(deptsResult.data || [])
