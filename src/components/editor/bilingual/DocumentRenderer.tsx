@@ -22,6 +22,7 @@ import {
   type MergeContext,
 } from '../../../lib/mergeFields'
 import { normalizeDoc, type DocNode, type DocumentDoc } from '../../../lib/documentDoc'
+import { SignatureBlockContent, signatureAttrsFrom, SIGNATURE_BLOCK_STYLES } from './SignatureBlockContent'
 
 export type DocumentRendererProps = {
   doc: DocumentDoc | DocNode | null | undefined
@@ -69,6 +70,9 @@ function LetterheadRender({ block, ctx }: { block: DocNode; ctx: MergeContext })
 
 function BlockRender({ block, lang, ctx }: { block: DocNode; lang: Lang; ctx: MergeContext }) {
   if (block.type === 'letterhead') return <LetterheadRender block={block} ctx={ctx} />
+  if (block.type === 'signatureBlock') {
+    return <SignatureBlockContent attrs={signatureAttrsFrom(block.attrs)} ctx={ctx} lang={lang} />
+  }
   if (block.type !== 'bilingualBlock') return null
   const body = (block.content || []).find(b => b.type === 'blockBody' && b.attrs?.lang === lang)
   if (!body || !Array.isArray(body.content)) return null
@@ -336,4 +340,4 @@ export const DOCUMENT_RENDERER_STYLES = `
   border-left-color: var(--color-danger);
   background: color-mix(in srgb, var(--color-danger) 6%, transparent);
 }
-`
+` + SIGNATURE_BLOCK_STYLES

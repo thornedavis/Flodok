@@ -620,6 +620,8 @@ function deriveBreadcrumbs(pathname: string, search: string, orgName: string, t:
     hiring: { label: t.navHiring, href: '/dashboard/hiring' },
     forms: { label: t.navForms, href: '/dashboard/forms' },
     recruitment: { label: t.navRecruitment, href: '/dashboard/recruitment' },
+    attendance: { label: t.navAttendance, href: '/dashboard/attendance' },
+    tasks: { label: t.navTasks, href: '/dashboard/tasks' },
   }
   const section = sectionMap[segments[1]]
   if (!section) return [{ label: orgName }]

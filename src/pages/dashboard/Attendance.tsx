@@ -195,33 +195,50 @@ export function Attendance({ user }: { user: User }) {
                   <td className="px-4 py-3 font-medium" style={{ color: 'var(--color-text)' }}>{r.employee_name ?? '—'}</td>
                   <td className="px-4 py-3" style={{ color: 'var(--color-text-tertiary)' }}>{formatTimestamp(r.server_timestamp, lang)}</td>
                   <td className="px-4 py-3" style={{ color: 'var(--color-text-secondary)' }}>
-                    {r.event_type === 'clock_in' ? t.attendanceEventClockIn : t.attendanceEventClockOut}
+                    <span className="inline-flex flex-wrap items-center gap-1.5">
+                      <span>{r.event_type === 'clock_in' ? t.attendanceEventClockIn : t.attendanceEventClockOut}</span>
+                      {r.is_auto && (
+                        <span
+                          className="inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium"
+                          style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-tertiary)' }}
+                          title={t.attendanceAutoTag}
+                        >
+                          {t.attendanceAutoTag}
+                        </span>
+                      )}
+                    </span>
                   </td>
                   <td className="px-4 py-3" style={{ color: 'var(--color-text-secondary)' }}>
                     <div className="flex flex-col">
                       <span>{r.location_name ?? '—'}</span>
-                      <a
-                        href={`https://www.google.com/maps?q=${r.latitude},${r.longitude}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-xs hover:underline"
-                        style={{ color: 'var(--color-primary)' }}
-                      >
-                        {t.attendanceViewOnMap}
-                      </a>
+                      {r.latitude != null && r.longitude != null && (
+                        <a
+                          href={`https://www.google.com/maps?q=${r.latitude},${r.longitude}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs hover:underline"
+                          style={{ color: 'var(--color-primary)' }}
+                        >
+                          {t.attendanceViewOnMap}
+                        </a>
+                      )}
                     </div>
                   </td>
                   <td className="px-4 py-3"><ConfidenceBadge row={r} t={t} /></td>
                   <td className="px-4 py-3"><StatusBadge status={r.status} t={t} /></td>
                   <td className="px-4 py-3">
-                    <button
-                      type="button"
-                      onClick={() => setPhotoRow(r)}
-                      className="rounded-md px-2.5 py-1 text-xs font-medium"
-                      style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}
-                    >
-                      {t.attendanceViewPhoto}
-                    </button>
+                    {r.selfie_path == null ? (
+                      <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>—</span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setPhotoRow(r)}
+                        className="rounded-md px-2.5 py-1 text-xs font-medium"
+                        style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}
+                      >
+                        {t.attendanceViewPhoto}
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -347,6 +364,11 @@ function PhotoModal({ row, t, lang, onClose }: { row: DashboardAttendanceRow; t:
 
   useEffect(() => {
     let alive = true
+    if (row.selfie_path == null) {
+      setUrl(null)
+      setLoading(false)
+      return
+    }
     setLoading(true)
     signAttendancePhoto(row.selfie_path)
       .then(signed => { if (alive) setUrl(signed) })

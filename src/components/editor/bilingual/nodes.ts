@@ -19,6 +19,7 @@
 // every section and bilingualBlock gets one.
 
 import { Node, mergeAttributes } from '@tiptap/core'
+import type { MergeContext } from '../../../lib/mergeFields'
 
 // ─── Root document ──────────────────────────────────────────────────
 //
@@ -32,7 +33,9 @@ export const DocumentNode = Node.create({
   // headers are now ordinary bilingualBlocks whose bodies hold an h2.
   // An optional full-width `letterhead` may lead the document (the org
   // letterhead header); everything below it is the bilingual body.
-  content: 'letterhead? bilingualBlock+',
+  // `signatureBlock` is another full-width, language-neutral sibling — the
+  // author drops it where a party signs (see the letterhead/signature notes).
+  content: 'letterhead? (bilingualBlock | signatureBlock)+',
 })
 
 // ─── Letterhead ─────────────────────────────────────────────────────
@@ -85,6 +88,71 @@ export const LetterheadNode = Node.create({
 
   renderHTML({ HTMLAttributes }) {
     return ['div', mergeAttributes(HTMLAttributes, { 'data-letterhead': 'true', class: 'letterhead' }), 0]
+  },
+})
+
+// ─── Signature block ────────────────────────────────────────────────
+//
+// A top-level, language-neutral signature area (see documentDoc.signatureBlock).
+// Like the letterhead it is a sibling of `bilingualBlock` at the document root
+// and spans full width in both layouts — never split into EN/ID columns. An
+// atom leaf: nothing is authored inside; the node-view (SignatureBlockView) and
+// the read-path renderers resolve the party's name / title / date / signature
+// live from the merge context. Deliberately excluded from docToMarkdown, the
+// translation pipeline, and the needsReview gate (all iterate only
+// `bilingualBlock` top-level nodes).
+
+export const SignatureBlockNode = Node.create({
+  name: 'signatureBlock',
+  atom: true,
+  selectable: true,
+  draggable: true,
+
+  addOptions() {
+    return {
+      // Supplied by DocumentEditor (from mergeFields.getContext) so the
+      // node-view can resolve the party's live signature/name/date. Undefined
+      // → the block previews its blank authoring state.
+      getContext: undefined as undefined | (() => MergeContext),
+    }
+  },
+
+  addAttributes() {
+    return {
+      role: {
+        default: 'employee',
+        parseHTML: el => {
+          const v = el.getAttribute('data-role')
+          return v === 'employer' || v === 'blank' ? v : 'employee'
+        },
+        renderHTML: attrs => ({ 'data-role': attrs.role }),
+      },
+      showDate: {
+        default: true,
+        parseHTML: el => el.getAttribute('data-show-date') !== 'false',
+        renderHTML: attrs => (attrs.showDate ? {} : { 'data-show-date': 'false' }),
+      },
+      showTitle: {
+        default: true,
+        parseHTML: el => el.getAttribute('data-show-title') !== 'false',
+        renderHTML: attrs => (attrs.showTitle ? {} : { 'data-show-title': 'false' }),
+      },
+      label: {
+        default: null,
+        parseHTML: el => el.getAttribute('data-label'),
+        renderHTML: attrs => (attrs.label ? { 'data-label': attrs.label } : {}),
+      },
+    }
+  },
+
+  parseHTML() {
+    return [{ tag: 'div[data-signature-block]' }]
+  },
+
+  // Leaf node — no content hole. The visible signature area is painted by the
+  // node-view in the editor and by the renderers on read paths.
+  renderHTML({ HTMLAttributes }) {
+    return ['div', mergeAttributes(HTMLAttributes, { 'data-signature-block': 'true', class: 'signature-block' })]
   },
 })
 

@@ -64,6 +64,34 @@ body {
   to { transform: translateX(-50%); }
 }
 
+/* App-wide loading splash — indeterminate shimmer bar under the Flodok mark
+   (see LoadingScreen.tsx). */
+.loading-bar {
+  position: relative;
+  width: 160px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--color-bg-tertiary);
+  overflow: hidden;
+}
+.loading-bar > span {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 42%;
+  border-radius: 999px;
+  background: var(--color-primary);
+  animation: loading-slide 1.35s ease-in-out infinite;
+}
+@keyframes loading-slide {
+  0%   { left: -42%; }
+  100% { left: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .loading-bar > span { animation: none; left: 0; width: 100%; opacity: 0.5; }
+}
+
 /* Phone mock bezel — silver in light mode, dark graphite in dark mode. */
 .phone-bezel {
   background: linear-gradient(135deg, #9ca3af 0%, #e5e7eb 100%);

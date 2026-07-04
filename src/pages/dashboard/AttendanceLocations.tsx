@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { useLang } from '../../contexts/LanguageContext'
+import { useBreadcrumbTrailing } from '../../contexts/BreadcrumbContext'
 import { useRole } from '../../hooks/useRole'
 import { Skeleton } from '../../components/Skeleton'
 import { Modal } from '../../components/Modal'
@@ -83,6 +84,7 @@ export function AttendanceLocations({ user }: { user: User }) {
   const { t } = useLang()
   const navigate = useNavigate()
   const { isAdmin } = useRole(user)
+  useBreadcrumbTrailing(t.attendanceLocationsCrumb)
 
   const [locations, setLocations] = useState<AttendanceLocation[]>([])
   const [loading, setLoading] = useState(true)

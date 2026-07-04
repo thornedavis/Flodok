@@ -212,12 +212,13 @@ export type Database = {
           id: string
           identity: Json
           ip_address: unknown
-          latitude: number
+          is_auto: boolean
+          latitude: number | null
           location_id: string | null
-          longitude: number
+          longitude: number | null
           on_office_network: boolean | null
           org_id: string
-          selfie_path: string
+          selfie_path: string | null
           server_timestamp: string
           status: string
           updated_at: string
@@ -237,12 +238,13 @@ export type Database = {
           id?: string
           identity?: Json
           ip_address?: unknown
-          latitude: number
+          is_auto?: boolean
+          latitude?: number | null
           location_id?: string | null
-          longitude: number
+          longitude?: number | null
           on_office_network?: boolean | null
           org_id: string
-          selfie_path: string
+          selfie_path?: string | null
           server_timestamp?: string
           status?: string
           updated_at?: string
@@ -262,12 +264,13 @@ export type Database = {
           id?: string
           identity?: Json
           ip_address?: unknown
-          latitude?: number
+          is_auto?: boolean
+          latitude?: number | null
           location_id?: string | null
-          longitude?: number
+          longitude?: number | null
           on_office_network?: boolean | null
           org_id?: string
-          selfie_path?: string
+          selfie_path?: string | null
           server_timestamp?: string
           status?: string
           updated_at?: string
@@ -3243,6 +3246,7 @@ export type Database = {
           address_postal_code: string | null
           address_province: string | null
           address_street: string | null
+          attendance_auto_close_hours: number
           attendance_enabled: boolean
           badges_enabled: boolean
           billing_override: string | null
@@ -3298,6 +3302,7 @@ export type Database = {
           address_postal_code?: string | null
           address_province?: string | null
           address_street?: string | null
+          attendance_auto_close_hours?: number
           attendance_enabled?: boolean
           badges_enabled?: boolean
           billing_override?: string | null
@@ -3353,6 +3358,7 @@ export type Database = {
           address_postal_code?: string | null
           address_province?: string | null
           address_street?: string | null
+          attendance_auto_close_hours?: number
           attendance_enabled?: boolean
           badges_enabled?: boolean
           billing_override?: string | null
@@ -4827,6 +4833,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      attendance_auto_close: { Args: never; Returns: Json }
       attendance_dashboard_list: { Args: never; Returns: Json }
       attendance_location_delete: { Args: { p_id: string }; Returns: undefined }
       attendance_location_upsert: {
@@ -5406,6 +5413,10 @@ export type Database = {
         Args: { emp_slug: string; emp_token: string }
         Returns: Json
       }
+      portal_list_tasks: {
+        Args: { emp_slug: string; emp_token: string }
+        Returns: Json
+      }
       portal_mark_notifications_seen: {
         Args: { emp_slug: string; emp_token: string }
         Returns: undefined
@@ -5436,12 +5447,13 @@ export type Database = {
           id: string
           identity: Json
           ip_address: unknown
-          latitude: number
+          is_auto: boolean
+          latitude: number | null
           location_id: string | null
-          longitude: number
+          longitude: number | null
           on_office_network: boolean | null
           org_id: string
-          selfie_path: string
+          selfie_path: string | null
           server_timestamp: string
           status: string
           updated_at: string
@@ -5451,6 +5463,44 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "attendance_events"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      portal_set_task_status: {
+        Args: {
+          emp_slug: string
+          emp_token: string
+          p_status: string
+          p_task_id: string
+        }
+        Returns: {
+          assignee_employee_id: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          deleted_by: string | null
+          due_date: string | null
+          due_time: string | null
+          id: string
+          notes: string | null
+          org_id: string
+          parent_task_id: string | null
+          position: number
+          priority: number
+          project_id: string | null
+          related_doc_id: string | null
+          related_doc_type: string | null
+          status: string
+          title: string
+          updated_at: string
+          url: string | null
+          visible_in_portal: boolean
+        }
+        SetofOptions: {
+          from: "*"
+          to: "tasks"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -5970,6 +6020,7 @@ export type Database = {
         Returns: undefined
       }
       trash_spotlight_post: { Args: { p_post_id: string }; Returns: undefined }
+      trash_task: { Args: { p_task_id: string }; Returns: undefined }
       upcoming_milestones: {
         Args: { p_days_ahead: number }
         Returns: {

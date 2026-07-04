@@ -32,8 +32,8 @@ export interface DashboardAttendanceRow {
   event_type: AttendanceEventType
   server_timestamp: string
   client_timestamp: string | null
-  latitude: number
-  longitude: number
+  latitude: number | null
+  longitude: number | null
   accuracy_meters: number | null
   within_geofence: boolean | null
   distance_meters: number | null
@@ -41,6 +41,7 @@ export interface DashboardAttendanceRow {
   on_office_network: boolean | null
   geofence_radius_meters: number | null
   status: AttendanceStatus
-  selfie_path: string
+  selfie_path: string | null
+  is_auto: boolean
   identity: Record<string, unknown>
 }

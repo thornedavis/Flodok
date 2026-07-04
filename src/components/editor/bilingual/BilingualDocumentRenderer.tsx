@@ -21,6 +21,7 @@ import {
   type MergeContext,
 } from '../../../lib/mergeFields'
 import { normalizeDoc, type DocNode, type DocumentDoc, type LanguageMode, type ViewMode } from '../../../lib/documentDoc'
+import { SignatureBlockContent, signatureAttrsFrom, SIGNATURE_BLOCK_STYLES } from './SignatureBlockContent'
 
 export type BilingualDocumentRendererProps = {
   doc: DocumentDoc | DocNode | null | undefined
@@ -77,6 +78,13 @@ function LetterheadRender({ block, ctx }: { block: DocNode; ctx: MergeContext })
 
 function BlockRender({ block, ctxEn, ctxId, languageMode }: { block: DocNode; ctxEn: MergeContext; ctxId: MergeContext; languageMode: LanguageMode }) {
   if (block.type === 'letterhead') return <LetterheadRender block={block} ctx={ctxEn} />
+  if (block.type === 'signatureBlock') {
+    // Language-neutral: rendered once, full-width (never split into EN/ID
+    // columns). Bilingual docs get a bilingual caption ("Employee / Karyawan").
+    const sigLang = languageMode === 'en' ? 'en' : languageMode === 'id' ? 'id' : 'both'
+    const sigCtx = languageMode === 'id' ? ctxId : ctxEn
+    return <SignatureBlockContent attrs={signatureAttrsFrom(block.attrs)} ctx={sigCtx} lang={sigLang} />
+  }
   if (block.type !== 'bilingualBlock') return null
   const enBody = (block.content || []).find(b => b.type === 'blockBody' && b.attrs?.lang === 'en')
   const idBody = (block.content || []).find(b => b.type === 'blockBody' && b.attrs?.lang === 'id')
@@ -347,4 +355,4 @@ export const BILINGUAL_DOCUMENT_RENDERER_STYLES = `
   border-left-color: var(--color-danger);
   background: color-mix(in srgb, var(--color-danger) 6%, transparent);
 }
-`
+` + SIGNATURE_BLOCK_STYLES

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { createBrowserRouter, RouterProvider, Routes, Route, Navigate, useParams, useLocation } from 'react-router-dom'
 import { useAuth } from './hooks/useAuth'
 import { DashboardLayout, PublicLayout } from './components/Layout'
+import { LoadingScreen } from './components/LoadingScreen'
 import { Login } from './pages/auth/Login'
 import { Signup } from './pages/auth/Signup'
 import { AcceptInvite } from './pages/auth/AcceptInvite'
@@ -65,11 +66,7 @@ function AppRoutes() {
   const { session, user, org, loading, recovering, signIn, signUp, signOut, recover } = useAuth()
 
   if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center" style={{ backgroundColor: 'var(--color-bg)' }}>
-        <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>Loading...</div>
-      </div>
-    )
+    return <LoadingScreen />
   }
 
   return (
@@ -245,35 +242,37 @@ function AccountSetup({
 
   const settingUp = recovering || !attempted
 
+  if (settingUp) {
+    return <LoadingScreen label="Setting up your account…" />
+  }
+
   return (
     <div
       className="flex min-h-screen flex-col items-center justify-center gap-4 px-4 text-center"
       style={{ backgroundColor: 'var(--color-bg)' }}
     >
       <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-        {settingUp ? 'Setting up your account…' : 'We couldn’t finish setting up your account.'}
+        We couldn’t finish setting up your account.
       </div>
-      {error && !settingUp && (
+      {error && (
         <div className="max-w-sm text-xs" style={{ color: 'var(--color-danger)' }}>{error}</div>
       )}
-      {!settingUp && (
-        <div className="flex items-center gap-3">
-          <button
-            onClick={retry}
-            className="rounded-lg px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90"
-            style={{ backgroundColor: 'var(--color-primary)' }}
-          >
-            Retry setup
-          </button>
-          <button
-            onClick={onSignOut}
-            className="rounded-lg border px-4 py-2 text-sm font-medium transition-opacity hover:opacity-90"
-            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-          >
-            Sign out
-          </button>
-        </div>
-      )}
+      <div className="flex items-center gap-3">
+        <button
+          onClick={retry}
+          className="rounded-lg px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+          style={{ backgroundColor: 'var(--color-primary)' }}
+        >
+          Retry setup
+        </button>
+        <button
+          onClick={onSignOut}
+          className="rounded-lg border px-4 py-2 text-sm font-medium transition-opacity hover:opacity-90"
+          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+        >
+          Sign out
+        </button>
+      </div>
     </div>
   )
 }

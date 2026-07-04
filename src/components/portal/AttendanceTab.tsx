@@ -56,11 +56,17 @@ export function AttendanceTab({ slug, token }: {
   const [phase, setPhase] = useState<Phase>('idle')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+  const [starting, setStarting] = useState(false)
+  const [now, setNow] = useState(() => Date.now())
 
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
 
   const nextType = inferNextType(records)
+  const clockedIn = nextType === 'clock_out'
+  const nowDate = new Date(now)
+  const timeLabel = nowDate.toLocaleTimeString(lang === 'id' ? 'id-ID' : 'en-US', { hour: 'numeric', minute: '2-digit' })
+  const dateLabel = nowDate.toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-US', { weekday: 'long', day: 'numeric', month: 'long' })
 
   function stopCamera() {
     if (streamRef.current) {
@@ -88,6 +94,12 @@ export function AttendanceTab({ slug, token }: {
     /* eslint-disable-next-line react-hooks/exhaustive-deps */
   }, [slug, token])
 
+  // Tick every second so the live clock stays current.
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [])
+
   // Assign the camera stream once the <video> is committed for the 'camera'
   // phase. An effect is more reliable than a one-shot rAF, especially on iOS
   // Safari where the element may not exist on the first frame after setState.
@@ -103,6 +115,14 @@ export function AttendanceTab({ slug, token }: {
   async function startCamera() {
     setError('')
     setSuccess(false)
+    // Camera capture needs a secure context (https or localhost). Over plain
+    // http — e.g. opening the site via a LAN IP on a phone — navigator.mediaDevices
+    // is undefined, so say that plainly instead of throwing into a generic "denied".
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setError(t.attendanceCameraUnavailable)
+      return
+    }
+    setStarting(true)
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })
       streamRef.current = stream
@@ -111,6 +131,8 @@ export function AttendanceTab({ slug, token }: {
       stopCamera()
       setPhase('idle')
       setError(t.attendanceCameraDenied)
+    } finally {
+      setStarting(false)
     }
   }
 
@@ -201,15 +223,30 @@ export function AttendanceTab({ slug, token }: {
       )}
 
       {phase === 'idle' ? (
-        <div className="space-y-3">
-          <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{t.attendanceCaptureHint}</p>
+        <div className="flex flex-col items-center justify-center gap-5 text-center" style={{ minHeight: '55vh' }}>
+          {/* Live time hero */}
+          <div>
+            <div className="text-6xl font-light tracking-tight tabular-nums" style={{ color: 'var(--color-text)' }}>{timeLabel}</div>
+            <div className="mt-2 text-sm" style={{ color: 'var(--color-text-secondary)' }}>{dateLabel}</div>
+          </div>
+
+          {/* Status pill */}
+          <div className="inline-flex items-center gap-2 rounded-full px-3 py-1" style={{ backgroundColor: 'var(--color-bg-tertiary)', border: '1px solid var(--color-border)' }}>
+            <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: clockedIn ? 'var(--color-success)' : 'var(--color-text-tertiary)' }} />
+            <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>{clockedIn ? t.attendanceClockedIn : t.attendanceNotClockedIn}</span>
+          </div>
+
+          {/* Action — rounded-rectangle button matching the app's other buttons */}
           <button
             onClick={startCamera}
-            className="w-full rounded-lg px-3 py-2.5 text-sm font-medium text-white"
+            disabled={starting}
+            className="mt-1 w-full rounded-lg px-4 py-3.5 text-sm font-medium text-white transition-opacity disabled:opacity-70"
             style={{ backgroundColor: 'var(--color-primary)' }}
           >
-            {nextType === 'clock_in' ? t.attendanceClockIn : t.attendanceClockOut}
+            {starting ? t.attendanceStartingCamera : (nextType === 'clock_in' ? t.attendanceClockIn : t.attendanceClockOut)}
           </button>
+
+          <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.attendanceCaptureHint}</p>
         </div>
       ) : (
         <div className="space-y-3">

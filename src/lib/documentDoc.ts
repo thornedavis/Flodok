@@ -207,6 +207,54 @@ export function withLetterhead(doc: DocumentDoc): DocumentDoc {
   return { type: 'document', content: [letterheadBlock(), ...content] }
 }
 
+// ─── Signature block ────────────────────────────────────────────────
+//
+// A top-level, language-neutral signature area the author drops where a party
+// signs — `employee`, `employer`, or a `blank` wet-signature line (witness /
+// third party). Like the letterhead it is a SIBLING of `bilingualBlock` at the
+// document root (schema: `letterhead? (bilingualBlock | signatureBlock)+`), so
+// it is authored ONCE and renders identically on the EN and ID sides — no more
+// hand-duplicating {{employee_signature}} tokens into both bodies.
+//
+// It is deliberately invisible to docToMarkdown, the snapshot/translation
+// pipeline, and the needsReview gate — all iterate only `bilingualBlock`
+// top-level nodes. So it never enters the signed markdown, never gets flagged
+// for translation, and (because the signing-integrity hash is built from
+// content_markdown) never changes the document hash. An atom leaf: nothing is
+// authored inside — the node-view and the DocumentRenderer/BilingualDocumentRenderer
+// resolve the party's name / title / date / signature live from the MergeContext
+// (the same resolvers the {{…_signature}} tokens use).
+
+export type SignatureRole = 'employee' | 'employer' | 'blank'
+
+export type SignatureBlockAttrs = {
+  role: SignatureRole
+  // Render the sign-date line under the signature.
+  showDate: boolean
+  // Render a title line (employer/witness identify their role/title;
+  // employees sign name-only). Defaults on per role at insert time.
+  showTitle: boolean
+  // Author caption override ("Disclosing Party" / "Witness"). A single
+  // language-neutral string — wins for both EN and ID. Null → a role-derived
+  // default label resolved from the render language.
+  label: string | null
+}
+
+export function signatureBlock(
+  role: SignatureRole = 'employee',
+  opts?: Partial<Omit<SignatureBlockAttrs, 'role'>>,
+): DocNode {
+  return {
+    type: 'signatureBlock',
+    attrs: {
+      role,
+      showDate: opts?.showDate ?? true,
+      showTitle: opts?.showTitle ?? (role !== 'employee'),
+      label: opts?.label ?? null,
+    },
+  }
+}
+
 // ─── normalizeDoc ───────────────────────────────────────────────────
 //
 // Migrates a legacy section-nested document into the flat block stream

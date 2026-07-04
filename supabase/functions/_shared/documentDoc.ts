@@ -138,6 +138,11 @@ export function docToMarkdown(doc: DocNode | unknown, lang: 'en' | 'id'): string
   const flat = normalizeDoc(doc)
   const lines: string[] = []
   for (const block of flat.content || []) {
+    // Only bilingual body blocks project into the signed markdown. Full-width
+    // presentation nodes — `letterhead` and `signatureBlock` (see the
+    // frontend twin src/lib/documentDoc.ts) — are intentionally skipped: they
+    // carry no translatable text and must stay out of content_markdown so the
+    // signing-integrity hash is unaffected by their presence.
     if (block.type !== 'bilingualBlock') continue
     const body = (block.content || []).find(
       b => b.type === 'blockBody' && (b.attrs?.lang === lang),

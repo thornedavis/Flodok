@@ -108,6 +108,7 @@ export interface PortalTask {
   due_date: string | null
   due_time: string | null
   url: string | null
+  project_id: string | null
   project_name: string | null
   project_color: string | null
 }

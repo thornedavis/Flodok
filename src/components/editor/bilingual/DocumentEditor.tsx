@@ -23,7 +23,7 @@ import { Link } from '@tiptap/extension-link'
 import { Underline } from '@tiptap/extension-underline'
 import { Table, TableRow, TableCell, TableHeader } from '@tiptap/extension-table'
 import { TextAlign } from '@tiptap/extension-text-align'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Editor } from '@tiptap/core'
 import {
   DocumentNode,
@@ -31,10 +31,13 @@ import {
   BlockBodyNode,
   CalloutNode,
   LetterheadNode,
+  SignatureBlockNode,
   emptyBlock,
 } from './nodes'
 import { BilingualBlockView } from './BilingualBlockView'
 import { LetterheadView } from './LetterheadView'
+import { SignatureBlockView } from './SignatureBlockView'
+import { SIGNATURE_BLOCK_STYLES } from './SignatureBlockContent'
 import { BlockGutter } from './BlockGutter'
 import { SelectionBubble } from './SelectionBubble'
 import { BilingualMergeFieldExtension } from './BilingualMergeField'
@@ -43,7 +46,7 @@ import { MERGE_FIELD_STYLES } from '../MergeField'
 import { DOCUMENT_EDITOR_STYLES } from './styles'
 import { supabase } from '../../../lib/supabase'
 import { generateDocument } from '../../../lib/aiGenerate'
-import { normalizeDoc, stripDefaultTextAlign, letterheadBlock, type DocumentDoc, type LanguageMode } from '../../../lib/documentDoc'
+import { normalizeDoc, stripDefaultTextAlign, letterheadBlock, signatureBlock, type DocumentDoc, type LanguageMode, type SignatureRole } from '../../../lib/documentDoc'
 import type { MergeContext } from '../../../lib/mergeFields'
 
 export type DocumentEditorView = 'side_by_side' | 'stacked'
@@ -125,6 +128,12 @@ export function DocumentEditor({
     },
   })
 
+  const SignatureBlockWithView = SignatureBlockNode.extend({
+    addNodeView() {
+      return ReactNodeViewRenderer(SignatureBlockView)
+    },
+  })
+
   // Normalize once at mount so legacy section-nested docs render in the
   // flat schema. The effect below re-normalizes on every initialDoc
   // change for the async-load case.
@@ -165,6 +174,7 @@ export function DocumentEditor({
       DocumentNode,
       BilingualBlockWithView,
       LetterheadWithView.configure({ getContext: mergeFields?.getContext }),
+      SignatureBlockWithView.configure({ getContext: mergeFields?.getContext }),
       BlockBodyNode,
       CalloutNode,
       Placeholder.configure({
@@ -408,7 +418,7 @@ export function DocumentEditor({
       >
         <span>+</span> Add block
       </button>
-      <style>{DOCUMENT_EDITOR_STYLES}{MERGE_FIELD_STYLES}</style>
+      <style>{DOCUMENT_EDITOR_STYLES}{MERGE_FIELD_STYLES}{SIGNATURE_BLOCK_STYLES}</style>
     </div>
   )
 }
@@ -511,6 +521,7 @@ function Toolbar({ editor, onSetLink, mergeFields, view, onViewChange, languageM
               auto-localize per blockBody. We pass lang='en' as the
               picker's own UI language since the editor chrome is EN. */}
           <MergeFieldButton editor={editor} scope={mergeFields.scope} lang="en" />
+          <SignatureButton editor={editor} />
         </>
       )}
       {onGenerate && (
@@ -579,6 +590,85 @@ function Toolbar({ editor, onSetLink, mergeFields, view, onViewChange, languageM
             </select>
           )}
         </>
+      )}
+    </div>
+  )
+}
+
+// ─── Signature insert button ───────────────────────────────────────
+//
+// Drops a top-level signatureBlock at the end of the document. A small role
+// submenu (mirrors the merge-field picker) picks employee / employer / a blank
+// wet-signature line. Unlike the letterhead there's no "only one" constraint —
+// a contract has two signers, an NDA two parties, etc.
+
+function SignatureButton({ editor }: { editor: Editor }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function onDoc(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', onDoc)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDoc)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  function insert(role: SignatureRole) {
+    const end = editor.state.doc.content.size
+    editor.chain().focus().insertContentAt(end, signatureBlock(role)).run()
+    setOpen(false)
+  }
+
+  const items: Array<{ role: SignatureRole; label: string }> = [
+    { role: 'employee', label: 'Employee signature' },
+    { role: 'employer', label: 'Employer signature' },
+    { role: 'blank', label: 'Blank signature line' },
+  ]
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        title="Insert a signature block"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors"
+        style={{ color: 'var(--color-text-secondary)' }}
+        onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
+        onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
+      >
+        <SignatureIcon />
+        <span>Signature</span>
+      </button>
+      {open && (
+        <div
+          role="menu"
+          className="absolute left-0 top-full z-40 mt-1 min-w-[190px] overflow-hidden rounded-lg border py-1 shadow-lg"
+          style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }}
+        >
+          {items.map(it => (
+            <button
+              key={it.role}
+              type="button"
+              role="menuitem"
+              onClick={() => insert(it.role)}
+              className="flex w-full items-center px-3 py-2 text-left text-xs transition-colors"
+              style={{ color: 'var(--color-text)' }}
+              onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
+              onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
+            >
+              {it.label}
+            </button>
+          ))}
+        </div>
       )}
     </div>
   )
@@ -667,6 +757,7 @@ function AlignCenterIcon() { return <svg {...s}><line x1="3" y1="6" x2="21" y2="
 function AlignRightIcon() { return <svg {...s}><line x1="3" y1="6" x2="21" y2="6"/><line x1="9" y1="12" x2="21" y2="12"/><line x1="6" y1="18" x2="21" y2="18"/></svg> }
 function AlignJustifyIcon() { return <svg {...s}><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg> }
 function LetterheadIcon() { return <svg {...s}><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="9" y1="7" x2="15" y2="7"/><line x1="7" y1="14" x2="17" y2="14"/><line x1="7" y1="17" x2="13" y2="17"/></svg> }
+function SignatureIcon() { return <svg {...s}><path d="M3 19c3 0 4-6 6-6s1 4 3 4 2.5-7 4.5-7"/><path d="M17 10l3 3"/><line x1="3" y1="21" x2="21" y2="21"/></svg> }
 function BulletListIcon() { return <svg {...s}><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3" cy="6" r="1" fill="currentColor" stroke="none"/><circle cx="3" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="3" cy="18" r="1" fill="currentColor" stroke="none"/></svg> }
 function OrderedListIcon() { return <svg {...s}><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><text x="1" y="8" fontSize="7" fill="currentColor" stroke="none" fontFamily="system-ui">1</text><text x="1" y="14" fontSize="7" fill="currentColor" stroke="none" fontFamily="system-ui">2</text><text x="1" y="20" fontSize="7" fill="currentColor" stroke="none" fontFamily="system-ui">3</text></svg> }
 function LinkIcon() { return <svg {...s}><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> }

@@ -18,6 +18,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { supabase } from './supabase'
 import { BilingualDocumentRenderer, BILINGUAL_DOCUMENT_RENDERER_STYLES } from '../components/editor/bilingual/BilingualDocumentRenderer'
 import { MERGE_FIELD_STYLES } from '../components/editor/MergeField'
+import { signatureFontsHref } from './signatureFonts'
 import type { DocumentDoc, LanguageMode, ViewMode } from './documentDoc'
 import type { MergeContext } from './mergeFields'
 
@@ -121,6 +122,10 @@ export async function exportDocumentPdf({ doc, title, view, contextEn, contextId
     '<head>',
     '<meta charset="utf-8">',
     `<title>${escapeHtml(title)}</title>`,
+    // Signature fonts (Dancing Script, Great Vibes, …). Without this the
+    // headless renderer falls back to a default face and cursive signatures
+    // print wrong; the worker waits for networkidle0 so the link resolves.
+    `<link rel="stylesheet" href="${signatureFontsHref()}">`,
     '<style>',
     PDF_DOCUMENT_STYLES,
     BILINGUAL_DOCUMENT_RENDERER_STYLES,

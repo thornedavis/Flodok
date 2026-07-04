@@ -11,12 +11,13 @@ import { useLang } from '../../contexts/LanguageContext'
 import { RequestsTab } from '../../components/portal/RequestsTab'
 import { TasksTab } from '../../components/portal/TasksTab'
 import { AttendanceTab } from '../../components/portal/AttendanceTab'
+import { LoadingScreen } from '../../components/LoadingScreen'
 import { formatIdr } from '../../lib/credits'
 import { formatRelativeTime } from '../../lib/relativeTime'
 import { BadgeGlyph } from '../../components/BadgeGlyph'
 import { renderMergeFields, type MergeContext } from '../../lib/mergeFields'
 import { DocumentRenderer, DOCUMENT_RENDERER_STYLES } from '../../components/editor/bilingual/DocumentRenderer'
-import { isDocumentDoc, type LanguageMode } from '../../lib/documentDoc'
+import { isDocumentDoc, docPreviewLines, type LanguageMode } from '../../lib/documentDoc'
 import { CompensationRing, ShieldPath, WalletPath, CoinPath } from '../../components/portal/CompensationRing'
 import { StatRow } from '../../components/portal/StatRow'
 import { InfoTooltip } from '../../components/InfoTooltip'
@@ -190,10 +191,6 @@ function HomeIcon() {
   return <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
 }
 
-function SpotlightIcon() {
-  return <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>
-}
-
 function BellIcon({ count }: { count: number }) {
   return (
     <div className="relative">
@@ -215,23 +212,23 @@ function MoonIcon() {
   return <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
 }
 
-function DocIcon() {
-  return <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+function DocIcon({ size = 20 }: { size?: number }) {
+  return <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
 }
 
-function ContractIcon() {
+function ContractIcon({ size = 20 }: { size?: number }) {
   // File shape mirroring DocIcon (so it stays in the "document" family) but
   // with a wavy signature line inside instead of horizontal text lines.
   // Reads as "signed document" → contract. Same outline as SOPs icon for
   // visual continuity, distinct content for separation.
-  return <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M7 16q2-3 4 0t4 0"/></svg>
+  return <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M7 16q2-3 4 0t4 0"/></svg>
 }
 
-function LetterIcon() {
+function LetterIcon({ size = 20 }: { size?: number }) {
   // Envelope glyph — reads as "letter" / "communication", visually
   // distinct from the file-shaped SOP and contract icons so the three
   // doc types separate at a glance in the grid.
-  return <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+  return <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
 }
 
 function ActivityIcon() {
@@ -926,11 +923,7 @@ export function Portal() {
 
   // ─── Loading ───
   if (!employee) {
-    return (
-      <div className="flex min-h-screen items-center justify-center" style={{ backgroundColor: 'var(--color-bg)' }}>
-        <p style={{ color: 'var(--color-text-secondary)' }}>{s.loading}</p>
-      </div>
-    )
+    return <LoadingScreen />
   }
 
   // ─── Candidate onboarding flow ───
@@ -969,7 +962,6 @@ export function Portal() {
   }
 
   const orgLogoUrl = org?.logo_url || portal?.org.logo_url || null
-  const orgDisplayName = org?.display_name || org?.name || portal?.org.name || 'Flodok'
   const orgLegalName = org?.name || portal?.org.name || 'Flodok'
 
   return (
@@ -978,33 +970,12 @@ export function Portal() {
       {/* ─── Top Bar ─── */}
       <div className="sticky top-0 z-30 border-b px-4 py-2 no-print" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }}>
         <div className="relative mx-auto flex max-w-lg items-center justify-between">
-          {/* Left: org identity */}
-          <div className="flex min-w-0 items-center gap-2">
-            {orgLogoUrl && (
-              <img
-                src={orgLogoUrl}
-                alt=""
-                className="h-5 w-5 shrink-0 rounded object-contain"
-              />
-            )}
-            <span className="truncate text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>
-              {orgDisplayName}
+          {/* Left: employee identity */}
+          <div className="flex min-w-0 items-center">
+            <span className="truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+              {employee.name}
             </span>
           </div>
-
-          {/* Center: employee identity */}
-          {employee && (
-            <div className="pointer-events-none absolute left-1/2 flex min-w-0 max-w-[60%] -translate-x-1/2 items-baseline gap-1.5">
-              <span className="truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>
-                {employee.name}
-              </span>
-              {portal?.employee.department && (
-                <span className="hidden shrink-0 text-xs sm:inline" style={{ color: 'var(--color-text-tertiary)' }}>
-                  · {portal.employee.department}
-                </span>
-              )}
-            </div>
-          )}
 
           {/* Right: controls */}
           <div className="flex items-center gap-3">
@@ -1162,6 +1133,8 @@ export function Portal() {
               onSelectMonth={setSelectedMonth}
               onOpenSop={sop => openSopDoc(sop)}
               onSelectAchievement={setSelectedAchievement}
+              onOpenBadges={() => setTab('badges')}
+              onOpenLeaderboard={() => setTab('leaderboard')}
             />
           )}
 
@@ -1170,6 +1143,8 @@ export function Portal() {
             <DocumentsGrid
               s={s}
               lang={lang}
+              employee={employee}
+              org={org}
               docFilter={docFilter}
               onSetFilter={setDocFilter}
               pendingCards={pendingDocCards}
@@ -1563,6 +1538,19 @@ export function Portal() {
           })()}
 
 
+          {/* Back control for the views that moved off the bottom bar — they're
+              now opened from the home page, so they need a way back. */}
+          {(tab === 'spotlight' || tab === 'leaderboard' || tab === 'badges') && (
+            <button
+              onClick={() => setTab('home')}
+              className="mb-3 flex items-center gap-1 text-sm font-medium"
+              style={{ color: 'var(--color-text-secondary)' }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+              {s.home}
+            </button>
+          )}
+
           {/* ─── Spotlight Tab Content ─── */}
           {tab === 'spotlight' && (
             <SpotlightTab
@@ -1622,14 +1610,9 @@ export function Portal() {
             ...(org?.attendance_enabled === true
               ? [{ key: 'attendance' as Tab, label: s.portalAttendanceTab, icon: <ClockIcon /> }]
               : []),
-            { key: 'spotlight' as Tab, label: s.spotlightTabLabel, icon: <SpotlightIcon /> },
-            ...(org?.badges_enabled !== false
-              ? [{ key: 'badges' as Tab, label: s.portalBadgesTabLabel, icon: <BadgeIcon /> }]
-              : []),
-            // Leaderboard is credits-based — hide when credits are disabled.
-            ...(org?.credits_enabled !== false
-              ? [{ key: 'leaderboard' as Tab, label: s.leaderboard, icon: <TrophyIcon /> }]
-              : []),
+            // Spotlight, Badges and Leaderboard moved off the bar to keep it to
+            // five items — they're now reached from the home page (Spotlight via
+            // its home banner, Badges and Leaderboard via the Recognition rows).
           ]).map(item => (
             <button
               key={item.key}
@@ -1694,6 +1677,8 @@ type DocCardItem =
 function DocumentsGrid({
   s,
   lang,
+  employee,
+  org,
   docFilter,
   onSetFilter,
   pendingCards,
@@ -1705,6 +1690,8 @@ function DocumentsGrid({
 }: {
   s: ReturnType<typeof useLang>['t']
   lang: 'en' | 'id'
+  employee: Employee | null
+  org: Organization | null
   docFilter: DocFilter
   onSetFilter: (f: DocFilter) => void
   pendingCards: DocCardItem[]
@@ -1736,8 +1723,19 @@ function DocumentsGrid({
     return new Intl.DateTimeFormat(lang === 'id' ? 'id-ID' : 'en-GB', opts).format(d)
   }
 
+  // Google Docs–style tile mirroring the dashboard's Documents landing
+  // (RecentGrid): a page-preview thumbnail — the doc's title heading plus
+  // the first few lines of its body — over a footer with the type icon,
+  // type label, filename and version · date. The portal stays read-only
+  // (whole card opens the doc; no kebab menu), and the status pill carries
+  // the portal-specific Awaiting/Signed signal.
   function renderCard(card: DocCardItem) {
     const Icon = card.type === 'sop' ? DocIcon : card.type === 'contract' ? ContractIcon : LetterIcon
+    const typeLabel = card.type === 'sop' ? s.sops : card.type === 'contract' ? s.contracts : s.portalLettersFilter
+    const title = card.doc.title?.trim() || s.documentsUntitled
+    // Amber for "needs signing", green once signed — same colour language as
+    // the dashboard's status pill (dot + label), portal semantics.
+    const statusColor = card.needsAction ? 'var(--color-warning, #f59e0b)' : 'var(--color-success, #22c55e)'
     // Date line: signed docs anchor to the signature date (legal anchor —
     // absolute is more meaningful than "5 days ago"); unsigned/awaiting docs
     // show a relative "Updated" so freshness is obvious at a glance.
@@ -1746,57 +1744,85 @@ function DocumentsGrid({
       : card.updatedAt
         ? `${s.metaUpdated} ${formatRelativeTime(card.updatedAt, lang)}`
         : ''
+    // Thumbnail body text, resolved against the employee/org (and, for
+    // contracts, the contract itself) so tokens read as real values rather
+    // than raw {{placeholders}}. Prefer the employee's language, fall back
+    // to the other side for a doc authored monolingually.
+    const ctx: MergeContext = {
+      employee,
+      organization: org,
+      contract: card.type === 'contract' ? card.doc : null,
+      today: new Date(),
+      lang,
+    }
+    const rawPreview = docPreviewLines(card.doc.content_doc, lang, 6)
+    const preview = (rawPreview.length ? rawPreview : docPreviewLines(card.doc.content_doc, lang === 'id' ? 'en' : 'id', 6))
+      .map(line => renderMergeFields(line, ctx))
+
     return (
       <button
         key={`${card.type}-${card.doc.id}`}
         onClick={() => openCard(card)}
-        className="relative flex flex-col rounded-xl border p-3 text-left transition-colors"
-        style={{
-          borderColor: card.needsAction ? 'var(--color-warning, #f59e0b)' : 'var(--color-border)',
-          backgroundColor: 'var(--color-bg)',
+        className="group flex cursor-pointer flex-col overflow-hidden rounded-lg border text-left transition-all"
+        style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }}
+        onMouseOver={e => {
+          e.currentTarget.style.borderColor = 'var(--color-border-strong)'
+          e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.18)'
+        }}
+        onMouseOut={e => {
+          e.currentTarget.style.borderColor = 'var(--color-border)'
+          e.currentTarget.style.boxShadow = 'none'
         }}
       >
-        {/* Status pill: top-right of card. Awaiting is amber-emphasized so it
-            draws the eye; Signed recedes to a muted check so the resting state
-            doesn't compete with documents that need action. */}
-        <span
-          className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold"
-          style={card.needsAction
-            ? {
-                backgroundColor: 'var(--color-warning-subtle, rgba(245, 158, 11, 0.15))',
-                color: 'var(--color-warning, #f59e0b)',
-              }
-            : {
-                backgroundColor: 'var(--color-success-subtle, rgba(34, 197, 94, 0.15))',
-                color: 'var(--color-success, #22c55e)',
-              }}
-        >
-          {card.needsAction ? (
-            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10"/>
-              <line x1="12" y1="8" x2="12" y2="12"/>
-              <line x1="12" y1="16" x2="12.01" y2="16"/>
-            </svg>
-          ) : (
-            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="20 6 9 17 4 12"/>
-            </svg>
-          )}
-          {card.needsAction ? s.statusAwaiting : s.statusSigned}
-        </span>
-        <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-lg" style={{ backgroundColor: 'var(--color-bg-secondary)', color: 'var(--color-text-secondary)' }}>
-          <Icon />
+        {/* Page preview — title heading plus the first lines of body, with
+            the status pill floated top-right. */}
+        <div className="relative aspect-[3/4] overflow-hidden px-3 py-3" style={{ backgroundColor: 'var(--color-bg)' }}>
+          <span
+            className="absolute right-1.5 top-1.5 inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9px] font-medium"
+            style={{ backgroundColor: 'var(--color-bg)', borderColor: 'var(--color-border)', color: statusColor }}
+          >
+            <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: statusColor }} />
+            {card.needsAction ? s.statusAwaiting : s.statusSigned}
+          </span>
+          <div className="pr-12 text-[13px] font-semibold leading-snug" style={{ color: 'var(--color-text)' }}>
+            {title}
+          </div>
+          <div className="mt-2 space-y-1.5">
+            {preview.map((line, i) => (
+              <div
+                key={i}
+                className="overflow-hidden text-[10px] leading-relaxed"
+                style={{
+                  color: 'var(--color-text-secondary)',
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical',
+                }}
+              >
+                {line}
+              </div>
+            ))}
+          </div>
         </div>
-        <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-tertiary)' }}>
-          {card.type === 'sop' ? s.sops : s.contracts}
-        </p>
-        <p className="mt-0.5 line-clamp-2 text-sm font-medium" style={{ color: 'var(--color-text)' }}>
-          {card.doc.title}
-        </p>
-        <p className="mt-1 text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>
-          v{card.doc.current_version}
-          {dateLine && ` · ${dateLine}`}
-        </p>
+
+        {/* Footer — type icon + label, filename, then version · date. */}
+        <div className="border-t px-3 py-2.5" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)' }}>
+          <div className="flex items-center gap-1" style={{ color: 'var(--color-text-secondary)' }}>
+            <span className="shrink-0">
+              <Icon size={12} />
+            </span>
+            <span className="truncate text-[8px] font-semibold uppercase tracking-wide">
+              {typeLabel}
+            </span>
+          </div>
+          <div className="mt-1 truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+            {title}
+          </div>
+          <div className="mt-1 truncate text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>
+            v{card.doc.current_version}
+            {dateLine && ` · ${dateLine}`}
+          </div>
+        </div>
       </button>
     )
   }
@@ -1842,7 +1868,7 @@ function DocumentsGrid({
               <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-warning, #f59e0b)' }}>
                 {s.needsAction}
               </h2>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-3">
                 {pendingCards.map(renderCard)}
               </div>
             </div>
@@ -1855,7 +1881,7 @@ function DocumentsGrid({
                   {s.yourDocuments}
                 </h2>
               )}
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-3">
                 {archiveCards.map(renderCard)}
               </div>
             </div>
@@ -1947,6 +1973,40 @@ function AchievementDetailModal({
 
 // ─── Home Tab ────────────────────────────────────────────
 
+// A tappable navigation row on the home page — used for Badges and Leaderboard
+// now that they've moved off the bottom tab bar. Mirrors the pending-action
+// row styling (rounded card, 36px icon chip, trailing chevron).
+function PortalLinkRow({
+  icon,
+  accent,
+  label,
+  trailing,
+  onClick,
+}: {
+  icon: React.ReactNode
+  accent: string
+  label: string
+  trailing?: number | string
+  onClick: () => void
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-colors"
+      style={{ borderColor: 'var(--color-border)' }}
+    >
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: 'var(--color-bg-tertiary)', color: accent }}>
+        {icon}
+      </div>
+      <span className="min-w-0 flex-1 text-sm font-medium" style={{ color: 'var(--color-text)' }}>{label}</span>
+      {trailing !== undefined && (
+        <span className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{trailing}</span>
+      )}
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-text-tertiary)' }}><path d="m9 18 6-6-6-6"/></svg>
+    </button>
+  )
+}
+
 function HomeTab({
   employee,
   portal,
@@ -1962,6 +2022,8 @@ function HomeTab({
   onSelectMonth,
   onOpenSop,
   onSelectAchievement,
+  onOpenBadges,
+  onOpenLeaderboard,
 }: {
   employee: Employee
   portal: PortalHomeData | null
@@ -1977,6 +2039,8 @@ function HomeTab({
   onSelectMonth: (month: string) => void
   onOpenSop: (sop: Sop) => void
   onSelectAchievement: (achievement: AchievementSummary) => void
+  onOpenBadges: () => void
+  onOpenLeaderboard: () => void
 }) {
   const earliestMonth = monthFromIsoDate(employee.created_at)
   // Past months: pending SOPs and the activity feed are filtered to that
@@ -2129,6 +2193,30 @@ function HomeTab({
           )}
         </StatRow>
       </div>
+
+      {/* Recognition — Badges and Leaderboard moved here from the bottom bar so
+          the bar could shrink to five tabs. Each row opens the full view. */}
+      {(badgesEnabled || adjustmentsEnabled) && (
+        <div className="mb-6 space-y-2">
+          {badgesEnabled && (
+            <PortalLinkRow
+              icon={<BadgeIcon />}
+              accent="var(--color-warning)"
+              label={s.portalBadgesTabLabel}
+              trailing={portal?.achievements.length ?? 0}
+              onClick={onOpenBadges}
+            />
+          )}
+          {adjustmentsEnabled && (
+            <PortalLinkRow
+              icon={<TrophyIcon />}
+              accent="var(--color-primary)"
+              label={s.leaderboard}
+              onClick={onOpenLeaderboard}
+            />
+          )}
+        </div>
+      )}
 
       {/* Pending actions */}
       {visibleUnsignedSops.length > 0 && (
