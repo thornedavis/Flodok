@@ -5,6 +5,7 @@ export async function callLLM(
   userMessage: string,
   apiKey: string,
   model: string,
+  maxTokens?: number,
 ): Promise<string> {
   let lastError: Error | null = null;
 
@@ -30,6 +31,10 @@ export async function callLLM(
           ],
           temperature: 0.1,
           response_format: { type: "json_object" },
+          // Sized for the SOP worst-case (a full-document rewrite). Without a
+          // cap the model can be truncated by provider defaults mid-JSON, which
+          // then throws in parseLLMJson and loses the whole meeting.
+          ...(maxTokens ? { max_tokens: maxTokens } : {}),
         }),
       });
 

@@ -1,5 +1,6 @@
 import type {
   Env,
+  ExtractedTask,
   FlodokEmployee,
   FlodokEmployeeWithSOP,
   SOPUpdate,
@@ -98,6 +99,28 @@ export async function submitSOPUpdate(
     }),
   });
   return response.json() as Promise<{ status: string; update_id: string }>;
+}
+
+// Meeting action items → the tasks-ingest edge fn, which stages them as
+// pending_tasks for human review. Reuses the same worker auth as SOP updates.
+// One call per meeting (the whole array); tasks-ingest dedups per item and
+// resolves each assignee_name to a real person server-side.
+export async function submitTask(
+  env: Env,
+  orgId: string,
+  meetingId: string,
+  sourceMeeting: string,
+  tasks: ExtractedTask[],
+): Promise<{ ingested: number; deduped: number; failed: number }> {
+  const response = await flodokFetch(env, orgId, "tasks-ingest", {
+    method: "POST",
+    body: JSON.stringify({
+      meeting_id: meetingId,
+      source_meeting: sourceMeeting,
+      tasks,
+    }),
+  });
+  return response.json() as Promise<{ ingested: number; deduped: number; failed: number }>;
 }
 
 export async function submitUnmatchedItem(

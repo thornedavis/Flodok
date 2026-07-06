@@ -39,6 +39,8 @@ interface LogProcessingRequest {
   meeting_date?: string
   employees_matched?: number
   tasks_created?: number
+  tasks_deduped?: number
+  tasks_failed?: number
   sop_updates_sent?: number
   unmatched_items?: number
   errors?: string[]
@@ -183,6 +185,8 @@ async function handleLogProcessing(supabase: SupabaseClient, body: LogProcessing
     meeting_date: body.meeting_date ?? null,
     employees_matched: body.employees_matched ?? 0,
     tasks_created: body.tasks_created ?? 0,
+    tasks_deduped: body.tasks_deduped ?? 0,
+    tasks_failed: body.tasks_failed ?? 0,
     sop_updates_sent: body.sop_updates_sent ?? 0,
     unmatched_items: body.unmatched_items ?? 0,
     errors: body.errors && body.errors.length > 0 ? body.errors : null,

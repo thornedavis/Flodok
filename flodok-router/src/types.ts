@@ -98,9 +98,13 @@ export interface NameExtractionResult {
 // --- LLM Call 2: Full Analysis ---
 
 export interface ExtractedTask {
-  assignee_name: string;
-  description: string;
-  deadline: string | null;
+  // Name as referred to in the meeting (or the speaker's name for first-person
+  // commitments). Resolved to a real person server-side in tasks-ingest; null =
+  // genuinely unassigned. The LLM never emits an id.
+  assignee_name: string | null;
+  title: string;
+  notes?: string | null;
+  due_date: string | null;
   priority: "high" | "medium" | "low";
 }
 
@@ -133,9 +137,6 @@ export interface OrgConfig {
   org_name: string;
   fireflies_api_key: string;
   fireflies_webhook_secret?: string;
-  asana_access_token?: string;
-  asana_workspace_id?: string;
-  asana_project_id?: string;
   enabled: boolean;
   // Incremented on every credential change. Used as a cache-busting hint so
   // the Worker can treat KV-cached configs as stale without a DB round trip.
@@ -150,7 +151,9 @@ export interface ProcessingLog {
   meeting_date: string;
   processed_at: string;
   employees_matched: number;
-  tasks_created: number;
+  tasks_created: number;   // tasks ingested into pending_tasks (was: Asana-created)
+  tasks_deduped: number;   // re-extracted tasks collapsed by the idempotency key
+  tasks_failed: number;    // tasks rejected by server-side validation
   sop_updates_sent: number;
   unmatched_items: number;
   errors: string[];

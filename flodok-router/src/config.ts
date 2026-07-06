@@ -28,9 +28,6 @@ interface FirefliesCreds {
   api_key: string;
   webhook_secret?: string;
 }
-interface AsanaCreds {
-  access_token: string;
-}
 
 async function callWorkerConfig<T>(
   env: Env,
@@ -61,31 +58,24 @@ async function assembleOrgConfig(resolved: ResolveResponse): Promise<OrgConfig |
     if (row.status === "active") byProvider.set(row.provider, row);
   }
 
-  // Fireflies is the only required integration — it's the source of
-  // transcripts. Without it the pipeline has nothing to do. Asana is optional;
-  // tasks just get skipped with a log entry when it's absent.
+  // Fireflies is the only integration the pipeline needs — it's the source of
+  // transcripts. Without it there's nothing to do. (Tasks now route into Flodok,
+  // not Asana, so no Asana creds are assembled here.)
   const fireflies = byProvider.get("fireflies");
-  const asana = byProvider.get("asana");
-
   if (!fireflies) return null;
 
-  const [firefliesPlain, asanaPlain] = await Promise.all([
-    decryptJson<FirefliesCreds>(fireflies.credentials_encrypted, env_key),
-    asana ? decryptJson<AsanaCreds>(asana.credentials_encrypted, env_key) : Promise.resolve(null),
-  ]);
-
-  const maxVersion = Math.max(fireflies.version, asana?.version ?? 0);
+  const firefliesPlain = await decryptJson<FirefliesCreds>(
+    fireflies.credentials_encrypted,
+    env_key,
+  );
 
   return {
     org_id: resolved.org.id,
     org_name: resolved.org.name,
     fireflies_api_key: firefliesPlain.api_key,
     fireflies_webhook_secret: firefliesPlain.webhook_secret,
-    asana_access_token: asanaPlain?.access_token,
-    asana_workspace_id: (asana?.config?.workspace_id as string | undefined) ?? undefined,
-    asana_project_id: (asana?.config?.project_id as string | undefined) ?? undefined,
     enabled: true,
-    config_version: maxVersion,
+    config_version: fireflies.version,
   };
 }
 
@@ -178,6 +168,8 @@ export async function writeProcessingLog(
     meeting_date: log.meeting_date || null,
     employees_matched: log.employees_matched,
     tasks_created: log.tasks_created,
+    tasks_deduped: log.tasks_deduped,
+    tasks_failed: log.tasks_failed,
     sop_updates_sent: log.sop_updates_sent,
     unmatched_items: log.unmatched_items,
     errors: log.errors,
