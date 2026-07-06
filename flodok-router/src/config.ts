@@ -38,6 +38,9 @@ async function callWorkerConfig<T>(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      // Anon key satisfies the Supabase gateway's mandatory Authorization
+      // header; worker-config still enforces X-Worker-Token itself. See flodok.ts.
+      Authorization: `Bearer ${env.SUPABASE_ANON_KEY}`,
       "X-Worker-Token": env.WORKER_SERVICE_TOKEN,
     },
     body: JSON.stringify(body ?? {}),

@@ -31,6 +31,12 @@ async function flodokFetch(
         ...options,
         headers: {
           "Content-Type": "application/json",
+          // Supabase's function gateway requires a valid project key in the
+          // Authorization header before a request reaches the function; the anon
+          // key satisfies it. The function still enforces X-Worker-Token, so this
+          // adds no trust — it just gets us past the gateway. (Without it every
+          // worker→Supabase call 401s with UNAUTHORIZED_NO_AUTH_HEADER.)
+          Authorization: `Bearer ${env.SUPABASE_ANON_KEY}`,
           "X-Worker-Token": env.WORKER_SERVICE_TOKEN,
           "X-Worker-Org-Id": orgId,
           ...options.headers,

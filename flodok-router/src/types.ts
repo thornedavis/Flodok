@@ -14,13 +14,13 @@ export interface Env {
   // throttling lives at the app layer (processing_logs counter), not here.
   OPENROUTER_API_KEY: string;
   OPENROUTER_MODEL?: string;
-  // Supabase anon API key — used by the /pdf endpoint to verify
-  // user sessions via the auth/v1/user lookup. This is algorithm-
-  // agnostic so it works regardless of whether the project signs
-  // tokens with the legacy HS256 secret or the newer ECC signing
-  // keys. Set via `wrangler secret put SUPABASE_ANON_KEY` from
-  // flodok-router/. Same value as the browser's VITE_SUPABASE_ANON_KEY.
-  SUPABASE_ANON_KEY?: string;
+  // Supabase anon API key. Two uses: (1) the Authorization header on every
+  // worker→Supabase Edge Function call — the gateway rejects requests without a
+  // valid project key (the functions still enforce X-Worker-Token themselves);
+  // (2) the /pdf endpoint verifies user sessions via the auth/v1/user lookup.
+  // Required (see REQUIRED_SECRETS). Set via `wrangler secret put
+  // SUPABASE_ANON_KEY` from flodok-router/. Same value as VITE_SUPABASE_ANON_KEY.
+  SUPABASE_ANON_KEY: string;
   // Optional — if set, requests to the legacy /webhook/fireflies path route
   // to this org for a grace period while users update their Fireflies URLs.
   LEGACY_WEBHOOK_ORG_ID?: string;

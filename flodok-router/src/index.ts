@@ -15,6 +15,9 @@ import {
 // the request level) rather than silent (cron skips, webhooks fail obscurely).
 const REQUIRED_SECRETS = [
   "SUPABASE_URL",
+  // Required: it's the Authorization header on every worker→Supabase call
+  // (the gateway rejects requests without one). Not just for /pdf anymore.
+  "SUPABASE_ANON_KEY",
   "WORKER_SERVICE_TOKEN",
   "ENCRYPTION_KEY",
   "OPENROUTER_API_KEY",
