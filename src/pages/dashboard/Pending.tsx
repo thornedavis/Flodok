@@ -6,6 +6,7 @@ import { useLang } from '../../contexts/LanguageContext'
 import { writeSnapshot } from '../../lib/snapshotApi'
 import { useBilling } from '../../contexts/BillingContext'
 import { Skeleton } from '../../components/Skeleton'
+import { SuggestedTasks } from '../../components/SuggestedTasks'
 import type { User, PendingUpdate, Employee, Sop } from '../../types/aliases'
 
 type Change = { section?: string; summary?: string; content_markdown?: string; change_type?: string }
@@ -648,6 +649,9 @@ export function Pending({ user }: { user: User }) {
           })}
         </div>
       )}
+
+      {/* AI-extracted meeting action items awaiting review (renders nothing when empty). */}
+      <SuggestedTasks user={user} />
 
       {resolved.length > 0 && (
         <div className="mt-10">
