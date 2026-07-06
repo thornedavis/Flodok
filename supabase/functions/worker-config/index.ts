@@ -27,9 +27,18 @@ interface DedupClaimRequest {
   org_id: string
   provider: string
   external_id: string
-  status?: 'ok' | 'error' | 'skipped'
-  detail?: Record<string, unknown>
 }
+
+interface MarkMeetingRequest {
+  org_id: string
+  provider: string
+  external_id: string
+  success: boolean
+}
+
+// Bounded retries: a transiently-failed meeting is re-claimable by the cron poll
+// up to this many attempts before it's marked 'poison' and left alone.
+const MAX_MEETING_ATTEMPTS = 3
 
 interface LogProcessingRequest {
   org_id: string
@@ -149,27 +158,37 @@ async function handleDedupClaim(supabase: SupabaseClient, body: DedupClaimReques
     return jsonResponse({ error: 'org_id, provider, external_id required' }, 400)
   }
 
-  // Atomic claim: insert returns the row only if it didn't already exist.
-  // Postgres `on conflict do nothing` + `returning` yields zero rows on
-  // conflict, giving us a race-free dedup primitive.
-  const { data, error } = await supabase
-    .from('processed_meetings')
-    .insert({
-      org_id: body.org_id,
-      provider: body.provider,
-      external_id: body.external_id,
-      status: body.status ?? 'ok',
-      detail: body.detail ?? null,
-    })
-    .select('external_id')
+  // Atomic claim-or-revive (see migration 209). Returns true iff this caller may
+  // process the meeting: brand-new, or a 'failed' row still under the attempt
+  // cap (revived to 'processing'). Concurrent webhook+poll can't both win.
+  const { data, error } = await supabase.rpc('claim_meeting', {
+    p_org: body.org_id,
+    p_provider: body.provider,
+    p_external_id: body.external_id,
+    p_max_attempts: MAX_MEETING_ATTEMPTS,
+  })
 
-  if (error) {
-    // Unique-violation is the "already claimed" path.
-    if (error.code === '23505') return jsonResponse({ claimed: false })
-    return jsonResponse({ error: error.message }, 500)
+  if (error) return jsonResponse({ error: error.message }, 500)
+  return jsonResponse({ claimed: data === true })
+}
+
+async function handleMarkMeeting(supabase: SupabaseClient, body: MarkMeetingRequest) {
+  if (!body.org_id || !body.provider || !body.external_id || typeof body.success !== 'boolean') {
+    return jsonResponse({ error: 'org_id, provider, external_id, success required' }, 400)
   }
 
-  return jsonResponse({ claimed: (data?.length ?? 0) > 0 })
+  // Record the outcome: 'done' on success, else 'failed' (poll-retryable) or
+  // 'poison' once attempts are exhausted.
+  const { error } = await supabase.rpc('mark_meeting', {
+    p_org: body.org_id,
+    p_provider: body.provider,
+    p_external_id: body.external_id,
+    p_success: body.success,
+    p_max_attempts: MAX_MEETING_ATTEMPTS,
+  })
+
+  if (error) return jsonResponse({ error: error.message }, 500)
+  return jsonResponse({ ok: true })
 }
 
 async function handleLogProcessing(supabase: SupabaseClient, body: LogProcessingRequest) {
@@ -308,6 +327,8 @@ Deno.serve(async (req: Request) => {
         return await handleRunMonthlyLeaderboard(supabase, body as { period_start?: string })
       case '/dedup-claim':
         return await handleDedupClaim(supabase, body as DedupClaimRequest)
+      case '/mark-meeting':
+        return await handleMarkMeeting(supabase, body as unknown as MarkMeetingRequest)
       case '/log-processing':
         return await handleLogProcessing(supabase, body as LogProcessingRequest)
       case '/test-credentials':

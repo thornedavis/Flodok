@@ -158,6 +158,25 @@ export async function claimMeeting(
   return res.claimed === true;
 }
 
+// Record the outcome of processing a claimed meeting (see migration 209). On
+// success the row is marked 'done'; on failure it's left 'failed' (so the cron
+// poll can retry it) until attempts are exhausted, then 'poison'. This is what
+// makes a transient failure recoverable instead of a silent, permanent loss.
+export async function markMeeting(
+  env: Env,
+  orgId: string,
+  provider: string,
+  externalId: string,
+  success: boolean,
+): Promise<void> {
+  await callWorkerConfig(env, "/mark-meeting", {
+    org_id: orgId,
+    provider,
+    external_id: externalId,
+    success,
+  });
+}
+
 export async function writeProcessingLog(
   env: Env,
   orgId: string,

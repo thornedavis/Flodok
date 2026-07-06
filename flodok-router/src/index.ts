@@ -302,16 +302,20 @@ async function handleFirefliesWebhook(
     return Response.json({ status: "disabled" }, { status: 200 });
   }
 
+  // Fail closed: if this org has configured a webhook secret, a signature is
+  // REQUIRED — a missing header is rejected, not waved through. (Orgs without a
+  // secret — e.g. Fireflies free plan, which can't set one — are unchanged;
+  // meeting-id dedup is their practical replay defense.)
   if (config.fireflies_webhook_secret) {
     const sigHeader = request.headers.get("x-hub-signature");
-    if (sigHeader) {
-      const isValid = await verifyWebhookSignature(request, config.fireflies_webhook_secret);
-      if (!isValid) {
-        console.error(`Webhook[${orgId}]: signature verification failed`);
-        return Response.json({ error: "Invalid signature" }, { status: 401 });
-      }
-    } else {
-      console.warn(`Webhook[${orgId}]: no x-hub-signature header — skipping verification`);
+    if (!sigHeader) {
+      console.error(`Webhook[${orgId}]: secret configured but no x-hub-signature header — rejecting`);
+      return Response.json({ error: "Signature required" }, { status: 401 });
+    }
+    const isValid = await verifyWebhookSignature(request, config.fireflies_webhook_secret);
+    if (!isValid) {
+      console.error(`Webhook[${orgId}]: signature verification failed`);
+      return Response.json({ error: "Invalid signature" }, { status: 401 });
     }
   }
 

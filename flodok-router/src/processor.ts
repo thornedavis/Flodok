@@ -18,7 +18,7 @@ import {
   buildTaskOnlyUserMessage,
 } from "./prompts";
 import { chunkTranscript, formatTranscriptText, needsChunking } from "./chunking";
-import { writeProcessingLog } from "./config";
+import { markMeeting, writeProcessingLog } from "./config";
 
 const DEFAULT_OPENROUTER_MODEL = "anthropic/claude-sonnet-4.5";
 // Cap sized for the SOP worst-case (a full-document rewrite); prevents provider
@@ -59,6 +59,7 @@ export async function processWebhook(
     errors: [],
   };
 
+  let ok = true;
   try {
     const transcript = await fetchTranscript(meetingId, config.fireflies_api_key);
     log.meeting_title = transcript.title;
@@ -73,7 +74,18 @@ export async function processWebhook(
       await processSingle(meetingId, transcript, transcriptText, roster, config, env, log);
     }
   } catch (err) {
+    ok = false;
     log.errors.push(err instanceof Error ? err.message : String(err));
+  }
+
+  // Record the claim outcome so a fatal failure is retryable by the cron poll
+  // (bounded, then poisoned) instead of a silent permanent loss. Per-item
+  // failures inside routeOutputs don't throw, so they don't flip ok=false — a
+  // bad task never marks the whole meeting failed.
+  try {
+    await markMeeting(env, config.org_id, "fireflies", meetingId, ok);
+  } catch (err) {
+    console.error(`Failed to mark meeting ${meetingId}:`, err);
   }
 
   try {
