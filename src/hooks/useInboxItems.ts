@@ -16,11 +16,12 @@ export function useInboxItems(orgId: string, userId: string, refreshKey = 0) {
     let cancelled = false
     async function load() {
       setLoading(true)
-      const [c, s, e, pu, cs, ss, d, f, ur] = await Promise.all([
+      const [c, s, e, pu, ptk, cs, ss, d, f, ur] = await Promise.all([
         supabase.from('contracts').select('*').eq('org_id', orgId),
         supabase.from('sops').select('*').eq('org_id', orgId),
         supabase.from('employees').select('*').eq('org_id', orgId).in('lifecycle_stage', [...WORKFORCE_STAGES]),
         supabase.from('pending_updates').select('*').eq('org_id', orgId).eq('status', 'pending'),
+        supabase.from('pending_tasks').select('*').eq('org_id', orgId).eq('status', 'pending'),
         supabase.from('contract_signatures').select('*'),
         supabase.from('sop_signatures').select('*'),
         supabase.from('inbox_dismissals').select('*').eq('user_id', userId),
@@ -33,6 +34,7 @@ export function useInboxItems(orgId: string, userId: string, refreshKey = 0) {
         sops: s.data || [],
         employees: e.data || [],
         pendingUpdates: pu.data || [],
+        pendingTasks: ptk.data || [],
         contractSignatures: cs.data || [],
         sopSignatures: ss.data || [],
         dismissals: d.data || [],

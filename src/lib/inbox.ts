@@ -10,8 +10,8 @@
 //   - awaiting_others: we've sent it, waiting on someone else
 //   - upcoming:        heads-up, no action yet but coming soon
 //
-// And one of five categories (rendered as filter pills):
-//   contract | sop | probation | document | pending_update
+// And one of these categories (rendered as filter pills):
+//   contract | sop | probation | document | pending_update | form | task
 
 import type {
   Contract,
@@ -23,13 +23,15 @@ import type {
   InboxDismissal,
   FormSubmission,
 } from '../types/aliases'
+import type { PendingTask } from './pendingTasks'
 import { documentEditPath } from './documentTypes'
 
 export type InboxBucket = 'action_required' | 'awaiting_others' | 'upcoming'
-export type InboxCategory = 'contract' | 'sop' | 'probation' | 'document' | 'pending_update' | 'form'
+export type InboxCategory = 'contract' | 'sop' | 'probation' | 'document' | 'pending_update' | 'form' | 'task'
 
 export type InboxKind =
   | 'pending_update_review'
+  | 'pending_task_review'
   | 'probation_decision_due'
   | 'contract_awaiting_employee_signature'
   | 'sop_awaiting_employee_signature'
@@ -75,6 +77,7 @@ export interface DeriveInputs {
   sops: Sop[]
   employees: Employee[]
   pendingUpdates: PendingUpdate[]
+  pendingTasks: PendingTask[]
   contractSignatures: ContractSignature[]
   sopSignatures: SopSignature[]
   dismissals: InboxDismissal[]
@@ -93,6 +96,7 @@ export function deriveInboxItems({
   sops,
   employees,
   pendingUpdates,
+  pendingTasks,
   contractSignatures,
   sopSignatures,
   dismissals,
@@ -117,6 +121,22 @@ export function deriveInboxItems({
         : 'Update suggested',
       subtitle: pu.source_meeting || undefined,
       due_at: pu.created_at,
+      href: '/dashboard/pending',
+      action_label_key: 'inboxActionReview',
+    })
+  }
+
+  // Suggested tasks (AI-extracted from meetings) awaiting review.
+  for (const pt of pendingTasks) {
+    if (pt.status !== 'pending') continue
+    items.push({
+      dedupe_key: `pending_task_review:${pt.id}`,
+      kind: 'pending_task_review',
+      bucket: 'action_required',
+      category: 'task',
+      title: pt.title,
+      subtitle: pt.source_meeting || undefined,
+      due_at: pt.created_at,
       href: '/dashboard/pending',
       action_label_key: 'inboxActionReview',
     })
@@ -266,7 +286,7 @@ function daysBetween(now: Date, iso: string): number {
 // ─── Filter helpers used by the page ────────────────────
 
 export const ALL_CATEGORIES: InboxCategory[] = [
-  'contract', 'sop', 'probation', 'document', 'pending_update', 'form',
+  'contract', 'sop', 'probation', 'document', 'pending_update', 'form', 'task',
 ]
 
 // `bucket` accepts 'all' to span every bucket — used by the top-level
@@ -306,7 +326,7 @@ export function countByCategory(
   bucket: InboxBucketSelection,
 ): Record<InboxCategory, number> {
   const counts: Record<InboxCategory, number> = {
-    contract: 0, sop: 0, probation: 0, document: 0, pending_update: 0, form: 0,
+    contract: 0, sop: 0, probation: 0, document: 0, pending_update: 0, form: 0, task: 0,
   }
   for (const i of items) {
     if (bucket !== 'all' && i.bucket !== bucket) continue
