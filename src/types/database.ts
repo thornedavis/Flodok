@@ -3651,6 +3651,108 @@ export type Database = {
           },
         ]
       }
+      pending_tasks: {
+        Row: {
+          assignee_ambiguous: boolean
+          assignee_employee_id: string | null
+          assignee_name: string | null
+          assignee_user_id: string | null
+          created_at: string
+          created_task_id: string | null
+          due_date: string | null
+          id: string
+          meeting_id: string | null
+          notes: string | null
+          org_id: string
+          priority: number
+          resolved_at: string | null
+          reviewed_by: string | null
+          source: string
+          source_meeting: string | null
+          source_ref: string
+          status: string
+          title: string
+        }
+        Insert: {
+          assignee_ambiguous?: boolean
+          assignee_employee_id?: string | null
+          assignee_name?: string | null
+          assignee_user_id?: string | null
+          created_at?: string
+          created_task_id?: string | null
+          due_date?: string | null
+          id?: string
+          meeting_id?: string | null
+          notes?: string | null
+          org_id: string
+          priority?: number
+          resolved_at?: string | null
+          reviewed_by?: string | null
+          source?: string
+          source_meeting?: string | null
+          source_ref: string
+          status?: string
+          title: string
+        }
+        Update: {
+          assignee_ambiguous?: boolean
+          assignee_employee_id?: string | null
+          assignee_name?: string | null
+          assignee_user_id?: string | null
+          created_at?: string
+          created_task_id?: string | null
+          due_date?: string | null
+          id?: string
+          meeting_id?: string | null
+          notes?: string | null
+          org_id?: string
+          priority?: number
+          resolved_at?: string | null
+          reviewed_by?: string | null
+          source?: string
+          source_meeting?: string | null
+          source_ref?: string
+          status?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pending_tasks_assignee_employee_id_fkey"
+            columns: ["assignee_employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pending_tasks_assignee_user_id_fkey"
+            columns: ["assignee_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pending_tasks_created_task_id_fkey"
+            columns: ["created_task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pending_tasks_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pending_tasks_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pending_updates: {
         Row: {
           created_at: string
@@ -3760,6 +3862,8 @@ export type Database = {
           provider: string
           sop_updates_sent: number
           tasks_created: number
+          tasks_deduped: number
+          tasks_failed: number
           unmatched_items: number
         }
         Insert: {
@@ -3774,6 +3878,8 @@ export type Database = {
           provider: string
           sop_updates_sent?: number
           tasks_created?: number
+          tasks_deduped?: number
+          tasks_failed?: number
           unmatched_items?: number
         }
         Update: {
@@ -3788,6 +3894,8 @@ export type Database = {
           provider?: string
           sop_updates_sent?: number
           tasks_created?: number
+          tasks_deduped?: number
+          tasks_failed?: number
           unmatched_items?: number
         }
         Relationships: [
@@ -4404,6 +4512,7 @@ export type Database = {
       tasks: {
         Row: {
           assignee_employee_id: string | null
+          assignee_user_id: string | null
           completed_at: string | null
           created_at: string
           created_by: string | null
@@ -4428,6 +4537,7 @@ export type Database = {
         }
         Insert: {
           assignee_employee_id?: string | null
+          assignee_user_id?: string | null
           completed_at?: string | null
           created_at?: string
           created_by?: string | null
@@ -4452,6 +4562,7 @@ export type Database = {
         }
         Update: {
           assignee_employee_id?: string | null
+          assignee_user_id?: string | null
           completed_at?: string | null
           created_at?: string
           created_by?: string | null
@@ -4480,6 +4591,13 @@ export type Database = {
             columns: ["assignee_employee_id"]
             isOneToOne: false
             referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_assignee_user_id_fkey"
+            columns: ["assignee_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
           {
@@ -5483,6 +5601,7 @@ export type Database = {
         }
         Returns: {
           assignee_employee_id: string | null
+          assignee_user_id: string | null
           completed_at: string | null
           created_at: string
           created_by: string | null
@@ -5847,6 +5966,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      portal_validate_token: {
+        Args: { emp_slug: string; emp_token: string }
+        Returns: boolean
       }
       preview_payroll: { Args: { p_period: string }; Returns: Json }
       publish_job_description: {
