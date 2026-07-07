@@ -3499,6 +3499,7 @@ export type Database = {
           paid_out_at: string | null
           period_month: string
           reason: string
+          task_id: string | null
         }
         Insert: {
           amount_idr: number
@@ -3510,6 +3511,7 @@ export type Database = {
           paid_out_at?: string | null
           period_month?: string
           reason: string
+          task_id?: string | null
         }
         Update: {
           amount_idr?: number
@@ -3521,6 +3523,7 @@ export type Database = {
           paid_out_at?: string | null
           period_month?: string
           reason?: string
+          task_id?: string | null
         }
         Relationships: [
           {
@@ -3542,6 +3545,13 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pay_adjustments_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
             referencedColumns: ["id"]
           },
         ]
@@ -3816,6 +3826,7 @@ export type Database = {
       }
       processed_meetings: {
         Row: {
+          attempts: number
           detail: Json | null
           external_id: string
           org_id: string
@@ -3824,6 +3835,7 @@ export type Database = {
           status: string
         }
         Insert: {
+          attempts?: number
           detail?: Json | null
           external_id: string
           org_id: string
@@ -3832,6 +3844,7 @@ export type Database = {
           status?: string
         }
         Update: {
+          attempts?: number
           detail?: Json | null
           external_id?: string
           org_id?: string
@@ -4834,6 +4847,20 @@ export type Database = {
         Args: { p_org_id: string }
         Returns: undefined
       }
+      accept_pending_task: {
+        Args: {
+          p_assignee_employee_id?: string
+          p_assignee_user_id?: string
+          p_due_date?: string
+          p_notes?: string
+          p_pending_id: string
+          p_priority?: number
+          p_project_id?: string
+          p_title: string
+          p_visible_in_portal?: boolean
+        }
+        Returns: string
+      }
       acknowledge_letter: {
         Args: {
           emp_slug: string
@@ -4975,6 +5002,15 @@ export type Database = {
       }
       attendance_locations_list: { Args: never; Returns: Json }
       auto_close_periods: { Args: never; Returns: Json }
+      claim_meeting: {
+        Args: {
+          p_external_id: string
+          p_max_attempts: number
+          p_org: string
+          p_provider: string
+        }
+        Returns: boolean
+      }
       cleanup_processed_meetings: {
         Args: { retention_days?: number }
         Returns: number
@@ -5252,6 +5288,16 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      mark_meeting: {
+        Args: {
+          p_external_id: string
+          p_max_attempts: number
+          p_org: string
+          p_provider: string
+          p_success: boolean
+        }
+        Returns: undefined
       }
       next_letter_reference_number: {
         Args: { p_org_id: string; p_type_code: string; p_year?: number }
@@ -6033,6 +6079,10 @@ export type Database = {
         }[]
       }
       redeem_owner_claim: { Args: { p_token: string }; Returns: string }
+      reopen_period: {
+        Args: { p_employee_id?: string; p_period: string }
+        Returns: Json
+      }
       repost_form_to_payroll: {
         Args: { p_submission_id: string }
         Returns: undefined
@@ -6059,10 +6109,6 @@ export type Database = {
           snapshot_rows: number
           unlocks_awarded: number
         }[]
-      }
-      reopen_period: {
-        Args: { p_period: string; p_employee_id?: string }
-        Returns: Json
       }
       run_payroll: { Args: { p_period: string }; Returns: Json }
       seed_default_pay_components: { Args: never; Returns: number }
