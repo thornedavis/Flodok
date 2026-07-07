@@ -72,6 +72,7 @@ export function Inbox({ user }: { user: User }) {
     pending_update: t.inboxCategoryPendingUpdate,
     form: t.inboxCategoryForm,
     task: t.inboxCategoryTask,
+    recruitment: t.inboxCategoryRecruitment,
   }
 
   const emptyMsg =
@@ -327,6 +328,7 @@ function CategoryGlyph({ category }: { category: InboxCategory }) {
     pending_update: <><path d="M21 12a9 9 0 1 1-9-9" /><polyline points="21 3 21 9 15 9" /></>,
     form: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="9" y1="13" x2="15" y2="13" /><line x1="9" y1="17" x2="13" y2="17" /></>,
     task: <><polyline points="9 11 12 14 22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></>,
+    recruitment: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><line x1="19" y1="8" x2="19" y2="14" /><line x1="22" y1="11" x2="16" y2="11" /></>,
   }
   return (
     <span

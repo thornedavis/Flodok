@@ -16,7 +16,7 @@ export function useInboxItems(orgId: string, userId: string, refreshKey = 0) {
     let cancelled = false
     async function load() {
       setLoading(true)
-      const [c, s, e, pu, ptk, cs, ss, d, f, ur] = await Promise.all([
+      const [c, s, e, pu, ptk, cs, ss, d, f, ur, sc] = await Promise.all([
         supabase.from('contracts').select('*').eq('org_id', orgId),
         supabase.from('sops').select('*').eq('org_id', orgId),
         supabase.from('employees').select('*').eq('org_id', orgId).in('lifecycle_stage', [...WORKFORCE_STAGES]),
@@ -27,6 +27,7 @@ export function useInboxItems(orgId: string, userId: string, refreshKey = 0) {
         supabase.from('inbox_dismissals').select('*').eq('user_id', userId),
         supabase.from('form_submissions').select('*').eq('org_id', orgId),
         supabase.from('users').select('role').eq('id', userId).single(),
+        supabase.from('employees').select('*').eq('org_id', orgId).eq('lifecycle_stage', 'signed'),
       ])
       if (cancelled) return
       setItems(deriveInboxItems({
@@ -39,6 +40,7 @@ export function useInboxItems(orgId: string, userId: string, refreshKey = 0) {
         sopSignatures: ss.data || [],
         dismissals: d.data || [],
         forms: f.data || [],
+        signedCandidates: sc.data || [],
         viewerUserId: userId,
         viewerIsOwner: ur.data?.role === 'owner',
       }))

@@ -7,6 +7,7 @@ import { buildContractDocumentHash, captureSignatureIp, getUserAgent } from '../
 import { docToMarkdown, type DocumentDoc } from '../../lib/documentDoc'
 import { computeProfileSections, profileCompletionPercent } from '../../lib/candidateProfile'
 import { DocumentUpload } from '../DocumentUpload'
+import { Imagemark } from '../Brand'
 import type { Contract, ContractSignature, Employee, EmployeeEmergencyContact, JobDescription, JobDescriptionSignature, Organization } from '../../types/aliases'
 
 ensureSignatureFontsLoaded()
@@ -48,7 +49,7 @@ interface Props {
 
 type Step = 'welcome' | 'sign' | 'signJd' | 'personal' | 'banking' | 'emergency' | 'docs' | 'done'
 
-const STEP_ORDER: Step[] = ['welcome', 'sign', 'signJd', 'personal', 'banking', 'emergency', 'docs', 'done']
+const STEP_ORDER: Step[] = ['welcome', 'signJd', 'sign', 'personal', 'banking', 'emergency', 'docs', 'done']
 // 'done' isn't a numbered step. The active step list is filtered at
 // render time when there's no contract or no JD, so the progress
 // denominator below is the *maximum* possible step count; the chrome
@@ -67,15 +68,18 @@ export function CandidateOnboarding({
   jdSignature: initialJdSig = null,
   onCompleted,
 }: Props) {
-  const { t, lang } = useLang()
+  const { t, lang, toggle } = useLang()
   const [employee, setEmployee] = useState<Employee>(initialEmployee)
   const [signature, setSignature] = useState<ContractSignature | null>(initialSig)
   const [jdSig, setJdSig] = useState<JobDescriptionSignature | null>(initialJdSig)
-  const requiresJdSig = !!appliedForJd
-  // Pre-offer candidates land here for opportunistic profile completion;
-  // copy on the welcome + done screens shifts to match (no "let's review
-  // your contract" framing when there isn't one yet).
+  // Pre-offer candidates (prospective/shortlisted) land here for opportunistic
+  // profile completion ONLY — no JD/contract/signing appears until they're
+  // offered. Copy on the welcome + done screens shifts to match.
   const preOffer = employee.lifecycle_stage === 'prospective' || employee.lifecycle_stage === 'shortlisted'
+  // Signing is gated on being offered+. When it applies, the JD is signed first
+  // (read the role), then the contract (agree to the terms).
+  const requiresJdSig = !preOffer && !!appliedForJd
+  const signContract = preOffer ? null : activeContract
   const [step, setStep] = useState<Step>(() => {
     if (initialEmployee.lifecycle_stage === 'signed') {
       return needsPersonalInfo(initialEmployee) ? 'personal' : 'done'
@@ -99,49 +103,58 @@ export function CandidateOnboarding({
   }
 
   const stepIndex = Math.min(STEP_ORDER.indexOf(step) + 1, TOTAL_STEPS)
+  const orgName = organization?.display_name || organization?.name || ''
+  const orgLogoUrl = organization?.logo_url || null
 
   function go(next: Step) { setStep(next) }
 
   return (
     <div className="min-h-screen w-full" style={{ backgroundColor: 'var(--color-bg)' }}>
       <div className="mx-auto flex min-h-screen max-w-2xl flex-col px-5 py-8">
-        <header className="mb-6 flex items-center justify-between">
-          <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
-            {organization?.display_name || organization?.name || ''}
-          </span>
-          {step !== 'done' && (
-            <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-              {t.onboardingProgress(stepIndex, TOTAL_STEPS)}
+        <header className="mb-6 flex items-center justify-between gap-4">
+          {orgLogoUrl ? (
+            <img src={orgLogoUrl} alt={orgName} className="h-10 w-auto max-w-[220px] object-contain" />
+          ) : (
+            <span className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
+              {orgName}
             </span>
           )}
+          <div className="flex shrink-0 items-center gap-3">
+            {step !== 'done' && (
+              <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                {t.onboardingProgress(stepIndex, TOTAL_STEPS)}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={toggle}
+              className="flex items-center gap-1.5 rounded-md px-2 py-1.5 transition-colors hover:opacity-70"
+              style={{ color: 'var(--color-text-secondary)' }}
+              title={lang === 'en' ? t.switchToId : t.switchToEn}
+              aria-label={lang === 'en' ? t.switchToId : t.switchToEn}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="m5 8 6 6" />
+                <path d="m4 14 6-6 2-3" />
+                <path d="M2 5h12" />
+                <path d="M7 2h1" />
+                <path d="m22 22-5-10-5 10" />
+                <path d="M14 18h6" />
+              </svg>
+              <span className="hidden text-xs font-semibold sm:inline">{lang === 'en' ? 'EN' : 'ID'}</span>
+            </button>
+          </div>
         </header>
 
         <ProgressBar current={stepIndex} total={TOTAL_STEPS} />
 
-        <main className="mt-8 flex-1">
+        <main className="mt-8 flex flex-1 flex-col justify-center py-8">
           {step === 'welcome' && (
             <WelcomeStep
               orgName={organization?.display_name || organization?.name || ''}
               preOffer={preOffer}
               employee={employee}
-              onContinue={() => go(firstSigningStep(activeContract, requiresJdSig))}
-            />
-          )}
-
-          {step === 'sign' && (
-            <SignStep
-              employee={employee}
-              organization={organization}
-              activeContract={activeContract}
-              employerSignature={employerSignature}
-              employeeSignature={signature}
-              lang={lang}
-              onSigned={async sig => {
-                setSignature(sig)
-                await maybeAdvanceToSigned({ contractSigned: true, jdSigned: !!jdSig })
-                go(requiresJdSig ? 'signJd' : 'personal')
-              }}
-              onSkipBack={() => go('welcome')}
+              onContinue={() => go(firstSigningStep(signContract, requiresJdSig))}
             />
           )}
 
@@ -154,23 +167,42 @@ export function CandidateOnboarding({
               onSigned={async sig => {
                 setJdSig(sig)
                 await maybeAdvanceToSigned({ contractSigned: !!signature, jdSigned: true })
+                go(signContract ? 'sign' : 'personal')
+              }}
+              onSkipBack={() => go('welcome')}
+            />
+          )}
+
+          {step === 'sign' && signContract && (
+            <SignStep
+              employee={employee}
+              organization={organization}
+              activeContract={signContract}
+              employerSignature={employerSignature}
+              employeeSignature={signature}
+              lang={lang}
+              onSigned={async sig => {
+                setSignature(sig)
+                await maybeAdvanceToSigned({ contractSigned: true, jdSigned: !!jdSig })
                 go('personal')
               }}
-              onSkipBack={() => go(activeContract ? 'sign' : 'welcome')}
+              onSkipBack={() => go(requiresJdSig ? 'signJd' : 'welcome')}
             />
           )}
 
           {step === 'personal' && (
             <PersonalStep
               employee={employee}
+              required={!preOffer}
               onSaved={updated => { setEmployee(updated); go('banking') }}
-              onBack={() => go(previousStepBeforePersonal(activeContract, requiresJdSig))}
+              onBack={() => go(previousStepBeforePersonal(signContract, requiresJdSig))}
             />
           )}
 
           {step === 'banking' && (
             <BankingStep
               employee={employee}
+              required={!preOffer}
               onSaved={updated => { setEmployee(updated); go('emergency') }}
               onBack={() => go('personal')}
             />
@@ -179,6 +211,7 @@ export function CandidateOnboarding({
           {step === 'emergency' && (
             <EmergencyStep
               employee={employee}
+              required={!preOffer}
               onSaved={() => go('docs')}
               onBack={() => go('banking')}
             />
@@ -202,6 +235,26 @@ export function CandidateOnboarding({
             />
           )}
         </main>
+
+        <footer
+          className="mt-10 flex flex-col items-center gap-3 border-t pt-6 text-xs sm:flex-row sm:justify-between"
+          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-tertiary)' }}
+        >
+          <a
+            href="https://flodok.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 transition-opacity hover:opacity-70"
+          >
+            <Imagemark size={14} />
+            <span>{t.onboardingPoweredBy} Flodok</span>
+          </a>
+          <nav className="flex items-center gap-4">
+            <a href="/privacy" target="_blank" rel="noopener noreferrer" className="transition-opacity hover:opacity-70">{t.onboardingFooterPrivacy}</a>
+            <a href="/terms" target="_blank" rel="noopener noreferrer" className="transition-opacity hover:opacity-70">{t.onboardingFooterTerms}</a>
+            <a href="/security" target="_blank" rel="noopener noreferrer" className="transition-opacity hover:opacity-70">{t.onboardingFooterSecurity}</a>
+          </nav>
+        </footer>
       </div>
     </div>
   )
@@ -214,15 +267,17 @@ function needsPersonalInfo(employee: Employee): boolean {
 // Step routing — keeps the "skip steps that don't apply" logic in one place
 // so the welcome screen's Continue button and the personal step's Back
 // button agree on what the previous/next step is.
-function firstSigningStep(activeContract: Contract | null, requiresJdSig: boolean): Step {
-  if (activeContract) return 'sign'
+function firstSigningStep(signContract: Contract | null, requiresJdSig: boolean): Step {
   if (requiresJdSig) return 'signJd'
+  if (signContract) return 'sign'
   return 'personal'
 }
 
-function previousStepBeforePersonal(activeContract: Contract | null, requiresJdSig: boolean): Step {
+function previousStepBeforePersonal(signContract: Contract | null, requiresJdSig: boolean): Step {
+  // The step right before 'personal' is the last signing step: contract (last),
+  // else JD, else there was no signing (pre-offer) → welcome.
+  if (signContract) return 'sign'
   if (requiresJdSig) return 'signJd'
-  if (activeContract) return 'sign'
   return 'welcome'
 }
 
@@ -415,7 +470,7 @@ function SignStep({ employee, organization, activeContract, employerSignature, e
         <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>{t.onboardingSignBody}</p>
 
         <div>
-          <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.onboardingSignNameLabel}</label>
+          <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.onboardingSignNameLabel}<span style={{ color: 'var(--color-danger)' }}> *</span></label>
           <input
             type="text"
             value={typedName}
@@ -587,7 +642,7 @@ function SignJdStep({ employee, jd, jdSignature, lang, onSigned, onSkipBack }: {
         <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>{t.onboardingJdSignBody}</p>
 
         <div>
-          <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.onboardingSignNameLabel}</label>
+          <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.onboardingSignNameLabel}<span style={{ color: 'var(--color-danger)' }}> *</span></label>
           <input
             type="text"
             value={typedName}
@@ -655,8 +710,9 @@ function SignJdStep({ employee, jd, jdSignature, lang, onSigned, onSkipBack }: {
 
 // ───── Personal step ─────────────────────────────────────────────────────
 
-function PersonalStep({ employee, onSaved, onBack }: {
+function PersonalStep({ employee, required, onSaved, onBack }: {
   employee: Employee
+  required: boolean
   onSaved: (updated: Employee) => void
   onBack: () => void
 }) {
@@ -700,7 +756,7 @@ function PersonalStep({ employee, onSaved, onBack }: {
       </div>
 
       <div className="space-y-4">
-        <Field label={t.onboardingPersonalKtpLabel}>
+        <Field label={t.onboardingPersonalKtpLabel} required={required}>
           <input
             type="text"
             inputMode="numeric"
@@ -712,7 +768,7 @@ function PersonalStep({ employee, onSaved, onBack }: {
           />
         </Field>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <Field label={t.onboardingPersonalDobLabel}>
+          <Field label={t.onboardingPersonalDobLabel} required={required}>
             <input
               type="date"
               value={dob}
@@ -759,8 +815,8 @@ function PersonalStep({ employee, onSaved, onBack }: {
         <button
           type="button"
           onClick={handleSave}
-          disabled={saving}
-          className="rounded-lg px-6 py-3 text-base font-medium text-white disabled:opacity-50"
+          disabled={saving || (required && (!ktpNik.trim() || !dob))}
+          className="rounded-lg px-6 py-3 text-base font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
           style={{ backgroundColor: 'var(--color-primary)' }}
         >
           {saving ? t.onboardingSaving : t.onboardingNext}
@@ -772,8 +828,9 @@ function PersonalStep({ employee, onSaved, onBack }: {
 
 // ───── Banking step ──────────────────────────────────────────────────────
 
-function BankingStep({ employee, onSaved, onBack }: {
+function BankingStep({ employee, required, onSaved, onBack }: {
   employee: Employee
+  required: boolean
   onSaved: (updated: Employee) => void
   onBack: () => void
 }) {
@@ -826,7 +883,7 @@ function BankingStep({ employee, onSaved, onBack }: {
             style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
           />
         </Field>
-        <Field label={t.onboardingBankingNameLabel}>
+        <Field label={t.onboardingBankingNameLabel} required={required}>
           <input
             type="text"
             value={bankName}
@@ -836,7 +893,7 @@ function BankingStep({ employee, onSaved, onBack }: {
             style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
           />
         </Field>
-        <Field label={t.onboardingBankingAccountLabel}>
+        <Field label={t.onboardingBankingAccountLabel} required={required}>
           <input
             type="text"
             inputMode="numeric"
@@ -846,7 +903,7 @@ function BankingStep({ employee, onSaved, onBack }: {
             style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
           />
         </Field>
-        <Field label={t.onboardingBankingHolderLabel}>
+        <Field label={t.onboardingBankingHolderLabel} required={required}>
           <input
             type="text"
             value={accountHolder}
@@ -864,8 +921,8 @@ function BankingStep({ employee, onSaved, onBack }: {
         <button
           type="button"
           onClick={handleSave}
-          disabled={saving}
-          className="rounded-lg px-6 py-3 text-base font-medium text-white disabled:opacity-50"
+          disabled={saving || (required && (!bankName.trim() || !accountNumber.trim() || !accountHolder.trim()))}
+          className="rounded-lg px-6 py-3 text-base font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
           style={{ backgroundColor: 'var(--color-primary)' }}
         >
           {saving ? t.onboardingSaving : t.onboardingNext}
@@ -877,8 +934,9 @@ function BankingStep({ employee, onSaved, onBack }: {
 
 // ───── Emergency contact step ────────────────────────────────────────────
 
-function EmergencyStep({ employee, onSaved, onBack }: {
+function EmergencyStep({ employee, required, onSaved, onBack }: {
   employee: Employee
+  required: boolean
   onSaved: () => void
   onBack: () => void
 }) {
@@ -893,8 +951,9 @@ function EmergencyStep({ employee, onSaved, onBack }: {
   // Load any existing emergency contact so we can edit rather than duplicate.
   useEffect(() => {
     let cancelled = false
-    const getContact = supabase.rpc as unknown as PortalGetEmergencyContactRpc
-    getContact('portal_get_emergency_contact', { emp_slug: employee.slug, emp_token: employee.access_token })
+    // Call rpc inline (not via a detached variable) so `this` stays bound to the
+    // supabase client — otherwise supabase-js throws "reading 'rest'" on undefined.
+    ;(supabase.rpc as unknown as PortalGetEmergencyContactRpc)('portal_get_emergency_contact', { emp_slug: employee.slug, emp_token: employee.access_token })
       .then(({ data }) => {
         if (cancelled) return
         if (data) {
@@ -909,9 +968,12 @@ function EmergencyStep({ employee, onSaved, onBack }: {
 
   async function handleSave() {
     if (saving) return
-    // Allow skipping with all-blank.
-    const allBlank = !name.trim() && !relationship.trim() && !phone.trim()
-    if (allBlank) { onSaved(); return }
+    // Optional (pre-offer): allow skipping with an all-blank form. In the real
+    // onboarding, Name + Phone are required and the button gates on them.
+    if (!required) {
+      const allBlank = !name.trim() && !relationship.trim() && !phone.trim()
+      if (allBlank) { onSaved(); return }
+    }
     setSaving(true)
     setError('')
 
@@ -938,7 +1000,7 @@ function EmergencyStep({ employee, onSaved, onBack }: {
         <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{t.loading}</p>
       ) : (
         <div className="space-y-4">
-          <Field label={t.onboardingEmergencyNameLabel}>
+          <Field label={t.onboardingEmergencyNameLabel} required={required}>
             <input
               type="text"
               value={name}
@@ -957,7 +1019,7 @@ function EmergencyStep({ employee, onSaved, onBack }: {
               style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
             />
           </Field>
-          <Field label={t.onboardingEmergencyPhoneLabel}>
+          <Field label={t.onboardingEmergencyPhoneLabel} required={required}>
             <input
               type="tel"
               value={phone}
@@ -975,8 +1037,8 @@ function EmergencyStep({ employee, onSaved, onBack }: {
         <button
           type="button"
           onClick={handleSave}
-          disabled={saving || loading}
-          className="rounded-lg px-6 py-3 text-base font-medium text-white disabled:opacity-50"
+          disabled={saving || loading || (required && (!name.trim() || !phone.trim()))}
+          className="rounded-lg px-6 py-3 text-base font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
           style={{ backgroundColor: 'var(--color-primary)' }}
         >
           {saving ? t.onboardingSaving : t.onboardingNext}
@@ -1125,10 +1187,12 @@ function DoneStep({ startDate, lang, preOffer, onEnter }: { startDate: string | 
 
 // ───── Helpers ───────────────────────────────────────────────────────────
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <div>
-      <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{label}</label>
+      <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+        {label}{required && <span style={{ color: 'var(--color-danger)' }}> *</span>}
+      </label>
       {children}
     </div>
   )

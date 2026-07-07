@@ -501,3 +501,17 @@ input[data-no-focus-ring]:focus-visible {
 .sop-content > *:first-child {
   margin-top: 0;
 }
+
+/* Recruitment path tracker — the Active endpoint emits a soft pulsing glow when
+   a hire is at, or imminently reaching, Active (ready to activate / starting soon). */
+@keyframes recruit-path-pulse {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-success) 55%, transparent); }
+  70%  { box-shadow: 0 0 0 7px color-mix(in srgb, var(--color-success) 0%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-success) 0%, transparent); }
+}
+.recruit-path-pulse {
+  animation: recruit-path-pulse 1.8s ease-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .recruit-path-pulse { animation: none; }
+}

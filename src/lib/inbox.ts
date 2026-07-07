@@ -27,7 +27,7 @@ import type { PendingTask } from './pendingTasks'
 import { documentEditPath } from './documentTypes'
 
 export type InboxBucket = 'action_required' | 'awaiting_others' | 'upcoming'
-export type InboxCategory = 'contract' | 'sop' | 'probation' | 'document' | 'pending_update' | 'form' | 'task'
+export type InboxCategory = 'contract' | 'sop' | 'probation' | 'document' | 'pending_update' | 'form' | 'task' | 'recruitment'
 
 export type InboxKind =
   | 'pending_update_review'
@@ -39,6 +39,9 @@ export type InboxKind =
   | 'passport_expiring_soon'
   | 'form_awaiting_manager_decision'
   | 'form_awaiting_owner_decision'
+  | 'recruit_needs_start_date'
+  | 'recruit_ready_to_start'
+  | 'recruit_starts_upcoming'
 
 export interface InboxItem {
   dedupe_key: string
@@ -62,6 +65,7 @@ export type ActionLabelKey =
   | 'inboxActionOpenContract'
   | 'inboxActionOpenSop'
   | 'inboxActionOpenEmployee'
+  | 'inboxActionOpenRecruitment'
 
 // Days of look-ahead per kind. Items only surface once they fall inside the
 // window. Probation gets a tighter window because the decision is
@@ -69,6 +73,7 @@ export type ActionLabelKey =
 const PROBATION_DECISION_WINDOW_DAYS = 7      // T-7 → overdue ⇒ action_required
 const PROBATION_UPCOMING_WINDOW_DAYS = 30     // T-30 → T-8 ⇒ upcoming
 const PASSPORT_UPCOMING_WINDOW_DAYS = 60      // T-60 → T-0 ⇒ upcoming
+const RECRUIT_START_UPCOMING_WINDOW_DAYS = 30 // signed hire's start date within a month ⇒ upcoming
 
 // ─── Derivation inputs ──────────────────────────────────
 
@@ -81,6 +86,9 @@ export interface DeriveInputs {
   contractSignatures: ContractSignature[]
   sopSignatures: SopSignature[]
   dismissals: InboxDismissal[]
+  // Signed hires (lifecycle_stage 'signed'), loaded separately from the
+  // workforce `employees` set, for start-date nudges.
+  signedCandidates?: Employee[]
   // Forms awaiting a decision. viewerUserId / viewerIsOwner personalise which
   // pending forms count as "action required" for the current viewer.
   forms?: FormSubmission[]
@@ -101,6 +109,7 @@ export function deriveInboxItems({
   sopSignatures,
   dismissals,
   forms = [],
+  signedCandidates = [],
   viewerUserId,
   viewerIsOwner,
   now = new Date(),
@@ -253,6 +262,29 @@ export function deriveInboxItems({
     })
   }
 
+  // Signed hires: nudge to set a start date (the join_date trap — a signed hire
+  // with no date never graduates to active), and surface who's ready to activate
+  // or starting soon. Derived from lifecycle_stage + join_date only.
+  for (const cand of signedCandidates) {
+    if (cand.lifecycle_stage !== 'signed') continue
+    const base = {
+      category: 'recruitment' as const,
+      href: '/dashboard/recruitment',
+      action_label_key: 'inboxActionOpenRecruitment' as const,
+      subtitle: cand.job_position || undefined,
+    }
+    if (!cand.join_date) {
+      items.push({ ...base, dedupe_key: `recruit_needs_start_date:${cand.id}`, kind: 'recruit_needs_start_date', bucket: 'action_required', title: `Set a start date: ${cand.name}`, due_at: null })
+      continue
+    }
+    const daysUntil = daysBetween(now, cand.join_date)
+    if (daysUntil <= 0) {
+      items.push({ ...base, dedupe_key: `recruit_ready_to_start:${cand.id}:${cand.join_date}`, kind: 'recruit_ready_to_start', bucket: 'action_required', title: `Ready to start: ${cand.name}`, due_at: cand.join_date })
+    } else if (daysUntil <= RECRUIT_START_UPCOMING_WINDOW_DAYS) {
+      items.push({ ...base, dedupe_key: `recruit_starts_upcoming:${cand.id}:${cand.join_date}`, kind: 'recruit_starts_upcoming', bucket: 'upcoming', title: `Starting soon: ${cand.name}`, due_at: cand.join_date })
+    }
+  }
+
   // Layer per-user dismissal/snooze state.
   const dismissedKeys = new Set<string>()
   const snoozedUntil = new Map<string, string>()
@@ -286,7 +318,7 @@ function daysBetween(now: Date, iso: string): number {
 // ─── Filter helpers used by the page ────────────────────
 
 export const ALL_CATEGORIES: InboxCategory[] = [
-  'contract', 'sop', 'probation', 'document', 'pending_update', 'form', 'task',
+  'contract', 'sop', 'probation', 'document', 'pending_update', 'form', 'task', 'recruitment',
 ]
 
 // `bucket` accepts 'all' to span every bucket — used by the top-level
@@ -326,7 +358,7 @@ export function countByCategory(
   bucket: InboxBucketSelection,
 ): Record<InboxCategory, number> {
   const counts: Record<InboxCategory, number> = {
-    contract: 0, sop: 0, probation: 0, document: 0, pending_update: 0, form: 0, task: 0,
+    contract: 0, sop: 0, probation: 0, document: 0, pending_update: 0, form: 0, task: 0, recruitment: 0,
   }
   for (const i of items) {
     if (bucket !== 'all' && i.bucket !== bucket) continue
