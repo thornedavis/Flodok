@@ -81,17 +81,22 @@ export async function createDocFromTemplate(
   }
 
   // Contract — copy the structured starter fields alongside the body.
+  const contractType = tpl.contract_type ?? 'pkwt'
   const { data, error } = await supabase
     .from('contracts')
     .insert({
       ...base,
-      contract_type: tpl.contract_type ?? 'pkwt',
+      contract_type: contractType,
       base_wage_idr: tpl.base_wage_idr,
       allowance_idr: tpl.allowance_idr,
       hours_per_day: tpl.hours_per_day,
       days_per_week: tpl.days_per_week,
       annual_leave_days: tpl.annual_leave_days ?? 12,
-      probation_months: tpl.probation_months,
+      // Probation is PKWTT-only — never carry it onto a PKWT contract, or the
+      // editor reads the fresh draft as "unsaved" on open (parsedProbationMonths
+      // is force-nulled for PKWT). The DB trigger (migration 212) enforces this
+      // too; keeping it explicit here documents the intent at the create site.
+      probation_months: contractType === 'pkwtt' ? tpl.probation_months : null,
     })
     .select('id')
     .single()

@@ -4,12 +4,12 @@ import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
 import { useRole } from '../../hooks/useRole'
 import { useBilling } from '../../contexts/BillingContext'
-import { Modal } from '../Modal'
 import { InfoTooltip } from '../InfoTooltip'
-import { currentPeriodMonth, formatIdr, formatIdrDigits } from '../../lib/credits'
+import { currentPeriodMonth, formatIdr } from '../../lib/credits'
 import { documentEditPath } from '../../lib/documentTypes'
 import { CompensationRing, ShieldPath, WalletPath, CoinPath } from '../portal/CompensationRing'
 import { StatRow } from '../portal/StatRow'
+import { PayAdjustmentModal } from './PayAdjustmentModal'
 import type { Contract, User } from '../../types/aliases'
 
 function ShieldIcon() {
@@ -55,12 +55,6 @@ function TrendIcon({ direction }: { direction: 'up' | 'down' | 'flat' }) {
       <line x1="5" y1="12" x2="19" y2="12" />
     </svg>
   )
-}
-
-const inputStyle: React.CSSProperties = {
-  borderColor: 'var(--color-border)',
-  backgroundColor: 'var(--color-bg)',
-  color: 'var(--color-text)',
 }
 
 export function CompensationOverview({
@@ -287,133 +281,12 @@ export function CompensationOverview({
           user={user}
           employeeId={employeeId}
           period={period}
-          baseWage={baseWage}
-          allowance={allowance}
-          currentNet={adjustmentNet}
           maxIdr={maxAdjustmentIdr}
+          resultingPay={{ baseWage, allowance, currentNet: adjustmentNet }}
           onClose={() => setPayAction(null)}
           onDone={() => { setPayAction(null); onChange?.() }}
         />
       )}
     </section>
-  )
-}
-
-// ─── Reward / Penalise modal ─────────────────────────────
-
-function PayAdjustmentModal({
-  mode,
-  user,
-  employeeId,
-  period,
-  baseWage,
-  allowance,
-  currentNet,
-  maxIdr,
-  onClose,
-  onDone,
-}: {
-  mode: 'reward' | 'penalise'
-  user: User
-  employeeId: string
-  period: string
-  baseWage: number
-  allowance: number
-  currentNet: number
-  maxIdr: number | null
-  onClose: () => void
-  onDone: () => void
-}) {
-  const { t, lang } = useLang()
-  const [amount, setAmount] = useState('')
-  const [reason, setReason] = useState('')
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState('')
-
-  const parsed = Number(amount)
-  const isValidAmount = Number.isFinite(parsed) && parsed > 0
-  const signed = mode === 'reward' ? Math.round(parsed) : -Math.round(parsed)
-  const resultingPay = isValidAmount
-    ? Math.max(0, baseWage + allowance + currentNet + signed)
-    : Math.max(0, baseWage + allowance + currentNet)
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (!isValidAmount) { setError(t.validationAmountPositive); return }
-    if (maxIdr != null && parsed > maxIdr) {
-      setError(t.capExceededBonus(formatIdr(maxIdr, lang)))
-      return
-    }
-    if (reason.trim().length < 20) { setError(t.validationReasonMinLength); return }
-    setSubmitting(true)
-    setError('')
-    const { error: insertError } = await supabase.from('pay_adjustments').insert({
-      org_id: user.org_id,
-      employee_id: employeeId,
-      period_month: period,
-      amount_idr: signed,
-      reason: reason.trim(),
-      awarded_by: user.id,
-    })
-    setSubmitting(false)
-    if (insertError) { setError(insertError.message); return }
-    onDone()
-  }
-
-  return (
-    <Modal open onClose={onClose} title={mode === 'reward' ? t.compensationReward : t.compensationPenalise}>
-      <form onSubmit={handleSubmit} className="space-y-3">
-        <div>
-          <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.bonusAmountLabel}</label>
-          <div className="relative">
-            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm" style={{ color: 'var(--color-text-tertiary)' }}>Rp</span>
-            <input
-              type="text"
-              inputMode="numeric"
-              value={formatIdrDigits(amount)}
-              onChange={e => setAmount(e.target.value.replace(/\D/g, ''))}
-              className="w-full rounded-lg border py-2 pl-9 pr-3 text-sm"
-              style={inputStyle}
-              autoFocus
-            />
-          </div>
-          {isValidAmount && (
-            <p className="mt-1 text-xs" style={{ color: mode === 'penalise' && resultingPay === 0 ? 'var(--color-danger)' : 'var(--color-text-tertiary)' }}>
-              {t.adjustmentResultingPay(formatIdr(resultingPay, lang))}
-            </p>
-          )}
-        </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.reasonLabel}</label>
-          <textarea
-            value={reason}
-            onChange={e => setReason(e.target.value)}
-            rows={3}
-            className="w-full rounded-lg border px-3 py-2 text-sm"
-            style={inputStyle}
-          />
-          <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.reasonHelp}</p>
-        </div>
-        {error && <p className="text-sm" style={{ color: 'var(--color-danger)' }}>{error}</p>}
-        <div className="flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg border px-4 py-2 text-sm"
-            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
-          >
-            {t.cancel}
-          </button>
-          <button
-            type="submit"
-            disabled={submitting}
-            className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-            style={{ backgroundColor: mode === 'reward' ? 'var(--color-success, #16a34a)' : 'var(--color-danger)' }}
-          >
-            {submitting ? '...' : mode === 'reward' ? t.compensationReward : t.compensationPenalise}
-          </button>
-        </div>
-      </form>
-    </Modal>
   )
 }

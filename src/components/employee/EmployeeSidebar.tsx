@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useLang } from '../../contexts/LanguageContext'
 import { getAvatarGradient } from '../../lib/avatar'
+import { AvatarEditMenu } from '../AvatarEditMenu'
 import type { DerivedStatus } from '../../lib/employeeStatus'
 import type { Translations } from '../../lib/translations'
 
@@ -88,15 +89,6 @@ function statusLabel(s: DerivedStatus, t: Translations): string {
   }
 }
 
-function CameraIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-      <circle cx="12" cy="13" r="4" />
-    </svg>
-  )
-}
-
 export function EmployeeSidebar({
   employeeId,
   name,
@@ -165,40 +157,20 @@ export function EmployeeSidebar({
         style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }}
       >
         <div className="flex flex-col items-center text-center">
-          <div className="relative">
+          <AvatarEditMenu
+            photoUrl={photoUrl}
+            uploading={uploading}
+            onSelectFile={onUpload}
+            onRemove={onRemove}
+          >
             <div
               className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-full"
               style={{ background: photoUrl ? 'var(--color-bg-tertiary)' : getAvatarGradient(employeeId) }}
             >
               {photoUrl && <img src={photoUrl} alt={name} className="h-full w-full object-cover" />}
             </div>
-            <label
-              className="absolute -bottom-1 -right-1 flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border text-white shadow-sm"
-              style={{ backgroundColor: 'var(--color-text)', borderColor: 'var(--color-bg)' }}
-              title={uploading ? t.uploading : t.upload}
-            >
-              <CameraIcon />
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                onChange={onUpload}
-                disabled={uploading}
-                className="hidden"
-              />
-            </label>
-          </div>
+          </AvatarEditMenu>
           <h2 className="mt-3 max-w-full truncate text-base font-semibold" style={{ color: 'var(--color-text)' }}>{name}</h2>
-          {photoUrl && (
-            <button
-              type="button"
-              onClick={onRemove}
-              disabled={uploading}
-              className="mt-1 text-xs"
-              style={{ color: 'var(--color-text-tertiary)' }}
-            >
-              {t.remove}
-            </button>
-          )}
         </div>
 
         <div className="mt-3 flex w-full justify-center" title={t.derivedStatusHelp}>

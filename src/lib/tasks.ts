@@ -59,6 +59,20 @@ export async function listTasks(): Promise<Task[]> {
   return (data ?? []) as Task[]
 }
 
+// One employee's tasks — for the Performance reward/penalty task picker. RLS
+// already scopes to the caller's org and drops trashed rows; we surface every
+// status (done included) so the picker can float the mode-relevant ones up.
+export async function listEmployeeTasks(employeeId: string): Promise<Task[]> {
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('assignee_employee_id', employeeId)
+    .order('due_date', { ascending: true, nullsFirst: false })
+    .order('position', { ascending: true })
+  if (error) throw new Error(error.message)
+  return (data ?? []) as Task[]
+}
+
 export async function createTask(input: TaskInsert): Promise<Task> {
   const { data, error } = await supabase
     .from('tasks')

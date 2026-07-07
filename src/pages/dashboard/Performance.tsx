@@ -6,11 +6,12 @@ import { useLang } from '../../contexts/LanguageContext'
 import { useRole } from '../../hooks/useRole'
 import { Modal } from '../../components/Modal'
 import { getAvatarGradient } from '../../lib/avatar'
-import { formatIdr, formatIdrDigits, currentPeriodMonth } from '../../lib/credits'
+import { formatIdr, currentPeriodMonth } from '../../lib/credits'
 import { BadgeGlyph } from '../../components/BadgeGlyph'
 import { Skeleton } from '../../components/Skeleton'
 import { FilterPill, FilterPanel, FilterSearchInput, MultiSelectDropdown, type FilterPanelSection } from '../../components/FilterControls'
 import { StatCard, TrendCard, ChartCard, LegendDot, CHART_TOOLTIP, compactIdr, monthShort, CHART_GREEN, CHART_RED, type TrendPoint } from '../../components/Metrics'
+import { PayAdjustmentModal } from '../../components/employee/PayAdjustmentModal'
 import { MonthStrip } from '../../components/portal/MonthStrip'
 import { ActionsMenuButton } from '../../components/ActionsMenuButton'
 import { useFullWidthLayout } from '../../components/Layout'
@@ -497,15 +498,14 @@ export function Performance({ user }: { user: User }) {
 
       {payAction && roster && (
         <PayAdjustmentModal
-          row={payAction.row}
           mode={payAction.mode}
+          user={user}
+          employeeId={payAction.row.employee_id}
+          employeeName={payAction.row.name}
           period={selectedMonth}
           maxIdr={maxAdjustmentIdr}
-          user={user}
           onClose={() => setPayAction(null)}
           onDone={refreshAfterAction}
-          t={t}
-          lang={lang}
         />
       )}
 
@@ -1029,114 +1029,6 @@ function RewardMenu({
         </div>
       )}
     </div>
-  )
-}
-
-// ─── Reward / Penalise modal ─────────────────────────────
-
-function PayAdjustmentModal({
-  row,
-  mode,
-  period,
-  maxIdr,
-  user,
-  onClose,
-  onDone,
-  t,
-  lang,
-}: {
-  row: RosterRow
-  mode: PayMode
-  period: string
-  maxIdr: number | null
-  user: User
-  onClose: () => void
-  onDone: () => void
-  t: ReturnType<typeof useLang>['t']
-  lang: 'en' | 'id'
-}) {
-  const [amount, setAmount] = useState('')
-  const [reason, setReason] = useState('')
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState('')
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    const parsed = Number(amount)
-    if (!Number.isFinite(parsed) || parsed <= 0) { setError(t.validationAmountPositive); return }
-    if (maxIdr != null && parsed > maxIdr) {
-      setError(t.capExceededBonus(formatIdr(maxIdr, lang)))
-      return
-    }
-    if (reason.trim().length < 20) { setError(t.validationReasonMinLength); return }
-    setSubmitting(true)
-    setError('')
-    const { error: insertError } = await supabase.from('pay_adjustments').insert({
-      org_id: user.org_id,
-      employee_id: row.employee_id,
-      period_month: period,
-      amount_idr: mode === 'reward' ? Math.round(parsed) : -Math.round(parsed),
-      reason: reason.trim(),
-      awarded_by: user.id,
-    })
-    setSubmitting(false)
-    if (insertError) { setError(insertError.message); return }
-    onDone()
-  }
-
-  return (
-    <Modal open onClose={onClose} title={`${mode === 'reward' ? t.compensationReward : t.compensationPenalise} — ${row.name}`}>
-      <form onSubmit={handleSubmit} className="space-y-3">
-        <div>
-          <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.bonusAmountLabel}</label>
-          <div className="relative">
-            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm" style={{ color: 'var(--color-text-tertiary)' }}>Rp</span>
-            <input
-              type="text"
-              inputMode="numeric"
-              value={formatIdrDigits(amount)}
-              onChange={e => setAmount(e.target.value.replace(/\D/g, ''))}
-              className="w-full rounded-lg border py-2 pl-9 pr-3 text-sm"
-              style={inputStyle}
-              autoFocus
-            />
-          </div>
-          {maxIdr != null && (
-            <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{`max ${formatIdr(maxIdr, lang)}`}</p>
-          )}
-        </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.reasonLabel}</label>
-          <textarea
-            value={reason}
-            onChange={e => setReason(e.target.value)}
-            rows={3}
-            className="w-full rounded-lg border px-3 py-2 text-sm"
-            style={inputStyle}
-          />
-          <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.reasonHelp}</p>
-        </div>
-        {error && <p className="text-sm" style={{ color: 'var(--color-danger)' }}>{error}</p>}
-        <div className="flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg border px-4 py-2 text-sm"
-            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
-          >
-            {t.cancel}
-          </button>
-          <button
-            type="submit"
-            disabled={submitting}
-            className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-            style={{ backgroundColor: mode === 'reward' ? 'var(--color-success, #16a34a)' : 'var(--color-danger)' }}
-          >
-            {submitting ? '...' : mode === 'reward' ? t.compensationReward : t.compensationPenalise}
-          </button>
-        </div>
-      </form>
-    </Modal>
   )
 }
 

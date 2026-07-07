@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
@@ -18,6 +18,7 @@ import {
 import { PhoneInput } from '../../components/PhoneInput'
 import { EmployeeAttachments } from '../../components/EmployeeAttachments'
 import { DeleteEmployeeModal } from '../../components/DeleteEmployeeModal'
+import { AvatarEditMenu } from '../../components/AvatarEditMenu'
 import type { Employee, Organization, User } from '../../types/aliases'
 import type { Translations } from '../../lib/translations'
 
@@ -78,6 +79,16 @@ export function CandidateEdit({ user }: { user: User }) {
   const [department, setDepartment] = useState('')
   const [initialDepartment, setInitialDepartment] = useState('')
   const [appliedForJdId, setAppliedForJdId] = useState('')
+  // When arrived via the recruitment drawer's "Job description — not linked"
+  // step (?focus=jd), scroll to and focus the JD picker once the options load.
+  const jdSelectRef = useRef<HTMLSelectElement>(null)
+  useEffect(() => {
+    if (searchParams.get('focus') !== 'jd' || publishedJds.length === 0) return
+    const el = jdSelectRef.current
+    if (!el) return
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    el.focus({ preventScroll: true })
+  }, [publishedJds, searchParams])
   const [source, setSource] = useState<CandidateSourceOption | ''>('')
   const [notes, setNotes] = useState('')
 
@@ -285,12 +296,19 @@ export function CandidateEdit({ user }: { user: User }) {
           <aside className="w-full shrink-0 md:w-64">
             <div className="rounded-xl border p-5" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }}>
               <div className="flex flex-col items-center text-center">
-                <div
-                  className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full text-lg font-semibold text-white"
-                  style={{ background: candidate.photo_url ? 'var(--color-bg-tertiary)' : getAvatarGradient(candidate.id) }}
+                <AvatarEditMenu
+                  photoUrl={candidate.photo_url}
+                  uploading={uploading}
+                  onSelectFile={handlePhotoSelect}
+                  onRemove={handlePhotoRemove}
                 >
-                  {candidate.photo_url ? <img src={candidate.photo_url} alt="" className="h-full w-full object-cover" /> : initials}
-                </div>
+                  <div
+                    className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full text-lg font-semibold text-white"
+                    style={{ background: candidate.photo_url ? 'var(--color-bg-tertiary)' : getAvatarGradient(candidate.id) }}
+                  >
+                    {candidate.photo_url ? <img src={candidate.photo_url} alt="" className="h-full w-full object-cover" /> : initials}
+                  </div>
+                </AvatarEditMenu>
                 <div className="mt-3 truncate text-base font-semibold" style={{ color: 'var(--color-text)' }}>{name || candidate.name}</div>
                 <span
                   className="mt-2 inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium"
@@ -303,21 +321,6 @@ export function CandidateEdit({ user }: { user: User }) {
                   <span className="mt-2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
                     {t.hiringCompletionChip(completionPct)}
                   </span>
-                )}
-              </div>
-
-              <div className="mt-4 flex items-center justify-center gap-2">
-                <label
-                  className={`cursor-pointer rounded-lg border px-3 py-1.5 text-xs transition-colors ${uploading ? 'pointer-events-none opacity-50' : 'hover:bg-[var(--color-bg-tertiary)]'}`}
-                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
-                >
-                  {candidate.photo_url ? t.hiringPhotoChange : t.hiringPhotoUpload}
-                  <input type="file" accept="image/jpeg,image/png,image/webp" onChange={handlePhotoSelect} disabled={uploading} className="hidden" />
-                </label>
-                {candidate.photo_url && (
-                  <button type="button" onClick={handlePhotoRemove} disabled={uploading} className="text-xs" style={{ color: 'var(--color-danger)' }}>
-                    {t.hiringPhotoRemove}
-                  </button>
                 )}
               </div>
 
@@ -384,6 +387,7 @@ export function CandidateEdit({ user }: { user: User }) {
             <Section title={t.candidateSectionApplication}>
               <Field label={t.candidateFieldAppliedForJd} help={publishedJds.length === 0 ? t.candidateNoPublishedJds : t.candidateFieldAppliedForJdHelp}>
                 <select
+                  ref={jdSelectRef}
                   value={appliedForJdId}
                   onChange={e => handleAppliedForJdChange(e.target.value)}
                   disabled={publishedJds.length === 0}

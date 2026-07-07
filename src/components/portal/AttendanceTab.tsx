@@ -226,7 +226,7 @@ export function AttendanceTab({ slug, token }: {
         <div className="flex flex-col items-center justify-center gap-5 text-center" style={{ minHeight: '55vh' }}>
           {/* Live time hero */}
           <div>
-            <div className="text-6xl font-light tracking-tight tabular-nums" style={{ color: 'var(--color-text)' }}>{timeLabel}</div>
+            <div className="text-6xl font-semibold tracking-tight tabular-nums" style={{ color: 'var(--color-text)' }}>{timeLabel}</div>
             <div className="mt-2 text-sm" style={{ color: 'var(--color-text-secondary)' }}>{dateLabel}</div>
           </div>
 

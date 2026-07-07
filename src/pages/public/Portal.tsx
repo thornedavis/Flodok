@@ -19,7 +19,6 @@ import { renderMergeFields, type MergeContext } from '../../lib/mergeFields'
 import { DocumentRenderer, DOCUMENT_RENDERER_STYLES } from '../../components/editor/bilingual/DocumentRenderer'
 import { isDocumentDoc, docPreviewLines, type LanguageMode } from '../../lib/documentDoc'
 import { CompositionBar } from '../../components/portal/CompositionBar'
-import { StatRow } from '../../components/portal/StatRow'
 import { InfoTooltip } from '../../components/InfoTooltip'
 import { AvatarWithBadge } from '../../components/portal/AvatarWithBadge'
 import { MonthStrip } from '../../components/portal/MonthStrip'
@@ -1973,10 +1972,12 @@ function AchievementDetailModal({
 
 // ─── Home Tab ────────────────────────────────────────────
 
-// A tappable navigation row on the home page — used for Badges and Leaderboard
-// now that they've moved off the bottom tab bar. Mirrors the pending-action
-// row styling (rounded card, 36px icon chip, trailing chevron).
-function PortalLinkRow({
+// A discreet metadata pill in the recognition row (XP / badges / leaderboard),
+// replacing the old full-width nav rows. Bordered and low-emphasis so it reads
+// as a footnote under the compensation card. Interactive pills (badges,
+// leaderboard) render as buttons; the static XP pill renders as a span. The
+// icon takes the accent colour; the [&_svg] rule sizes every child icon to 14px.
+function RecognitionChip({
   icon,
   accent,
   label,
@@ -1986,24 +1987,23 @@ function PortalLinkRow({
   icon: React.ReactNode
   accent: string
   label: string
-  trailing?: number | string
-  onClick: () => void
+  trailing?: React.ReactNode
+  onClick?: () => void
 }) {
-  return (
-    <button
-      onClick={onClick}
-      className="flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-colors"
-      style={{ borderColor: 'var(--color-border)' }}
-    >
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: 'var(--color-bg-tertiary)', color: accent }}>
-        {icon}
-      </div>
-      <span className="min-w-0 flex-1 text-sm font-medium" style={{ color: 'var(--color-text)' }}>{label}</span>
-      {trailing !== undefined && (
-        <span className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{trailing}</span>
-      )}
-      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-text-tertiary)' }}><path d="m9 18 6-6-6-6"/></svg>
-    </button>
+  const cls =
+    'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors [&_svg]:h-3.5 [&_svg]:w-3.5'
+  const style: React.CSSProperties = { borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }
+  const inner = (
+    <>
+      <span className="inline-flex" style={{ color: accent }}>{icon}</span>
+      <span>{label}</span>
+      {trailing}
+    </>
+  )
+  return onClick ? (
+    <button type="button" onClick={onClick} className={cls} style={style}>{inner}</button>
+  ) : (
+    <span className={cls} style={style}>{inner}</span>
   )
 }
 
@@ -2215,43 +2215,34 @@ function HomeTab({
         </div>
       </div>
 
-      {/* Experience / tenure */}
-      <div className="mb-6 space-y-2">
-        <StatRow
-          icon={<SparkIcon />}
-          label={s.portalExperience}
-          info={s.portalExperienceInfo}
-          value={s.portalExperienceXp(portal?.lifetime_xp ?? 0)}
-          accent="#eab308"
-        >
-          {portal && (portal.days_employed > 0 || portal.hours_per_week > 0) ? (
-            <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-              {s.portalExperienceBreakdown(portal.days_employed, Math.round(portal.hours_per_week))}
-            </p>
-          ) : (
-            <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{s.portalNoContractYet}</p>
+      {/* Recognition — discreet metadata pills. XP shows only once earned so a
+          new hire never leads with "0 XP"; Badges opens the badges tab and
+          Leaderboard opens the leaderboard. The old full-width Experience card
+          and nav rows collapsed into this single row. */}
+      {((portal?.lifetime_xp ?? 0) > 0 || badgesEnabled || adjustmentsEnabled) && (
+        <div className="mb-6 flex flex-wrap gap-2">
+          {(portal?.lifetime_xp ?? 0) > 0 && (
+            <RecognitionChip
+              icon={<SparkIcon />}
+              accent="var(--color-warning)"
+              label={s.portalExperienceXp(portal?.lifetime_xp ?? 0)}
+            />
           )}
-        </StatRow>
-      </div>
-
-      {/* Recognition — Badges and Leaderboard moved here from the bottom bar so
-          the bar could shrink to five tabs. Each row opens the full view. */}
-      {(badgesEnabled || adjustmentsEnabled) && (
-        <div className="mb-6 space-y-2">
           {badgesEnabled && (
-            <PortalLinkRow
+            <RecognitionChip
               icon={<BadgeIcon />}
               accent="var(--color-warning)"
               label={s.portalBadgesTabLabel}
-              trailing={portal?.achievements.length ?? 0}
+              trailing={<span style={{ color: 'var(--color-text-tertiary)' }}>{portal?.achievements.length ?? 0}</span>}
               onClick={onOpenBadges}
             />
           )}
           {adjustmentsEnabled && (
-            <PortalLinkRow
+            <RecognitionChip
               icon={<TrophyIcon />}
               accent="var(--color-primary)"
               label={s.leaderboard}
+              trailing={<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-text-tertiary)' }}><path d="m9 18 6-6-6-6"/></svg>}
               onClick={onOpenLeaderboard}
             />
           )}
@@ -2413,7 +2404,7 @@ function WalletBalance({
 }) {
   if (!hasContract) {
     return (
-      <div className="mb-6 text-center">
+      <div className="mb-8 mt-4 text-center">
         <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{s.portalMonthlyPayout}</p>
         <p className="mt-1 text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{s.portalSetupCompensation}</p>
       </div>
@@ -2431,12 +2422,15 @@ function WalletBalance({
       : 'var(--color-text-tertiary)'
 
   return (
-    <div className="mb-6 text-center">
+    <div className="mb-8 mt-4 text-center">
       <p className="inline-flex items-center text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
         {s.portalMonthlyPayout}
         <InfoTooltip text={s.portalMonthlyPayoutInfo} />
       </p>
-      <p className="mt-1 text-4xl font-semibold tabular-nums" style={{ color: 'var(--color-text)' }}>
+      <p
+        className="mt-1.5 font-semibold tabular-nums"
+        style={{ color: 'var(--color-text)', fontSize: 'clamp(2.5rem, 11.5vw, 3.25rem)', letterSpacing: '-0.02em', lineHeight: 1.05 }}
+      >
         {formatIdr(total, lang)}
       </p>
       <div

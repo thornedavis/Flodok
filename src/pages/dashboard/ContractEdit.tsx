@@ -287,7 +287,14 @@ export function ContractEdit({ user }: { user: User }) {
   const structuredChanged = contract ? (
     contractType !== (contract.contract_type === 'pkwtt' ? 'pkwtt' : 'pkwt') ||
     parsedAnnualLeave !== contract.annual_leave_days ||
-    parsedProbationMonths !== contract.probation_months
+    // Probation is PKWTT-only — for PKWT it's force-nulled in parsedProbationMonths
+    // (and persistContract writes null). Comparing that forced null against the
+    // stored value would flag every PKWT contract as dirty on load, because
+    // contracts.probation_months defaults to 3 (migration 096) and template-
+    // seeded rows carry it too. Only count it as a change when the contract is
+    // actually PKWTT; a real PKWTT→PKWT switch is already caught by the
+    // contract_type comparison above.
+    (contractType === 'pkwtt' && parsedProbationMonths !== contract.probation_months)
   ) : false
 
   // Required-field gating for Activate & sign. Templates are exempt

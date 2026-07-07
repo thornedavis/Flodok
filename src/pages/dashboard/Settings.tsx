@@ -10,6 +10,7 @@ import { BadgeGlyph } from '../../components/BadgeGlyph'
 import { BadgePicker } from '../../components/BadgePicker'
 import { Skeleton } from '../../components/Skeleton'
 import { Toggle } from '../../components/Toggle'
+import { SettingsSection, ToggleRow, FieldCard, SettingStack } from '../../components/settings/SettingsLayout'
 import { formatIdrDigits } from '../../lib/credits'
 import { AvatarUpload } from '../../components/AvatarUpload'
 import { PhoneInput } from '../../components/PhoneInput'
@@ -94,10 +95,7 @@ export function Settings({ user }: { user: User }) {
       {tab === 'integrations' && isAdmin && <IntegrationsTab user={user} t={t} />}
       {tab === 'payroll' && isAdmin && (
         <div className="space-y-10">
-          <div>
-            <h2 className="mb-4 text-lg font-semibold" style={{ color: 'var(--color-text)' }}>{t.settingsAdjustmentsTab}</h2>
-            <AdjustmentsTab user={user} t={t} />
-          </div>
+          <AdjustmentsTab user={user} t={t} />
           <div className="border-t pt-8" style={{ borderColor: 'var(--color-border)' }}>
             <PayComponentsTab user={user} t={t} />
           </div>
@@ -1057,37 +1055,29 @@ function ApprovalsTab({ user, t }: { user: User; t: Translations }) {
   if (loading) return <SettingsSectionSkeleton />
 
   return (
-    <div className="space-y-6">
-      <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>{t.approvalsTitle}</h2>
-      <div className="space-y-2">
-        <label className="block text-sm font-medium" style={{ color: 'var(--color-text)' }}>{t.approvalsApproverLabel}</label>
-        <select
-          value={approverId ?? ''}
-          disabled={saving}
-          onChange={e => saveApprover(e.target.value || null)}
-          className="w-full max-w-sm rounded-lg border px-3 py-2 text-sm"
-          style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
-        >
-          <option value="">{t.approvalsApproverOwnerDefault}</option>
-          {members.map(m => <option key={m.id} value={m.id}>{m.name ?? m.id}</option>)}
-        </select>
-        <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.approvalsApproverHint}</p>
-      </div>
-      <div className="flex items-start justify-between gap-4 rounded-lg border p-4" style={{ borderColor: 'var(--color-border)' }}>
-        <div className="min-w-0">
-          <div className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{t.approvalsOwnerGateLabel}</div>
-          <p className="mt-0.5 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.approvalsOwnerGateHint}</p>
-        </div>
-        <input
-          type="checkbox"
+    <SettingsSection title={t.approvalsTitle}>
+      <SettingStack>
+        <FieldCard label={t.approvalsApproverLabel} help={t.approvalsApproverHint}>
+          <select
+            value={approverId ?? ''}
+            disabled={saving}
+            onChange={e => saveApprover(e.target.value || null)}
+            className="w-full max-w-sm rounded-lg border px-3 py-2 text-sm"
+            style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+          >
+            <option value="">{t.approvalsApproverOwnerDefault}</option>
+            {members.map(m => <option key={m.id} value={m.id}>{m.name ?? m.id}</option>)}
+          </select>
+        </FieldCard>
+        <ToggleRow
+          label={t.approvalsOwnerGateLabel}
+          help={t.approvalsOwnerGateHint}
           checked={requireOwner}
+          onChange={saveOwnerGate}
           disabled={saving}
-          onChange={e => saveOwnerGate(e.target.checked)}
-          className="mt-0.5 h-5 w-5 shrink-0 cursor-pointer"
-          style={{ accentColor: 'var(--color-primary)' }}
         />
-      </div>
-    </div>
+      </SettingStack>
+    </SettingsSection>
   )
 }
 
@@ -1146,38 +1136,35 @@ function AttendanceSettingsTab({ user, t }: { user: User; t: Translations }) {
   if (loading) return <SettingsSectionSkeleton />
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between gap-4">
-        <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{t.attendanceEnabledLabel}</p>
-        <Toggle checked={enabled} onChange={toggleEnabled} />
-      </div>
-      <p className="-mt-3 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.attendanceEnabledHelp}</p>
+    <div className="space-y-10">
+      <SettingsSection title={t.settingsAttendanceTab} description={t.attendanceEnabledHelp}>
+        <SettingStack>
+          <ToggleRow label={t.attendanceEnabledLabel} checked={enabled} onChange={toggleEnabled} />
+          <FieldCard label={t.attendanceAutoCloseLabel} help={t.attendanceAutoCloseHelp} dimmed={!enabled}>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={24}
+                step={1}
+                value={hours}
+                onChange={e => setHours(e.target.value)}
+                onBlur={saveHours}
+                disabled={!enabled}
+                className="rounded-lg border px-3 py-2 text-sm md:w-32"
+                style={inputStyle}
+              />
+              <span className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>{t.attendanceAutoCloseUnit}</span>
+              {savingHours && <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>…</span>}
+            </div>
+          </FieldCard>
+        </SettingStack>
+      </SettingsSection>
 
-      <div style={{ opacity: enabled ? 1 : 0.5 }}>
-        <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.attendanceAutoCloseLabel}</label>
-        <div className="flex items-center gap-2">
-          <input
-            type="number"
-            inputMode="numeric"
-            min={1}
-            max={24}
-            step={1}
-            value={hours}
-            onChange={e => setHours(e.target.value)}
-            onBlur={saveHours}
-            disabled={!enabled}
-            className="rounded-lg border px-3 py-2 text-sm md:w-32"
-            style={inputStyle}
-          />
-          <span className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>{t.attendanceAutoCloseUnit}</span>
-          {savingHours && <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>…</span>}
-        </div>
-        <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.attendanceAutoCloseHelp}</p>
-      </div>
-
-      <div className="border-t pt-5" style={{ borderColor: 'var(--color-border)' }}>
+      <SettingsSection title={t.attendanceLocationsTitle} divider>
         <AttendanceLocationsManager user={user} />
-      </div>
+      </SettingsSection>
     </div>
   )
 }
@@ -1231,42 +1218,18 @@ function IntegrationsTab({ user, t }: { user: User; t: Translations }) {
       <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>{t.integrationsIntro}</p>
 
       {/* Review mode — controls whether API-submitted updates need approval */}
-      <section>
-        <h2 className="mb-4 text-lg font-semibold" style={{ color: 'var(--color-text)' }}>{t.reviewModeSectionTitle}</h2>
-        <div
-          className="flex items-start justify-between gap-4 rounded-xl border p-5"
-          style={{ borderColor: 'var(--color-border)' }}
-        >
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{t.reviewModeLabel}</p>
-            <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-              {t.reviewModeDesc}
-            </p>
-          </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={reviewMode === true}
-            onClick={() => reviewMode !== null && handleToggleReviewMode(!reviewMode)}
-            disabled={reviewMode === null || updatingReviewMode}
-            className="relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50"
-            style={{
-              backgroundColor: reviewMode ? 'var(--color-primary)' : 'var(--color-bg-tertiary)',
-            }}
-          >
-            <span
-              className="absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all"
-              style={{ left: reviewMode ? '22px' : '2px' }}
-            />
-          </button>
-        </div>
-      </section>
+      <SettingsSection title={t.reviewModeSectionTitle}>
+        <ToggleRow
+          label={t.reviewModeLabel}
+          help={t.reviewModeDesc}
+          checked={reviewMode === true}
+          onChange={handleToggleReviewMode}
+          disabled={reviewMode === null || updatingReviewMode}
+        />
+      </SettingsSection>
 
       {/* Third-party integrations */}
-      <section>
-        <h2 className="mb-4 text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
-          {t.integrationsSectionTitle}
-        </h2>
+      <SettingsSection title={t.integrationsSectionTitle}>
         <div className="space-y-3">
           <IntegrationCard
             title={t.firefliesTitle}
@@ -1289,7 +1252,7 @@ function IntegrationsTab({ user, t }: { user: User; t: Translations }) {
             t={t}
           />
         </div>
-      </section>
+      </SettingsSection>
 
       {activeDialog === 'fireflies' && (
         <ConnectFirefliesDialog
@@ -1391,63 +1354,56 @@ function AdjustmentsTab({ user, t }: { user: User; t: Translations }) {
   if (loading) return <SettingsSectionSkeleton />
 
   return (
-    <div className="space-y-5">
-      <InfoBanner
-        storageKey="flodok.banner.adjustments.dismissed"
-        title={t.bannerAdjustmentsTitle}
-        body={t.bannerAdjustmentsBody}
-        icon={creditsIcon}
-        accent="#3b82f6"
-      />
-
-      <div className="flex items-center justify-between gap-4">
-        <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{t.adjustmentsEnabledLabel}</p>
-        <Toggle checked={enabled} onChange={toggleEnabled} />
+    <SettingsSection title={t.settingsAdjustmentsTab}>
+      <div className="space-y-5">
+        <InfoBanner
+          storageKey="flodok.banner.adjustments.dismissed"
+          title={t.bannerAdjustmentsTitle}
+          body={t.bannerAdjustmentsBody}
+          icon={creditsIcon}
+          accent="#3b82f6"
+        />
+        <SettingStack>
+          <ToggleRow label={t.adjustmentsEnabledLabel} help={t.adjustmentsEnabledHelp} checked={enabled} onChange={toggleEnabled} />
+          <FieldCard label={t.adjustmentMaxLabel} help={t.adjustmentMaxHelp} dimmed={!enabled}>
+            <div className="flex items-center gap-2">
+              <div className="relative md:w-56">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={formatIdrDigits(maxAdj)}
+                  onChange={e => setMaxAdj(e.target.value.replace(/\D/g, ''))}
+                  onBlur={saveMax}
+                  disabled={!enabled}
+                  placeholder={t.noCapPlaceholder}
+                  className="w-full rounded-lg border px-3 py-2 pr-12 text-sm"
+                  style={inputStyle}
+                />
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.idr}</span>
+              </div>
+              {savingMax && <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>…</span>}
+            </div>
+          </FieldCard>
+          <FieldCard label={t.leaderboardRateLabel} help={t.leaderboardRateHelp} dimmed={!enabled}>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                inputMode="numeric"
+                min={1}
+                step={1}
+                value={rate}
+                onChange={e => setRate(e.target.value)}
+                onBlur={saveRate}
+                disabled={!enabled}
+                className="rounded-lg border px-3 py-2 text-sm md:w-48"
+                style={inputStyle}
+              />
+              {savingRate && <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>…</span>}
+            </div>
+          </FieldCard>
+        </SettingStack>
       </div>
-      <p className="-mt-3 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.adjustmentsEnabledHelp}</p>
-
-      <div style={{ opacity: enabled ? 1 : 0.5 }}>
-        <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.adjustmentMaxLabel}</label>
-        <div className="flex items-center gap-2">
-          <div className="relative md:w-56">
-            <input
-              type="text"
-              inputMode="numeric"
-              value={formatIdrDigits(maxAdj)}
-              onChange={e => setMaxAdj(e.target.value.replace(/\D/g, ''))}
-              onBlur={saveMax}
-              disabled={!enabled}
-              placeholder={t.noCapPlaceholder}
-              className="w-full rounded-lg border px-3 py-2 pr-12 text-sm"
-              style={inputStyle}
-            />
-            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.idr}</span>
-          </div>
-          {savingMax && <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>…</span>}
-        </div>
-        <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.adjustmentMaxHelp}</p>
-      </div>
-
-      <div style={{ opacity: enabled ? 1 : 0.5 }}>
-        <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.leaderboardRateLabel}</label>
-        <div className="flex items-center gap-2">
-          <input
-            type="number"
-            inputMode="numeric"
-            min={1}
-            step={1}
-            value={rate}
-            onChange={e => setRate(e.target.value)}
-            onBlur={saveRate}
-            disabled={!enabled}
-            className="rounded-lg border px-3 py-2 text-sm md:w-48"
-            style={inputStyle}
-          />
-          {savingRate && <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>…</span>}
-        </div>
-        <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.leaderboardRateHelp}</p>
-      </div>
-    </div>
+    </SettingsSection>
   )
 }
 
@@ -1641,11 +1597,7 @@ function AchievementsTab({ user, t }: { user: User; t: Translations }) {
       />
 
       {/* Org-level master switch */}
-      <div className="flex items-center justify-between gap-4">
-        <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{t.badgesEnabledLabel}</p>
-        <Toggle checked={orgBadgesEnabled} onChange={toggleOrgBadgesEnabled} />
-      </div>
-      <p className="-mt-3 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.badgesEnabledHelp}</p>
+      <ToggleRow label={t.badgesEnabledLabel} help={t.badgesEnabledHelp} checked={orgBadgesEnabled} onChange={toggleOrgBadgesEnabled} />
 
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>{t.achievementDefsTitle}</h2>

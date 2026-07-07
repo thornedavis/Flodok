@@ -12,6 +12,8 @@ type Entry = {
   reason: string
   paid_out_at: string | null
   awarded_by_name: string | null
+  task_id: string | null
+  linkedTask?: { title: string; status: string } | null
 }
 
 const LIMIT = 30
@@ -39,14 +41,14 @@ export function EmployeeActivityLog({ user, employeeId, refreshKey = 0, period, 
       setLoading(true)
       let q = supabase
         .from('pay_adjustments')
-        .select('id, created_at, amount_idr, reason, paid_out_at, awardedBy:users!pay_adjustments_awarded_by_fkey(name)')
+        .select('id, created_at, amount_idr, reason, paid_out_at, task_id, awardedBy:users!pay_adjustments_awarded_by_fkey(name)')
         .eq('employee_id', employeeId)
       // When a period is given, scope the log to that month; otherwise show the
       // most recent activity across all periods.
       if (period) q = q.eq('period_month', period)
       const { data } = await q.order('created_at', { ascending: false }).limit(LIMIT)
       if (cancelled) return
-      const rows = (data ?? []).map((r): Entry => {
+      let rows = (data ?? []).map((r): Entry => {
         const awarder = r.awardedBy as { name: string } | { name: string }[] | null
         const name = Array.isArray(awarder) ? awarder[0]?.name ?? null : awarder?.name ?? null
         return {
@@ -56,8 +58,20 @@ export function EmployeeActivityLog({ user, employeeId, refreshKey = 0, period, 
           reason: r.reason,
           paid_out_at: r.paid_out_at,
           awarded_by_name: name,
+          task_id: r.task_id,
+          linkedTask: null,
         }
       })
+      // Resolve linked-task titles in one round-trip. RLS scopes tasks to the org
+      // and drops trashed rows, so a since-deleted task simply loses its chip —
+      // the reason text (auto-filled from the task) still carries the context.
+      const taskIds = [...new Set(rows.map(r => r.task_id).filter((id): id is string => !!id))]
+      if (taskIds.length > 0) {
+        const { data: taskRows } = await supabase.from('tasks').select('id, title, status').in('id', taskIds)
+        if (cancelled) return
+        const byId = new Map((taskRows ?? []).map(tk => [tk.id, { title: tk.title, status: tk.status }]))
+        rows = rows.map(r => (r.task_id ? { ...r, linkedTask: byId.get(r.task_id) ?? null } : r))
+      }
       setEntries(rows)
       setLoading(false)
     }
@@ -98,6 +112,19 @@ export function EmployeeActivityLog({ user, employeeId, refreshKey = 0, period, 
               <li key={e.id} className="flex items-start justify-between gap-3 px-4 py-3" style={{ borderColor: 'var(--color-border)' }}>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm" style={{ color: 'var(--color-text)' }}>{e.reason}</p>
+                  {e.linkedTask && (
+                    <span
+                      className="mt-1 inline-flex max-w-full items-center gap-1 rounded-md px-1.5 py-0.5 text-xs"
+                      style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-tertiary)' }}
+                      title={t.taskLinkChipLabel}
+                    >
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                        <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" />
+                        <rect x="9" y="3" width="6" height="4" rx="1" />
+                      </svg>
+                      <span className="truncate">{e.linkedTask.title}</span>
+                    </span>
+                  )}
                   <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
                     {kindLabel} · {new Date(e.created_at).toLocaleString(lang === 'id' ? 'id-ID' : 'en-US')}
                     {e.awarded_by_name && <> · {t.awardedBy} {e.awarded_by_name}</>}

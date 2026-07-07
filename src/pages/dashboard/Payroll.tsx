@@ -17,7 +17,7 @@ import { MonthStrip } from '../../components/portal/MonthStrip'
 import { useFullWidthLayout } from '../../components/Layout'
 import { FilterPanel, FilterSearchInput, type FilterPanelSection } from '../../components/FilterControls'
 import { Modal } from '../../components/Modal'
-import { ToolbarMoreMenu } from '../../components/editor/ToolbarMoreMenu'
+import { ToolbarMoreMenu, type ToolbarMenuItem } from '../../components/editor/ToolbarMoreMenu'
 import {
   StatCard, TrendCard, ChartCard, LegendDot, CHART_TOOLTIP, compactIdr,
   monthShort, monthLong, monthsAgo, CHART_BLUE, CHART_GREEN, CHART_RED, type TrendPoint,
@@ -263,6 +263,31 @@ export function Payroll({ user }: { user: User }) {
     }
   }
 
+  // Client-side CSV of the whole month's roster (not the filtered view) — a
+  // quick handoff to a spreadsheet / payroll provider ahead of a formal export.
+  // Money columns are plain integers; a UTF-8 BOM keeps Excel happy with names.
+  function handleExportCsv() {
+    if (!data) return
+    const esc = (v: string | number) => {
+      const s = String(v)
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+    }
+    const header = [t.payrollColEmployee, t.payrollColBase, t.payrollColAllowance, t.payrollColAdjustments, t.payrollColPayout, t.payrollColStatus]
+    const rows = data.rows.map(r => [
+      r.name, r.base_idr, r.allowance_idr, r.adjustment_net_idr, r.payout_idr,
+      r.settled ? t.payrollStatusSettled : t.payrollStatusOpen,
+    ])
+    const csv = '\ufeff' + [header, ...rows].map(cols => cols.map(esc).join(',')).join('\r\n')
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `Payroll-${period.slice(0, 7)}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
   async function toggleExpand(employeeId: string) {
     const next = new Set(expanded)
     if (next.has(employeeId)) {
@@ -351,6 +376,15 @@ export function Payroll({ user }: { user: User }) {
   ]
   const resetFilters = () => { setStatusFilter([]); setContractFilter([]); setSort('name'); setSearch('') }
 
+  // "More" overflow menu: quick CSV export, the batch payslip download, a jump to
+  // payroll settings, and Reopen month (danger-styled + separated; owner-only
+  // server-side, so a non-owner admin gets the "ask an owner" notice on click).
+  const moreItems: ToolbarMenuItem[] = []
+  if (hasRows) moreItems.push({ key: 'export-csv', label: t.payrollExportCsv, icon: 'download', onClick: handleExportCsv })
+  if ((counts?.settled ?? 0) > 0) moreItems.push({ key: 'download-all', label: t.payrollDownloadAll, icon: 'download', onClick: handleDownloadAll, disabled: zipBusy })
+  moreItems.push({ key: 'settings', label: t.payrollSettingsLink, icon: 'settings', to: '/dashboard/settings?tab=payroll' })
+  if ((counts?.settled ?? 0) > 0) moreItems.push({ key: 'reopen-month', label: t.payrollReopenMonth, title: t.payrollReopenMonthTitle, danger: true, onClick: () => isOwner ? setConfirm({ kind: 'reopen-month' }) : setOwnerNotice(true) })
+
   return (
     <div className="pb-20">
       {/* Header + run action — re-constrained within the full-width canvas. */}
@@ -361,31 +395,12 @@ export function Payroll({ user }: { user: User }) {
               <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.payrollTitle}</h1>
             </div>
             <div className="flex items-center gap-2">
-              {flash && <span className="text-xs font-medium" style={{ color: 'var(--color-success)' }}>{flash}</span>}
-              <ToolbarMoreMenu
-                items={(counts?.settled ?? 0) > 0 ? [{
-                  key: 'reopen-month',
-                  label: t.payrollReopenMonth,
-                  title: t.payrollReopenMonthTitle,
-                  onClick: () => isOwner ? setConfirm({ kind: 'reopen-month' }) : setOwnerNotice(true),
-                }] : []}
-              />
-              {(counts?.settled ?? 0) > 0 && (
-                <button
-                  type="button"
-                  onClick={handleDownloadAll}
-                  disabled={zipBusy}
-                  className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
-                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                >
-                  {zipBusy ? (
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>
-                  ) : (
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
-                  )}
-                  {zipBusy && zipProgress ? t.payrollDownloadingAll(zipProgress.done, zipProgress.total) : t.payrollDownloadAll}
-                </button>
+              {(flash || (zipBusy && zipProgress)) && (
+                <span className="text-xs font-medium" style={{ color: 'var(--color-success)' }}>
+                  {zipBusy && zipProgress ? t.payrollDownloadingAll(zipProgress.done, zipProgress.total) : flash}
+                </span>
               )}
+              <ToolbarMoreMenu items={moreItems} />
               <button
                 type="button"
                 onClick={() => setRunModalOpen(true)}
@@ -873,69 +888,39 @@ function PayrollCard({ r, isOpen, onToggle, lines, onPayslip, payslipBusy, isAdm
   t: ReturnType<typeof useLang>['t']
   lang: 'en' | 'id'
 }) {
+  // Kebab actions: details toggle, payslip (frozen), freeze (open+runnable),
+  // reopen (frozen; owner-gated via the parent's onReopen). Matches the row
+  // actions but tucked into a card menu so the status can sit top-right.
+  const menuItems: ToolbarMenuItem[] = [
+    { key: 'details', label: isOpen ? t.payrollHideDetails : t.payrollViewDetails, onClick: () => onToggle(r.employee_id) },
+  ]
+  if (r.settled) menuItems.push({ key: 'payslip', label: t.payrollPayslip, disabled: payslipBusy === r.employee_id, onClick: () => onPayslip(r.employee_id) })
+  if (!r.settled && isAdmin && (r.has_active_contract || r.adjustment_net_idr !== 0)) menuItems.push({ key: 'freeze', label: t.payrollFreezeOne, onClick: () => onFreeze(r.employee_id, r.name) })
+  if (r.settled) menuItems.push({ key: 'reopen', label: t.payrollReopen, danger: true, onClick: () => onReopen(r.employee_id, r.name) })
+
   return (
-    <li className="overflow-hidden rounded-xl border" style={{ borderColor: 'var(--color-border)' }}>
-      <button type="button" onClick={() => onToggle(r.employee_id)} className="w-full p-3 text-left">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full" style={{ background: r.photo_url ? 'transparent' : getAvatarGradient(r.employee_id) }}>
-            {r.photo_url && <img src={r.photo_url} alt="" className="h-full w-full object-cover" />}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>{r.name}</p>
-            {!r.has_active_contract && <p className="truncate text-[11px]" style={{ color: 'var(--color-warning)' }}>{t.payrollNoContract}</p>}
-          </div>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 transition-transform" style={{ transform: isOpen ? 'rotate(90deg)' : 'none', color: 'var(--color-text-tertiary)' }}><polyline points="9 18 15 12 9 6" /></svg>
+    <li className="rounded-xl border p-3" style={{ borderColor: 'var(--color-border)' }}>
+      <div className="flex items-start gap-3">
+        <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full" style={{ background: r.photo_url ? 'transparent' : getAvatarGradient(r.employee_id) }}>
+          {r.photo_url && <img src={r.photo_url} alt="" className="h-full w-full object-cover" />}
         </div>
-        <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2">
-          <CardFigure label={t.payrollColBase} value={formatIdr(r.base_idr, lang)} />
-          <CardFigure label={t.payrollColAllowance} value={formatIdr(r.allowance_idr, lang)} />
-          <CardFigure label={t.payrollColAdjustments} value={r.adjustment_net_idr === 0 ? '—' : formatIdr(r.adjustment_net_idr, lang)} tone={r.adjustment_net_idr < 0 ? 'danger' : undefined} />
-          <CardFigure label={t.payrollColPayout} value={formatIdr(r.payout_idr, lang)} emphasis />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>{r.name}</p>
+          {!r.has_active_contract && <p className="truncate text-[11px]" style={{ color: 'var(--color-warning)' }}>{t.payrollNoContract}</p>}
         </div>
-      </button>
-      <div className="flex items-center justify-between gap-2 px-3 pb-3">
-        <StatusBadge settled={r.settled} t={t} />
-        <div className="flex items-center gap-3">
-          {!r.settled && isAdmin && (r.has_active_contract || r.adjustment_net_idr !== 0) && (
-            <button
-              type="button"
-              onClick={() => onFreeze(r.employee_id, r.name)}
-              className="text-xs font-medium"
-              style={{ color: 'var(--color-text-tertiary)' }}
-            >
-              {t.payrollFreezeOne}
-            </button>
-          )}
-          {r.settled && (
-            <button
-              type="button"
-              onClick={() => onPayslip(r.employee_id)}
-              disabled={payslipBusy === r.employee_id}
-              className="inline-flex items-center gap-1 text-xs font-medium disabled:opacity-50"
-              style={{ color: 'var(--color-primary)' }}
-            >
-              {payslipBusy === r.employee_id ? (
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>
-              ) : (
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
-              )}
-              {t.payrollPayslip}
-            </button>
-          )}
-          {r.settled && (
-            <button
-              type="button"
-              onClick={() => onReopen(r.employee_id, r.name)}
-              className="text-xs font-medium"
-              style={{ color: 'var(--color-text-tertiary)' }}
-            >
-              {t.payrollReopen}
-            </button>
-          )}
+        <div className="flex shrink-0 items-center gap-1">
+          <StatusBadge settled={r.settled} t={t} />
+          <ToolbarMoreMenu variant="kebab" items={menuItems} />
         </div>
       </div>
+      <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2">
+        <CardFigure label={t.payrollColBase} value={formatIdr(r.base_idr, lang)} />
+        <CardFigure label={t.payrollColAllowance} value={formatIdr(r.allowance_idr, lang)} />
+        <CardFigure label={t.payrollColAdjustments} value={r.adjustment_net_idr === 0 ? '—' : formatIdr(r.adjustment_net_idr, lang)} tone={r.adjustment_net_idr < 0 ? 'danger' : undefined} />
+        <CardFigure label={t.payrollColPayout} value={formatIdr(r.payout_idr, lang)} emphasis />
+      </div>
       {isOpen && (
-        <div className="border-t px-3 py-3" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary, var(--color-bg))' }}>
+        <div className="mt-3 border-t pt-3" style={{ borderColor: 'var(--color-border)' }}>
           <PayrollBreakdown lines={lines} t={t} lang={lang} />
         </div>
       )}

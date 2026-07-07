@@ -20,6 +20,8 @@ import { formatIdr } from '../../lib/credits'
 import { documentsIndexPath } from '../../lib/documentTypes'
 import { BadgeGlyph } from '../../components/BadgeGlyph'
 import { Skeleton } from '../../components/Skeleton'
+import { listDashboardAttendance } from '../../lib/attendance/api'
+import type { DashboardAttendanceRow } from '../../lib/attendance/types'
 import type { Translations } from '../../lib/translations'
 import type { FeedEvent, User } from '../../types/aliases'
 
@@ -41,6 +43,7 @@ interface EmployeeLite {
   employee_departments: EmployeeDepartmentRow[] | null
   date_of_birth: string | null
   created_at: string
+  lifecycle_stage: string
 }
 
 interface ActivityBucket {
@@ -77,6 +80,10 @@ interface DashboardData {
   employeesById: Record<string, EmployeeLite>
   employees: EmployeeLite[]
   badgesEnabled: boolean
+  attendanceEnabled: boolean
+  attendanceToday: { clockedIn: number; presentNow: number }
+  activeHeadcount: number
+  approvalsCount: number
 }
 
 const DEPT_COLORS = [
@@ -108,7 +115,7 @@ export function Overview({ user }: { user: User }) {
   const { canManagePeople } = useRole(user)
   const [data, setData] = useState<DashboardData | null>(null)
 
-  useEffect(() => { loadDashboard(user.org_id).then(setData) }, [user.org_id])
+  useEffect(() => { loadDashboard(user.org_id, canManagePeople).then(setData) }, [user.org_id, canManagePeople])
 
   if (!data) {
     return <OverviewSkeleton title={t.navOverview} />
@@ -124,23 +131,16 @@ export function Overview({ user }: { user: User }) {
 
       <QuickActions t={t} />
 
-      <StatCards stats={data.stats} t={t} canManagePeople={canManagePeople} />
+      {/* Act now — the counts that need a decision today */}
+      <ActionCards data={data} t={t} canManagePeople={canManagePeople} />
 
+      {/* Operating context */}
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <ActivityPulse buckets={data.activity} t={t} />
         </div>
-        <SignatureCoverage coverage={data.coverage} t={t} />
-      </div>
-
-      {data.badgesEnabled ? (
-        <div className="grid gap-6 lg:grid-cols-2">
-          <RecognitionMoments t={t} lang={lang} />
-          <CompensationTotal orgId={user.org_id} t={t} lang={lang} />
-        </div>
-      ) : (
         <CompensationTotal orgId={user.org_id} t={t} lang={lang} />
-      )}
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
@@ -151,20 +151,32 @@ export function Overview({ user }: { user: User }) {
           <TeamComposition slices={data.departments} totalHeadcount={data.totalHeadcount} t={t} />
         </div>
       </div>
+
+      {/* Ambient — de-prioritized, kept small */}
+      {(data.coverage || data.badgesEnabled) && (
+        <div className="grid gap-6 lg:grid-cols-2">
+          {data.coverage && <SignatureCoverage coverage={data.coverage} t={t} />}
+          {data.badgesEnabled && <RecognitionMoments t={t} lang={lang} />}
+        </div>
+      )}
     </div>
   )
 }
 
 // ─── Data loading ───────────────────────────────────────
 
-async function loadDashboard(orgId: string): Promise<DashboardData> {
+async function loadDashboard(orgId: string, canManagePeople: boolean): Promise<DashboardData> {
   const now = Date.now()
   const windowDays = 30
   const windowStartMs = now - windowDays * 86400000
   const windowStartIso = new Date(windowStartMs).toISOString()
 
-  const [empResult, candidateResult, sopResult, contractResult, pendingResult, feedWindowResult, recentResult, sigResult, csigResult, orgResult] = await Promise.all([
-    supabase.from('employees').select('id, name, photo_url, date_of_birth, created_at, employee_departments(is_primary, department:company_departments(id, name))').eq('org_id', orgId).in('lifecycle_stage', ['active', 'separated']),
+  const [
+    empResult, candidateResult, sopResult, contractResult, pendingResult,
+    feedWindowResult, recentResult, sigResult, csigResult, orgResult,
+    attendanceRows, formsPendingResult, hiringPendingResult,
+  ] = await Promise.all([
+    supabase.from('employees').select('id, name, photo_url, date_of_birth, created_at, lifecycle_stage, employee_departments(is_primary, department:company_departments(id, name))').eq('org_id', orgId).in('lifecycle_stage', ['active', 'separated']),
     supabase.from('employees').select('id', { count: 'exact', head: true }).eq('org_id', orgId).in('lifecycle_stage', ['prospective', 'shortlisted', 'offered', 'signed', 'talent_pool', 'no_show']),
     supabase.from('sops').select('id, status, current_version, employee_id').eq('org_id', orgId),
     supabase.from('contracts').select('id, status, current_version, employee_id').eq('org_id', orgId),
@@ -173,12 +185,27 @@ async function loadDashboard(orgId: string): Promise<DashboardData> {
     supabase.from('feed_events').select('*').eq('org_id', orgId).order('created_at', { ascending: false }).limit(10),
     supabase.from('sop_signatures').select('sop_id, version_number'),
     supabase.from('contract_signatures').select('contract_id, version_number'),
-    supabase.from('organizations').select('badges_enabled').eq('id', orgId).single(),
+    supabase.from('organizations').select('badges_enabled, attendance_enabled').eq('id', orgId).single(),
+    // Attendance + approvals are admin/HR surfaces (RLS-scoped); skip the round
+    // trips entirely for members, who won't see those cards.
+    canManagePeople ? listDashboardAttendance().catch(() => [] as DashboardAttendanceRow[]) : Promise.resolve([] as DashboardAttendanceRow[]),
+    canManagePeople
+      ? supabase.from('form_submissions').select('id', { count: 'exact', head: true }).eq('org_id', orgId).is('deleted_at', null).in('status', ['submitted', 'manager_approved'])
+      : Promise.resolve({ count: 0 }),
+    canManagePeople
+      ? supabase.from('hiring_requests').select('id', { count: 'exact', head: true }).eq('org_id', orgId).is('deleted_at', null).in('status', ['submitted', 'manager_approved'])
+      : Promise.resolve({ count: 0 }),
   ])
 
   const employees = (empResult.data || []) as unknown as EmployeeLite[]
+  const activeHeadcount = employees.filter(e => e.lifecycle_stage === 'active').length
   const sops = sopResult.data || []
   const contracts = contractResult.data || []
+
+  const attendanceToday = computeAttendanceToday(attendanceRows as DashboardAttendanceRow[])
+  const approvalsCount =
+    ((formsPendingResult as { count: number | null }).count ?? 0) +
+    ((hiringPendingResult as { count: number | null }).count ?? 0)
 
   // Stats
   const activeSops = sops.filter(s => s.status === 'active')
@@ -266,7 +293,29 @@ async function loadDashboard(orgId: string): Promise<DashboardData> {
     employeesById,
     employees,
     badgesEnabled: orgResult.data?.badges_enabled ?? true,
+    attendanceEnabled: orgResult.data?.attendance_enabled ?? false,
+    attendanceToday,
+    activeHeadcount,
+    approvalsCount,
   }
+}
+
+// Today's attendance rollup — mirrors the `todayStats` logic in the Attendance
+// log page (src/pages/dashboard/Attendance.tsx). `clockedIn` counts distinct
+// employees who clocked in today; `presentNow` counts those whose most recent
+// event today is still a clock_in.
+function computeAttendanceToday(rows: DashboardAttendanceRow[]): { clockedIn: number; presentNow: number } {
+  const today = new Date().toDateString()
+  const todays = rows.filter(r => new Date(r.server_timestamp).toDateString() === today)
+  const clockedIn = new Set(todays.filter(r => r.event_type === 'clock_in').map(r => r.employee_id)).size
+  const latest = new Map<string, DashboardAttendanceRow>()
+  for (const r of todays) {
+    const prev = latest.get(r.employee_id)
+    if (!prev || r.server_timestamp > prev.server_timestamp) latest.set(r.employee_id, r)
+  }
+  let presentNow = 0
+  for (const r of latest.values()) if (r.event_type === 'clock_in') presentNow++
+  return { clockedIn, presentNow }
 }
 
 // ─── Quick actions ──────────────────────────────────────
@@ -285,8 +334,8 @@ function OverviewSkeleton({ title }: { title: string }) {
         ))}
       </div>
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-        {Array.from({ length: 5 }).map((_, i) => (
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
           <div
             key={i}
             className="rounded-xl border p-5"
@@ -316,6 +365,16 @@ function QuickActions({ t }: { t: Translations }) {
   const navigate = useNavigate()
   const actions: { label: string; onClick: () => void; icon: React.ReactNode }[] = [
     {
+      label: t.tasksNewTask,
+      onClick: () => navigate('/dashboard/tasks'),
+      icon: (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M11 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-6" />
+          <path d="m9 11 3 3L22 4" />
+        </svg>
+      ),
+    },
+    {
       label: t.quickActionAddEmployee,
       onClick: () => navigate('/dashboard/employees'),
       icon: (
@@ -328,25 +387,14 @@ function QuickActions({ t }: { t: Translations }) {
       ),
     },
     {
-      label: t.quickActionNewSop,
-      onClick: () => navigate(documentsIndexPath('sop')),
+      label: t.quickActionNewDocument,
+      onClick: () => navigate(documentsIndexPath()),
       icon: (
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
           <polyline points="14 2 14 8 20 8" />
           <line x1="12" y1="18" x2="12" y2="12" />
           <line x1="9" y1="15" x2="15" y2="15" />
-        </svg>
-      ),
-    },
-    {
-      label: t.quickActionNewContract,
-      onClick: () => navigate(documentsIndexPath('contract')),
-      icon: (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="4" y="3" width="16" height="18" rx="2" />
-          <line x1="12" y1="8" x2="12" y2="14" />
-          <line x1="9" y1="11" x2="15" y2="11" />
         </svg>
       ),
     },
@@ -374,24 +422,62 @@ function QuickActions({ t }: { t: Translations }) {
   )
 }
 
-// ─── Stat cards ─────────────────────────────────────────
+// ─── Action cards ───────────────────────────────────────
+// The top row leads with what needs a decision today — attendance, signatures,
+// updates, approvals — not static roster counts (those live in the sidebar and
+// the Team panel now). Cards are gated by role/feature and capped at 4.
 
-function StatCards({ stats, t, canManagePeople }: { stats: Stats; t: Translations; canManagePeople: boolean }) {
-  const cards = [
-    { label: t.overviewEmployees, value: stats.employeeCount, link: '/dashboard/employees' },
-    { label: t.overviewCandidates, value: stats.candidateCount, link: '/dashboard/recruitment' },
-    { label: t.overviewActiveSops, value: stats.activeSOPs, link: documentsIndexPath('sop') },
-    // Contracts are pay-sensitive and admin/HR-only now (RLS); a member's view
-    // of contracts is empty, so hide the tile rather than show a misleading 0.
-    ...(canManagePeople
-      ? [{ label: t.overviewActiveContracts, value: stats.activeContracts, link: documentsIndexPath('contract') }]
-      : []),
-    { label: t.overviewAwaitingSignature, value: stats.pendingSignatures, link: documentsIndexPath('sop') },
-    { label: t.overviewPendingUpdates, value: stats.pendingUpdates, link: '/dashboard/pending' },
-  ]
+interface ActionCard {
+  label: string
+  value: string
+  sub?: string
+  link: string
+  muted?: boolean
+}
+
+function ActionCards({ data, t, canManagePeople }: { data: DashboardData; t: Translations; canManagePeople: boolean }) {
+  const cards: ActionCard[] = []
+
+  // Present today — clocked-in / active headcount, with present-now as the sub.
+  // Attendance is opt-in and admin-scoped, so gate on both.
+  if (data.attendanceEnabled && canManagePeople) {
+    cards.push({
+      label: t.overviewPresentToday,
+      value: `${data.attendanceToday.clockedIn} / ${data.activeHeadcount}`,
+      sub: t.overviewPresentNowSub(data.attendanceToday.presentNow),
+      link: '/dashboard/attendance',
+    })
+  }
+  cards.push({
+    label: t.overviewAwaitingSignature,
+    value: String(data.stats.pendingSignatures),
+    link: documentsIndexPath('sop'),
+    muted: data.stats.pendingSignatures === 0,
+  })
+  cards.push({
+    label: t.overviewPendingUpdates,
+    value: String(data.stats.pendingUpdates),
+    link: '/dashboard/pending',
+    muted: data.stats.pendingUpdates === 0,
+  })
+  // Approvals — leave/overtime forms + hiring requests awaiting a decision. The
+  // Inbox is where those actually get actioned, so link there.
+  if (canManagePeople) {
+    cards.push({
+      label: t.overviewApprovals,
+      value: String(data.approvalsCount),
+      sub: t.overviewApprovalsSub,
+      link: '/dashboard/inbox',
+      muted: data.approvalsCount === 0,
+    })
+  }
+
+  const shown = cards.slice(0, 4)
+  const cols = shown.length >= 4 ? 'lg:grid-cols-4' : shown.length === 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-2'
+
   return (
-    <div className="grid grid-cols-2 gap-4 lg:grid-cols-6">
-      {cards.map(card => (
+    <div className={`grid grid-cols-2 gap-4 ${cols}`}>
+      {shown.map(card => (
         <Link
           key={card.label}
           to={card.link}
@@ -401,7 +487,8 @@ function StatCards({ stats, t, canManagePeople }: { stats: Stats; t: Translation
           onMouseOut={e => { e.currentTarget.style.borderColor = 'var(--color-border)' }}
         >
           <div className="truncate text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{card.label}</div>
-          <div className="mt-1 text-3xl font-semibold" style={{ color: 'var(--color-text)' }}>{card.value}</div>
+          <div className="mt-1 text-3xl font-semibold tabular-nums" style={{ color: card.muted ? 'var(--color-text-tertiary)' : 'var(--color-text)' }}>{card.value}</div>
+          {card.sub && <div className="mt-0.5 truncate text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{card.sub}</div>}
         </Link>
       ))}
     </div>
@@ -493,11 +580,13 @@ function LegendDot({ color, label }: { color: string; label: string }) {
   )
 }
 
-// ─── Signature coverage gauge ───────────────────────────
+// ─── Signature coverage (compact) ───────────────────────
+// De-prioritized to a slim ambient card: a small % + progress bar + the two
+// per-type rows. The big gauge is gone.
 
 function SignatureCoverage({ coverage, t }: { coverage: DashboardData['coverage']; t: Translations }) {
   const header = (
-    <div className="mb-4">
+    <div>
       <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{t.signatureCoverageTitle}</h3>
       <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{t.signatureCoverageSubtitle}</p>
     </div>
@@ -507,7 +596,7 @@ function SignatureCoverage({ coverage, t }: { coverage: DashboardData['coverage'
     return (
       <Card>
         {header}
-        <div className="flex h-56 items-center justify-center text-sm" style={{ color: 'var(--color-text-tertiary)' }}>
+        <div className="mt-3 text-sm" style={{ color: 'var(--color-text-tertiary)' }}>
           {t.signatureCoverageNone}
         </div>
       </Card>
@@ -515,12 +604,6 @@ function SignatureCoverage({ coverage, t }: { coverage: DashboardData['coverage'
   }
 
   const pct = Math.round((coverage.signed / coverage.total) * 100)
-  const size = 140
-  const center = size / 2
-  const stroke = 12
-  const radius = center - stroke / 2
-  const circumference = 2 * Math.PI * radius
-  const dashOffset = circumference * (1 - pct / 100)
   const color = pct >= 90 ? '#10b981' : pct >= 60 ? '#f59e0b' : '#ef4444'
 
   const rows: { key: string; label: string; color: string; signed: number; total: number }[] = [
@@ -530,52 +613,27 @@ function SignatureCoverage({ coverage, t }: { coverage: DashboardData['coverage'
 
   return (
     <Card>
-      {header}
-      <div className="flex flex-col items-center justify-center gap-4">
-        <div className="relative">
-          <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-            <circle
-              cx={center}
-              cy={center}
-              r={radius}
-              fill="none"
-              stroke="var(--color-bg-tertiary)"
-              strokeWidth={stroke}
-            />
-            <circle
-              cx={center}
-              cy={center}
-              r={radius}
-              fill="none"
-              stroke={color}
-              strokeWidth={stroke}
-              strokeLinecap="round"
-              strokeDasharray={circumference}
-              strokeDashoffset={dashOffset}
-              transform={`rotate(-90 ${center} ${center})`}
-              style={{ transition: 'stroke-dashoffset 0.6s ease' }}
-            />
-          </svg>
-          <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-3xl font-semibold" style={{ color: 'var(--color-text)' }}>{pct}%</span>
-            <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-              {coverage.signed} / {coverage.total}
-            </span>
-          </div>
-        </div>
-
-        <ul className="w-full space-y-1.5">
-          {rows.map(r => (
-            <li key={r.key} className="flex items-center justify-between text-xs">
-              <span className="flex items-center gap-2" style={{ color: 'var(--color-text-secondary)' }}>
-                <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: r.color }} />
-                <span className="truncate">{r.label}</span>
-              </span>
-              <span style={{ color: 'var(--color-text)' }}>{r.signed} / {r.total}</span>
-            </li>
-          ))}
-        </ul>
+      <div className="mb-3 flex items-start justify-between gap-3">
+        {header}
+        <span className="shrink-0 text-2xl font-semibold tabular-nums" style={{ color: 'var(--color-text)' }}>{pct}%</span>
       </div>
+
+      <div className="mb-2 flex h-2 overflow-hidden rounded-full" style={{ backgroundColor: 'var(--color-bg-tertiary)' }}>
+        <div style={{ width: `${pct}%`, backgroundColor: color }} />
+      </div>
+      <p className="mb-3 text-xs tabular-nums" style={{ color: 'var(--color-text-tertiary)' }}>{coverage.signed} / {coverage.total}</p>
+
+      <ul className="space-y-1.5">
+        {rows.map(r => (
+          <li key={r.key} className="flex items-center justify-between text-xs">
+            <span className="flex items-center gap-2" style={{ color: 'var(--color-text-secondary)' }}>
+              <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: r.color }} />
+              <span className="truncate">{r.label}</span>
+            </span>
+            <span className="tabular-nums" style={{ color: 'var(--color-text)' }}>{r.signed} / {r.total}</span>
+          </li>
+        ))}
+      </ul>
     </Card>
   )
 }
@@ -945,12 +1003,9 @@ type UpcomingMilestone = {
   milestone_at: string
 }
 
-type RecognitionTab = 'today' | '7d' | '30d'
-
 function RecognitionMoments({ t, lang }: { t: Translations; lang: 'en' | 'id' }) {
   const [today, setToday] = useState<RecentUnlock[]>([])
   const [upcoming, setUpcoming] = useState<UpcomingMilestone[]>([])
-  const [tab, setTab] = useState<RecognitionTab>('today')
 
   useEffect(() => {
     let cancelled = false
@@ -965,95 +1020,54 @@ function RecognitionMoments({ t, lang }: { t: Translations; lang: 'en' | 'id' })
     return () => { cancelled = true }
   }, [])
 
-  const upcoming7 = upcoming.filter(u => {
-    const ms = new Date(u.milestone_at).getTime() - Date.now()
-    return ms <= 7 * 24 * 60 * 60 * 1000
-  })
-
-  const tabs: { key: RecognitionTab; label: string; count: number }[] = [
-    { key: 'today', label: t.recognitionToday, count: today.length },
-    { key: '7d', label: t.recognitionUpcoming7, count: upcoming7.length },
-    { key: '30d', label: t.recognitionUpcoming30, count: upcoming.length },
-  ]
-
-  const emptyMessage =
-    tab === 'today' ? t.recognitionEmptyToday : t.recognitionEmptyUpcoming
+  // Compact: today's most recent unlock as the lead, plus the single soonest
+  // upcoming milestone. The full history/forecast lives on the Performance page.
+  const lead = today[0]
+  const next = [...upcoming].sort((a, b) => new Date(a.milestone_at).getTime() - new Date(b.milestone_at).getTime())[0]
 
   return (
     <Card>
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+      <div className="mb-3 flex items-center justify-between gap-3">
         <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{t.recognitionMomentsTitle}</h3>
-        <div className="flex flex-wrap gap-1">
-          {tabs.map(p => {
-            const active = tab === p.key
-            return (
-              <button
-                key={p.key}
-                type="button"
-                onClick={() => setTab(p.key)}
-                className="rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors"
-                style={{
-                  borderColor: active ? 'var(--color-text)' : 'var(--color-border)',
-                  backgroundColor: active ? 'var(--color-bg-tertiary)' : 'transparent',
-                  color: active ? 'var(--color-text)' : 'var(--color-text-secondary)',
-                }}
-              >
-                {p.label}
-                {p.count > 0 && <span className="ml-1 opacity-70">{p.count}</span>}
-              </button>
-            )
-          })}
-        </div>
+        {today.length > 0 && (
+          <span
+            className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
+            style={{ backgroundColor: 'color-mix(in srgb, var(--color-warning) 14%, transparent)', color: 'var(--color-warning)' }}
+          >
+            {t.recognitionToday} {today.length}
+          </span>
+        )}
       </div>
 
-      {tab === 'today' && today.length === 0 ? (
-        <p className="py-3 text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{emptyMessage}</p>
-      ) : tab === '7d' && upcoming7.length === 0 ? (
-        <p className="py-3 text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{emptyMessage}</p>
-      ) : tab === '30d' && upcoming.length === 0 ? (
-        <p className="py-3 text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{emptyMessage}</p>
+      {lead ? (
+        <div className="flex items-center gap-2.5">
+          <BadgeGlyph icon={lead.achievement_icon} size={20} className="shrink-0" />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>{lead.employee_name}</p>
+            <p className="truncate text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+              {lead.achievement_name}
+              {today.length > 1 ? ` +${today.length - 1}` : ''}
+            </p>
+          </div>
+          <span className="shrink-0 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+            {formatRelativeTime(lead.announced_at, lang)}
+          </span>
+        </div>
       ) : (
-        <ul className="max-h-56 space-y-2 overflow-y-auto pr-1">
-          {tab === 'today' && today.map(u => (
-            <li key={u.unlock_id} className="flex items-center gap-2.5">
-              <BadgeGlyph icon={u.achievement_icon} size={18} className="shrink-0" />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>{u.employee_name}</p>
-                <p className="truncate text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                  {u.achievement_name}
-                  {u.is_manual && u.reason ? ` · ${u.reason}` : ''}
-                </p>
-              </div>
-              <span className="shrink-0 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                {formatRelativeTime(u.announced_at, lang)}
-              </span>
-            </li>
-          ))}
-          {tab === '7d' && upcoming7.map(u => (
-            <li key={`${u.employee_id}-${u.achievement_id}`} className="flex items-center gap-2.5">
-              <BadgeGlyph icon={u.achievement_icon} size={18} className="shrink-0" />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>{u.employee_name}</p>
-                <p className="truncate text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{u.achievement_name}</p>
-              </div>
-              <span className="shrink-0 text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
-                {formatUpcomingDate(u.milestone_at, lang)}
-              </span>
-            </li>
-          ))}
-          {tab === '30d' && upcoming.map(u => (
-            <li key={`${u.employee_id}-${u.achievement_id}`} className="flex items-center gap-2.5">
-              <BadgeGlyph icon={u.achievement_icon} size={18} className="shrink-0" />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium" style={{ color: 'var(--color-text)' }}>{u.employee_name}</p>
-                <p className="truncate text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{u.achievement_name}</p>
-              </div>
-              <span className="shrink-0 text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
-                {formatUpcomingDate(u.milestone_at, lang)}
-              </span>
-            </li>
-          ))}
-        </ul>
+        <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>{t.recognitionEmptyToday}</p>
+      )}
+
+      {next && (
+        <div className="mt-3 flex items-center gap-2.5 border-t pt-3" style={{ borderColor: 'var(--color-border)' }}>
+          <BadgeGlyph icon={next.achievement_icon} size={16} className="shrink-0" />
+          <p className="min-w-0 flex-1 truncate text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+            <span className="font-medium" style={{ color: 'var(--color-text-secondary)' }}>{next.employee_name}</span>
+            {' · '}{next.achievement_name}
+          </p>
+          <span className="shrink-0 text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+            {formatUpcomingDate(next.milestone_at, lang)}
+          </span>
+        </div>
       )}
     </Card>
   )

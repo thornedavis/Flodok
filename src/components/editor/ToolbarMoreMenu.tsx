@@ -12,7 +12,7 @@ import { useLang } from '../../contexts/LanguageContext'
 // `onClick` fires. Renders nothing when there are no items (e.g. a brand-new
 // unsaved doc), so callers can build the array unconditionally.
 
-export type ToolbarMenuIcon = 'download' | 'template' | 'history' | 'duplicate' | 'trash'
+export type ToolbarMenuIcon = 'download' | 'template' | 'history' | 'duplicate' | 'trash' | 'settings'
 
 export interface ToolbarMenuItem {
   key: string
@@ -43,11 +43,12 @@ function MenuIcon({ name, muted }: { name: ToolbarMenuIcon; muted: boolean }) {
       {name === 'history' && (<><path d="M3 3v5h5" /><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8" /><path d="M12 7v5l3 3" /></>)}
       {name === 'duplicate' && (<><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></>)}
       {name === 'trash' && (<><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></>)}
+      {name === 'settings' && (<><line x1="4" y1="21" x2="4" y2="14" /><line x1="4" y1="10" x2="4" y2="3" /><line x1="12" y1="21" x2="12" y2="12" /><line x1="12" y1="8" x2="12" y2="3" /><line x1="20" y1="21" x2="20" y2="16" /><line x1="20" y1="12" x2="20" y2="3" /><line x1="1" y1="14" x2="7" y2="14" /><line x1="9" y1="8" x2="15" y2="8" /><line x1="17" y1="16" x2="23" y2="16" /></>)}
     </svg>
   )
 }
 
-export function ToolbarMoreMenu({ items, disabled }: { items: ToolbarMenuItem[]; disabled?: boolean }) {
+export function ToolbarMoreMenu({ items, disabled, variant = 'button' }: { items: ToolbarMenuItem[]; disabled?: boolean; variant?: 'button' | 'kebab' }) {
   const { t } = useLang()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
@@ -81,20 +82,39 @@ export function ToolbarMoreMenu({ items, disabled }: { items: ToolbarMenuItem[];
 
   return (
     <div className="relative" ref={wrapRef}>
-      <button
-        type="button"
-        onClick={() => { setExpandedKey(null); setOpen(o => !o) }}
-        disabled={disabled}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
-      >
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <circle cx="5" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="19" cy="12" r="1.6" />
-        </svg>
-        {t.more}
-      </button>
+      {variant === 'kebab' ? (
+        <button
+          type="button"
+          onClick={() => { setExpandedKey(null); setOpen(o => !o) }}
+          disabled={disabled}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          aria-label={t.more}
+          className="inline-flex items-center justify-center rounded-lg p-1.5 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+          style={{ color: 'var(--color-text-tertiary)' }}
+          onMouseOver={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)' }}
+          onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <circle cx="12" cy="5" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="12" cy="19" r="1.6" />
+          </svg>
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => { setExpandedKey(null); setOpen(o => !o) }}
+          disabled={disabled}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <circle cx="5" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="19" cy="12" r="1.6" />
+          </svg>
+          {t.more}
+        </button>
+      )}
 
       {open && (
         <div
