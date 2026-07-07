@@ -7,6 +7,7 @@ import { BillingProvider } from '../contexts/BillingContext'
 import { useRole } from '../hooks/useRole'
 import { getAvatarGradient } from '../lib/avatar'
 import { supabase } from '../lib/supabase'
+import { currentPeriodMonth } from '../lib/credits'
 import type { Translations } from '../lib/translations'
 import type { Organization, User } from '../types/aliases'
 import { Wordmark, Imagemark } from './Brand'
@@ -272,6 +273,32 @@ function Sidebar({ user, mobileOpen, onCloseMobile }: {
   const location = useLocation()
   const { collapsed, setCollapsed } = useSidebar()
 
+  // "Needs payroll" nudge: how many past months still have un-run payroll.
+  // Shown as a badge on the Payroll nav item. Refreshes when the Payroll page
+  // freezes/reopens a period (via the shared `flodok:payroll-changed` event).
+  const [payrollPending, setPayrollPending] = useState(0)
+  useEffect(() => {
+    // Payroll is an admin-only nav item, so non-admins never see this badge.
+    if (!isAdmin) return
+    let cancelled = false
+    const current = currentPeriodMonth()
+    const [cy, cm] = current.split('-').map(Number)
+    let fy = cy
+    let fm = cm - 11
+    while (fm < 1) { fm += 12; fy -= 1 }
+    const from = `${fy}-${String(fm).padStart(2, '0')}-01`
+    const fetchPending = () => {
+      supabase.rpc('payroll_pending_months', { p_from: from, p_to: current }).then(({ data }) => {
+        if (cancelled) return
+        const arr = (data as unknown as Array<{ month: string; pending: number }> | null) ?? []
+        setPayrollPending(arr.length)
+      })
+    }
+    fetchPending()
+    window.addEventListener('flodok:payroll-changed', fetchPending)
+    return () => { cancelled = true; window.removeEventListener('flodok:payroll-changed', fetchPending) }
+  }, [isAdmin])
+
   // Mobile drawer always shows the full expanded layout, regardless of the
   // desktop collapsed preference — the narrow icon-only mode would be hard
   // to tap on touch.
@@ -366,6 +393,7 @@ function Sidebar({ user, mobileOpen, onCloseMobile }: {
               const isActive = item.exact
                 ? location.pathname === item.path
                 : location.pathname.startsWith(item.path)
+              const badge = item.labelKey === 'navPayroll' ? payrollPending : 0
               return (
                 <li key={item.path} className="group relative">
                   <Link
@@ -383,8 +411,24 @@ function Sidebar({ user, mobileOpen, onCloseMobile }: {
                     <span style={{ color: isActive ? 'var(--color-text)' : 'var(--color-text-tertiary)' }}>
                       {item.icon}
                     </span>
-                    {!isCollapsed && t[item.labelKey]}
+                    {!isCollapsed && <span className="flex-1">{t[item.labelKey]}</span>}
+                    {!isCollapsed && badge > 0 && (
+                      <span
+                        className="inline-flex min-w-[18px] items-center justify-center rounded-full px-1.5 text-[10px] font-semibold"
+                        style={{ backgroundColor: 'var(--color-warning)', color: '#fff' }}
+                        title={t.payrollPendingBadge(badge)}
+                      >
+                        {badge}
+                      </span>
+                    )}
                   </Link>
+                  {isCollapsed && badge > 0 && (
+                    <span
+                      aria-hidden
+                      className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full"
+                      style={{ backgroundColor: 'var(--color-warning)', boxShadow: '0 0 0 2px var(--color-bg-secondary)' }}
+                    />
+                  )}
                   {isCollapsed && <NavFlyout label={t[item.labelKey]} />}
                 </li>
               )

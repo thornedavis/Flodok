@@ -17,6 +17,7 @@ import { MonthStrip } from '../../components/portal/MonthStrip'
 import { useFullWidthLayout } from '../../components/Layout'
 import { FilterPanel, FilterSearchInput, type FilterPanelSection } from '../../components/FilterControls'
 import { Modal } from '../../components/Modal'
+import { ToolbarMoreMenu } from '../../components/editor/ToolbarMoreMenu'
 import {
   StatCard, TrendCard, ChartCard, LegendDot, CHART_TOOLTIP, compactIdr,
   monthShort, monthLong, monthsAgo, CHART_BLUE, CHART_GREEN, CHART_RED, type TrendPoint,
@@ -68,9 +69,14 @@ type PayrollView = 'list' | 'cards'
 type PayrollSort = 'name' | 'payout' | 'adjustment'
 const VIEW_STORAGE_KEY = 'flodok-payroll-view'
 
+type ConfirmState =
+  | { kind: 'freeze-one'; employeeId: string; name: string }
+  | { kind: 'reopen-one'; employeeId: string; name: string }
+  | { kind: 'reopen-month' }
+
 export function Payroll({ user }: { user: User }) {
   const { t, lang } = useLang()
-  const { isAdmin } = useRole(user)
+  const { isAdmin, isOwner } = useRole(user)
   // Render edge-to-edge so the month-picker band spans the full page width.
   useFullWidthLayout()
 
@@ -93,6 +99,14 @@ export function Payroll({ user }: { user: User }) {
   // and the expandable charts), plus whether the chart panel is open.
   const [trend, setTrend] = useState<TrendPoint[] | null>(null)
   const [analyticsOpen, setAnalyticsOpen] = useState(false)
+  // Past months that still need payroll run — powers the month-strip dots.
+  const [pendingMonths, setPendingMonths] = useState<Set<string>>(new Set())
+  // Per-employee / whole-month freeze + reopen confirmation.
+  const [confirm, setConfirm] = useState<ConfirmState | null>(null)
+  const [actionBusy, setActionBusy] = useState(false)
+  // Non-owner admins can see the reopen actions but not run them — clicking
+  // shows this "ask an owner" notice instead of the confirm dialog.
+  const [ownerNotice, setOwnerNotice] = useState(false)
   // Roster controls: view (persisted), free-text search, filters and sort.
   const [view, setView] = useState<PayrollView>(() => {
     const stored = typeof localStorage !== 'undefined' ? localStorage.getItem(VIEW_STORAGE_KEY) : null
@@ -131,12 +145,24 @@ export function Payroll({ user }: { user: User }) {
     setTrend(rpcError ? [] : ((res as unknown as TrendPoint[]) ?? []))
   }, [])
 
+  // Which past months still need payroll run (flags the month-strip dots). Spans
+  // the same 12-month window the strip shows; independent of the selected month.
+  const loadPending = useCallback(async () => {
+    const { data: res } = await supabase.rpc('payroll_pending_months', {
+      p_from: monthsAgo(current, 11), p_to: current,
+    })
+    const arr = (res as unknown as Array<{ month: string; pending: number }> | null) ?? []
+    setPendingMonths(new Set(arr.map(x => x.month)))
+  }, [current])
+
   useEffect(() => {
     if (isAdmin) {
       load(period)
       loadTrend(period)
     }
   }, [period, isAdmin, load, loadTrend])
+
+  useEffect(() => { if (isAdmin) loadPending() }, [isAdmin, loadPending])
 
   // Invoked from the confirmation modal (which carries the info + irreversibility
   // warning + acknowledgement). On success it closes the modal and reloads.
@@ -156,6 +182,46 @@ export function Payroll({ user }: { user: User }) {
     setFlash(t.payrollRunDone(ran))
     setTimeout(() => setFlash(''), 4000)
     await load(period)
+    await loadPending()
+    window.dispatchEvent(new Event('flodok:payroll-changed'))
+  }
+
+  // Per-employee freeze (close_period) and reopen (reopen_period), driven by the
+  // confirmation modal. Each refreshes the roster, the month dots, and the
+  // sidebar badge (via the shared event).
+  async function runConfirm() {
+    if (!confirm || actionBusy) return
+    setActionBusy(true)
+    setError('')
+    try {
+      if (confirm.kind === 'freeze-one') {
+        const { error: e } = await supabase.rpc('close_period', {
+          target_employee_id: confirm.employeeId, target_period_month: period,
+        })
+        if (e) throw e
+        setFlash(t.payrollFreezeOneDone(confirm.name))
+      } else if (confirm.kind === 'reopen-one') {
+        const { error: e } = await supabase.rpc('reopen_period', {
+          p_period: period, p_employee_id: confirm.employeeId,
+        })
+        if (e) throw e
+        setFlash(t.payrollReopenDone(1))
+      } else {
+        const { data: res, error: e } = await supabase.rpc('reopen_period', { p_period: period })
+        if (e) throw e
+        const n = (res as { employees_reopened?: number } | null)?.employees_reopened ?? 0
+        setFlash(t.payrollReopenDone(n))
+      }
+      setConfirm(null)
+      setTimeout(() => setFlash(''), 4000)
+      await load(period)
+      await loadPending()
+      window.dispatchEvent(new Event('flodok:payroll-changed'))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Action failed')
+    } finally {
+      setActionBusy(false)
+    }
   }
 
   async function handlePayslip(employeeId: string) {
@@ -251,7 +317,12 @@ export function Payroll({ user }: { user: User }) {
   }
 
   const counts = data?.counts
-  const canRun = (counts?.open ?? 0) > 0
+  // Only open employees who actually have something to settle (active contract
+  // or an adjustment) are runnable — run_payroll skips the rest. Basing the
+  // button on the raw open count lit it up for empty no-contract rows, inviting
+  // a click that froze nobody.
+  const runnableOpen = data?.rows.filter(r => !r.settled && (r.has_active_contract || r.adjustment_net_idr !== 0)).length ?? 0
+  const canRun = runnableOpen > 0
   const hasRows = !!data && data.rows.length > 0
 
   const filterSections: FilterPanelSection[] = [
@@ -285,13 +356,20 @@ export function Payroll({ user }: { user: User }) {
       {/* Header + run action — re-constrained within the full-width canvas. */}
       <div className={`${SHELL_PAD} pt-8 pb-5`}>
         <div className={SHELL_INNER}>
-          <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h1 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.payrollTitle}</h1>
-              <p className="mt-0.5 text-sm" style={{ color: 'var(--color-text-secondary)' }}>{t.payrollSubtitle}</p>
+              <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{t.payrollTitle}</h1>
             </div>
             <div className="flex items-center gap-2">
               {flash && <span className="text-xs font-medium" style={{ color: 'var(--color-success)' }}>{flash}</span>}
+              <ToolbarMoreMenu
+                items={(counts?.settled ?? 0) > 0 ? [{
+                  key: 'reopen-month',
+                  label: t.payrollReopenMonth,
+                  title: t.payrollReopenMonthTitle,
+                  onClick: () => isOwner ? setConfirm({ kind: 'reopen-month' }) : setOwnerNotice(true),
+                }] : []}
+              />
               {(counts?.settled ?? 0) > 0 && (
                 <button
                   type="button"
@@ -337,6 +415,7 @@ export function Payroll({ user }: { user: User }) {
               currentMonth={current}
               onSelect={setPeriod}
               lang={lang}
+              flaggedMonths={pendingMonths}
             />
           </div>
         </div>
@@ -367,7 +446,7 @@ export function Payroll({ user }: { user: User }) {
 
       {/* The page-level error only surfaces when the run modal is closed; while
           it's open the modal owns the error display. */}
-      {error && !runModalOpen && <p className="mt-4 text-sm" style={{ color: 'var(--color-danger)' }}>{error}</p>}
+      {error && !runModalOpen && !confirm && <p className="mt-4 text-sm" style={{ color: 'var(--color-danger)' }}>{error}</p>}
 
       {/* The adjustments/double-count note now lives in the run-confirmation
           modal, surfaced at the moment of the irreversible action. */}
@@ -402,6 +481,9 @@ export function Payroll({ user }: { user: User }) {
               lines={lines[r.employee_id]}
               onPayslip={handlePayslip}
               payslipBusy={payslipBusy}
+              isAdmin={isAdmin}
+              onFreeze={(id, name) => setConfirm({ kind: 'freeze-one', employeeId: id, name })}
+              onReopen={(id, name) => isOwner ? setConfirm({ kind: 'reopen-one', employeeId: id, name }) : setOwnerNotice(true)}
               t={t}
               lang={lang}
             />
@@ -461,6 +543,30 @@ export function Payroll({ user }: { user: User }) {
                             {t.payrollPayslip}
                           </button>
                         )}
+                        {!r.settled && isAdmin && (r.has_active_contract || r.adjustment_net_idr !== 0) && (
+                          <button
+                            type="button"
+                            onClick={() => setConfirm({ kind: 'freeze-one', employeeId: r.employee_id, name: r.name })}
+                            className="text-xs font-medium transition-colors"
+                            style={{ color: 'var(--color-text-tertiary)' }}
+                            onMouseOver={e => { e.currentTarget.style.color = 'var(--color-text)' }}
+                            onMouseOut={e => { e.currentTarget.style.color = 'var(--color-text-tertiary)' }}
+                          >
+                            {t.payrollFreezeOne}
+                          </button>
+                        )}
+                        {r.settled && (
+                          <button
+                            type="button"
+                            onClick={() => isOwner ? setConfirm({ kind: 'reopen-one', employeeId: r.employee_id, name: r.name }) : setOwnerNotice(true)}
+                            className="text-xs font-medium transition-colors"
+                            style={{ color: 'var(--color-text-tertiary)' }}
+                            onMouseOver={e => { e.currentTarget.style.color = 'var(--color-warning)' }}
+                            onMouseOut={e => { e.currentTarget.style.color = 'var(--color-text-tertiary)' }}
+                          >
+                            {t.payrollReopen}
+                          </button>
+                        )}
                         <StatusBadge settled={r.settled} t={t} />
                       </div>
                     </td>
@@ -486,13 +592,107 @@ export function Payroll({ user }: { user: User }) {
         open={runModalOpen}
         onClose={() => setRunModalOpen(false)}
         monthLabel={monthLong(period, lang)}
-        openCount={counts?.open ?? 0}
+        openCount={runnableOpen}
         running={running}
         error={error}
         onConfirm={handleRun}
         t={t}
       />
+
+      <PayrollConfirmModal
+        state={confirm}
+        monthLabel={monthLong(period, lang)}
+        settledCount={counts?.settled ?? 0}
+        busy={actionBusy}
+        error={error}
+        onCancel={() => { setConfirm(null); setError('') }}
+        onConfirm={runConfirm}
+        t={t}
+      />
+
+      <Modal open={ownerNotice} onClose={() => setOwnerNotice(false)} title={t.payrollReopenOwnerOnlyTitle}>
+        <div className="space-y-4 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+          <p>{t.payrollReopenOwnerOnlyBody}</p>
+          <div className="flex justify-end pt-2">
+            <button
+              type="button"
+              onClick={() => setOwnerNotice(false)}
+              className="rounded-md px-3 py-1.5 text-sm font-medium text-white"
+              style={{ backgroundColor: 'var(--color-primary)' }}
+            >
+              {t.close}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
+  )
+}
+
+// Confirmation for the per-employee freeze and the per-employee / whole-month
+// reopen. Reopen uses a warning-toned primary; freeze uses the standard primary.
+function PayrollConfirmModal({ state, monthLabel, settledCount, busy, error, onCancel, onConfirm, t }: {
+  state: ConfirmState | null
+  monthLabel: string
+  settledCount: number
+  busy: boolean
+  error: string
+  onCancel: () => void
+  onConfirm: () => void
+  t: ReturnType<typeof useLang>['t']
+}) {
+  const isReopen = state?.kind === 'reopen-one' || state?.kind === 'reopen-month'
+  let title = ''
+  let body = ''
+  let confirmLabel = ''
+  if (state?.kind === 'freeze-one') {
+    title = t.payrollFreezeOneTitle
+    body = t.payrollFreezeOneIntro(state.name, monthLabel)
+    confirmLabel = t.payrollFreezeOneConfirm
+  } else if (state?.kind === 'reopen-one') {
+    title = t.payrollReopenOneTitle
+    body = t.payrollReopenOneIntro(state.name, monthLabel)
+    confirmLabel = t.payrollReopenConfirm
+  } else if (state?.kind === 'reopen-month') {
+    title = t.payrollReopenMonthTitle
+    body = t.payrollReopenMonthIntro(monthLabel, settledCount)
+    confirmLabel = t.payrollReopenConfirm
+  }
+
+  return (
+    <Modal open={!!state} onClose={busy ? () => undefined : onCancel} title={title}>
+      <div className="space-y-4 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+        <p>{body}</p>
+
+        {error && (
+          <div className="rounded-md border p-2 text-xs" style={{ borderColor: 'var(--color-danger)', color: 'var(--color-danger)' }}>
+            {error}
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2 pt-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={busy}
+            className="rounded-md border px-3 py-1.5 text-sm disabled:opacity-50"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+          >
+            {t.cancel}
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={busy}
+            className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+            style={{ backgroundColor: isReopen ? 'var(--color-warning)' : 'var(--color-primary)' }}
+          >
+            {busy && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>}
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </Modal>
   )
 }
 
@@ -660,13 +860,16 @@ function ViewToggle({ view, onChange, t }: {
   )
 }
 
-function PayrollCard({ r, isOpen, onToggle, lines, onPayslip, payslipBusy, t, lang }: {
+function PayrollCard({ r, isOpen, onToggle, lines, onPayslip, payslipBusy, isAdmin, onFreeze, onReopen, t, lang }: {
   r: PayrollRow
   isOpen: boolean
   onToggle: (employeeId: string) => void
   lines: PayrollLine[] | 'loading' | undefined
   onPayslip: (employeeId: string) => void
   payslipBusy: string | null
+  isAdmin: boolean
+  onFreeze: (employeeId: string, name: string) => void
+  onReopen: (employeeId: string, name: string) => void
   t: ReturnType<typeof useLang>['t']
   lang: 'en' | 'id'
 }) {
@@ -692,22 +895,44 @@ function PayrollCard({ r, isOpen, onToggle, lines, onPayslip, payslipBusy, t, la
       </button>
       <div className="flex items-center justify-between gap-2 px-3 pb-3">
         <StatusBadge settled={r.settled} t={t} />
-        {r.settled && (
-          <button
-            type="button"
-            onClick={() => onPayslip(r.employee_id)}
-            disabled={payslipBusy === r.employee_id}
-            className="inline-flex items-center gap-1 text-xs font-medium disabled:opacity-50"
-            style={{ color: 'var(--color-primary)' }}
-          >
-            {payslipBusy === r.employee_id ? (
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>
-            ) : (
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
-            )}
-            {t.payrollPayslip}
-          </button>
-        )}
+        <div className="flex items-center gap-3">
+          {!r.settled && isAdmin && (r.has_active_contract || r.adjustment_net_idr !== 0) && (
+            <button
+              type="button"
+              onClick={() => onFreeze(r.employee_id, r.name)}
+              className="text-xs font-medium"
+              style={{ color: 'var(--color-text-tertiary)' }}
+            >
+              {t.payrollFreezeOne}
+            </button>
+          )}
+          {r.settled && (
+            <button
+              type="button"
+              onClick={() => onPayslip(r.employee_id)}
+              disabled={payslipBusy === r.employee_id}
+              className="inline-flex items-center gap-1 text-xs font-medium disabled:opacity-50"
+              style={{ color: 'var(--color-primary)' }}
+            >
+              {payslipBusy === r.employee_id ? (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>
+              ) : (
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+              )}
+              {t.payrollPayslip}
+            </button>
+          )}
+          {r.settled && (
+            <button
+              type="button"
+              onClick={() => onReopen(r.employee_id, r.name)}
+              className="text-xs font-medium"
+              style={{ color: 'var(--color-text-tertiary)' }}
+            >
+              {t.payrollReopen}
+            </button>
+          )}
+        </div>
       </div>
       {isOpen && (
         <div className="border-t px-3 py-3" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary, var(--color-bg))' }}>

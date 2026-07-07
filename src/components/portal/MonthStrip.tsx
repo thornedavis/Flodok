@@ -10,6 +10,9 @@ type Props = {
   trailing?: ReactNode
   /** Dim the month list (e.g. when an "all time" mode makes it inactive). */
   muted?: boolean
+  /** Months (ISO `YYYY-MM-01`) to flag with an attention dot — e.g. a past
+   *  payroll month that still needs running. */
+  flaggedMonths?: ReadonlySet<string>
 }
 
 function buildMonthList(earliest: string, current: string): string[] {
@@ -47,7 +50,7 @@ function CalendarIcon() {
   )
 }
 
-export function MonthStrip({ selectedMonth, earliestMonth, currentMonth, onSelect, lang, trailing, muted = false }: Props) {
+export function MonthStrip({ selectedMonth, earliestMonth, currentMonth, onSelect, lang, trailing, muted = false, flaggedMonths }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const itemRefs = useRef<Record<string, HTMLButtonElement | null>>({})
   const settleTimerRef = useRef<number | null>(null)
@@ -187,13 +190,14 @@ export function MonthStrip({ selectedMonth, earliestMonth, currentMonth, onSelec
             // center-origin scale keeps the item's centre fixed, so the
             // snap/centre-scroll maths is unaffected.
             const scale = isSelected ? 1.25 : 1
+            const isFlagged = flaggedMonths?.has(month) ?? false
             return (
               <button
                 key={month}
                 ref={el => { itemRefs.current[month] = el }}
                 type="button"
                 onClick={() => { if (month !== selectedMonth) onSelect(month) }}
-                className="snap-center shrink-0 whitespace-nowrap text-xl font-semibold transition-all duration-300 ease-out"
+                className="relative snap-center shrink-0 whitespace-nowrap text-xl font-semibold transition-all duration-300 ease-out"
                 style={{
                   color: isSelected ? 'var(--color-text)' : 'var(--color-text-tertiary)',
                   transform: `scale(${scale})`,
@@ -201,6 +205,13 @@ export function MonthStrip({ selectedMonth, earliestMonth, currentMonth, onSelec
                 }}
               >
                 {formatMonthLong(month, lang)}
+                {isFlagged && (
+                  <span
+                    aria-hidden
+                    className="absolute -right-2.5 -top-0.5 h-2 w-2 rounded-full"
+                    style={{ backgroundColor: 'var(--color-warning)' }}
+                  />
+                )}
               </button>
             )
           })
@@ -241,12 +252,13 @@ export function MonthStrip({ selectedMonth, earliestMonth, currentMonth, onSelec
               <div className="grid grid-cols-3 gap-1">
                 {group.months.map(m => {
                   const isSelected = m === selectedMonth
+                  const isFlagged = flaggedMonths?.has(m) ?? false
                   return (
                     <button
                       key={m}
                       type="button"
                       onClick={() => { onSelect(m); setPickerOpen(false) }}
-                      className="rounded-md px-2 py-1.5 text-xs font-medium transition-colors"
+                      className="relative rounded-md px-2 py-1.5 text-xs font-medium transition-colors"
                       style={{
                         color: isSelected ? '#fff' : 'var(--color-text-secondary)',
                         backgroundColor: isSelected ? 'var(--color-primary)' : 'transparent',
@@ -255,6 +267,13 @@ export function MonthStrip({ selectedMonth, earliestMonth, currentMonth, onSelec
                       onMouseOut={e => { if (!isSelected) e.currentTarget.style.backgroundColor = 'transparent' }}
                     >
                       {formatMonthShort(m, lang)}
+                      {isFlagged && (
+                        <span
+                          aria-hidden
+                          className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full"
+                          style={{ backgroundColor: isSelected ? '#fff' : 'var(--color-warning)' }}
+                        />
+                      )}
                     </button>
                   )
                 })}

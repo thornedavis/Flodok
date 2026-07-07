@@ -5346,6 +5346,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      payroll_pending_months: {
+        Args: { p_from: string; p_to: string }
+        Returns: Json
+      }
       payroll_trend: {
         Args: { p_months?: number; p_period: string }
         Returns: Json
@@ -6055,6 +6059,10 @@ export type Database = {
           snapshot_rows: number
           unlocks_awarded: number
         }[]
+      }
+      reopen_period: {
+        Args: { p_period: string; p_employee_id?: string }
+        Returns: Json
       }
       run_payroll: { Args: { p_period: string }; Returns: Json }
       seed_default_pay_components: { Args: never; Returns: number }
