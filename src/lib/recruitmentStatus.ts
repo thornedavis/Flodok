@@ -30,7 +30,7 @@ export type StatusActor =
   | 'neutral' // off-path (talent pool / no-show)
 
 export type StatusKind =
-  | 'review'
+  | 'awaiting_profile'
   | 'filling_profile'
   | 'ready_to_offer'
   | 'add_jd'
@@ -99,9 +99,12 @@ export function deriveBoardColumn(stage: LifecycleStage, s: CandidateSignals): B
 export function deriveStatus(stage: LifecycleStage, s: CandidateSignals): CandidateStatus {
   switch (stage) {
     case 'prospective':
+      // Pre-offer, the ball is always with the candidate: they've been invited to fill
+      // the screening profile, and completing it is what advances them to shortlisted.
+      // A fresh import is NOT your move — don't nag with needs_you here.
       return s.onboardingDone > 0
         ? { actor: 'with_them', kind: 'filling_profile', data: { pct: pct(s) } }
-        : { actor: 'needs_you', kind: 'review' }
+        : { actor: 'with_them', kind: 'awaiting_profile' }
 
     case 'shortlisted':
       // JD is now required to send an offer, so surface it as the next move.

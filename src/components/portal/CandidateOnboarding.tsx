@@ -6,6 +6,7 @@ import { SIGNATURE_FONTS, ensureSignatureFontsLoaded } from '../../lib/signature
 import { buildContractDocumentHash, captureSignatureIp, getUserAgent } from '../../lib/signatureFingerprint'
 import { docToMarkdown, type DocumentDoc } from '../../lib/documentDoc'
 import { computeProfileSections, profileCompletionPercent } from '../../lib/candidateProfile'
+import { GENDER_VALUES, MARITAL_VALUES, RELIGION_VALUES, genderLabel, maritalLabel, religionLabel } from '../employee/sections/personal/enums'
 import { DocumentUpload } from '../DocumentUpload'
 import { Imagemark } from '../Brand'
 import type { Contract, ContractSignature, Employee, EmployeeEmergencyContact, JobDescription, JobDescriptionSignature, Organization } from '../../types/aliases'
@@ -30,6 +31,7 @@ type PortalSignJdRpc = (fn: 'portal_sign_jd', args: {
 type PortalUpdateProfileRpc = (fn: 'portal_update_onboarding_profile', args: { emp_slug: string; emp_token: string; p_patch: Record<string, string | null> }) => Promise<{ data: Employee | null; error: { message: string } | null }>
 type PortalGetEmployeeRpc = (fn: 'portal_get_employee', args: { emp_slug: string; emp_token: string }) => Promise<{ data: Employee | null; error: { message: string } | null }>
 type PortalAdvanceToSignedRpc = (fn: 'portal_advance_to_signed', args: { emp_slug: string; emp_token: string }) => Promise<{ data: Employee | null; error: { message: string } | null }>
+type PortalAdvanceToShortlistedRpc = (fn: 'portal_advance_to_shortlisted', args: { emp_slug: string; emp_token: string }) => Promise<{ data: Employee | null; error: { message: string } | null }>
 type PortalGetEmergencyContactRpc = (fn: 'portal_get_emergency_contact', args: { emp_slug: string; emp_token: string }) => Promise<{ data: EmployeeEmergencyContact | null; error: { message: string } | null }>
 type PortalUpsertEmergencyContactRpc = (fn: 'portal_upsert_emergency_contact', args: { emp_slug: string; emp_token: string; p_name: string; p_relationship: string; p_phone: string }) => Promise<{ data: EmployeeEmergencyContact | null; error: { message: string } | null }>
 
@@ -102,6 +104,16 @@ export function CandidateOnboarding({
     if (data?.lifecycle_stage === 'signed') setEmployee(prev => ({ ...prev, lifecycle_stage: 'signed' }))
   }
 
+  // Pre-offer: flip 'prospective' -> 'shortlisted' once the screening subset is in.
+  // The server re-validates the fields, so a partial profile is a safe no-op.
+  async function maybeAdvanceToShortlisted() {
+    if (employee.lifecycle_stage !== 'prospective') return
+    const { data } = await (supabase.rpc as unknown as PortalAdvanceToShortlistedRpc)('portal_advance_to_shortlisted', {
+      emp_slug: employee.slug, emp_token: employee.access_token,
+    })
+    if (data?.lifecycle_stage === 'shortlisted') setEmployee(prev => ({ ...prev, lifecycle_stage: 'shortlisted' }))
+  }
+
   const stepIndex = Math.min(STEP_ORDER.indexOf(step) + 1, TOTAL_STEPS)
   const orgName = organization?.display_name || organization?.name || ''
   const orgLogoUrl = organization?.logo_url || null
@@ -120,7 +132,7 @@ export function CandidateOnboarding({
             </span>
           )}
           <div className="flex shrink-0 items-center gap-3">
-            {step !== 'done' && (
+            {step !== 'done' && !preOffer && (
               <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
                 {t.onboardingProgress(stepIndex, TOTAL_STEPS)}
               </span>
@@ -146,7 +158,7 @@ export function CandidateOnboarding({
           </div>
         </header>
 
-        <ProgressBar current={stepIndex} total={TOTAL_STEPS} />
+        {!preOffer && <ProgressBar current={stepIndex} total={TOTAL_STEPS} />}
 
         <main className="mt-8 flex flex-1 flex-col justify-center py-8">
           {step === 'welcome' && (
@@ -193,8 +205,14 @@ export function CandidateOnboarding({
           {step === 'personal' && (
             <PersonalStep
               employee={employee}
-              required={!preOffer}
-              onSaved={updated => { setEmployee(updated); go('banking') }}
+              required
+              onSaved={async updated => {
+                setEmployee(updated)
+                // Pre-offer the screening profile IS the step — completing it advances
+                // them to shortlisted and ends here (no bank/docs until they're offered).
+                if (preOffer) { await maybeAdvanceToShortlisted(); go('done') }
+                else go('banking')
+              }}
               onBack={() => go(previousStepBeforePersonal(signContract, requiresJdSig))}
             />
           )}
@@ -722,6 +740,9 @@ function PersonalStep({ employee, required, onSaved, onBack }: {
   const [placeOfBirth, setPlaceOfBirth] = useState(employee.place_of_birth || '')
   const [address, setAddress] = useState(employee.address || '')
   const [postalCode, setPostalCode] = useState(employee.postal_code || '')
+  const [gender, setGender] = useState(employee.gender || '')
+  const [religion, setReligion] = useState(employee.religion || '')
+  const [maritalStatus, setMaritalStatus] = useState(employee.marital_status || '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -738,6 +759,9 @@ function PersonalStep({ employee, required, onSaved, onBack }: {
         place_of_birth: placeOfBirth.trim() || null,
         address: address.trim() || null,
         postal_code: postalCode.trim() || null,
+        gender: gender || null,
+        religion: religion || null,
+        marital_status: maritalStatus || null,
       },
     })
     if (updateError || !data) {
@@ -788,7 +812,42 @@ function PersonalStep({ employee, required, onSaved, onBack }: {
             />
           </Field>
         </div>
-        <Field label={t.onboardingPersonalAddressLabel}>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <Field label={t.onboardingPersonalGenderLabel} required={required}>
+            <select
+              value={gender}
+              onChange={e => setGender(e.target.value)}
+              className="w-full rounded-lg border px-3 py-2 text-sm"
+              style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+            >
+              <option value="">{t.onboardingSelectPrompt}</option>
+              {GENDER_VALUES.map(v => <option key={v} value={v}>{genderLabel(t, v)}</option>)}
+            </select>
+          </Field>
+          <Field label={t.onboardingPersonalMaritalLabel} required={required}>
+            <select
+              value={maritalStatus}
+              onChange={e => setMaritalStatus(e.target.value)}
+              className="w-full rounded-lg border px-3 py-2 text-sm"
+              style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+            >
+              <option value="">{t.onboardingSelectPrompt}</option>
+              {MARITAL_VALUES.map(v => <option key={v} value={v}>{maritalLabel(t, v)}</option>)}
+            </select>
+          </Field>
+        </div>
+        <Field label={t.onboardingPersonalReligionLabel} required={required}>
+          <select
+            value={religion}
+            onChange={e => setReligion(e.target.value)}
+            className="w-full rounded-lg border px-3 py-2 text-sm"
+            style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+          >
+            <option value="">{t.onboardingSelectPrompt}</option>
+            {RELIGION_VALUES.map(v => <option key={v} value={v}>{religionLabel(t, v)}</option>)}
+          </select>
+        </Field>
+        <Field label={t.onboardingPersonalAddressLabel} required={required}>
           <textarea
             value={address}
             onChange={e => setAddress(e.target.value)}
@@ -815,7 +874,7 @@ function PersonalStep({ employee, required, onSaved, onBack }: {
         <button
           type="button"
           onClick={handleSave}
-          disabled={saving || (required && (!ktpNik.trim() || !dob))}
+          disabled={saving || (required && (!ktpNik.trim() || !dob || !gender || !religion || !maritalStatus || !address.trim()))}
           className="rounded-lg px-6 py-3 text-base font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
           style={{ backgroundColor: 'var(--color-primary)' }}
         >

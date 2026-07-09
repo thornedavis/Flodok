@@ -51,8 +51,8 @@ describe('deriveBoardColumn', () => {
 })
 
 describe('deriveStatus', () => {
-  it('prospective: your move to review, or waiting on them if they started a profile', () => {
-    expect(deriveStatus('prospective', signals())).toMatchObject({ actor: 'needs_you', kind: 'review' })
+  it('prospective: waiting on them to fill the screening profile (awaiting, then filling)', () => {
+    expect(deriveStatus('prospective', signals())).toMatchObject({ actor: 'with_them', kind: 'awaiting_profile' })
     expect(deriveStatus('prospective', signals({ onboardingDone: 3 })))
       .toMatchObject({ actor: 'with_them', kind: 'filling_profile', data: { pct: 43 } })
   })

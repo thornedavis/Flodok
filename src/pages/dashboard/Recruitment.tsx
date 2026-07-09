@@ -906,7 +906,7 @@ const ACTOR_TONE: Record<StatusActor, { bg: string; fg: string; dot: string }> =
 
 function statusText(status: CandidateStatus, t: Translations, lang: 'en' | 'id'): string {
   switch (status.kind) {
-    case 'review': return t.recruitStatusReview
+    case 'awaiting_profile': return t.recruitStatusAwaitingProfile
     case 'filling_profile': return t.recruitStatusFillingProfile(status.data?.pct ?? 0)
     case 'ready_to_offer': return t.recruitStatusReadyToOffer
     case 'add_jd': return t.recruitStatusAddJd
@@ -1072,6 +1072,11 @@ function journeySteps(candidate: Candidate, s: CandidateSignals, stage: Recruitm
   const reached = (target: RecruitmentStage) => STAGE_INDEX[stage] >= STAGE_INDEX[target]
   const steps: { key: StepKey; state: StepState; title: string; sub: string }[] = []
   steps.push({ key: 'added', state: 'done', title: t.recruitStepAdded, sub: candidate.source ? candidateSourceLabel(candidate.source as CandidateSourceOption, t) : '' })
+  // The screening profile is the bridge INTO Shortlisted — completing it is what advances
+  // prospective → shortlisted — so the onboarding node sits here, before the shortlist node,
+  // not sixth (after Offer sent + Contract signed). Data capture starts pre-offer.
+  const onbState: StepState = s.onboardingDone >= s.onboardingTotal ? 'done' : (s.onboardingDone > 0 ? 'prog' : 'todo')
+  steps.push({ key: 'onboarding', state: onbState, title: t.recruitStepOnboarding, sub: t.recruitStatusOnboarding(s.onboardingDone, s.onboardingTotal) })
   steps.push({ key: 'shortlisted', state: reached('shortlisted') ? 'done' : 'todo', title: t.hiringStageShortlisted, sub: '' })
   // Linking a JD is the prerequisite to sending an offer, so it comes first.
   // Pre-offer it reads as your task (link it); post-offer it tracks the
@@ -1087,8 +1092,6 @@ function journeySteps(candidate: Candidate, s: CandidateSignals, stage: Recruitm
   }
   steps.push({ key: 'offer', state: reached('offered') ? 'done' : 'todo', title: t.recruitStepOfferSent, sub: '' })
   steps.push({ key: 'contract', state: s.contractSigned ? 'done' : (reached('offered') ? 'prog' : 'todo'), title: t.recruitStepContract, sub: s.contractSigned ? t.recruitJdSigned : (reached('offered') ? t.recruitStatusAwaiting : '') })
-  const onbState: StepState = s.onboardingDone >= s.onboardingTotal ? 'done' : (s.onboardingDone > 0 ? 'prog' : 'todo')
-  steps.push({ key: 'onboarding', state: onbState, title: t.recruitStepOnboarding, sub: t.recruitStatusOnboarding(s.onboardingDone, s.onboardingTotal) })
   if (s.joinDate) {
     steps.push({ key: 'start', state: s.joinDate <= s.today ? 'done' : 'prog', title: t.recruitStepStartDate, sub: formatDate(s.joinDate, lang) })
   } else {

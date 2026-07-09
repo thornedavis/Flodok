@@ -5400,6 +5400,67 @@ export type Database = {
         Args: { p_months?: number; p_period: string }
         Returns: Json
       }
+      portal_advance_to_shortlisted: {
+        Args: { emp_slug: string; emp_token: string }
+        Returns: {
+          access_token: string
+          address: string | null
+          applied_for_jd_id: string | null
+          bank_account_holder: string | null
+          bank_account_number: string | null
+          bank_name: string | null
+          blood_type: string | null
+          branch_name: string | null
+          citizen_id_address: string | null
+          class: string | null
+          created_at: string
+          date_of_birth: string | null
+          deleted_at: string | null
+          deleted_by: string | null
+          email: string | null
+          employee_code: string | null
+          employment_type: string | null
+          first_name: string | null
+          gender: string | null
+          grade: string | null
+          id: string
+          job_level: string | null
+          job_position: string | null
+          join_date: string | null
+          kk_photo_url: string | null
+          ktp_nik: string | null
+          ktp_photo_url: string | null
+          last_name: string | null
+          last_notifications_seen_at: string | null
+          lifecycle_stage: string
+          marital_status: string | null
+          name: string
+          notes: string | null
+          npwp: string | null
+          org_id: string
+          passport_expiry: string | null
+          passport_number: string | null
+          phone: string
+          photo_url: string | null
+          place_of_birth: string | null
+          postal_code: string | null
+          probation_end_date: string | null
+          religion: string | null
+          resign_date: string | null
+          separation_reason: string | null
+          separation_type: string | null
+          slug: string
+          source: string | null
+          source_request_id: string | null
+          status: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "employees"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       portal_advance_to_signed: {
         Args: { emp_slug: string; emp_token: string }
         Returns: {
