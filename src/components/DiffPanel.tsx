@@ -79,6 +79,11 @@ function InlineWordDiff({ oldLine, newLine }: { oldLine: string; newLine: string
 }
 
 export function DiffPanel({ oldContent, newContent }: DiffPanelProps) {
+  // Hooks must run before any early return so the hook order stays stable
+  // across renders — otherwise flipping between an identical-content render
+  // (early return) and a diff render throws "rendered more/fewer hooks".
+  const [open, setOpen] = useState(true)
+
   if (!oldContent && !newContent) return null
   if (oldContent === newContent) {
     return (
@@ -152,8 +157,6 @@ export function DiffPanel({ oldContent, newContent }: DiffPanelProps) {
   // Count changes for summary
   const added = lines.filter(l => l.type === 'added').length
   const removed = lines.filter(l => l.type === 'removed').length
-
-  const [open, setOpen] = useState(true)
 
   return (
     <div className="rounded-lg border" style={{ borderColor: 'var(--color-border)' }}>
