@@ -1,0 +1,48 @@
+# Supabase project configuration.
+#
+# This file exists to PIN per-function JWT-verification settings that must not
+# sit at their default. Everything unspecified uses the Supabase CLI defaults,
+# so this is intentionally minimal.
+#
+# Background: by default the Supabase Edge Functions gateway enforces a valid
+# project JWT (`Authorization: Bearer <jwt>`) on EVERY call before the function
+# code runs. Functions whose legitimate callers cannot send a Supabase JWT must
+# opt out with `verify_jwt = false` and authenticate the caller themselves.
+project_id = "ljdgktjkyqjorjeajjpl"
+
+# ── billing — CRITICAL ───────────────────────────────────────────────────────
+# Stripe posts webhooks to /billing/webhook with a `Stripe-Signature` header and
+# NO Supabase JWT. With verify_jwt on, the gateway 401s every webhook before
+# handleWebhook() runs, so `checkout.session.completed` never fires and a paid
+# checkout never flips the org to Pro (the customer pays but stays on Free).
+# The function verifies the Stripe signature itself (constructEventAsync), and
+# its user-facing actions (checkout/portal/sync-seats/…) still do their own
+# Bearer-JWT auth via authenticateUser() — so disabling the gateway check is
+# both required (for the webhook) and safe (management actions self-authenticate).
+[functions.billing]
+verify_jwt = false
+
+# ── sop-update-status ────────────────────────────────────────────────────────
+# Serves external API-key callers (`Authorization: Bearer flk_…`, not a Supabase
+# JWT) and validates the key itself via validateApiKey(). Already deployed with
+# the gateway check off; pinned here so a future `supabase functions deploy`
+# doesn't silently re-enable it.
+[functions.sop-update-status]
+verify_jwt = false
+
+# ── employees / sop-updates / tasks-ingest — RECOMMENDED (see notes) ──────────
+# These use the SAME API-key / worker-token auth (validateWorkerOrApiKey) as
+# sop-update-status above, yet are currently deployed with verify_jwt = true.
+# That means any caller using a raw `flk_` API key (or a bare worker token with
+# no anon-key bearer) is 401'd by the gateway before the function runs — the
+# public integration API path is effectively gated. Flipping these to false is
+# safe (each validates its own caller) and makes them consistent with
+# sop-update-status. Left commented until you confirm your integration callers
+# actually use the `flk_` / worker-token path (if the flodok-router always sends
+# the anon key as the bearer, the router path works either way).
+# [functions.employees]
+# verify_jwt = false
+# [functions.sop-updates]
+# verify_jwt = false
+# [functions.tasks-ingest]
+# verify_jwt = false
