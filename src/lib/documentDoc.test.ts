@@ -105,9 +105,9 @@ describe('normalizeDoc', () => {
     const starter = buildPkwtStarterDoc('pkwtt')
     expect(countType(starter, 'section')).toBe(0)
     // The starter now leads with a full-width letterhead; everything below it
-    // is the flat bilingual body.
+    // is the flat bilingual body, closing with author-placed signature blocks.
     expect(starter.content?.[0]?.type).toBe('letterhead')
-    expect((starter.content || []).slice(1).every(n => n.type === 'bilingualBlock')).toBe(true)
+    expect((starter.content || []).slice(1).every(n => n.type === 'bilingualBlock' || n.type === 'signatureBlock')).toBe(true)
     expect(clauseHeadingTexts(starter, 'en').length).toBeGreaterThan(0)
   })
 })
