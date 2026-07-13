@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
 import { LanguageProvider } from './contexts/LanguageContext'
+import { ErrorBoundary } from './components/ErrorBoundary'
 
 // Apply the saved/system theme before React paints, so EVERY route matches the
 // home page — including the auth pages and the standalone /onboarding wizard,
@@ -19,7 +20,9 @@ try {
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <LanguageProvider>
-      <App />
+      <ErrorBoundary variant="fullscreen">
+        <App />
+      </ErrorBoundary>
     </LanguageProvider>
   </StrictMode>,
 )

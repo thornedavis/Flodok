@@ -4,6 +4,7 @@ import { useTheme } from '../hooks/useTheme'
 import { useLang } from '../contexts/LanguageContext'
 import { BreadcrumbProvider, useBreadcrumb } from '../contexts/BreadcrumbContext'
 import { BillingProvider } from '../contexts/BillingContext'
+import { ErrorBoundary } from './ErrorBoundary'
 import { useRole } from '../hooks/useRole'
 import { getAvatarGradient } from '../lib/avatar'
 import { supabase } from '../lib/supabase'
@@ -243,7 +244,12 @@ export function DashboardLayout({ user, onSignOut }: { user: User; onSignOut: ()
                 <div className={fullWidth ? '' : 'mx-auto max-w-6xl'}>
                   <DunningBanner user={user} />
                   <OwnerClaimBanner user={user} />
-                  <Outlet context={{ org } satisfies DashboardOutletContext} />
+                  {/* Per-page boundary: a render crash in one page shows a
+                      recoverable fallback while the sidebar/header stay usable.
+                      Keyed on the path so navigating away resets the error. */}
+                  <ErrorBoundary key={location.pathname} variant="inline">
+                    <Outlet context={{ org } satisfies DashboardOutletContext} />
+                  </ErrorBoundary>
                 </div>
               </main>
             </div>

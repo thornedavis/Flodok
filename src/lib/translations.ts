@@ -2,6 +2,12 @@ export type Lang = 'en' | 'id'
 
 export const translations = {
   en: {
+    // Global error boundary (App/Layout render-crash fallback)
+    errorBoundaryTitle: 'Something went wrong',
+    errorBoundaryBody: 'This page ran into an unexpected error. Reloading usually fixes it.',
+    errorBoundaryReload: 'Reload',
+    errorBoundaryBack: 'Back to dashboard',
+
     // Employee portal
     home: 'Home',
     sops: 'SOPs',
@@ -2897,6 +2903,12 @@ export const translations = {
     spotlightTabLabel: 'Spotlight',
   },
   id: {
+    // Global error boundary (App/Layout render-crash fallback)
+    errorBoundaryTitle: 'Terjadi kesalahan',
+    errorBoundaryBody: 'Halaman ini mengalami kesalahan tak terduga. Memuat ulang biasanya memperbaikinya.',
+    errorBoundaryReload: 'Muat ulang',
+    errorBoundaryBack: 'Kembali ke dasbor',
+
     // Employee portal
     home: 'Beranda',
     sops: 'SOP',
