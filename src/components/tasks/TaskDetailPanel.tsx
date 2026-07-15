@@ -9,6 +9,7 @@ import { DatePicker } from '../DatePicker'
 import { DOCUMENT_TYPES, documentEditPath, type DocumentType } from '../../lib/documentTypes'
 import { extractUrls } from '../../lib/taskFormat'
 import type { Task, TaskProject, TaskStatus, LinkableDoc } from '../../lib/tasks'
+import type { DepartmentOption } from '../../lib/departments'
 import type { Employee } from '../../types/aliases'
 import type { EmpDeptShape } from '../../lib/employee'
 import type { Translations } from '../../lib/translations'
@@ -19,6 +20,7 @@ export interface TaskPatch {
   title: string
   notes: string | null
   project_id: string | null
+  department_id: string | null
   assignee_employee_id: string | null
   due_date: string | null
   due_time: string | null
@@ -34,6 +36,7 @@ interface Draft {
   title: string
   notes: string
   project_id: string | null
+  department_id: string | null
   assignee_employee_id: string | null
   due_date: string
   due_time: string
@@ -45,9 +48,9 @@ interface Draft {
   related_doc_id: string | null
 }
 
-function blank(defaults: { project_id: string | null; due_date: string }): Draft {
+function blank(defaults: { project_id: string | null; department_id: string | null; due_date: string }): Draft {
   return {
-    title: '', notes: '', project_id: defaults.project_id, assignee_employee_id: null,
+    title: '', notes: '', project_id: defaults.project_id, department_id: defaults.department_id, assignee_employee_id: null,
     due_date: defaults.due_date, due_time: '', url: '', priority: 0, status: 'todo', visible_in_portal: true,
     related_doc_type: null, related_doc_id: null,
   }
@@ -62,13 +65,14 @@ function docTypeLabel(type: DocumentType, t: Translations): string {
 }
 
 export function TaskDetailPanel({
-  open, mode, task, defaults, projects, employees, linkableDocs, t, saving, onClose, onSubmit, onDelete,
+  open, mode, task, defaults, projects, departments, employees, linkableDocs, t, saving, onClose, onSubmit, onDelete,
 }: {
   open: boolean
   mode: 'create' | 'edit'
   task: Task | null
-  defaults: { project_id: string | null; due_date: string }
+  defaults: { project_id: string | null; department_id: string | null; due_date: string }
   projects: TaskProject[]
+  departments: DepartmentOption[]
   employees: Emp[]
   linkableDocs: LinkableDoc[]
   t: Translations
@@ -87,6 +91,7 @@ export function TaskDetailPanel({
         title: task.title,
         notes: task.notes ?? '',
         project_id: task.project_id,
+        department_id: task.department_id,
         assignee_employee_id: task.assignee_employee_id,
         due_date: task.due_date ?? '',
         due_time: task.due_time ?? '',
@@ -109,6 +114,7 @@ export function TaskDetailPanel({
       title: d.title.trim(),
       notes: d.notes.trim() || null,
       project_id: d.project_id,
+      department_id: d.department_id,
       assignee_employee_id: d.assignee_employee_id,
       due_date: d.due_date || null,
       due_time: d.due_date ? (d.due_time || null) : null,
@@ -219,6 +225,19 @@ export function TaskDetailPanel({
               <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.tasksDueDateLabel}</label>
               <DatePicker value={d.due_date} onChange={v => setD({ ...d, due_date: v, due_time: v ? d.due_time : '' })} />
             </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.tasksDepartmentLabel}</label>
+            <select
+              value={d.department_id ?? ''}
+              onChange={e => setD({ ...d, department_id: e.target.value || null })}
+              className="w-full rounded-lg border px-3 py-2 text-sm outline-none"
+              style={inputStyle}
+            >
+              <option value="">{t.tasksNoDepartment}</option>
+              {departments.map(dep => <option key={dep.id} value={dep.id}>{dep.name}</option>)}
+            </select>
           </div>
 
           {d.due_date && (

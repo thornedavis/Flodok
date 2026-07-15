@@ -11,6 +11,19 @@ import { supabase } from './supabase'
 
 export type DepartmentOption = { id: string; name: string }
 
+/** The org's departments, ordered as configured (display_order then name).
+ *  Used by id-based pickers/filters like the Tasks page. */
+export async function listDepartments(orgId: string): Promise<DepartmentOption[]> {
+  const { data, error } = await supabase
+    .from('company_departments')
+    .select('id, name')
+    .eq('org_id', orgId)
+    .order('display_order', { ascending: true })
+    .order('name', { ascending: true })
+  if (error) throw new Error(error.message)
+  return (data ?? []) as DepartmentOption[]
+}
+
 export type SetDepartmentResult = {
   error?: string
   /** Set when a new department row was created (caller can splice into its

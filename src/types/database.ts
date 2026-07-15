@@ -4531,6 +4531,7 @@ export type Database = {
           created_by: string | null
           deleted_at: string | null
           deleted_by: string | null
+          department_id: string | null
           due_date: string | null
           due_time: string | null
           id: string
@@ -4556,6 +4557,7 @@ export type Database = {
           created_by?: string | null
           deleted_at?: string | null
           deleted_by?: string | null
+          department_id?: string | null
           due_date?: string | null
           due_time?: string | null
           id?: string
@@ -4581,6 +4583,7 @@ export type Database = {
           created_by?: string | null
           deleted_at?: string | null
           deleted_by?: string | null
+          department_id?: string | null
           due_date?: string | null
           due_time?: string | null
           id?: string
@@ -4625,6 +4628,13 @@ export type Database = {
             columns: ["deleted_by"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "company_departments"
             referencedColumns: ["id"]
           },
           {
@@ -5718,6 +5728,7 @@ export type Database = {
           created_by: string | null
           deleted_at: string | null
           deleted_by: string | null
+          department_id: string | null
           due_date: string | null
           due_time: string | null
           id: string

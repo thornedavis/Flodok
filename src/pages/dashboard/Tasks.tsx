@@ -21,6 +21,7 @@ import {
   setTaskDone, listLinkableDocuments,
   type Task, type TaskProject, type LinkableDoc,
 } from '../../lib/tasks'
+import { listDepartments, type DepartmentOption } from '../../lib/departments'
 import { trashTask } from '../../lib/trash'
 import { fmtTime } from '../../lib/taskFormat'
 import type { Employee, User } from '../../types/aliases'
@@ -48,6 +49,7 @@ export function Tasks({ user }: { user: User }) {
   const { t, lang } = useLang()
 
   const [projects, setProjects] = useState<TaskProject[]>([])
+  const [departments, setDepartments] = useState<DepartmentOption[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
   const [employees, setEmployees] = useState<EmployeeWithDepartments[]>([])
   const [linkableDocs, setLinkableDocs] = useState<LinkableDoc[]>([])
@@ -55,6 +57,10 @@ export function Tasks({ user }: { user: User }) {
   const [error, setError] = useState<string | null>(null)
 
   const [scope, setScope] = useState<Scope>({ kind: 'all' })
+  // Department is a cross-cutting filter (not a scope): it composes on top of the
+  // active smart-list/project, and is driven by both the rail section and the
+  // header dropdown. null = all departments.
+  const [deptFilter, setDeptFilter] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [quickAdd, setQuickAdd] = useState('')
   const [dragRow, setDragRow] = useState<string | null>(null)
@@ -67,7 +73,7 @@ export function Tasks({ user }: { user: User }) {
   const [panelOpen, setPanelOpen] = useState(false)
   const [panelMode, setPanelMode] = useState<'create' | 'edit'>('create')
   const [selected, setSelected] = useState<Task | null>(null)
-  const [createDefaults, setCreateDefaults] = useState<{ project_id: string | null; due_date: string }>({ project_id: null, due_date: '' })
+  const [createDefaults, setCreateDefaults] = useState<{ project_id: string | null; department_id: string | null; due_date: string }>({ project_id: null, department_id: null, due_date: '' })
   const [saving, setSaving] = useState(false)
 
   const [showProjectModal, setShowProjectModal] = useState(false)
@@ -83,13 +89,15 @@ export function Tasks({ user }: { user: User }) {
     setLoading(true)
     setError(null)
     try {
-      const [proj, tsk, empRes, docs] = await Promise.all([
+      const [proj, deps, tsk, empRes, docs] = await Promise.all([
         listTaskProjects(),
+        listDepartments(user.org_id),
         listTasks(),
         activeWorkforceEmployees(user.org_id),
         listLinkableDocuments(user.org_id),
       ])
       setProjects(proj)
+      setDepartments(deps)
       setTasks(tsk)
       setEmployees((empRes.data ?? []) as unknown as EmployeeWithDepartments[])
       setLinkableDocs(docs)
@@ -110,6 +118,7 @@ export function Tasks({ user }: { user: User }) {
       completed: tasks.filter(x => x.status === 'done').length,
       inbox: active.filter(x => x.project_id == null).length,
       project: (id: string) => active.filter(x => x.project_id === id).length,
+      department: (id: string) => active.filter(x => x.department_id === id).length,
     }
   }, [tasks, today])
 
@@ -126,10 +135,12 @@ export function Tasks({ user }: { user: User }) {
       case 'scheduled': list = list.filter(x => x.due_date != null); break
       default: break
     }
+    // Department filter composes on top of the active scope (rail + header both drive it).
+    if (deptFilter) list = list.filter(x => x.department_id === deptFilter)
     const q = search.trim().toLowerCase()
     if (q) list = list.filter(x => x.title.toLowerCase().includes(q) || (x.notes ?? '').toLowerCase().includes(q))
     return list
-  }, [tasks, scope, search, today])
+  }, [tasks, scope, deptFilter, search, today])
 
   const listTasksInScope = useMemo(() => {
     if (scope.kind === 'completed') return scopedByStructure.filter(x => x.status === 'done')
@@ -224,6 +235,7 @@ export function Tasks({ user }: { user: User }) {
         created_by: user.id,
         title,
         project_id: scope.kind === 'project' ? scope.id : null,
+        department_id: deptFilter,
         due_date: scope.kind === 'today' ? today : null,
       })
       await load()
@@ -237,6 +249,7 @@ export function Tasks({ user }: { user: User }) {
     setSelected(null)
     setCreateDefaults({
       project_id: scope.kind === 'project' ? scope.id : null,
+      department_id: deptFilter,
       due_date: dueISO ?? (scope.kind === 'today' ? today : ''),
     })
     setPanelOpen(true)
@@ -336,6 +349,31 @@ export function Tasks({ user }: { user: User }) {
             )}
           </div>
         </div>
+
+        {departments.length > 0 && (
+          <div className="mt-1 border-t px-3 py-3" style={{ borderColor: 'var(--color-border)' }}>
+            <div className="mb-1 flex items-center justify-between px-2">
+              <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-tertiary)' }}>{t.tasksDepartments}</span>
+              {deptFilter && (
+                <button type="button" onClick={() => setDeptFilter(null)} className="rounded px-1 py-0.5 text-[11px] font-medium" style={{ color: 'var(--color-primary)' }} title={t.tasksAllDepartments}>
+                  {t.tasksAllDepartments}
+                </button>
+              )}
+            </div>
+            <div className="space-y-0.5">
+              {departments.map(dep => (
+                <NavRow
+                  key={dep.id}
+                  active={deptFilter === dep.id}
+                  onClick={() => setDeptFilter(deptFilter === dep.id ? null : dep.id)}
+                  count={counts.department(dep.id)}
+                  label={dep.name}
+                  icon={<IconUsers />}
+                />
+              ))}
+            </div>
+          </div>
+        )}
       </aside>
 
       {/* Main */}
@@ -363,6 +401,22 @@ export function Tasks({ user }: { user: User }) {
                   </button>
                 ))}
               </div>
+              {departments.length > 0 && (
+                <select
+                  value={deptFilter ?? ''}
+                  onChange={e => setDeptFilter(e.target.value || null)}
+                  className="hidden rounded-lg border px-2.5 py-1.5 text-xs font-medium outline-none sm:block"
+                  style={{
+                    borderColor: deptFilter ? 'var(--color-primary)' : 'var(--color-border)',
+                    backgroundColor: deptFilter ? 'color-mix(in srgb, var(--color-primary) 10%, transparent)' : 'var(--color-bg)',
+                    color: deptFilter ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+                  }}
+                  aria-label={t.tasksDepartmentLabel}
+                >
+                  <option value="">{t.tasksAllDepartments}</option>
+                  {departments.map(dep => <option key={dep.id} value={dep.id}>{dep.name}</option>)}
+                </select>
+              )}
               <FilterSearchInput value={search} onChange={setSearch} placeholder={t.tasksSearchPlaceholder} className="hidden w-52 sm:block" />
               <button type="button" onClick={() => openCreate()} className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium" style={{ backgroundColor: 'var(--color-primary)', color: '#fff' }}>
                 <IconPlus size={15} />
@@ -507,6 +561,7 @@ export function Tasks({ user }: { user: User }) {
         task={selected}
         defaults={createDefaults}
         projects={projects}
+        departments={departments}
         employees={employees}
         linkableDocs={linkableDocs}
         t={t}
@@ -599,6 +654,9 @@ function IconList() {
 }
 function IconInbox() {
   return <svg width="16" height="16" viewBox="0 0 24 24" {...S}><polyline points="22 12 16 12 14 15 10 15 8 12 2 12" /><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" /></svg>
+}
+function IconUsers() {
+  return <svg width="15" height="15" viewBox="0 0 24 24" {...S}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
 }
 function IconPhone() {
   return <svg width="15" height="15" viewBox="0 0 24 24" {...S}><rect x="7" y="2" width="10" height="20" rx="2" /><line x1="11" y1="18" x2="13" y2="18" /></svg>
