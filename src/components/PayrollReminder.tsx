@@ -26,10 +26,12 @@ export function PayrollReminder({ user }: { user: User }) {
   const [period, setPeriod] = useState('')
   const [dismissed, setDismissed] = useState(false)
 
-  // Dismissal is scoped to the exact reminder: org + period + open count. A new
-  // month, or a change in how many employees are still open, mints a fresh key
-  // so the nudge returns when there's genuinely new work to run.
-  const storageKey = period ? `flodok:payroll-reminder-dismissed:${user.org_id}:${period}:${openCount}` : ''
+  // Dismissal is scoped to org + period. Closing the banner hides it for the
+  // rest of the month regardless of how the open count then shifts — no more
+  // re-popping mid-month. A new month mints a fresh key so the nudge returns
+  // once for genuinely new payroll; between times, the standing "needs payroll"
+  // signal is carried by the sidebar badge/dot on the Payroll nav item.
+  const storageKey = period ? `flodok:payroll-reminder-dismissed:${user.org_id}:${period}` : ''
 
   useEffect(() => {
     if (!isAdmin) return
