@@ -179,7 +179,7 @@ export function CandidateOnboarding({
               onSigned={async sig => {
                 setJdSig(sig)
                 await maybeAdvanceToSigned({ contractSigned: !!signature, jdSigned: true })
-                go(signContract ? 'sign' : 'personal')
+                go(signContract ? 'sign' : (screeningComplete(employee) ? 'banking' : 'personal'))
               }}
               onSkipBack={() => go('welcome')}
             />
@@ -196,7 +196,7 @@ export function CandidateOnboarding({
               onSigned={async sig => {
                 setSignature(sig)
                 await maybeAdvanceToSigned({ contractSigned: true, jdSigned: !!jdSig })
-                go('personal')
+                go(screeningComplete(employee) ? 'banking' : 'personal')
               }}
               onSkipBack={() => go(requiresJdSig ? 'signJd' : 'welcome')}
             />
@@ -280,6 +280,13 @@ export function CandidateOnboarding({
 
 function needsPersonalInfo(employee: Employee): boolean {
   return !employee.ktp_nik || !employee.ktp_photo_url
+}
+
+// The pre-offer screening subset — mirrors portal_advance_to_shortlisted's server-side
+// check. Post-signing we use it to skip re-asking the personal step when it's already
+// filled ("never re-ask what you already have").
+function screeningComplete(e: Employee): boolean {
+  return !!(e.ktp_nik && e.date_of_birth && e.gender && e.religion && e.marital_status && e.address)
 }
 
 // Step routing — keeps the "skip steps that don't apply" logic in one place

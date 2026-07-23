@@ -180,7 +180,11 @@ column titles, status labels, drawer section headings, actions. Reuse existing
 A design review reframed the pre-offer profile from **offer-prep** to a
 **screening instrument**, and split data collection into trust-timed waves. Where
 this contradicts the plan above, this addendum wins (superseded items called out
-under [Supersedes](#supersedes--refines-above)). Not built yet — this is the spec.
+under [Supersedes](#supersedes--refines-above)). **Status: built + shipped** —
+migration 213 is live and the portal screening gate, prospective→shortlisted
+auto-advance, two-wave onboarding, and lightweight add-candidate flow are all in.
+Tier 3 (self-paced family/education/work-history on the portal home) is the one
+piece still outstanding.
 
 ## The reframe
 

@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
 import { useBilling } from '../../contexts/BillingContext'
 import { generateUniqueSlug } from '../../lib/slug'
+import { normalizePhone } from '../../lib/phone'
 import { getAvatarGradient } from '../../lib/avatar'
 import { getEmployeeDepts, type EmpDeptShape } from '../../lib/employee'
 import { findTemplateForPosition, buildContractFromTemplate, seedContractComponentsFromTemplate } from '../../lib/contractTemplates'
@@ -63,7 +64,7 @@ export function Recruitment({ user }: { user: User }) {
   const [sourceFilter, setSourceFilter] = useState<string[]>([])
   const [sort, setSort] = useState<SortValue>(DEFAULT_SORT)
   const [makeOfferCandidate, setMakeOfferCandidate] = useState<Employee | null>(null)
-  const [adding, setAdding] = useState(false)
+  const [showAdd, setShowAdd] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<
     | { kind: 'single'; id: string; name: string }
     | { kind: 'bulk'; ids: string[] }
@@ -100,31 +101,6 @@ export function Recruitment({ user }: { user: User }) {
     setOrg(orgResult.data || null)
     setSignalsById(await loadCandidateSignals(cands))
     setLoading(false)
-  }
-
-  async function handleAddCandidate() {
-    if (!canWrite || adding) return
-    setAdding(true)
-    const placeholderName = t.hiringNewPlaceholderName
-    const slug = generateUniqueSlug(placeholderName)
-    // access_token is minted server-side by the DB default (migration 165).
-    const { data: created, error } = await supabase
-      .from('employees')
-      .insert({
-        org_id: user.org_id,
-        name: placeholderName,
-        phone: '',
-        slug,
-        lifecycle_stage: 'prospective',
-      })
-      .select()
-      .single()
-    setAdding(false)
-    if (error || !created) {
-      alert(error?.message || t.hiringCreateError)
-      return
-    }
-    navigate(`/dashboard/recruitment/${created.id}/edit?new=1`)
   }
 
   const counts = useMemo(() => {
@@ -314,8 +290,8 @@ export function Recruitment({ user }: { user: User }) {
           <ViewToggle view={view} onChange={setView} t={t} />
           <button
             type="button"
-            onClick={handleAddCandidate}
-            disabled={!canWrite || adding}
+            onClick={() => setShowAdd(true)}
+            disabled={!canWrite}
             className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
             style={{ backgroundColor: 'var(--color-primary)' }}
           >
@@ -369,6 +345,18 @@ export function Recruitment({ user }: { user: User }) {
           onDelete={() => { setDrawerId(null); deleteCandidate(drawerCandidate) }}
           onViewFullProfile={() => navigate(`/dashboard/recruitment/${drawerCandidate.id}/edit`)}
           onLinkJd={() => navigate(`/dashboard/recruitment/${drawerCandidate.id}/edit?focus=jd`)}
+        />
+      )}
+
+      {showAdd && (
+        <AddCandidateModal
+          orgId={user.org_id}
+          orgCountryCode={org?.default_country_code || '+62'}
+          orgDisplayName={org?.display_name || org?.name || ''}
+          onClose={() => setShowAdd(false)}
+          onReload={loadData}
+          onOpenFull={id => navigate(`/dashboard/recruitment/${id}/edit`)}
+          t={t}
         />
       )}
 
@@ -804,6 +792,115 @@ function ModalShell({ onClose, children }: { onClose: () => void; children: Reac
         {children}
       </div>
     </div>
+  )
+}
+
+// Lightweight "add candidate" — a name (and optional phone) is all HR provides;
+// the record lands in `prospective` with its portal link minted, ready to send.
+// The candidate fills the screening profile themselves. "Open full profile" stays
+// available for the HR-fills-it-in-on-their-behalf override.
+function AddCandidateModal({ orgId, orgCountryCode, orgDisplayName, onClose, onReload, onOpenFull, t }: {
+  orgId: string
+  orgCountryCode: string
+  orgDisplayName: string
+  onClose: () => void
+  onReload: () => Promise<void> | void
+  onOpenFull: (id: string) => void
+  t: Translations
+}) {
+  const [name, setName] = useState('')
+  const [phone, setPhone] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [created, setCreated] = useState<{ id: string; slug: string; access_token: string; name: string; phone: string } | null>(null)
+
+  async function handleCreate() {
+    if (saving || !name.trim()) return
+    setSaving(true)
+    setError('')
+    const normalizedPhone = phone.trim() ? normalizePhone(phone.trim(), orgCountryCode) : ''
+    // access_token is minted server-side by the DB default (migration 165).
+    const { data, error: insErr } = await supabase
+      .from('employees')
+      .insert({ org_id: orgId, name: name.trim(), phone: normalizedPhone, slug: generateUniqueSlug(name.trim()), lifecycle_stage: 'prospective' })
+      .select('id, slug, access_token, name, phone')
+      .single()
+    setSaving(false)
+    if (insErr || !data) { setError(insErr?.message || t.hiringCreateError); return }
+    setCreated(data as { id: string; slug: string; access_token: string; name: string; phone: string })
+    await onReload()
+  }
+
+  if (created) {
+    const portalUrl = `${window.location.origin}/portal/${created.slug}-${created.access_token}`
+    const phoneDigits = created.phone?.replace(/[^0-9]/g, '') ?? ''
+    const whatsappShareUrl = phoneDigits
+      ? `https://wa.me/${phoneDigits}?text=${encodeURIComponent(t.hiringWhatsAppShareMessage(created.name, orgDisplayName || '—', portalUrl))}`
+      : null
+    return (
+      <ModalShell onClose={onClose}>
+        <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>{t.hiringAddedTitle(created.name)}</h2>
+        <p className="mt-2 text-sm" style={{ color: 'var(--color-text-secondary)' }}>{t.hiringAddedBody}</p>
+        <div className="mt-4 rounded-lg border px-3 py-2 text-xs" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)', wordBreak: 'break-all' }}>
+          {portalUrl}
+        </div>
+        <div className="mt-3 flex gap-2">
+          {whatsappShareUrl && (
+            <a href={whatsappShareUrl} target="_blank" rel="noopener noreferrer" className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-colors hover:bg-[var(--color-bg-tertiary)]" style={{ borderColor: 'var(--color-border-strong)', color: 'var(--color-text)' }}>
+              <WhatsAppIcon size={14} /> {t.hiringActionWhatsApp}
+            </a>
+          )}
+          <DrawerCopyButton url={portalUrl} t={t} />
+        </div>
+        <div className="mt-5 flex items-center justify-between">
+          <button type="button" onClick={() => onOpenFull(created.id)} className="text-xs font-medium transition-opacity hover:opacity-70" style={{ color: 'var(--color-primary)' }}>
+            {t.hiringActionViewFullProfile}
+          </button>
+          <button type="button" onClick={onClose} className="rounded-lg px-4 py-2 text-sm font-medium text-white" style={{ backgroundColor: 'var(--color-primary)' }}>
+            {t.makeOfferDone}
+          </button>
+        </div>
+      </ModalShell>
+    )
+  }
+
+  return (
+    <ModalShell onClose={onClose}>
+      <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>{t.hiringAddCandidateTitle}</h2>
+      <p className="mt-2 text-sm" style={{ color: 'var(--color-text-secondary)' }}>{t.hiringAddCandidateBody}</p>
+      <div className="mt-4 space-y-3">
+        <div>
+          <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.hiringFieldName}</label>
+          <input
+            type="text"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            autoFocus
+            onKeyDown={e => { if (e.key === 'Enter' && name.trim() && !saving) handleCreate() }}
+            className="w-full rounded-lg border px-3 py-2 text-sm"
+            style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t.hiringFieldPhoneOptional}</label>
+          <input
+            type="tel"
+            value={phone}
+            onChange={e => setPhone(e.target.value)}
+            placeholder={t.hiringFieldPhoneWhatsappHint}
+            className="w-full rounded-lg border px-3 py-2 text-sm"
+            style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+          />
+        </div>
+        {error && <p className="text-sm" style={{ color: 'var(--color-danger)' }}>{error}</p>}
+      </div>
+      <div className="mt-5 flex justify-end gap-2">
+        <button type="button" onClick={onClose} className="rounded-lg border px-4 py-2 text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>{t.cancel}</button>
+        <button type="button" onClick={handleCreate} disabled={saving || !name.trim()} className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50" style={{ backgroundColor: 'var(--color-primary)' }}>
+          {saving ? t.onboardingSaving : t.hiringCreateAndGetLink}
+        </button>
+      </div>
+    </ModalShell>
   )
 }
 

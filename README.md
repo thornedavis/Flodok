@@ -167,10 +167,24 @@ prospective → shortlisted → offered → signed → active → separated
                                               talent_pool ←┘ (no-go branch)
 ```
 
-The Hiring page surfaces the funnel stages (`prospective` through `signed`
+The Recruitment page surfaces the funnel stages (`prospective` through `signed`
 plus `talent_pool`); the Employees page filters to `active` and `separated`.
-Hiring stages graduate to `active` automatically when the employee's
-`join_date` arrives — see `src/lib/lifecycleAdvance.ts`.
+
+Two transitions happen automatically:
+
+- **`prospective → shortlisted`** when the candidate completes their pre-offer
+  *screening profile* (NIK, date of birth, gender, religion, marital status,
+  address) in the portal — enforced server-side by the
+  `portal_advance_to_shortlisted` RPC (migration 213). This is the "screening
+  gate": the profile is a screening instrument, and finishing it is what
+  surfaces the candidate for review.
+- **`signed → active`** when the employee's `join_date` arrives — see
+  `src/lib/lifecycleAdvance.ts`.
+
+The candidate portal collects data in two waves — a light screening profile
+pre-offer, then bank / tax / document details after signing (see
+`src/components/portal/CandidateOnboarding.tsx`). Design notes live in
+`docs/recruitment-pipeline-plan.md`.
 
 The visible status **badge** is *derived* from `lifecycle_stage` plus dates
 (probation, join, resign) — see `src/lib/employeeStatus.ts`. Do not write
