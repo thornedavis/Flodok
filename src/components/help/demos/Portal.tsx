@@ -219,90 +219,79 @@ export function PortalAboutDemo() {
 // ═══════════════════════════════════════════════════════
 
 const ONBOARD_STEPS: TourStep[] = [
-  { target: 'o-welcome-step', caption: 'New hires land on a warm welcome with a progress bar' },
-  { target: 'o-continue-btn', caption: 'Tap Continue to start the guided steps' },
-  { target: 'o-contract-preview', caption: 'Step 2 is reviewing and signing the contract' },
-  { target: 'o-font-picker', caption: 'Pick a signature style — the name renders live' },
-  { target: 'o-sign-btn', caption: 'Confirm to sign and move to the next step' },
-  { target: 'o-progress', caption: 'Progress bar shows completion across all 7 steps' },
+  { target: 'o-welcome-step', caption: 'Before an offer, a candidate gets a short screening profile — nothing sensitive' },
+  { target: 'o-screening-fields', caption: 'Just the essentials you screen on: ID, date of birth, and a few details' },
+  { target: 'o-submit-btn', caption: 'Submitting moves them to Shortlisted automatically — no bank details, no signing yet' },
+  { target: 'o-setup-card', caption: 'After you make an offer, they come back to sign and finish setup' },
+  { target: 'o-sign-btn', caption: 'They e-sign the contract, then add bank details & documents — asked only now they’re hired' },
 ]
 
-const FONTS = ['cursive', 'serif', 'monospace', 'system-ui']
+const SCREEN_FIELDS: [string, string][] = [
+  ['National ID (KTP/NIK)', '3175 •••• •••• 1234'],
+  ['Date of birth', '14 Aug 1996'],
+  ['Gender', 'Female'],
+  ['Religion', 'Islam'],
+  ['Marital status', 'Single'],
+]
 
 export function PortalOnboardingDemo() {
-  const [signing, setSigning] = useState(false)
-  const [font, setFont] = useState(0)
+  const [phase, setPhase] = useState<'screening' | 'setup'>('screening')
+  const [filled, setFilled] = useState(false)
   const [signed, setSigned] = useState(false)
 
   const apply = useCallback((i: number) => {
-    if (i === 1) setSigning(true)
-    else if (i === 3) setFont(1)
+    if (i === 1) setFilled(true)
+    else if (i === 3) setPhase('setup')
     else if (i === 4) setSigned(true)
   }, [])
-  const reset = useCallback(() => { setSigning(false); setFont(0); setSigned(false) }, [])
+  const reset = useCallback(() => { setPhase('screening'); setFilled(false); setSigned(false) }, [])
   const tour = useGuidedTour(ONBOARD_STEPS, apply, reset)
   const at = tour.activeTarget
 
   return (
-    <PhoneStage tour={tour} label="Candidate onboarding — welcome, then review and sign the contract." steps={ONBOARD_STEPS}>
+    <PhoneStage tour={tour} label="Candidate onboarding — a light screening profile first, sign & setup after the offer." steps={ONBOARD_STEPS}>
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-tertiary)' }}>{signing ? 'Step 2 of 7' : 'Step 1 of 7'}</span>
+          <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-tertiary)' }}>
+            {phase === 'screening' ? 'Screening · pre-offer' : 'Employment setup · after signing'}
+          </span>
           <span className="text-[10px]" style={{ color: 'var(--color-text-tertiary)' }}>Acme Indonesia</span>
         </div>
-        <div data-demo-id="o-progress" className="h-1.5 w-full overflow-hidden rounded-full" style={{ backgroundColor: 'var(--color-bg-tertiary)', ...ringStyle(at === 'o-progress') }}>
-          <span className="block h-full rounded-full transition-all" style={{ width: signing ? '28%' : '14%', backgroundColor: 'var(--color-primary)' }} />
-        </div>
 
-        {!signing ? (
-          <div data-demo-id="o-welcome-step" className="space-y-2 rounded-xl border p-3" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)', ...ringStyle(at === 'o-welcome-step') }}>
-            <div className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Welcome to Acme Indonesia</div>
-            <div className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>Let’s finish setting up your profile and sign your contract.</div>
-            <div className="mt-1 flex items-center justify-between text-[11px]">
-              <span style={{ color: 'var(--color-text-tertiary)' }}>Profile complete</span>
-              <span className="font-semibold" style={{ color: 'var(--color-primary)' }}>45%</span>
+        {phase === 'screening' ? (
+          <>
+            <div data-demo-id="o-welcome-step" className="space-y-1 rounded-xl border p-3" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)', ...ringStyle(at === 'o-welcome-step') }}>
+              <div className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Welcome to Acme Indonesia</div>
+              <div className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>A few details so we can review your application.</div>
             </div>
-            <div className="h-1.5 w-full overflow-hidden rounded-full" style={{ backgroundColor: 'var(--color-bg-tertiary)' }}>
-              <span className="block h-full rounded-full" style={{ width: '45%', backgroundColor: 'var(--color-warning)' }} />
+            <div data-demo-id="o-screening-fields" className="space-y-1.5 rounded-xl border p-3" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)', ...ringStyle(at === 'o-screening-fields') }}>
+              {SCREEN_FIELDS.map(([k, v]) => (
+                <div key={k} className="flex items-center justify-between text-[11px]">
+                  <span style={{ color: 'var(--color-text-tertiary)' }}>{k}</span>
+                  <span style={{ color: filled ? 'var(--color-text)' : 'var(--color-text-tertiary)' }}>{filled ? v : '—'}</span>
+                </div>
+              ))}
             </div>
-          </div>
+            <Btn demoId="o-submit-btn" active={at === 'o-submit-btn'}>Submit profile</Btn>
+          </>
         ) : (
           <>
-            <div data-demo-id="o-contract-preview" className="space-y-2 rounded-xl border p-3" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)', ...ringStyle(at === 'o-contract-preview') }}>
-              <div className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Review &amp; sign contract</div>
+            <div data-demo-id="o-setup-card" className="space-y-2 rounded-xl border p-3" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)', ...ringStyle(at === 'o-setup-card') }}>
+              <div className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>🎉 You’re hired — sign &amp; set up</div>
               <div className="space-y-1">
                 <div className="h-1.5 w-full rounded-full" style={{ backgroundColor: 'var(--color-bg-tertiary)' }} />
                 <div className="h-1.5 w-4/5 rounded-full" style={{ backgroundColor: 'var(--color-bg-tertiary)' }} />
-                <div className="h-1.5 w-3/5 rounded-full" style={{ backgroundColor: 'var(--color-bg-tertiary)' }} />
               </div>
-              <div className="mt-1 rounded-md border border-dashed px-2 py-1.5 text-center text-base" style={{ borderColor: signed ? 'var(--color-success)' : 'var(--color-border-strong)', fontFamily: FONTS[font], color: 'var(--color-text)' }}>
+              <div className="mt-1 rounded-md border border-dashed px-2 py-1.5 text-center text-base" style={{ borderColor: signed ? 'var(--color-success)' : 'var(--color-border-strong)', fontFamily: 'cursive', color: 'var(--color-text)' }}>
                 Budi Santoso
               </div>
+              <div className="flex items-center justify-between text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>
+                <span>Then: bank details &amp; documents</span>
+                <span>after signing</span>
+              </div>
             </div>
-
-            <div data-demo-id="o-font-picker" className="grid grid-cols-4 gap-1.5" style={ringStyle(at === 'o-font-picker')}>
-              {FONTS.map((f, idx) => (
-                <span
-                  key={f}
-                  className="flex items-center justify-center rounded-md border py-1.5 text-[11px]"
-                  style={{
-                    fontFamily: f,
-                    borderColor: idx === font ? 'var(--color-primary)' : 'var(--color-border)',
-                    color: idx === font ? 'var(--color-primary)' : 'var(--color-text-tertiary)',
-                    backgroundColor: idx === font ? 'color-mix(in srgb, var(--color-primary) 8%, transparent)' : 'var(--color-bg)',
-                  }}
-                >
-                  Budi
-                </span>
-              ))}
-            </div>
+            <Btn demoId="o-sign-btn" active={at === 'o-sign-btn'}>{signed ? 'Signed ✓ — add bank & docs' : 'Confirm signature'}</Btn>
           </>
-        )}
-
-        {!signing ? (
-          <Btn demoId="o-continue-btn" active={at === 'o-continue-btn'}>Continue</Btn>
-        ) : (
-          <Btn demoId="o-sign-btn" active={at === 'o-sign-btn'}>{signed ? 'Signed ✓ — next step' : 'Confirm signature'}</Btn>
         )}
       </div>
     </PhoneStage>

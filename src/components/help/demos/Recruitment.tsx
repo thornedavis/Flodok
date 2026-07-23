@@ -77,15 +77,15 @@ function ModalCard({ children, active, demoId }: { children: ReactNode; active?:
 }
 
 // ───────────────────────────────────────────────────────────────
-// 1. Hiring funnel — move candidates between stages
+// 1. Recruitment funnel — how candidates move through the stages
 // ───────────────────────────────────────────────────────────────
 
 const FUNNEL_STEPS: TourStep[] = [
-  { target: 'r-table', caption: 'The recruitment table lists every candidate and their stage' },
-  { target: 'r-stage-prospective', caption: 'Click Budi’s Prospective badge to move him to Shortlisted' },
-  { target: 'r-stage-shortlisted', caption: 'Advance Chandra from Shortlisted to Offered' },
+  { target: 'r-table', caption: 'Recruitment tracks every candidate by stage' },
+  { target: 'r-stage-prospective', caption: 'Budi finished his screening profile, so he moves to Shortlisted automatically' },
+  { target: 'r-stage-shortlisted', caption: 'Chandra’s a fit — Make offer moves him to Offered' },
   { target: 'r-modal-confirm', caption: 'Confirm to spin up his offer as a draft contract' },
-  { target: 'r-stage-offered', caption: 'Move Diana from Offered to Signed once she accepts' },
+  { target: 'r-stage-offered', caption: 'Diana signs her contract and moves to Signed' },
   { target: 'r-filter', caption: 'Filter by stage to focus on just one part of the funnel' },
 ]
 
@@ -115,7 +115,7 @@ export function HiringFunnelDemo() {
   const at = tour.activeTarget
 
   return (
-    <DesktopStage tour={tour} label="The hiring funnel — move candidates between stages." steps={FUNNEL_STEPS} activeNav="Recruitment" url="app.flodok.com/dashboard/recruitment">
+    <DesktopStage tour={tour} label="Recruitment — how candidates move through the stages." steps={FUNNEL_STEPS} activeNav="Recruitment" url="app.flodok.com/dashboard/recruitment">
       <div className="relative p-4">
         <div className="mb-4 flex items-center justify-between">
           <div className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>Recruitment</div>
@@ -167,70 +167,80 @@ export function HiringFunnelDemo() {
 // ───────────────────────────────────────────────────────────────
 
 const CAND_STEPS: TourStep[] = [
-  { target: 'r-add-btn', caption: 'Click Add Candidate to open a fresh prospect form' },
-  { target: 'r-name-field', caption: 'Enter the candidate’s full name' },
-  { target: 'r-contact-fields', caption: 'Add their email and phone number' },
-  { target: 'r-position-dropdown', caption: 'Pick the job position they’re applying for' },
-  { target: 'r-department-dropdown', caption: 'Assign the department from your reference data' },
-  { target: 'r-save-btn', caption: 'Save — the candidate joins the recruitment list' },
+  { target: 'r-add-btn', caption: 'Click Add candidate — a quick modal, not a big form' },
+  { target: 'r-name-field', caption: 'All you need to start is their name' },
+  { target: 'r-phone-field', caption: 'Add a phone (optional) to send the link on WhatsApp' },
+  { target: 'r-create-btn', caption: 'Create — they’re saved as Prospective with a portal link' },
+  { target: 'r-link-row', caption: 'Copy the link or send it on WhatsApp; the candidate fills their own screening profile' },
 ]
 
 export function HiringCandidatesDemo() {
+  const [open, setOpen] = useState(false)
   const [name, setName] = useState(false)
-  const [contact, setContact] = useState(false)
-  const [position, setPosition] = useState(false)
-  const [department, setDepartment] = useState(false)
-  const [saved, setSaved] = useState(false)
+  const [phone, setPhone] = useState(false)
+  const [created, setCreated] = useState(false)
 
   const apply = useCallback((i: number) => {
-    if (i === 1) setName(true)
-    else if (i === 2) setContact(true)
-    else if (i === 3) setPosition(true)
-    else if (i === 4) setDepartment(true)
-    else if (i === 5) setSaved(true)
+    if (i === 0) setOpen(true)
+    else if (i === 1) setName(true)
+    else if (i === 2) setPhone(true)
+    else if (i === 3) setCreated(true)
   }, [])
   const reset = useCallback(() => {
+    setOpen(false)
     setName(false)
-    setContact(false)
-    setPosition(false)
-    setDepartment(false)
-    setSaved(false)
+    setPhone(false)
+    setCreated(false)
   }, [])
 
   const tour = useGuidedTour(CAND_STEPS, apply, reset)
   const at = tour.activeTarget
-  const caret = <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-tertiary)" strokeWidth="2.5" strokeLinecap="round"><polyline points="6 9 12 15 18 9" /></svg>
 
   return (
-    <DesktopStage tour={tour} label="Adding a candidate — capture a new prospect." steps={CAND_STEPS} activeNav="Recruitment" url="app.flodok.com/dashboard/recruitment/new?new=1">
-      <div className="p-4">
-        <div className="mb-4 flex items-center justify-between">
-          <div>
-            <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-tertiary)' }}>New candidate · Personal</div>
-            <div className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{name ? 'Putri Maharani' : 'New Candidate'}</div>
-          </div>
-          <div className="w-24"><Btn demoId="r-add-btn" active={at === 'r-add-btn'}>+ Add</Btn></div>
+    <DesktopStage tour={tour} label="Adding a candidate — a name, and a portal link to send." steps={CAND_STEPS} activeNav="Recruitment" url="app.flodok.com/dashboard/recruitment">
+      <div className="relative p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <div className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>Recruitment</div>
+          <div className="w-36"><Btn demoId="r-add-btn" active={at === 'r-add-btn'}>+ Add candidate</Btn></div>
         </div>
+        <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>Add a candidate, then send them their portal link.</div>
 
-        <div className="space-y-3">
-          <Field label="Full name" value={name ? 'Putri Maharani' : ''} placeholder="e.g. Putri Maharani" demoId="r-name-field" active={at === 'r-name-field'} caret={name ? undefined : <span className="h-4 w-px" style={{ backgroundColor: 'var(--color-primary)' }} />} />
-          <div data-demo-id="r-contact-fields" className="grid grid-cols-2 gap-3 rounded-lg p-1" style={ringStyle(at === 'r-contact-fields')}>
-            <Field label="Email" value={contact ? 'putri@example.com' : ''} placeholder="name@email.com" />
-            <Field label="Phone" value={contact ? '+62 812 3456' : ''} placeholder="+62…" />
-          </div>
-          <Field label="Job position" value={position ? 'Software Engineer' : ''} placeholder="Select position…" demoId="r-position-dropdown" active={at === 'r-position-dropdown'} caret={caret} />
-          <Field label="Department" value={department ? 'Engineering' : ''} placeholder="Select department…" demoId="r-department-dropdown" active={at === 'r-department-dropdown'} caret={caret} />
-        </div>
-
-        <div className="mt-4 flex items-center gap-3">
-          <div className="w-28"><Btn demoId="r-save-btn" active={at === 'r-save-btn'}>Save</Btn></div>
-          {saved && (
-            <span className="inline-flex items-center gap-1.5 text-[11px]" style={{ color: 'var(--color-success)' }}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-              Saved to recruitment list
-            </span>
-          )}
-        </div>
+        {open && (
+          <ModalCard>
+            {!created ? (
+              <>
+                <div className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Add candidate</div>
+                <div className="mt-1 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+                  Just a name to start — they fill in the rest through their portal link.
+                </div>
+                <div className="mt-3 space-y-3">
+                  <Field label="Full name" value={name ? 'Putri Maharani' : ''} placeholder="e.g. Putri Maharani" demoId="r-name-field" active={at === 'r-name-field'} caret={name ? undefined : <span className="h-4 w-px" style={{ backgroundColor: 'var(--color-primary)' }} />} />
+                  <Field label="Phone (optional)" value={phone ? '+62 812 3456 7890' : ''} placeholder="For sending the link on WhatsApp" demoId="r-phone-field" active={at === 'r-phone-field'} />
+                </div>
+                <div data-demo-id="r-create-btn" className="mt-4 rounded-lg" style={ringStyle(at === 'r-create-btn')}>
+                  <Btn>Create &amp; get link</Btn>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Putri Maharani added</div>
+                <div className="mt-1 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+                  Send them this link and ask them to complete their screening profile.
+                </div>
+                <div data-demo-id="r-link-row" className="mt-3 rounded-lg p-1" style={ringStyle(at === 'r-link-row')}>
+                  <div className="truncate rounded-lg border px-3 py-2 text-[11px]" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-secondary)', color: 'var(--color-text-secondary)' }}>
+                    app.flodok.com/portal/putri-maharani-3f9a…
+                  </div>
+                  <div className="mt-2 flex gap-2">
+                    <div className="flex-1"><Btn variant="ghost">WhatsApp</Btn></div>
+                    <div className="flex-1"><Btn>Copy link</Btn></div>
+                  </div>
+                </div>
+                <div className="mt-3 text-center text-[11px] font-medium" style={{ color: 'var(--color-primary)' }}>Open full profile</div>
+              </>
+            )}
+          </ModalCard>
+        )}
       </div>
     </DesktopStage>
   )
@@ -241,12 +251,12 @@ export function HiringCandidatesDemo() {
 // ───────────────────────────────────────────────────────────────
 
 const OFFER_STEPS: TourStep[] = [
-  { target: 'r-actions-menu', caption: 'Open the action menu on Fatima’s row' },
-  { target: 'r-action-offer', caption: 'Choose Make offer from the menu' },
-  { target: 'r-modal-template', caption: 'Flodok auto-matches a template to her position' },
+  { target: 'r-actions-menu', caption: 'Open the actions on Fatima’s card' },
+  { target: 'r-action-offer', caption: 'Choose Make offer — she already has a job description linked' },
+  { target: 'r-modal-template', caption: 'Flodok auto-matches a contract template to her position' },
   { target: 'r-modal-confirm', caption: 'Confirm to create the draft contract' },
   { target: 'r-modal-edit-contract', caption: 'Open Edit Contract to fine-tune the offer' },
-  { target: 'r-fatima-badge', caption: 'Back on the table, Fatima now shows Offered' },
+  { target: 'r-fatima-badge', caption: 'Back on the board, Fatima now shows Offered' },
 ]
 
 export function HiringOffersDemo() {
@@ -270,7 +280,7 @@ export function HiringOffersDemo() {
   const at = tour.activeTarget
 
   return (
-    <DesktopStage tour={tour} label="Making an offer — turn a shortlisted candidate into a draft contract." steps={OFFER_STEPS} activeNav="Recruitment" url="app.flodok.com/dashboard/recruitment">
+    <DesktopStage tour={tour} label="Making an offer — a shortlisted candidate with a linked job description becomes a draft contract." steps={OFFER_STEPS} activeNav="Recruitment" url="app.flodok.com/dashboard/recruitment">
       <div className="relative p-4">
         <div className="mb-4 flex items-center justify-between">
           <div className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>Recruitment</div>
