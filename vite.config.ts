@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { defineConfig, defaultExclude } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { existsSync, readFileSync } from 'node:fs'
@@ -33,5 +33,13 @@ export default defineConfig({
   envDir: findEnvDir(projectRoot),
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
+  },
+  test: {
+    // Git worktrees live under `.claude/worktrees/<name>/` and carry their own
+    // full copy of `src`, so without this vitest collects their test files too
+    // and reports failures for code that isn't in this checkout. A worktree is
+    // its own branch at its own commit — run its suite from inside it. (The
+    // default `**/.git/**` doesn't cover them: a worktree's `.git` is a file.)
+    exclude: [...defaultExclude, '**/.claude/**'],
   },
 })
