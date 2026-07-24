@@ -24,6 +24,10 @@ export interface PortalAttendanceItem {
   server_timestamp: string
   within_geofence: boolean | null
   status: AttendanceStatus
+  /** Reference shift hours as HH:MM, or null when none is configured. Shown
+   *  next to the actual times; never used to compute lateness (migration 215). */
+  expected_start: string | null
+  expected_end: string | null
 }
 
 export interface DashboardAttendanceRow {
@@ -44,5 +48,9 @@ export interface DashboardAttendanceRow {
   status: AttendanceStatus
   selfie_path: string | null
   is_auto: boolean
+  /** Effective reference shift hours as HH:MM — the employee's own override,
+   *  else the org default, else null. Informational only (migration 215). */
+  expected_start: string | null
+  expected_end: string | null
   identity: Record<string, unknown>
 }

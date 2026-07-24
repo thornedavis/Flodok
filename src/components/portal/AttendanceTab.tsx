@@ -64,6 +64,12 @@ export function AttendanceTab({ slug, token }: {
 
   const nextType = inferNextType(records)
   const clockedIn = nextType === 'clock_out'
+  // Every row carries the same employee-level hours; the first one will do.
+  const expectedHours = (() => {
+    const r = records[0]
+    if (!r || (!r.expected_start && !r.expected_end)) return ''
+    return `${r.expected_start ?? '—'} – ${r.expected_end ?? '—'}`
+  })()
   const nowDate = new Date(now)
   const timeLabel = nowDate.toLocaleTimeString(lang === 'id' ? 'id-ID' : 'en-US', { hour: 'numeric', minute: '2-digit' })
   const dateLabel = nowDate.toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-US', { weekday: 'long', day: 'numeric', month: 'long' })
@@ -235,6 +241,14 @@ export function AttendanceTab({ slug, token }: {
             <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: clockedIn ? 'var(--color-success)' : 'var(--color-text-tertiary)' }} />
             <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>{clockedIn ? t.attendanceClockedIn : t.attendanceNotClockedIn}</span>
           </div>
+
+          {/* Their own reference hours — shown so nobody has to guess what time
+              they are due. Purely informational, exactly as on the dashboard. */}
+          {expectedHours && (
+            <p className="-mt-2 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+              {t.attendanceYourHours(expectedHours)}
+            </p>
+          )}
 
           {/* Action — rounded-rectangle button matching the app's other buttons */}
           <button

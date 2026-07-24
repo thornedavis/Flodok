@@ -300,6 +300,7 @@ export function EmployeeEdit({ user }: { user: User }) {
         return (
           <EmploymentSection
             employee={employee}
+            organization={org}
             canWrite={canWrite}
             writeDisabledTitle={writeDisabledTitle}
             saveFields={saveFields}

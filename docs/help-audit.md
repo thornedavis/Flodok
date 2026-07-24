@@ -8,6 +8,7 @@ help topic(s) and a status. Working tracker for keeping docs matched to the app.
 - **Dev/architecture docs:** `README.md`, `docs/*.md`.
 
 Last full audit: **2026-07-12** (docs-vs-code, 7 feature clusters, code = ground truth).
+Since then, per-feature updates as they ship: **2026-07-24** — attendance work hours + daily view (see Attendance below).
 
 ## Legend
 - ✅ **accurate** — verified against code, no action
@@ -39,7 +40,15 @@ Selfie + GPS clock-in. Opt-in per org via `organizations.attendance_enabled` (**
 - Server-authoritative: edge fn `attendance-checkin` (slug+token auth) → selfie to a private bucket → `portal_record_attendance`; identity + geofence resolved server-side.
 - **Office-network/IP signal** confirms on-site independent of GPS; **confidence badge** on_site/off_site/unclear/none.
 - Dashboard **log** (owner/admin/hr): filterable table (status, geofence, date range) + 4 today stat cards; photo modal; auto-clock-out tag.
-- Setup in **Settings → Attendance**: clock-in enable toggle, auto-clock-out hours cap, locations manager (geofences/radius, office networks, primary marker).
+- Setup in **Settings → Attendance**: clock-in enable toggle, **default work hours**, auto-clock-out hours cap, locations manager (geofences/radius, office networks, primary marker).
+
+#### ✔️ Work hours + daily view — DONE 2026-07-24 (migrations 215–216; `ATTENDANCE` updated, new `#work-hours` heading)
+Reference hours so the log can be judged, with **no** lateness policy in code.
+- `employees.work_start_time/work_end_time` (null = inherit) over `organizations.default_work_start_time/default_work_end_time`. Edited in **Settings → Attendance** (org) and the employee **Employment** tab → **Work hours** (per person, shows which is in force).
+- Attendance page gained a **By day / All events** toggle. By-day = one row per employee per day: expected hours beside first clock-in / last clock-out, `Not recorded` for a missing event, "N sessions" when they clocked out and back in. Overnight shifts stay one row (sessions are paired chronologically and filed under the clock-**in** day).
+- Portal Attendance tab shows the employee their own **"Your hours"**.
+- **Deliberately NOT built** (say so in docs, don't drift): no `minutes_late`, no grace window, no auto-flag on time, no rounding, **no pay effect**. `status='flagged'` still means off-site only. A financial consequence stays the manual Reward/Penalise path.
+- All times on the Attendance page now render in the **org** timezone (`organizations.timezone`), not the viewer's — `SETTINGS_TIMEZONES` → "How times display" documents this as the explicit exception. Date filters + today stat cards bucket on the org calendar day.
 
 ### ✔️ Tasks — DONE 2026-07-12 (topic `TASKS` written + registered under **Your Workspace**, slug `tasks`)
 Reminders-style task manager.

@@ -1,12 +1,21 @@
-// Attendance log — read-only V1. Every clock-in / clock-out event the viewer
-// can see (RLS-scoped, owner/admin/hr), with location, time, geofence status
-// and a live-captured selfie. Employee search + status/geofence filter panel,
+// Attendance log — read-only. Every clock-in / clock-out event the viewer can
+// see (RLS-scoped, owner/admin/hr), with location, time, geofence status and a
+// live-captured selfie. Employee search + status/geofence filter panel,
 // mirroring the Forms list page.
+//
+// Two reading modes: "By day" rolls the event stream up into one row per
+// employee per day with their reference hours alongside the actual in/out, so
+// early/late is a glance rather than a hunt; "All events" is the raw log.
+// Nothing here computes lateness — we place expected next to actual and let
+// the reader judge (see migration 215).
+//
+// All times render in the ORG's timezone, not the viewer's browser zone.
 
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLang } from '../../contexts/LanguageContext'
 import { useRole } from '../../hooks/useRole'
+import { supabase } from '../../lib/supabase'
 import { FilterSearchInput, FilterPanel, type FilterPanelSection } from '../../components/FilterControls'
 import { Skeleton } from '../../components/Skeleton'
 import { Modal } from '../../components/Modal'
@@ -14,11 +23,14 @@ import { StatCard } from '../../components/Metrics'
 import { ConfidenceLegend } from '../../components/attendance/ConfidenceLegend'
 import { listDashboardAttendance, signAttendancePhoto } from '../../lib/attendance/api'
 import { attendanceConfidence } from '../../lib/attendance/confidence'
+import { buildAttendanceDays, orgDateTime, orgDayKey, orgTime, formatDayKey, zoneLabel, type AttendanceDay } from '../../lib/attendance/time'
 import type { DashboardAttendanceRow, AttendanceStatus, AttendanceConfidence } from '../../lib/attendance/types'
 import type { Translations } from '../../lib/translations'
 import type { User } from '../../types/aliases'
 
 const STATUSES: AttendanceStatus[] = ['recorded', 'flagged', 'excused']
+
+type ViewMode = 'daily' | 'events'
 
 export function Attendance({ user }: { user: User }) {
   const { t, lang } = useLang()
@@ -26,6 +38,8 @@ export function Attendance({ user }: { user: User }) {
   const navigate = useNavigate()
 
   const [rows, setRows] = useState<DashboardAttendanceRow[]>([])
+  const [timeZone, setTimeZone] = useState<string | null>(null)
+  const [view, setView] = useState<ViewMode>('daily')
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string[]>([])
   const [confidenceFilter, setConfidenceFilter] = useState<string[]>([])
@@ -38,14 +52,19 @@ export function Attendance({ user }: { user: User }) {
 
   async function load() {
     setLoading(true)
-    try {
-      const data = await listDashboardAttendance()
-      setRows(data)
-    } catch {
-      setRows([])
-    }
+    // The org timezone is the frame every timestamp below is rendered in — a
+    // clock-in means nothing against an expected 09:00 if the reader's own
+    // browser zone silently shifts it.
+    const [data, org] = await Promise.all([
+      listDashboardAttendance().catch(() => [] as DashboardAttendanceRow[]),
+      supabase.from('organizations').select('timezone').eq('id', user.org_id).single(),
+    ])
+    setRows(data)
+    setTimeZone(org.data?.timezone ?? null)
     setLoading(false)
   }
+
+  const tzLabel = useMemo(() => zoneLabel(timeZone, lang), [timeZone, lang])
 
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -53,19 +72,23 @@ export function Attendance({ user }: { user: User }) {
       if (statusFilter.length > 0 && !statusFilter.includes(r.status)) return false
       if (confidenceFilter.length > 0 && !confidenceFilter.includes(confidenceBucket(r))) return false
       if (dateFrom || dateTo) {
-        const d = (r.server_timestamp ?? '').slice(0, 10)
+        // Compare on the ORG's calendar day — slicing the raw ISO would filter
+        // on the UTC day and drop evening events for UTC+7/8 orgs.
+        const d = orgDayKey(r.server_timestamp, timeZone)
         if (dateFrom && d < dateFrom) return false
         if (dateTo && d > dateTo) return false
       }
       if (!q) return true
       return r.employee_name?.toLowerCase().includes(q) ?? false
     })
-  }, [rows, search, statusFilter, confidenceFilter, dateFrom, dateTo])
+  }, [rows, search, statusFilter, confidenceFilter, dateFrom, dateTo, timeZone])
 
-  // At-a-glance summary for TODAY (local day), computed from the loaded window.
+  const visibleDays = useMemo(() => buildAttendanceDays(visible, timeZone), [visible, timeZone])
+
+  // At-a-glance summary for TODAY in the org's timezone.
   const todayStats = useMemo(() => {
-    const today = new Date().toDateString()
-    const todays = rows.filter(r => new Date(r.server_timestamp).toDateString() === today)
+    const today = orgDayKey(new Date().toISOString(), timeZone)
+    const todays = rows.filter(r => orgDayKey(r.server_timestamp, timeZone) === today)
     const clockedIn = new Set(todays.filter(r => r.event_type === 'clock_in').map(r => r.employee_id)).size
     // "present now" = employees whose most recent event today is a clock_in.
     const latest = new Map<string, DashboardAttendanceRow>()
@@ -80,7 +103,7 @@ export function Attendance({ user }: { user: User }) {
     const inside = evaluated.filter(r => r.within_geofence === true).length
     const onsiteRate = evaluated.length > 0 ? Math.round((inside / evaluated.length) * 100) : null
     return { clockedIn, presentNow, flaggedToday, onsiteRate }
-  }, [rows])
+  }, [rows, timeZone])
 
   const filterSections: FilterPanelSection[] = [
     {
@@ -141,6 +164,10 @@ export function Attendance({ user }: { user: User }) {
       )}
 
       <div className="mb-5 flex flex-wrap items-center gap-2">
+        <div className="inline-flex rounded-lg border p-0.5" style={{ borderColor: 'var(--color-border)' }}>
+          <ViewTab active={view === 'daily'} onClick={() => setView('daily')}>{t.attendanceViewDaily}</ViewTab>
+          <ViewTab active={view === 'events'} onClick={() => setView('events')}>{t.attendanceViewEvents}</ViewTab>
+        </div>
         <FilterPanel
           triggerLabel={t.filterButtonLabel}
           sections={filterSections}
@@ -175,76 +202,10 @@ export function Attendance({ user }: { user: User }) {
         <TableSkeleton />
       ) : visible.length === 0 ? (
         <EmptyState message={anyFilterActive ? t.attendanceNoMatches : t.attendanceEmptyAll} />
+      ) : view === 'daily' ? (
+        <DailyTable days={visibleDays} t={t} lang={lang} timeZone={timeZone} tzLabel={tzLabel} onPhoto={setPhotoRow} />
       ) : (
-        <div className="overflow-hidden rounded-lg border" style={{ borderColor: 'var(--color-border)' }}>
-          <table className="w-full text-sm">
-            <thead style={{ backgroundColor: 'var(--color-bg-tertiary)' }}>
-              <tr>
-                <Th>{t.attendanceColEmployee}</Th>
-                <Th>{t.attendanceColTime}</Th>
-                <Th>{t.attendanceColType}</Th>
-                <Th>{t.attendanceColLocation}</Th>
-                <Th>{t.attendanceColGeofence}</Th>
-                <Th>{t.attendanceColStatus}</Th>
-                <Th>{t.attendanceColPhoto}</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {visible.map(r => (
-                <tr key={r.id} className="border-t" style={{ borderColor: 'var(--color-border)' }}>
-                  <td className="px-4 py-3 font-medium" style={{ color: 'var(--color-text)' }}>{r.employee_name ?? '—'}</td>
-                  <td className="px-4 py-3" style={{ color: 'var(--color-text-tertiary)' }}>{formatTimestamp(r.server_timestamp, lang)}</td>
-                  <td className="px-4 py-3" style={{ color: 'var(--color-text-secondary)' }}>
-                    <span className="inline-flex flex-wrap items-center gap-1.5">
-                      <span>{r.event_type === 'clock_in' ? t.attendanceEventClockIn : t.attendanceEventClockOut}</span>
-                      {r.is_auto && (
-                        <span
-                          className="inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium"
-                          style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-tertiary)' }}
-                          title={t.attendanceAutoTag}
-                        >
-                          {t.attendanceAutoTag}
-                        </span>
-                      )}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3" style={{ color: 'var(--color-text-secondary)' }}>
-                    <div className="flex flex-col">
-                      <span>{r.location_name ?? '—'}</span>
-                      {r.latitude != null && r.longitude != null && (
-                        <a
-                          href={`https://www.google.com/maps?q=${r.latitude},${r.longitude}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-xs hover:underline"
-                          style={{ color: 'var(--color-primary)' }}
-                        >
-                          {t.attendanceViewOnMap}
-                        </a>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3"><ConfidenceBadge row={r} t={t} /></td>
-                  <td className="px-4 py-3"><StatusBadge status={r.status} t={t} /></td>
-                  <td className="px-4 py-3">
-                    {r.selfie_path == null ? (
-                      <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>—</span>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setPhotoRow(r)}
-                        className="rounded-md px-2.5 py-1 text-xs font-medium"
-                        style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}
-                      >
-                        {t.attendanceViewPhoto}
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <EventsTable rows={visible} t={t} lang={lang} timeZone={timeZone} tzLabel={tzLabel} onPhoto={setPhotoRow} />
       )}
 
       {photoRow && (
@@ -252,6 +213,7 @@ export function Attendance({ user }: { user: User }) {
           row={photoRow}
           t={t}
           lang={lang}
+          timeZone={timeZone}
           onClose={() => setPhotoRow(null)}
         />
       )}
@@ -266,6 +228,206 @@ function Th({ children }: { children: React.ReactNode }) {
     <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--color-text-tertiary)' }}>
       {children}
     </th>
+  )
+}
+
+function ViewTab({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-md px-3 py-1.5 text-sm font-medium transition-colors"
+      style={{
+        backgroundColor: active ? 'var(--color-bg-tertiary)' : 'transparent',
+        color: active ? 'var(--color-text)' : 'var(--color-text-secondary)',
+      }}
+    >
+      {children}
+    </button>
+  )
+}
+
+// Column headers name the zone once, so "09:01" is never read in the wrong frame.
+function withZone(label: string, tzLabel: string): string {
+  return tzLabel ? `${label} (${tzLabel})` : label
+}
+
+function AutoTag({ t }: { t: Translations }) {
+  return (
+    <span
+      className="inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium"
+      style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-tertiary)' }}
+      title={t.attendanceAutoCloseHelp}
+    >
+      {t.attendanceAutoTag}
+    </span>
+  )
+}
+
+// ─── Daily view — expected hours beside the actual in/out ───────────────────
+
+function ClockCell({ row, timeZone, t, onPhoto }: {
+  row: DashboardAttendanceRow | null
+  timeZone: string | null
+  t: Translations
+  onPhoto: (r: DashboardAttendanceRow) => void
+}) {
+  if (!row) {
+    return <span className="text-xs italic" style={{ color: 'var(--color-text-tertiary)' }}>{t.attendanceMissingEvent}</span>
+  }
+  return (
+    <div className="flex flex-col">
+      <span className="inline-flex items-center gap-1.5 whitespace-nowrap font-medium" style={{ color: 'var(--color-text)' }}>
+        {orgTime(row.server_timestamp, timeZone)}
+        {row.is_auto && <AutoTag t={t} />}
+      </span>
+      {row.selfie_path != null && (
+        <button
+          type="button"
+          onClick={() => onPhoto(row)}
+          className="text-left text-xs hover:underline"
+          style={{ color: 'var(--color-primary)' }}
+        >
+          {t.attendanceViewPhoto}
+        </button>
+      )}
+    </div>
+  )
+}
+
+function DailyTable({ days, t, lang, timeZone, tzLabel, onPhoto }: {
+  days: AttendanceDay[]
+  t: Translations
+  lang: 'en' | 'id'
+  timeZone: string | null
+  tzLabel: string
+  onPhoto: (r: DashboardAttendanceRow) => void
+}) {
+  return (
+    <div className="overflow-x-auto rounded-lg border" style={{ borderColor: 'var(--color-border)' }}>
+      <table className="w-full text-sm">
+        <thead style={{ backgroundColor: 'var(--color-bg-tertiary)' }}>
+          <tr>
+            <Th>{t.attendanceColEmployee}</Th>
+            <Th>{t.attendanceColDay}</Th>
+            <Th>{t.attendanceColExpected}</Th>
+            <Th>{withZone(t.attendanceEventClockIn, tzLabel)}</Th>
+            <Th>{withZone(t.attendanceEventClockOut, tzLabel)}</Th>
+            <Th>{t.attendanceColGeofence}</Th>
+          </tr>
+        </thead>
+        <tbody>
+          {days.map(d => (
+            <tr key={d.key} className="border-t" style={{ borderColor: 'var(--color-border)' }}>
+              <td className="px-4 py-3 font-medium" style={{ color: 'var(--color-text)' }}>
+                <div className="flex flex-col">
+                  <span>{d.employee_name ?? '—'}</span>
+                  {d.sessions > 1 && (
+                    <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                      {t.attendanceSessionCount(d.sessions)}
+                    </span>
+                  )}
+                </div>
+              </td>
+              <td className="whitespace-nowrap px-4 py-3" style={{ color: 'var(--color-text-secondary)' }}>
+                {formatDayKey(d.day, lang)}
+              </td>
+              <td className="whitespace-nowrap px-4 py-3" style={{ color: 'var(--color-text-tertiary)' }}>
+                {d.expected_start || d.expected_end ? (
+                  `${d.expected_start ?? '—'} – ${d.expected_end ?? '—'}`
+                ) : (
+                  <span title={t.attendanceNoExpectedHint}>—</span>
+                )}
+              </td>
+              <td className="px-4 py-3"><ClockCell row={d.firstIn} timeZone={timeZone} t={t} onPhoto={onPhoto} /></td>
+              <td className="px-4 py-3"><ClockCell row={d.lastOut} timeZone={timeZone} t={t} onPhoto={onPhoto} /></td>
+              <td className="px-4 py-3"><ConfidenceBadge row={d.firstIn ?? d.lastOut} t={t} /></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+// ─── Events view — the raw log, unchanged apart from timezone-correct times ──
+
+function EventsTable({ rows, t, lang, timeZone, tzLabel, onPhoto }: {
+  rows: DashboardAttendanceRow[]
+  t: Translations
+  lang: 'en' | 'id'
+  timeZone: string | null
+  tzLabel: string
+  onPhoto: (r: DashboardAttendanceRow) => void
+}) {
+  return (
+    <div className="overflow-x-auto rounded-lg border" style={{ borderColor: 'var(--color-border)' }}>
+      <table className="w-full text-sm">
+        <thead style={{ backgroundColor: 'var(--color-bg-tertiary)' }}>
+          <tr>
+            <Th>{t.attendanceColEmployee}</Th>
+            <Th>{withZone(t.attendanceColTime, tzLabel)}</Th>
+            <Th>{t.attendanceColExpected}</Th>
+            <Th>{t.attendanceColType}</Th>
+            <Th>{t.attendanceColLocation}</Th>
+            <Th>{t.attendanceColGeofence}</Th>
+            <Th>{t.attendanceColStatus}</Th>
+            <Th>{t.attendanceColPhoto}</Th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(r => (
+            <tr key={r.id} className="border-t" style={{ borderColor: 'var(--color-border)' }}>
+              <td className="px-4 py-3 font-medium" style={{ color: 'var(--color-text)' }}>{r.employee_name ?? '—'}</td>
+              <td className="whitespace-nowrap px-4 py-3" style={{ color: 'var(--color-text-tertiary)' }}>
+                {orgDateTime(r.server_timestamp, timeZone, lang)}
+              </td>
+              <td className="whitespace-nowrap px-4 py-3" style={{ color: 'var(--color-text-tertiary)' }}>
+                {r.expected_start || r.expected_end ? `${r.expected_start ?? '—'} – ${r.expected_end ?? '—'}` : '—'}
+              </td>
+              <td className="px-4 py-3" style={{ color: 'var(--color-text-secondary)' }}>
+                <span className="inline-flex flex-wrap items-center gap-1.5">
+                  <span>{r.event_type === 'clock_in' ? t.attendanceEventClockIn : t.attendanceEventClockOut}</span>
+                  {r.is_auto && <AutoTag t={t} />}
+                </span>
+              </td>
+              <td className="px-4 py-3" style={{ color: 'var(--color-text-secondary)' }}>
+                <div className="flex flex-col">
+                  <span>{r.location_name ?? '—'}</span>
+                  {r.latitude != null && r.longitude != null && (
+                    <a
+                      href={`https://www.google.com/maps?q=${r.latitude},${r.longitude}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs hover:underline"
+                      style={{ color: 'var(--color-primary)' }}
+                    >
+                      {t.attendanceViewOnMap}
+                    </a>
+                  )}
+                </div>
+              </td>
+              <td className="px-4 py-3"><ConfidenceBadge row={r} t={t} /></td>
+              <td className="px-4 py-3"><StatusBadge status={r.status} t={t} /></td>
+              <td className="px-4 py-3">
+                {r.selfie_path == null ? (
+                  <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>—</span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => onPhoto(r)}
+                    className="rounded-md px-2.5 py-1 text-xs font-medium"
+                    style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}
+                  >
+                    {t.attendanceViewPhoto}
+                  </button>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   )
 }
 
@@ -313,7 +475,8 @@ function confidenceLabel(c: AttendanceConfidence, t: Translations): string {
   }
 }
 
-function ConfidenceBadge({ row, t }: { row: DashboardAttendanceRow; t: Translations }) {
+function ConfidenceBadge({ row, t }: { row: DashboardAttendanceRow | null; t: Translations }) {
+  if (!row) return <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>—</span>
   const confidence = attendanceConfidence(row)
   const palette = CONFIDENCE_PALETTE[confidence]
   return (
@@ -349,16 +512,15 @@ function ConfidenceBadge({ row, t }: { row: DashboardAttendanceRow; t: Translati
   )
 }
 
-function formatTimestamp(iso: string | null, lang: 'en' | 'id'): string {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ''
-  return d.toLocaleString(lang === 'id' ? 'id-ID' : 'en-US')
-}
-
 // ─── Photo modal — lazily signs the private-bucket path on open ─────────────
 
-function PhotoModal({ row, t, lang, onClose }: { row: DashboardAttendanceRow; t: Translations; lang: 'en' | 'id'; onClose: () => void }) {
+function PhotoModal({ row, t, lang, timeZone, onClose }: {
+  row: DashboardAttendanceRow
+  t: Translations
+  lang: 'en' | 'id'
+  timeZone: string | null
+  onClose: () => void
+}) {
   const [url, setUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -377,7 +539,7 @@ function PhotoModal({ row, t, lang, onClose }: { row: DashboardAttendanceRow; t:
   }, [row.selfie_path])
 
   return (
-    <Modal open onClose={onClose} title={`${row.employee_name ?? '—'} · ${formatTimestamp(row.server_timestamp, lang)}`}>
+    <Modal open onClose={onClose} title={`${row.employee_name ?? '—'} · ${orgDateTime(row.server_timestamp, timeZone, lang)}`}>
       <div className="flex min-h-[16rem] items-center justify-center">
         {loading ? (
           <Skeleton className="h-64 w-full rounded-lg" />

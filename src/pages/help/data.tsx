@@ -1301,6 +1301,14 @@ const SETTINGS_TIMEZONES: ReactNode = (
       reader's local time zone with the abbreviation (WIB/WITA/WIT). Exports
       record times in the originating user's time zone with offset.
     </P>
+    <P>
+      <Link to="/help/docs/attendance-overview">Attendance</Link> is the deliberate
+      exception: clock-in and clock-out times always display in the{' '}
+      <strong>organization</strong> time zone set above, with the zone named in the
+      column header. A clock-in is being read against someone's expected start time, so
+      everyone needs to see the same wall clock the employee did — regardless of where
+      the reader happens to be.
+    </P>
   </>
 )
 
@@ -2297,6 +2305,7 @@ const ATTENDANCE: ReactNode = (
     </P>
     <Bullets
       items={[
+        <><strong>Default work hours</strong> — the start and end time your team is normally due. This is the reference the log is read against; see <strong>Work hours</strong> below.</>,
         <><strong>Auto clock-out</strong> — a safety cap (1–24 hours, default 16) that closes a forgotten clock-in so it doesn't run overnight. Auto-generated clock-outs are tagged <em>"Auto"</em> in the log.</>,
         <><strong>Locations</strong> — add your office geofences (a point + radius) and, optionally, your office network(s), and mark one as the primary. These are what "on-site" is measured against.</>,
       ]}
@@ -2325,24 +2334,56 @@ const ATTENDANCE: ReactNode = (
       on its own, independent of GPS.
     </P>
 
+    <H3 id="work-hours">Work hours — the reference</H3>
+    <P>
+      A clock-in of <em>09:01</em> only means something if you know the person was due
+      at <em>09:00</em>. So Flodok stores those expected hours and shows them beside the
+      actual ones — and stops there. Flodok does <strong>not</strong> decide who was
+      late, and it never touches pay.
+    </P>
+    <Bullets
+      items={[
+        <><strong>Company default</strong> — set once in <Link to="/dashboard/settings?tab=attendance">Settings → Attendance</Link>, and it applies to everyone.</>,
+        <><strong>Per person</strong> — open an employee and use the <strong>Employment</strong> tab → <strong>Work hours</strong> to give someone different hours. Leave it blank and they follow the company default; the panel tells you which of the two is in force.</>,
+        <><strong>Employees see their own</strong> — their portal Attendance tab shows "Your hours", so nobody has to guess what time they're due.</>,
+      ]}
+    />
+    <Callout type="note">
+      Work hours are a <strong>reference, not a rule</strong>. Nothing is flagged for
+      being late, no minutes are counted, and pay is completely unaffected — the log
+      simply puts <em>expected</em> next to <em>actual</em> so you can make the call
+      yourself. (If you do want a financial consequence, that stays a deliberate manual
+      step: use <strong>Reward / Penalise</strong> on the employee's{' '}
+      <Link to="/help/docs/recognition">compensation</Link> page.)
+    </Callout>
+
     <H3 id="log">The attendance log</H3>
     <P>
       The <strong>Attendance</strong> page (owners, admins, and HR) is your read-only
       record. Four cards summarise today — <em>Clocked in</em>, <em>Currently in</em>,{' '}
-      <em>Flagged</em>, and <em>On-site rate</em> — over a filterable table:
+      <em>Flagged</em>, and <em>On-site rate</em> — over a table you can read two ways:
     </P>
     <Bullets
       items={[
-        <>Filter by <strong>employee</strong>, <strong>status</strong>, <strong>geofence confidence</strong>, and <strong>date range</strong>.</>,
-        <>Each row shows time, in/out, location (with <strong>View on map</strong>), the confidence badge, and the <strong>selfie</strong> (opens in a modal).</>,
+        <><strong>By day</strong> — one row per person per day: their expected hours, their first clock-in and last clock-out side by side. This is the view for answering "was anyone late this week?" at a glance. A missing clock-out shows as <em>Not recorded</em> rather than being hidden, and if someone clocked out and back in you'll see a <em>"2 sessions"</em> note.</>,
+        <><strong>All events</strong> — the raw stream, one row per clock-in or clock-out, with location (<strong>View on map</strong>), the confidence badge, status, and the <strong>selfie</strong> (opens in a modal).</>,
+        <>Both views filter by <strong>employee</strong>, <strong>status</strong>, <strong>geofence confidence</strong>, and <strong>date range</strong>.</>,
       ]}
     />
+    <P>
+      An overnight shift stays on one line: clock in at 22:00 and out at 06:00 and the
+      day reads as a single Monday row, not a Monday with no exit plus a Tuesday with
+      no entry.
+    </P>
 
     <Callout type="note">
-      Clock-ins are <strong>server-verified</strong>: the selfie is stored privately,
-      and identity and the geofence check are resolved on the server, not trusted from
-      the phone. Attendance stays completely inert until you enable it — no tab, no
-      prompts — so you can roll it out when it suits you.
+      Every time on this page is shown in your <strong>organization's time zone</strong>{' '}
+      (named in the column header), not the reader's — so a WITA clock-in looks the same
+      to a colleague reading it in Jakarta. Clock-ins are also{' '}
+      <strong>server-verified</strong>: the selfie is stored privately, and identity and
+      the geofence check are resolved on the server, not trusted from the phone.
+      Attendance stays completely inert until you enable it — no tab, no prompts — so you
+      can roll it out when it suits you.
     </Callout>
   </>
 )
@@ -2894,12 +2935,12 @@ export const sections: DocSection[] = [
   {
     id: "attendance",
     title: "Attendance",
-    description: "Selfie + GPS clock-in from the portal, the attendance log, and setup.",
+    description: "Selfie + GPS clock-in from the portal, work hours, the attendance log, and setup.",
     topics: [
       {
         slug: "attendance-overview",
         title: "Attendance & clock-in",
-        description: "Turn on selfie + GPS clock-in, read the on-site confidence signal, and review the attendance log.",
+        description: "Turn on selfie + GPS clock-in, set the work hours the log is read against, and review the daily log.",
         iconKey: "clock",
         body: ATTENDANCE,
       },

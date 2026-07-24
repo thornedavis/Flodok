@@ -1486,6 +1486,8 @@ export type Database = {
           source: string | null
           source_request_id: string | null
           status: string
+          work_end_time: string | null
+          work_start_time: string | null
         }
         Insert: {
           access_token?: string
@@ -1538,6 +1540,8 @@ export type Database = {
           source?: string | null
           source_request_id?: string | null
           status?: string
+          work_end_time?: string | null
+          work_start_time?: string | null
         }
         Update: {
           access_token?: string
@@ -1590,6 +1594,8 @@ export type Database = {
           source?: string | null
           source_request_id?: string | null
           status?: string
+          work_end_time?: string | null
+          work_start_time?: string | null
         }
         Relationships: [
           {
@@ -3265,6 +3271,8 @@ export type Database = {
           credits_enabled: boolean
           current_period_end: string | null
           default_country_code: string
+          default_work_end_time: string | null
+          default_work_start_time: string | null
           display_name: string | null
           forms_approver_user_id: string | null
           forms_config: Json
@@ -3321,6 +3329,8 @@ export type Database = {
           credits_enabled?: boolean
           current_period_end?: string | null
           default_country_code?: string
+          default_work_end_time?: string | null
+          default_work_start_time?: string | null
           display_name?: string | null
           forms_approver_user_id?: string | null
           forms_config?: Json
@@ -3377,6 +3387,8 @@ export type Database = {
           credits_enabled?: boolean
           current_period_end?: string | null
           default_country_code?: string
+          default_work_end_time?: string | null
+          default_work_start_time?: string | null
           display_name?: string | null
           forms_approver_user_id?: string | null
           forms_config?: Json
@@ -5463,6 +5475,8 @@ export type Database = {
           source: string | null
           source_request_id: string | null
           status: string
+          work_end_time: string | null
+          work_start_time: string | null
         }
         SetofOptions: {
           from: "*"
@@ -5524,6 +5538,8 @@ export type Database = {
           source: string | null
           source_request_id: string | null
           status: string
+          work_end_time: string | null
+          work_start_time: string | null
         }
         SetofOptions: {
           from: "*"
@@ -5633,6 +5649,8 @@ export type Database = {
           source: string | null
           source_request_id: string | null
           status: string
+          work_end_time: string | null
+          work_start_time: string | null
         }
         SetofOptions: {
           from: "*"
@@ -6056,6 +6074,8 @@ export type Database = {
           source: string | null
           source_request_id: string | null
           status: string
+          work_end_time: string | null
+          work_start_time: string | null
         }
         SetofOptions: {
           from: "*"

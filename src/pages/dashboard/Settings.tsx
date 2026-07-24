@@ -24,6 +24,7 @@ import { ConnectAsanaDialog } from '../../components/integrations/ConnectAsanaDi
 import { listIntegrations, deleteIntegration, type IntegrationRow } from '../../lib/integrations'
 import { SIGNATURE_FONTS, ensureSignatureFontsLoaded } from '../../lib/signatureFonts'
 import { AttendanceLocationsManager } from '../../components/attendance/AttendanceLocationsManager'
+import { hhmm } from '../../lib/attendance/time'
 import {
   loadOrgBilling,
   openPortal,
@@ -1082,13 +1083,19 @@ function ApprovalsTab({ user, t }: { user: User; t: Translations }) {
 }
 
 // ─── Attendance tab ─────────────────────────────────────
-// The enable toggle and the auto-clock-out hours cap (1–24). When disabled,
-// the hours row is dimmed and inert. Below, the full location manager handles
-// geofences / office networks / the primary-location marker.
+// The enable toggle, the default work hours (the reference the attendance log
+// is read against — informational only, never used to compute lateness or pay)
+// and the auto-clock-out hours cap (1–24). When disabled, those rows are
+// dimmed and inert. Below, the full location manager handles geofences /
+// office networks / the primary-location marker.
 function AttendanceSettingsTab({ user, t }: { user: User; t: Translations }) {
   const [enabled, setEnabled] = useState(false)
   const [hours, setHours] = useState<string>('16')
   const [savedHours, setSavedHours] = useState<number>(16)
+  const [workStart, setWorkStart] = useState('')
+  const [workEnd, setWorkEnd] = useState('')
+  const [savedWork, setSavedWork] = useState<{ start: string; end: string }>({ start: '', end: '' })
+  const [savingWork, setSavingWork] = useState(false)
   const [loading, setLoading] = useState(true)
   const [savingHours, setSavingHours] = useState(false)
 
@@ -1097,15 +1104,37 @@ function AttendanceSettingsTab({ user, t }: { user: User; t: Translations }) {
   async function load() {
     const { data } = await supabase
       .from('organizations')
-      .select('attendance_enabled, attendance_auto_close_hours')
+      .select('attendance_enabled, attendance_auto_close_hours, default_work_start_time, default_work_end_time')
       .eq('id', user.org_id)
       .single()
     if (data) {
       setEnabled(data.attendance_enabled ?? false)
       setSavedHours(data.attendance_auto_close_hours ?? 16)
       setHours(String(data.attendance_auto_close_hours ?? 16))
+      const start = hhmm(data.default_work_start_time)
+      const end = hhmm(data.default_work_end_time)
+      setWorkStart(start)
+      setWorkEnd(end)
+      setSavedWork({ start, end })
     }
     setLoading(false)
+  }
+
+  const workDirty = workStart !== savedWork.start || workEnd !== savedWork.end
+
+  async function saveWorkHours() {
+    if (!workDirty) return
+    setSavingWork(true)
+    const { error } = await supabase
+      .from('organizations')
+      .update({
+        default_work_start_time: workStart || null,
+        default_work_end_time: workEnd || null,
+      })
+      .eq('id', user.org_id)
+    if (!error) setSavedWork({ start: workStart, end: workEnd })
+    else alert(error.message)
+    setSavingWork(false)
   }
 
   async function toggleEnabled(next: boolean) {
@@ -1140,6 +1169,32 @@ function AttendanceSettingsTab({ user, t }: { user: User; t: Translations }) {
       <SettingsSection title={t.settingsAttendanceTab} description={t.attendanceEnabledHelp}>
         <SettingStack>
           <ToggleRow label={t.attendanceEnabledLabel} checked={enabled} onChange={toggleEnabled} />
+          <FieldCard label={t.attendanceWorkHoursLabel} help={t.attendanceWorkHoursHelp} dimmed={!enabled}>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="time"
+                value={workStart}
+                onChange={e => setWorkStart(e.target.value)}
+                onBlur={saveWorkHours}
+                disabled={!enabled}
+                aria-label={t.attendanceWorkHoursStart}
+                className="rounded-lg border px-3 py-2 text-sm"
+                style={inputStyle}
+              />
+              <span className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>–</span>
+              <input
+                type="time"
+                value={workEnd}
+                onChange={e => setWorkEnd(e.target.value)}
+                onBlur={saveWorkHours}
+                disabled={!enabled}
+                aria-label={t.attendanceWorkHoursEnd}
+                className="rounded-lg border px-3 py-2 text-sm"
+                style={inputStyle}
+              />
+              {savingWork && <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>…</span>}
+            </div>
+          </FieldCard>
           <FieldCard label={t.attendanceAutoCloseLabel} help={t.attendanceAutoCloseHelp} dimmed={!enabled}>
             <div className="flex items-center gap-2">
               <input
